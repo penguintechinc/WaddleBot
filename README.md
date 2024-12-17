@@ -1,4 +1,5 @@
 # Overview
+WaddleBot is used as the simple chatbot framework which is highly extensible. We're working to give access to AI, advanced features, and bring the next generation of bots to your company, stream, and more!
 
 Give an overview of the project:
 - What are the end goals
