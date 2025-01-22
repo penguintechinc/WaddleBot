@@ -1,2 +1,0 @@
-# WaddleWebUI
-pending docs
