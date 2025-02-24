@@ -1,0 +1,13 @@
+---
+- name: Run the waddlebot-configurator restart script every 1 minute as a cron job
+  become: false
+  ansible.builtin.cron:
+    name: waddlebot-configurator-restart
+    user: "{{ run.user }}"
+    weekday: "*"
+    minute: "0"
+    hour: "*"
+    day: "*"
+    month: "*"
+    job: "{{ run.user }} python3 /opt/manager/modules/WaddleBot-Configurator/app/restart.py > restart_log.txt 2>&1"
+    state: present

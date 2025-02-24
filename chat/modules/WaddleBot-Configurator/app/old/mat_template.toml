@@ -1,0 +1,35 @@
+[general]
+IgnoreFailureOnStart=true
+
+[discord]
+[discord.{{discord_gateway_name}}]
+
+Token="{{discord_token}}"
+Server="{{discord_server_id}}" 
+AutoWebhooks=true
+RemoteNickFormat="[{PROTOCOL}] <{NICK}> "
+# Map threads from other bridges on discord replies
+PreserveThreading=true
+AllowMention=["roles", "users"]
+
+[irc.{{twitch_gateway_name}}]
+#Add the oauth token here you got from https://twitchapps.com/tmi/
+Password="{{twitch_token}}"
+Nick="{{twitch_nick}}"
+Server="irc.chat.twitch.tv:6697"
+DebugLevel=1
+UseTLS=true
+RemoteNickFormat="[{PROTOCOL}] <{NICK}> "
+
+[[gateway]]
+name="{{gateway_name}}"
+enable=true
+
+[api.{{api_gateway_name}}]
+BindAddress="{{api_address}}"
+Buffer=1000
+RemoteNickFormat="{NICK}"
+
+[[gateway.inout]]
+account="api.{{api_gateway_name}}"
+channel="api"

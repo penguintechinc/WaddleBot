@@ -1,0 +1,32 @@
+---
+columns:
+  userid: int
+  score: float
+  namespace: str
+foreignKeys:
+  userid:
+    tableName: identities
+    columnName: id
+repvalues:
+  follow: 1.0
+  raffle: -0.1
+  giveaway: -0.1
+  support: 5.0
+  permban: -50
+  tempban: -20
+database:
+  waddlebot:
+  webhost: localhost
+  webport: 443
+  webuser: waddlebot
+  webpassword: changeme
+  database: waddlebot
+  tables:
+    - reputation
+    - reputation-scoring
+reputation-alias:
+  bronze: (300, 579)  # Poor
+  silver: (580, 669)  # Fair
+  gold: (670, 739)    # Good
+  platinum: (740,799) # VeryGood
+  diamond: (800,850)  # Excellent

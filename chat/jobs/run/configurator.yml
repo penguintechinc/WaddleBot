@@ -1,0 +1,86 @@
+---
+- name: Generate general matterbridge config fragment
+  ansible.builtin.template:
+    src: "/opt/manager/templates/matterbridge.j2"
+    dest: "/opt/matconf/0-matterbridge-general"
+    owner: "{{ run.user }}"
+    group: "{{ run.user }}"
+  when: discord.enable == "1"
+
+- name: Generate discord config fragment
+  ansible.builtin.template:
+    src: "/opt/manager/templates/matconfig/discord.j2"
+    dest: "/opt/matconf/1-discord"
+    owner: "{{ run.user }}"
+    group: "{{ run.user }}"
+  when: discord.enable == "1"
+
+- name: Generate discord inout config fragment
+  ansible.builtin.template:
+    src: "/opt/manager/templates/matconfig/discord-inout.j2"
+    dest: "/opt/matconf/6-discord-inout"
+    owner: "{{ run.user }}"
+    group: "{{ run.user }}"
+  when: discord.enable == "1"
+
+- name: Generate twitch config fragment
+  ansible.builtin.template:
+    src: "/opt/manager/templates/matconfig/twitch.j2"
+    dest: "/opt/matconf/2-twitch"
+    owner: "{{ run.user }}"
+    group: "{{ run.user }}"
+  when: twitch.enable == "1"
+
+- name: Generate twitch-inout config fragment
+  ansible.builtin.template:
+    src: "/opt/manager/templates/matconfig/twitch-inout.j2"
+    dest: "/opt/matconf/7-twitch-inout"
+    owner: "{{ run.user }}"
+    group: "{{ run.user }}"
+  when: twitch.enable == "1"
+
+- name: Generate telegram config fragment
+  ansible.builtin.template:
+    src: "/opt/manager/templates/matconfig/telegram.j2"
+    dest: "/opt/matconf/3-telegram"
+    owner: "{{ run.user }}"
+    group: "{{ run.user }}"
+  when: telegram.enable == "1"
+
+- name: Generate telegram-inout config fragment
+  ansible.builtin.template:
+    src: "/opt/manager/templates/matconfig/telegram-inout.j2"
+    dest: "/opt/matconf/8-telegram-inout"
+    owner: "{{ run.user }}"
+    group: "{{ run.user }}"
+  when: telegram.enable == "1"
+
+- name: Generate api config fragment
+  ansible.builtin.template:
+    src: "/opt/manager/templates/matconfig/api.j2"
+    dest: "/opt/matconf/5-api"
+    owner: "{{ run.user }}"
+    group: "{{ run.user }}"
+  when: api.enable == "1"
+
+- name: Generate api-inout config fragment
+  ansible.builtin.template:
+    src: "/opt/manager/templates/matconfig/api-inout.j2"
+    dest: "/opt/matconf/9-api-inout"
+    owner: "{{ run.user }}"
+    group: "{{ run.user }}"
+  when: api.enable == "1"
+
+- name: Generate Gateway config fragment
+  ansible.builtin.template:
+    src: "/opt/manager/templates/matconfig/gateway.j2"
+    dest: "/opt/matconf/4-gateway"
+    owner: "{{ run.user }}"
+    group: "{{ run.user }}"
+
+- name: Assemble from fragment configs from a directory
+  ansible.builtin.assemble:
+    src: "/opt/matconf"
+    dest: "/etc/old/matterbridge.toml"
+    owner: "{{ run.user }}"
+    group: "{{ run.user }}"
