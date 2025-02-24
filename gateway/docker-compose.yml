@@ -1,0 +1,9 @@
+---
+version: "2.4"
+services:
+  waddlebot-gateway-manager:
+    build: .
+    ports: 
+      - "80:5000"
+    env_file: .env
+    restart: always 
