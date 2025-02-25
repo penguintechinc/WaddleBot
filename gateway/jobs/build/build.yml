@@ -1,0 +1,22 @@
+---
+- name: Add the user {{ run.user }}
+  ansible.builtin.user:
+    name: "{{ run.user }}"
+    comment: Specified Run User
+    groups: root
+    append: true
+
+- name: Create /etc/{{ app.title }} if it does not exist
+  ansible.builtin.file:
+    path:  "/etc/{{ app.title }}"
+    state: directory
+    mode: '0755'
+    owner: "{{ run.user }}"
+    group: "{{ run.user }}"
+
+- name: Make sure the configurator pyhon script is executable by the run user
+  ansible.builtin.file:
+    dest: "/opt/manager/app/app.py"
+    owner: "{{ run.user }}"
+    group: "{{ run.user }}"
+    mode: '0755'
