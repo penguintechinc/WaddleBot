@@ -1,0 +1,91 @@
+---
+- name: Add the user {{ run.user }}
+  ansible.builtin.user:
+    name: "{{ run.user }}"
+    comment: Specified Run User
+    groups: root
+    append: true
+
+- name: Create /etc/{{ app.title }} if it does not exist
+  ansible.builtin.file:
+    path: "/etc/{{ app.title }}"
+    state: directory
+    mode: '0755'
+    owner: "{{ run.user }}"
+    group: "{{ run.user }}"
+
+- name: Create /opt/matconf if it does not exist
+  ansible.builtin.file:
+    path: "/opt/matconf"
+    state: directory
+    mode: '0755'
+    owner: "{{ run.user }}"
+    group: "{{ run.user }}"
+
+- name: Create /opt/{{ app.title }} if it does not exist
+  ansible.builtin.file:
+    path: "/opt/{{ app.title }}"
+    state: directory
+    mode: '0755'
+    owner: "{{ run.user }}"
+    group: "{{ run.user }}"
+
+- name: Create /opt/matterbridge if it does not exist
+  ansible.builtin.file:
+    path: /opt/matterbridge
+    state: directory
+    mode: '0755'
+    owner: "{{ run.user }}"
+    group: "{{ run.user }}"
+
+- name: Create /etc/matterbridge if it does not exist
+  ansible.builtin.file:
+    path: /etc/matterbridge
+    state: directory
+    mode: '0755'
+    owner: "{{ run.user }}"
+    group: "{{ run.user }}"
+
+# @thysw95 - this is not something we should have long term
+- name: Create a symbolic link for etc for convenience
+  ansible.builtin.file:
+    dest: "/opt/{{ app.title }}/etc"
+    src: "/etc/{{ app.title }}"
+    owner: "{{ run.user }}"
+    group: "{{ run.user }}"
+    state: link
+
+- name: Make sure the mat_template toml file can be accessed by the run user
+  ansible.builtin.file:
+    dest: "/opt/manager/modules/WaddleBot-Configurator/app/mat_template.toml"
+    owner: "{{ run.user }}"
+    group: "{{ run.user }}"
+    mode: '0755'
+
+- name: Make sure the matterbridge toml file can be accessed by the run user
+  ansible.builtin.file:
+    dest: "/opt/manager/modules/WaddleBot-Configurator/app/matterbridge.toml"
+    owner: "{{ run.user }}"
+    group: "{{ run.user }}"
+    state: touch
+
+- name: Make sure the test sh file can be accessed by the run user
+  ansible.builtin.file:
+    dest: "/opt/manager/modules/WaddleBot-Configurator/app/test.sh"
+    owner: "{{ run.user }}"
+    group: "{{ run.user }}"
+    state: touch
+
+- name: Make sure the configurator python script is executable by the run user
+  ansible.builtin.file:
+    dest: "/opt/manager/modules/WaddleBot-Configurator/app/configurator.py"
+    owner: "{{ run.user }}"
+    group: "{{ run.user }}"
+    mode: '0755'
+
+- name: Make sure the restart python script is executable by the run user
+  ansible.builtin.file:
+    dest: "/opt/manager/modules/WaddleBot-Configurator/app/restart.py"
+    owner: "{{ run.user }}"
+    group: "{{ run.user }}"
+    mode: '0755'
