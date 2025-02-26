@@ -76,7 +76,7 @@
     group: "{{ run.user }}"
     state: touch
 
-- name: Make sure the configurator pyhon script is executable by the run user
+- name: Make sure the configurator python script is executable by the run user
   ansible.builtin.file:
     dest: "/opt/manager/modules/WaddleBot-Configurator/app/configurator.py"
     owner: "{{ run.user }}"
