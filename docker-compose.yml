@@ -21,7 +21,7 @@ services:
     volumes:
         - db_data:/var/lib/postgresql/data
   dbm:
-    image: penguincloud/dbm:latest
+    image: penguincloud/waddledbm:latest
     networks:
       - waddlebot_network
   chat:
@@ -54,3 +54,6 @@ services:
 networks:
   waddlebot_network:
     driver: bridge
+
+volumes:
+  db_data:
