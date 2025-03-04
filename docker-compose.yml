@@ -11,7 +11,7 @@ services:
       - db
 
   db:
-    image: postgres:latest
+    image: postgres
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
@@ -21,16 +21,16 @@ services:
     volumes:
         - db_data:/var/lib/postgresql/data
   dbm:
-    image: penguincloud/waddledbm:latest
+    image: penguincloud/waddledbm:main
     networks:
       - waddlebot_network
   chat:
-    image: waddlebot-chat:latest
+    image: waddlebot-chat
     build: chat/
     networks:
         - waddlebot_network
   gateway:
-    image: waddlebot-gateway:latest
+    image: waddlebot-gateway
     build: gateway/
     networks:
       - waddlebot_network
@@ -38,14 +38,14 @@ services:
       - "8080:8080"
 
   listener:
-    image: waddlebot-listener:latest
+    image: waddlebot-listener
     build: listener/
     networks:
       - waddlebot_network
     ports:
       - "6000:6000"
   marketplace:
-    image: waddlebot-marketplace:latest
+    image: waddlebot-marketplace
     build: marketplace/
     networks:
       - waddlebot_network
