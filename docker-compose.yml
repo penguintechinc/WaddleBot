@@ -21,7 +21,7 @@ services:
     volumes:
         - db_data:/var/lib/postgresql/data
   dbm:
-    image: penguincloud/waddledbm:main
+    image: ghcr.io/penguincloud/waddledbm
     networks:
       - waddlebot_network
   chat:
