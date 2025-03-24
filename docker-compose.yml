@@ -2,55 +2,50 @@
 version: '3.8'
 
 services:
-  waddlebot:
-    build:
-      context: .
-    ports:
-      - "8000:8000"
-    depends_on:
-      - db
-
   db:
-    image: postgres:latest
+    image: postgres
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
       POSTGRES_DB: waddlebot_db
     networks:
-      - waddlebot_network
+      - waddlebotnet
     volumes:
         - db_data:/var/lib/postgresql/data
   dbm:
-    image: penguincloud/dbm:latest
+    image: ghcr.io/penguincloud/waddledbm:main
     networks:
-      - waddlebot_network
+      - waddlebotnet
   chat:
-    image: waddlebot-chat:latest
+    image: waddlebot-chat
     build: chat/
     networks:
-        - waddlebot_network
+        - waddlebotnet
   gateway:
-    image: waddlebot-gateway:latest
+    image: waddlebot-gateway
     build: gateway/
     networks:
-      - waddlebot_network
+      - waddlebotnet
     ports:
       - "8080:8080"
 
   listener:
-    image: waddlebot-listener:latest
+    image: waddlebot-listener
     build: listener/
     networks:
-      - waddlebot_network
+      - waddlebotnet
     ports:
       - "6000:6000"
   marketplace:
-    image: waddlebot-marketplace:latest
+    image: waddlebot-marketplace
     build: marketplace/
     networks:
-      - waddlebot_network
+      - waddlebotnet
     ports:
       - "7000:7000"
 networks:
-  waddlebot_network:
+  waddlebotnet:
     driver: bridge
+
+volumes:
+  db_data:

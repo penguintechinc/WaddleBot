@@ -1,0 +1,7 @@
+[general]
+IgnoreFailureOnStart=true
+
+[api.{{api_gateway_name}}]
+BindAddress="{{api_address}}"
+Buffer=1000
+RemoteNickFormat="{NICK}"

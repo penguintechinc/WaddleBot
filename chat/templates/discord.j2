@@ -1,0 +1,10 @@
+[discord]
+[discord.{{user.discord.name}}]
+
+Token="{{ discord.token }}"
+Server="{{ user.discord.ID}}" 
+AutoWebhooks=true
+RemoteNickFormat="[{PROTOCOL}] <{NICK}> "
+# Map threads from other bridges on discord replies
+PreserveThreading=true
+AllowMention=["roles", "users"]

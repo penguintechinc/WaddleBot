@@ -1,0 +1,32 @@
+run:
+  user: waddlebot
+app:
+  title: "{{ lookup('ansible.builtin.env', 'APP_TITLE') }}"
+user:
+  name: "{{ lookup('ansible.builtin.env', 'USER_NAME') }}"
+  discord:
+    id: "{{ lookup('ansible.builtin.env', 'USER_DISCORD_ID') }}"
+    name: "{{ lookup('ansible.builtin.env', 'USER_DISCORD_NAME') }}"
+twitch:
+  name: "{{ lookup('ansible.builtin.env', 'TWITCH_NAME') }}"
+  nick: "{{ lookup('ansible.builtin.env', 'TWITCH_NICK') }}"
+  channel: "{{ lookup('ansible.builtin.env', 'TWITCH_CHANNEL') }}"
+  token: "{{ lookup('ansible.builtin.env', 'TWITCH_TOKEN') }}"
+  enable: "{{ lookup('ansible.builtin.env', 'TWITCH_ENABLE') }}"
+discord:
+  token: "{{ lookup('ansible.builtin.env', 'DISCORD_TOKEN') }}"
+  enable: "{{ lookup('ansible.builtin.env', 'DISCORD_ENABLE') }}"
+  channel: "{{ lookup('ansible.builtin.env', 'DISCORD_CHANNEL') }}"
+matterbridge:
+  version: "{{ lookup('ansible.builtin.env', 'MATTERBRIDGE_VERSION') }}"
+api:
+  name: "{{ lookup('ansible.builtin.env', 'API_NAME') }}"
+  address: "{{ lookup('ansible.builtin.env', 'API_ADDRESS') }}"
+  enable: "{{ lookup('ansible.builtin.env', 'API_ENABLE') }}"
+telegram:
+  name: "{{ lookup('ansible.builtin.env', 'TELEGRAM_NAME') }}"
+  token: "{{ lookup('ansible.builtin.env', 'TELEGRAM_TOKEN') }}"
+  channel: "{{ lookup('ansible.builtin.env', 'TELEGRAM_CHANNEL') }}"
+  enable: "{{ lookup('ansible.builtin.env', 'TELEGRAM_ENABLE') }}"
+gateway:
+  name: "{{ lookup('ansible.builtin.env', 'GATEWAY_NAME') }}"

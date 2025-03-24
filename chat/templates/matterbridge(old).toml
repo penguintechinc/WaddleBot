@@ -1,0 +1,41 @@
+[discord]
+[discord.{{ discord.name }}]
+Token="{{ discord.token }}"
+Server="{{ discord.server }}"
+AutoWebhooks=true
+RemoteNickFormat="[{PROTOCOL}] <{NICK}> "
+PreserveThreading=true
+
+[telegram]
+[telegram.{{ telegram.name }}]
+Token="{{ telegram.token }}" 
+RemoteNickFormat="<{NICK}> "
+MessageFormat="HTMLNick :"
+QuoteFormat="{MESSAGE} (re @{QUOTENICK}: {QUOTEMESSAGE})"
+QuoteLengthLimit=46
+IgnoreMessages="^/"
+
+# / 
+# GATEWAYS
+# / 
+
+[api.{{ api.name }}]
+BindAddress="{{ api.address }}"
+Buffer=1000
+RemoteNickFormat="{NICK}"
+
+[[gateway]]
+name="{{ gateway.name }}"
+enable=true
+
+[[gateway.inout]]
+account="telegram.{{ telegram.name }}"
+channel="{{ telegram.channel }}"
+
+[[gateway.inout]]
+account="discord.{{ discord.name }}"
+channel="{{ discord.channel }}" 
+
+[[gateway.inout]]
+account="api.{{ api.name }}"
+channel="api"

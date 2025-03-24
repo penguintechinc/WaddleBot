@@ -1,0 +1,8 @@
+[irc.{{gateway_name}}]
+#Add the oauth token here you got from https://twitchapps.com/tmi/
+Password="{{token}}"
+Nick="{{nick}}"
+Server="{{server}}"
+DebugLevel=1
+UseTLS=true
+RemoteNickFormat="[{PROTOCOL}] <{NICK}> "
