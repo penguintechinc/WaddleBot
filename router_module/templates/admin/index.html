@@ -1,0 +1,205 @@
+[[extend 'admin/layout.html']]
+
+[[block content]]
+<div class="hero is-primary">
+    <div class="hero-body">
+        <div class="container">
+            <h1 class="title">
+                <i class="fas fa-tachometer-alt"></i>
+                Router Dashboard
+            </h1>
+            <h2 class="subtitle">
+                Monitor and manage your WaddleBot router system
+            </h2>
+        </div>
+    </div>
+</div>
+
+<div class="columns is-multiline">
+    <!-- Statistics Cards -->
+    <div class="column is-3">
+        <div class="card stats-card">
+            <div class="card-content">
+                <div class="level">
+                    <div class="level-left">
+                        <div class="level-item">
+                            <div>
+                                <p class="title is-4">[[=stats['total_accounts']]]</p>
+                                <p class="subtitle is-6">Total Accounts</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="level-right">
+                        <div class="level-item">
+                            <i class="fas fa-users fa-2x has-text-primary"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="column is-3">
+        <div class="card stats-card">
+            <div class="card-content">
+                <div class="level">
+                    <div class="level-left">
+                        <div class="level-item">
+                            <div>
+                                <p class="title is-4">[[=stats['active_accounts']]]</p>
+                                <p class="subtitle is-6">Active Accounts</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="level-right">
+                        <div class="level-item">
+                            <i class="fas fa-check-circle fa-2x has-text-success"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="column is-3">
+        <div class="card stats-card">
+            <div class="card-content">
+                <div class="level">
+                    <div class="level-left">
+                        <div class="level-item">
+                            <div>
+                                <p class="title is-4">[[=stats['collector_accounts']]]</p>
+                                <p class="subtitle is-6">Collector Modules</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="level-right">
+                        <div class="level-item">
+                            <i class="fas fa-download fa-2x has-text-info"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="column is-3">
+        <div class="card stats-card">
+            <div class="card-content">
+                <div class="level">
+                    <div class="level-left">
+                        <div class="level-item">
+                            <div>
+                                <p class="title is-4">[[=stats['api_requests_today']]]</p>
+                                <p class="subtitle is-6">Requests Today</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="level-right">
+                        <div class="level-item">
+                            <i class="fas fa-chart-line fa-2x has-text-warning"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="columns">
+    <!-- Quick Actions -->
+    <div class="column is-6">
+        <div class="card">
+            <header class="card-header">
+                <p class="card-header-title">
+                    <i class="fas fa-bolt"></i>
+                    &nbsp;Quick Actions
+                </p>
+            </header>
+            <div class="card-content">
+                <div class="buttons">
+                    <a href="[[=URL('admin/service-accounts/create')]]" class="button is-primary">
+                        <i class="fas fa-plus"></i>
+                        &nbsp;Create Service Account
+                    </a>
+                    <a href="[[=URL('admin/service-accounts')]]" class="button is-info">
+                        <i class="fas fa-list"></i>
+                        &nbsp;Manage Accounts
+                    </a>
+                    <a href="[[=URL('admin/api-usage')]]" class="button is-warning">
+                        <i class="fas fa-chart-bar"></i>
+                        &nbsp;View API Usage
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Top Endpoints -->
+    <div class="column is-6">
+        <div class="card">
+            <header class="card-header">
+                <p class="card-header-title">
+                    <i class="fas fa-fire"></i>
+                    &nbsp;Top API Endpoints
+                </p>
+            </header>
+            <div class="card-content">
+                [[if top_endpoints:]]
+                <table class="table is-fullwidth">
+                    <thead>
+                        <tr>
+                            <th>Endpoint</th>
+                            <th>Requests</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        [[for endpoint in top_endpoints:]]
+                        <tr>
+                            <td><code>[[=endpoint.api_usage.endpoint]]</code></td>
+                            <td>
+                                <span class="tag is-info">
+                                    [[=endpoint._extra[endpoint.api_usage.id.count()]]]
+                                </span>
+                            </td>
+                        </tr>
+                        [[pass]]
+                    </tbody>
+                </table>
+                [[else:]]
+                <p class="has-text-grey">No API usage data available</p>
+                [[pass]]
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- System Status -->
+<div class="card">
+    <header class="card-header">
+        <p class="card-header-title">
+            <i class="fas fa-heartbeat"></i>
+            &nbsp;System Status
+        </p>
+    </header>
+    <div class="card-content">
+        <div class="columns">
+            <div class="column">
+                <div class="notification is-success is-light">
+                    <strong>Router Status:</strong> Online
+                </div>
+            </div>
+            <div class="column">
+                <div class="notification is-info is-light">
+                    <strong>Database:</strong> Connected
+                </div>
+            </div>
+            <div class="column">
+                <div class="notification is-warning is-light">
+                    <strong>Authentication:</strong> Active
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+[[end]]

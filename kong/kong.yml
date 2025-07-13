@@ -1,0 +1,311 @@
+# Kong Declarative Configuration for WaddleBot API Gateway
+# Merges router, marketplace, and collector APIs into unified domain
+
+_format_version: "3.0"
+_transform: true
+
+services:
+  # Router Service (Core API)
+  - name: router-service
+    url: http://router-service:8000
+    tags:
+      - waddlebot
+      - core
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 1000
+          hour: 10000
+          policy: local
+      - name: cors
+        config:
+          origins:
+            - "*"
+          methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - OPTIONS
+          headers:
+            - Accept
+            - Authorization
+            - Content-Type
+            - X-API-Key
+          exposed_headers:
+            - X-Auth-Token
+          credentials: true
+          max_age: 3600
+
+  # Marketplace Service  
+  - name: marketplace-service
+    url: http://marketplace-service:8001
+    tags:
+      - waddlebot
+      - marketplace
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 500
+          hour: 5000
+          policy: local
+      - name: cors
+        config:
+          origins:
+            - "*"
+          methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - OPTIONS
+          headers:
+            - Accept
+            - Authorization
+            - Content-Type
+            - X-API-Key
+          credentials: true
+
+  # Twitch Collector Service
+  - name: twitch-collector
+    url: http://twitch-collector:8002
+    tags:
+      - waddlebot
+      - collector
+      - twitch
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 200
+          hour: 2000
+          policy: local
+
+  # Discord Collector Service
+  - name: discord-collector
+    url: http://discord-collector:8003
+    tags:
+      - waddlebot
+      - collector
+      - discord
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 200
+          hour: 2000
+          policy: local
+
+  # Slack Collector Service
+  - name: slack-collector
+    url: http://slack-collector:8004
+    tags:
+      - waddlebot
+      - collector
+      - slack
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 200
+          hour: 2000
+          policy: local
+
+routes:
+  # Router API Routes
+  - name: router-api
+    service: router-service
+    paths:
+      - /api/router
+    strip_path: true
+    preserve_host: false
+    tags:
+      - router
+      - api
+
+  # Router Admin Web UI
+  - name: router-admin
+    service: router-service
+    paths:
+      - /admin
+    strip_path: false
+    preserve_host: false
+    tags:
+      - router
+      - admin
+
+  # Marketplace API Routes
+  - name: marketplace-api
+    service: marketplace-service
+    paths:
+      - /api/marketplace
+    strip_path: true
+    preserve_host: false
+    tags:
+      - marketplace
+      - api
+
+  # Marketplace Web UI
+  - name: marketplace-web
+    service: marketplace-service
+    paths:
+      - /marketplace
+    strip_path: false
+    preserve_host: false
+    tags:
+      - marketplace
+      - web
+
+  # Twitch Collector Webhooks
+  - name: twitch-webhooks
+    service: twitch-collector
+    paths:
+      - /webhooks/twitch
+    strip_path: true
+    preserve_host: false
+    tags:
+      - twitch
+      - webhooks
+
+  # Discord Collector Routes
+  - name: discord-webhooks
+    service: discord-collector
+    paths:
+      - /webhooks/discord
+    strip_path: true
+    preserve_host: false
+    tags:
+      - discord
+      - webhooks
+
+  # Slack Collector Routes  
+  - name: slack-webhooks
+    service: slack-collector
+    paths:
+      - /webhooks/slack
+    strip_path: true
+    preserve_host: false
+    tags:
+      - slack
+      - webhooks
+
+  # Health Check Routes (No Authentication)
+  - name: health-checks
+    service: router-service
+    paths:
+      - /health
+    strip_path: false
+    preserve_host: false
+    tags:
+      - health
+
+plugins:
+  # Global Authentication Plugin
+  - name: key-auth
+    config:
+      key_names:
+        - X-API-Key
+        - apikey
+      key_in_body: false
+      key_in_header: true
+      key_in_query: true
+      hide_credentials: true
+    protocols:
+      - http
+      - https
+    tags:
+      - auth
+      - global
+
+  # Global Request Size Limiting
+  - name: request-size-limiting
+    config:
+      allowed_payload_size: 10 # 10MB
+    tags:
+      - security
+      - global
+
+  # Global IP Restriction (Optional - configure based on environment)
+  # - name: ip-restriction
+  #   config:
+  #     allow:
+  #       - 10.0.0.0/8
+  #       - 192.168.0.0/16
+  #       - 172.16.0.0/12
+  #     deny: []
+  #   tags:
+  #     - security
+  #     - global
+
+  # Request/Response Logging
+  - name: file-log
+    config:
+      path: /var/log/kong/api-access.log
+      reopen: true
+    tags:
+      - logging
+      - global
+
+consumers:
+  # Example service account consumers (will be created via admin API)
+  - username: twitch-collector-primary
+    keyauth_credentials:
+      - key: "wbot_twitch_primary_key_placeholder"
+    tags:
+      - collector
+      - twitch
+
+  - username: discord-collector-primary  
+    keyauth_credentials:
+      - key: "wbot_discord_primary_key_placeholder"
+    tags:
+      - collector
+      - discord
+
+  - username: slack-collector-primary
+    keyauth_credentials:
+      - key: "wbot_slack_primary_key_placeholder"
+    tags:
+      - collector
+      - slack
+
+  - username: marketplace-admin
+    keyauth_credentials:
+      - key: "wbot_marketplace_admin_key_placeholder"
+    tags:
+      - marketplace
+      - admin
+
+# ACL Groups for Role-Based Access
+acls:
+  - consumer: twitch-collector-primary
+    group: collectors
+  - consumer: discord-collector-primary
+    group: collectors
+  - consumer: slack-collector-primary
+    group: collectors
+  - consumer: marketplace-admin
+    group: admins
+
+# Rate Limiting by Consumer Group
+upstreams:
+  - name: router-upstream
+    algorithm: round-robin
+    hash_on: none
+    hash_fallback: none
+    slots: 10000
+    targets:
+      - target: router-service:8000
+        weight: 100
+    tags:
+      - router
+      - upstream
+
+  - name: marketplace-upstream
+    algorithm: round-robin
+    hash_on: none
+    hash_fallback: none
+    slots: 10000
+    targets:
+      - target: marketplace-service:8001
+        weight: 100
+    tags:
+      - marketplace
+      - upstream

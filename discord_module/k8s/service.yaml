@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: discord-collector
+  namespace: waddlebot
+  labels:
+    app: discord-collector
+    component: service
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  selector:
+    app: discord-collector

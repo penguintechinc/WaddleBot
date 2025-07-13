@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  twitch-collector:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      # Twitch Configuration
+      - TWITCH_APP_ID=${TWITCH_APP_ID}
+      - TWITCH_APP_SECRET=${TWITCH_APP_SECRET}
+      - TWITCH_REDIRECT_URI=${TWITCH_REDIRECT_URI:-http://localhost:8000/twitch/auth/callback}
+      - TWITCH_WEBHOOK_SECRET=${TWITCH_WEBHOOK_SECRET}
+      - TWITCH_WEBHOOK_CALLBACK_URL=${TWITCH_WEBHOOK_CALLBACK_URL}
+      
+      # Database Configuration
+      - DATABASE_URL=${DATABASE_URL:-postgresql://waddlebot:password@postgres:5432/waddlebot}
+      
+      # WaddleBot Core API Configuration
+      - CORE_API_URL=${CORE_API_URL:-http://core-api:8001}
+      - CONTEXT_API_URL=${CONTEXT_API_URL:-http://core-api:8001/api/context}
+      - REPUTATION_API_URL=${REPUTATION_API_URL:-http://core-api:8001/api/reputation}
+      - GATEWAY_ACTIVATE_URL=${GATEWAY_ACTIVATE_URL:-http://core-api:8001/api/gateway/activate}
+      
+      # Module Configuration
+      - MODULE_NAME=twitch
+      - MODULE_VERSION=1.0.0
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      
+      # Kubernetes Configuration (when deployed)
+      - KUBERNETES_NAMESPACE=${KUBERNETES_NAMESPACE:-waddlebot}
+      - KUBERNETES_SERVICE_NAME=${KUBERNETES_SERVICE_NAME:-twitch-collector}
+    
+    depends_on:
+      - postgres
+    
+    restart: unless-stopped
+    
+    volumes:
+      - ./logs:/app/logs
+    
+    networks:
+      - waddlebot-network
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=waddlebot
+      - POSTGRES_USER=waddlebot
+      - POSTGRES_PASSWORD=password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - waddlebot-network
+
+volumes:
+  postgres_data:
+
+networks:
+  waddlebot-network:
+    driver: bridge

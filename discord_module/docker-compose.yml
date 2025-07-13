@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  discord-collector:
+    build: .
+    ports:
+      - "8001:8000"
+    environment:
+      # Discord Configuration
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      - DISCORD_APPLICATION_ID=${DISCORD_APPLICATION_ID}
+      - DISCORD_PUBLIC_KEY=${DISCORD_PUBLIC_KEY}
+      - DISCORD_COMMAND_PREFIX=${DISCORD_COMMAND_PREFIX:-!}
+      
+      # Database Configuration
+      - DATABASE_URL=${DATABASE_URL:-postgresql://waddlebot:password@postgres:5432/waddlebot}
+      
+      # WaddleBot Core API Configuration
+      - CORE_API_URL=${CORE_API_URL:-http://core-api:8001}
+      - CONTEXT_API_URL=${CONTEXT_API_URL:-http://core-api:8001/api/context}
+      - REPUTATION_API_URL=${REPUTATION_API_URL:-http://core-api:8001/api/reputation}
+      - GATEWAY_ACTIVATE_URL=${GATEWAY_ACTIVATE_URL:-http://core-api:8001/api/gateway/activate}
+      
+      # Module Configuration
+      - MODULE_NAME=discord
+      - MODULE_VERSION=1.0.0
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      
+      # Kubernetes Configuration (when deployed)
+      - KUBERNETES_NAMESPACE=${KUBERNETES_NAMESPACE:-waddlebot}
+      - KUBERNETES_SERVICE_NAME=${KUBERNETES_SERVICE_NAME:-discord-collector}
+    
+    depends_on:
+      - postgres
+    
+    restart: unless-stopped
+    
+    volumes:
+      - ./logs:/app/logs
+    
+    networks:
+      - waddlebot-network
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=waddlebot
+      - POSTGRES_USER=waddlebot
+      - POSTGRES_PASSWORD=password
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - waddlebot-network
+
+volumes:
+  postgres_data:
+
+networks:
+  waddlebot-network:
+    driver: bridge

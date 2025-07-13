@@ -1,0 +1,164 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: discord-collector
+  namespace: waddlebot
+  labels:
+    app: discord-collector
+    component: collector
+    platform: discord
+spec:
+  replicas: 1  # Discord bots should typically run single instance
+  strategy:
+    type: Recreate  # Avoid multiple bot instances
+  selector:
+    matchLabels:
+      app: discord-collector
+  template:
+    metadata:
+      labels:
+        app: discord-collector
+        component: collector
+        platform: discord
+    spec:
+      containers:
+      - name: discord-collector
+        image: waddlebot/discord-collector:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        
+        env:
+        # Config from ConfigMap
+        - name: MODULE_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: discord-collector-config
+              key: MODULE_NAME
+        - name: MODULE_VERSION
+          valueFrom:
+            configMapKeyRef:
+              name: discord-collector-config
+              key: MODULE_VERSION
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: discord-collector-config
+              key: LOG_LEVEL
+        - name: ENVIRONMENT
+          valueFrom:
+            configMapKeyRef:
+              name: discord-collector-config
+              key: ENVIRONMENT
+        - name: DISCORD_COMMAND_PREFIX
+          valueFrom:
+            configMapKeyRef:
+              name: discord-collector-config
+              key: DISCORD_COMMAND_PREFIX
+        - name: CORE_API_URL
+          valueFrom:
+            configMapKeyRef:
+              name: discord-collector-config
+              key: CORE_API_URL
+        - name: CONTEXT_API_URL
+          valueFrom:
+            configMapKeyRef:
+              name: discord-collector-config
+              key: CONTEXT_API_URL
+        - name: REPUTATION_API_URL
+          valueFrom:
+            configMapKeyRef:
+              name: discord-collector-config
+              key: REPUTATION_API_URL
+        - name: GATEWAY_ACTIVATE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: discord-collector-config
+              key: GATEWAY_ACTIVATE_URL
+        
+        # Secrets
+        - name: DISCORD_BOT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: discord-collector-secrets
+              key: DISCORD_BOT_TOKEN
+        - name: DISCORD_APPLICATION_ID
+          valueFrom:
+            secretKeyRef:
+              name: discord-collector-secrets
+              key: DISCORD_APPLICATION_ID
+        - name: DISCORD_PUBLIC_KEY
+          valueFrom:
+            secretKeyRef:
+              name: discord-collector-secrets
+              key: DISCORD_PUBLIC_KEY
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: discord-collector-secrets
+              key: DATABASE_URL
+        
+        # Kubernetes info
+        - name: KUBERNETES_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: KUBERNETES_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: KUBERNETES_POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        
+        livenessProbe:
+          httpGet:
+            path: /discord/health
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /discord/health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+        
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: logs
+          mountPath: /app/logs
+      
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: logs
+        emptyDir: {}
+      
+      securityContext:
+        fsGroup: 1000
+      
+      restartPolicy: Always

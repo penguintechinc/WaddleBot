@@ -1,0 +1,172 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: twitch-collector
+  namespace: waddlebot
+  labels:
+    app: twitch-collector
+    component: collector
+    platform: twitch
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: twitch-collector
+  template:
+    metadata:
+      labels:
+        app: twitch-collector
+        component: collector
+        platform: twitch
+    spec:
+      containers:
+      - name: twitch-collector
+        image: waddlebot/twitch-collector:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        
+        env:
+        # Config from ConfigMap
+        - name: MODULE_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: twitch-collector-config
+              key: MODULE_NAME
+        - name: MODULE_VERSION
+          valueFrom:
+            configMapKeyRef:
+              name: twitch-collector-config
+              key: MODULE_VERSION
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: twitch-collector-config
+              key: LOG_LEVEL
+        - name: ENVIRONMENT
+          valueFrom:
+            configMapKeyRef:
+              name: twitch-collector-config
+              key: ENVIRONMENT
+        - name: CORE_API_URL
+          valueFrom:
+            configMapKeyRef:
+              name: twitch-collector-config
+              key: CORE_API_URL
+        - name: CONTEXT_API_URL
+          valueFrom:
+            configMapKeyRef:
+              name: twitch-collector-config
+              key: CONTEXT_API_URL
+        - name: REPUTATION_API_URL
+          valueFrom:
+            configMapKeyRef:
+              name: twitch-collector-config
+              key: REPUTATION_API_URL
+        - name: GATEWAY_ACTIVATE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: twitch-collector-config
+              key: GATEWAY_ACTIVATE_URL
+        
+        # Secrets
+        - name: TWITCH_APP_ID
+          valueFrom:
+            secretKeyRef:
+              name: twitch-collector-secrets
+              key: TWITCH_APP_ID
+        - name: TWITCH_APP_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: twitch-collector-secrets
+              key: TWITCH_APP_SECRET
+        - name: TWITCH_WEBHOOK_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: twitch-collector-secrets
+              key: TWITCH_WEBHOOK_SECRET
+        - name: TWITCH_WEBHOOK_CALLBACK_URL
+          valueFrom:
+            secretKeyRef:
+              name: twitch-collector-secrets
+              key: TWITCH_WEBHOOK_CALLBACK_URL
+        - name: TWITCH_REDIRECT_URI
+          valueFrom:
+            secretKeyRef:
+              name: twitch-collector-secrets
+              key: TWITCH_REDIRECT_URI
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: twitch-collector-secrets
+              key: DATABASE_URL
+        
+        # Kubernetes info
+        - name: KUBERNETES_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: KUBERNETES_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: KUBERNETES_POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        
+        livenessProbe:
+          httpGet:
+            path: /twitch/health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /twitch/health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+        
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: logs
+          mountPath: /app/logs
+      
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: logs
+        emptyDir: {}
+      
+      securityContext:
+        fsGroup: 1000
+      
+      restartPolicy: Always

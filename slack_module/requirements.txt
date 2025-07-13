@@ -1,0 +1,37 @@
+# Core py4web dependencies
+py4web>=1.20240906.1
+
+# HTTP requests
+requests>=2.31.0
+
+# Database
+pyDAL>=20231110.1
+
+# Environment variables
+python-dotenv>=1.0.0
+
+# Slack SDK
+slack-sdk>=3.25.0
+slack-bolt>=1.18.0
+
+# Cryptography for signature verification
+cryptography>=41.0.0
+
+# Date/time utilities
+python-dateutil>=2.8.2
+
+# Logging
+structlog>=23.1.0
+
+# Discord py-cord library
+py-cord>=2.4.1
+
+# Async support
+aiohttp>=3.8.0
+asyncio>=3.4.3
+
+# PostgreSQL adapter
+psycopg2-binary>=2.9.0
+
+# Optional: For enhanced JSON handling
+orjson>=3.9.0

@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: discord-collector-config
+  namespace: waddlebot
+  labels:
+    app: discord-collector
+    component: config
+data:
+  MODULE_NAME: "discord"
+  MODULE_VERSION: "1.0.0"
+  LOG_LEVEL: "INFO"
+  ENVIRONMENT: "production"
+  KUBERNETES_NAMESPACE: "waddlebot"
+  KUBERNETES_SERVICE_NAME: "discord-collector"
+  DISCORD_COMMAND_PREFIX: "!"
+  
+  # Core API endpoints
+  CORE_API_URL: "http://core-api:8001"
+  CONTEXT_API_URL: "http://core-api:8001/api/context"
+  REPUTATION_API_URL: "http://core-api:8001/api/reputation"
+  GATEWAY_ACTIVATE_URL: "http://core-api:8001/api/gateway/activate"

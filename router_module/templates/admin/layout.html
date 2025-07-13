@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>WaddleBot Router Admin</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .navbar-brand .navbar-item {
+            font-weight: bold;
+        }
+        .content table td {
+            vertical-align: middle;
+        }
+        .api-key-display {
+            font-family: monospace;
+            background-color: #f5f5f5;
+            padding: 0.5rem;
+            border-radius: 4px;
+            word-break: break-all;
+        }
+        .stats-card {
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar is-dark" role="navigation">
+        <div class="navbar-brand">
+            <a class="navbar-item" href="[[=URL('admin')]]">
+                <i class="fas fa-robot"></i>
+                &nbsp;WaddleBot Router Admin
+            </a>
+        </div>
+        
+        <div class="navbar-menu">
+            <div class="navbar-start">
+                <a class="navbar-item" href="[[=URL('admin')]]">
+                    <i class="fas fa-tachometer-alt"></i>
+                    &nbsp;Dashboard
+                </a>
+                <a class="navbar-item" href="[[=URL('admin/service-accounts')]]">
+                    <i class="fas fa-key"></i>
+                    &nbsp;Service Accounts
+                </a>
+                <a class="navbar-item" href="[[=URL('admin/api-usage')]]">
+                    <i class="fas fa-chart-bar"></i>
+                    &nbsp;API Usage
+                </a>
+                <a class="navbar-item" href="[[=URL('admin/coordination')]]">
+                    <i class="fas fa-network-wired"></i>
+                    &nbsp;Coordination
+                </a>
+            </div>
+            
+            <div class="navbar-end">
+                <div class="navbar-item has-dropdown is-hoverable">
+                    <a class="navbar-link">
+                        <i class="fas fa-user"></i>
+                        &nbsp;[[=user.email if user else 'Guest']]
+                    </a>
+                    <div class="navbar-dropdown">
+                        [[if user:]]
+                        <a class="navbar-item" href="[[=URL('admin/auth/logout')]]">
+                            <i class="fas fa-sign-out-alt"></i>
+                            &nbsp;Logout
+                        </a>
+                        [[else:]]
+                        <a class="navbar-item" href="[[=URL('admin/auth/login')]]">
+                            <i class="fas fa-sign-in-alt"></i>
+                            &nbsp;Login
+                        </a>
+                        [[pass]]
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+    
+    <section class="section">
+        <div class="container">
+            [[block content]]
+            <!-- Page content goes here -->
+            [[end]]
+        </div>
+    </section>
+    
+    <footer class="footer">
+        <div class="content has-text-centered">
+            <p>
+                <strong>WaddleBot Router Admin</strong> - Service Account Management
+            </p>
+        </div>
+    </footer>
+    
+    <script>
+        // Toggle mobile navbar
+        document.addEventListener('DOMContentLoaded', () => {
+            const $navbarBurgers = Array.prototype.slice.call(document.querySelectorAll('.navbar-burger'), 0);
+            if ($navbarBurgers.length > 0) {
+                $navbarBurgers.forEach(el => {
+                    el.addEventListener('click', () => {
+                        const target = el.dataset.target;
+                        const $target = document.getElementById(target);
+                        el.classList.toggle('is-active');
+                        $target.classList.toggle('is-active');
+                    });
+                });
+            }
+        });
+        
+        // Copy API key to clipboard
+        function copyApiKey(apiKey) {
+            navigator.clipboard.writeText(apiKey).then(() => {
+                // Show notification
+                const notification = document.createElement('div');
+                notification.className = 'notification is-success is-light';
+                notification.innerHTML = '<i class="fas fa-check"></i> API key copied to clipboard!';
+                document.body.appendChild(notification);
+                setTimeout(() => {
+                    notification.remove();
+                }, 3000);
+            });
+        }
+    </script>
+</body>
+</html>
