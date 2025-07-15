@@ -6,6 +6,7 @@ import json
 import logging
 import asyncio
 import time
+import os
 from datetime import datetime, timedelta
 from py4web import action, request, response, HTTP
 from typing import List, Dict, Any
@@ -13,12 +14,254 @@ from typing import List, Dict, Any
 from ..models import db
 from ..services.command_processor import command_processor, CommandRequest
 from ..services.auth_service import require_api_key
+from ..services.session_manager import session_manager
+from ..services.rbac_service import rbac_service
+from ..middleware.rbac_middleware import rbac_middleware, require_permission, require_role
 from ..config import load_config
+import requests
 
 logger = logging.getLogger(__name__)
 
 # Load configuration
 router_config, lambda_config, openwhisk_config, waddlebot_config = load_config()
+
+# Initialize RBAC system on startup
+try:
+    rbac_service.initialize_rbac_system()
+    logger.info("RBAC system initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize RBAC system: {str(e)}")
+    # Continue startup even if RBAC initialization fails
+
+def ensure_user_global_community_access(user_id: str) -> None:
+    """Ensure user has access to global community with default role"""
+    try:
+        rbac_service.ensure_user_in_global_community(user_id)
+        logger.debug(f"Ensured user {user_id} has access to global community")
+    except Exception as e:
+        logger.error(f"Error ensuring user {user_id} global community access: {str(e)}")
+
+def await_process_reputation_event(user_id: str, entity_id: str, message_type: str, event_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Process reputation event asynchronously"""
+    try:
+        # Map message types to reputation events
+        event_name_mapping = {
+            "chatMessage": "message",
+            "subscription": "sub",
+            "follow": "follow",
+            "donation": "donation",
+            "cheer": "cheer",
+            "raid": "raid",
+            "host": "host",
+            "subgift": "subgift",
+            "resub": "resub",
+            "reaction": "reaction",
+            "member_join": "member_join",
+            "member_leave": "member_leave",
+            "voice_join": "voice_join",
+            "voice_leave": "voice_leave",
+            "voice_time": "voice_time",
+            "boost": "boost",
+            "ban": "ban",
+            "kick": "kick",
+            "timeout": "timeout",
+            "warn": "warn",
+            "file_share": "file_share",
+            "app_mention": "app_mention",
+            "channel_join": "channel_join"
+        }
+        
+        event_name = event_name_mapping.get(message_type, message_type)
+        
+        # Prepare reputation event data
+        reputation_payload = {
+            "user_id": user_id,
+            "entity_id": entity_id,
+            "event_name": event_name,
+            "event_data": {
+                "platform": event_data.get("platform"),
+                "server_id": event_data.get("server_id"),
+                "channel_id": event_data.get("channel_id"),
+                "message_content": event_data.get("message_content"),
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        }
+        
+        # Add message-type specific data
+        if message_type == "cheer" and "bits" in event_data:
+            reputation_payload["event_data"]["bits"] = event_data["bits"]
+        elif message_type == "voice_time" and "minutes" in event_data:
+            reputation_payload["event_data"]["minutes"] = event_data["minutes"]
+        elif message_type == "donation" and "amount" in event_data:
+            reputation_payload["event_data"]["amount"] = event_data["amount"]
+        
+        # Send to reputation module
+        reputation_url = os.environ.get("REPUTATION_MODULE_URL", "http://reputation-module:8000")
+        
+        response = requests.post(
+            f"{reputation_url}/reputation/process",
+            json=reputation_payload,
+            headers={"Content-Type": "application/json"},
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            return {"success": True, "data": response.json()}
+        else:
+            logger.warning(f"Reputation processing failed: {response.status_code} - {response.text}")
+            return {"success": False, "error": f"HTTP {response.status_code}"}
+            
+    except requests.RequestException as e:
+        logger.error(f"Error sending reputation event: {str(e)}")
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        logger.error(f"Error processing reputation event: {str(e)}")
+        return {"success": False, "error": str(e)}
+
+def get_event_triggered_modules(message_type: str, entity_id: str) -> List[Dict[str, Any]]:
+    """Get modules that should be triggered by this event type"""
+    try:
+        # Get modules that are triggered by this event type or both commands and events
+        modules = db(
+            (db.commands.is_active == True) &
+            (db.commands.trigger_type.belongs(['event', 'both'])) &
+            (db.commands.event_types.contains(message_type))
+        ).select(orderby=db.commands.priority)
+        
+        # Check permissions for entity
+        authorized_modules = []
+        for module in modules:
+            # Check if entity has permission to use this module
+            permission = db(
+                (db.command_permissions.command_id == module.id) &
+                (db.command_permissions.entity_id == entity_id) &
+                (db.command_permissions.is_enabled == True)
+            ).select().first()
+            
+            if permission:
+                authorized_modules.append({
+                    "id": module.id,
+                    "command": module.command,
+                    "location_url": module.location_url,
+                    "method": module.method,
+                    "headers": module.headers,
+                    "timeout": module.timeout,
+                    "priority": module.priority,
+                    "execution_mode": module.execution_mode,
+                    "rate_limit": module.rate_limit
+                })
+        
+        return authorized_modules
+        
+    except Exception as e:
+        logger.error(f"Error getting event-triggered modules: {str(e)}")
+        return []
+
+def await_process_event_modules(event_modules: List[Dict[str, Any]], user_id: str, 
+                               entity_id: str, message_type: str, event_data: Dict[str, Any],
+                               session_id: str) -> List[Dict[str, Any]]:
+    """Process event-triggered modules"""
+    try:
+        results = []
+        parallel_modules = []
+        
+        # Separate modules by execution mode
+        for module in event_modules:
+            if module["execution_mode"] == "parallel":
+                parallel_modules.append(module)
+            else:
+                # Execute sequential modules immediately
+                result = execute_event_module(module, user_id, entity_id, message_type, event_data, session_id)
+                results.append(result)
+        
+        # Execute parallel modules concurrently
+        if parallel_modules:
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+                future_to_module = {
+                    executor.submit(execute_event_module, module, user_id, entity_id, message_type, event_data, session_id): module 
+                    for module in parallel_modules
+                }
+                
+                for future in concurrent.futures.as_completed(future_to_module):
+                    module = future_to_module[future]
+                    try:
+                        result = future.result()
+                        results.append(result)
+                    except Exception as exc:
+                        logger.error(f"Module {module['command']} generated an exception: {exc}")
+                        results.append({
+                            "module": module["command"],
+                            "success": False,
+                            "error": str(exc)
+                        })
+        
+        return results
+        
+    except Exception as e:
+        logger.error(f"Error processing event modules: {str(e)}")
+        return []
+
+def execute_event_module(module: Dict[str, Any], user_id: str, entity_id: str, 
+                        message_type: str, event_data: Dict[str, Any], session_id: str) -> Dict[str, Any]:
+    """Execute a single event-triggered module"""
+    try:
+        # Prepare payload for the module
+        payload = {
+            "user_id": user_id,
+            "entity_id": entity_id,
+            "message_type": message_type,
+            "event_data": event_data,
+            "session_id": session_id,
+            "execution_id": f"event_{int(time.time() * 1000000)}",
+            "trigger_type": "event"
+        }
+        
+        # Add headers
+        headers = {"Content-Type": "application/json"}
+        if module.get("headers"):
+            headers.update(module["headers"])
+        
+        # Make request to module
+        response = requests.request(
+            method=module["method"],
+            url=module["location_url"],
+            json=payload,
+            headers=headers,
+            timeout=module["timeout"]
+        )
+        
+        if response.status_code == 200:
+            result_data = response.json()
+            return {
+                "module": module["command"],
+                "success": True,
+                "response": result_data,
+                "status_code": response.status_code,
+                "execution_time_ms": response.elapsed.total_seconds() * 1000
+            }
+        else:
+            return {
+                "module": module["command"],
+                "success": False,
+                "error": f"HTTP {response.status_code}",
+                "status_code": response.status_code
+            }
+            
+    except requests.RequestException as e:
+        logger.error(f"Error executing module {module['command']}: {str(e)}")
+        return {
+            "module": module["command"],
+            "success": False,
+            "error": str(e)
+        }
+    except Exception as e:
+        logger.error(f"Error executing module {module['command']}: {str(e)}")
+        return {
+            "module": module["command"],
+            "success": False,
+            "error": str(e)
+        }
 
 @action("router/events", method=["POST"])
 @require_api_key(['collector'])
@@ -34,7 +277,7 @@ def receive_events():
             raise HTTP(400, "No event data provided")
         
         # Validate required fields
-        required_fields = ["platform", "server_id", "user_id", "user_name", "message_content"]
+        required_fields = ["platform", "server_id", "user_id", "user_name", "message_content", "message_type"]
         missing_fields = [field for field in required_fields if field not in event_data]
         if missing_fields:
             raise HTTP(400, f"Missing required fields: {', '.join(missing_fields)}")
@@ -46,25 +289,45 @@ def receive_events():
         user_id = event_data["user_id"]
         user_name = event_data["user_name"]
         message_content = event_data["message_content"]
+        message_type = event_data["message_type"]
         
-        # Parse command from message
-        command_request = command_processor.parse_message(
-            message_content=message_content,
-            platform=platform,
-            server_id=server_id,
-            channel_id=channel_id,
-            user_id=user_id,
-            user_name=user_name
-        )
+        # Validate message type
+        valid_message_types = [
+            "chatMessage", "subscription", "follow", "donation", "cheer", "raid", 
+            "host", "subgift", "resub", "reaction", "member_join", "member_leave",
+            "voice_join", "voice_leave", "voice_time", "boost", "ban", "kick",
+            "timeout", "warn", "file_share", "app_mention", "channel_join"
+        ]
+        if message_type not in valid_message_types:
+            raise HTTP(400, f"Invalid message_type '{message_type}'. Valid types: {', '.join(valid_message_types)}")
         
-        if not command_request:
-            # Not a command - check for string matches
-            string_match_result = asyncio.run(
-                command_processor.check_string_match(message_content, 
-                command_processor.generate_entity_id(platform, server_id, channel_id))
+        # Generate entity ID and ensure it exists in database
+        entity_id = command_processor.ensure_entity_exists(platform, server_id, channel_id, user_id)
+        session_id = session_manager.create_session(entity_id)
+        
+        # Ensure user has access to global community with default role
+        ensure_user_global_community_access(user_id)
+        
+        # Process based on message type
+        if message_type == "chatMessage":
+            # Only chat messages can contain commands
+            command_request = command_processor.parse_message(
+                message_content=message_content,
+                platform=platform,
+                server_id=server_id,
+                channel_id=channel_id,
+                user_id=user_id,
+                user_name=user_name
             )
             
-            if string_match_result.matched:
+            if not command_request:
+                # Not a command - check for string matches
+                string_match_result = asyncio.run(
+                    command_processor.check_string_match(message_content, 
+                    command_processor.generate_entity_id(platform, server_id, channel_id))
+                )
+                
+                if string_match_result.matched:
                 # Create a dummy request for string match processing
                 dummy_request = command_processor.CommandRequest(
                     message_id=f"{platform}_{server_id}_{channel_id}_{int(time.time() * 1000000)}",
@@ -90,18 +353,66 @@ def receive_events():
                     "execution_time_ms": result.execution_time_ms,
                     "response": result.response_data,
                     "status_code": result.status_code,
-                    "processed": True
+                    "processed": True,
+                    "session_id": session_id
                 }
             
-            # Not a command and no string match - return success but no action
+            # Not a command and no string match - process reputation and check for event-triggered modules
+            reputation_result = await_process_reputation_event(
+                user_id=user_id,
+                entity_id=entity_id,
+                message_type=message_type,
+                event_data=event_data
+            )
+            
+            # Check for event-triggered modules for chat messages
+            event_modules = get_event_triggered_modules(message_type, entity_id)
+            module_results = []
+            
+            if event_modules:
+                module_results = await_process_event_modules(
+                    event_modules=event_modules,
+                    user_id=user_id,
+                    entity_id=entity_id,
+                    message_type=message_type,
+                    event_data=event_data,
+                    session_id=session_id
+                )
+            
             return {
                 "success": True,
                 "message": "Not a command",
-                "processed": False
+                "processed": False,
+                "session_id": session_id,
+                "reputation_processed": reputation_result,
+                "event_modules_executed": len(module_results),
+                "module_results": module_results
             }
         
         # Process the command asynchronously
         result = asyncio.run(command_processor.process_command_async(command_request))
+        
+        # Also process reputation for chat message commands
+        reputation_result = await_process_reputation_event(
+            user_id=user_id,
+            entity_id=entity_id,
+            message_type=message_type,
+            event_data=event_data
+        )
+        
+        # Check for event-triggered modules for command messages
+        event_modules = get_event_triggered_modules(message_type, entity_id)
+        module_results = []
+        
+        if event_modules:
+            module_results = await_process_event_modules(
+                event_modules=event_modules,
+                user_id=user_id,
+                entity_id=entity_id,
+                message_type=message_type,
+                event_data=event_data,
+                session_id=session_id
+            )
         
         # Return result
         return {
@@ -110,8 +421,45 @@ def receive_events():
             "execution_time_ms": result.execution_time_ms,
             "response": result.response_data,
             "status_code": result.status_code,
-            "processed": True
+            "processed": True,
+            "session_id": session_id,
+            "reputation_processed": reputation_result,
+            "event_modules_executed": len(module_results),
+            "module_results": module_results
         }
+        
+        else:
+            # Non-chat message types - process reputation event and check for event-triggered modules
+            reputation_result = await_process_reputation_event(
+                user_id=user_id,
+                entity_id=entity_id,
+                message_type=message_type,
+                event_data=event_data
+            )
+            
+            # Check for event-triggered modules
+            event_modules = get_event_triggered_modules(message_type, entity_id)
+            module_results = []
+            
+            if event_modules:
+                module_results = await_process_event_modules(
+                    event_modules=event_modules,
+                    user_id=user_id,
+                    entity_id=entity_id,
+                    message_type=message_type,
+                    event_data=event_data,
+                    session_id=session_id
+                )
+            
+            return {
+                "success": True,
+                "message_type": message_type,
+                "processed": True,
+                "session_id": session_id,
+                "reputation_processed": reputation_result,
+                "event_modules_executed": len(module_results),
+                "module_results": module_results
+            }
         
     except Exception as e:
         logger.error(f"Error processing router event: {str(e)}")
@@ -136,13 +484,26 @@ def receive_events_batch():
         if len(events) > 100:  # Limit batch size
             raise HTTP(400, "Batch size too large (max 100 events)")
         
-        # Parse all events into command requests
+        # Parse all events into command requests and ensure global community access
         command_requests = []
+        user_ids_to_process = set()
+        
         for event_data in events:
             # Validate required fields
             required_fields = ["platform", "server_id", "user_id", "user_name", "message_content"]
             if not all(field in event_data for field in required_fields):
                 continue  # Skip invalid events
+            
+            # Collect user IDs for bulk processing
+            user_ids_to_process.add(event_data["user_id"])
+            
+            # Ensure entity exists in database
+            command_processor.ensure_entity_exists(
+                platform=event_data["platform"],
+                server_id=event_data["server_id"],
+                channel_id=event_data.get("channel_id", ""),
+                owner=event_data["user_id"]
+            )
             
             # Parse command from message
             command_request = command_processor.parse_message(
@@ -156,6 +517,10 @@ def receive_events_batch():
             
             if command_request:
                 command_requests.append(command_request)
+        
+        # Bulk ensure global community access for all users
+        if user_ids_to_process:
+            rbac_service.ensure_users_in_global_community_bulk(list(user_ids_to_process))
         
         if not command_requests:
             return {
@@ -552,13 +917,13 @@ def submit_module_response():
             raise HTTP(400, "No response data provided")
         
         # Validate required fields
-        required_fields = ["execution_id", "module_name", "success", "response_action"]
+        required_fields = ["execution_id", "module_name", "success", "response_action", "session_id"]
         missing_fields = [field for field in required_fields if field not in response_data]
         if missing_fields:
             raise HTTP(400, f"Missing required fields: {', '.join(missing_fields)}")
         
         # Validate response_action
-        valid_actions = ["chat", "media", "ticker"]
+        valid_actions = ["chat", "media", "ticker", "form"]
         if response_data["response_action"] not in valid_actions:
             raise HTTP(400, f"Invalid response_action. Must be one of: {', '.join(valid_actions)}")
         
@@ -566,6 +931,19 @@ def submit_module_response():
         execution = db(db.command_executions.execution_id == response_data["execution_id"]).select().first()
         if not execution:
             raise HTTP(404, f"Execution ID {response_data['execution_id']} not found")
+        
+        # Validate session_id exists and get entity_id
+        session_id = response_data["session_id"]
+        entity_id = session_manager.get_entity_id(session_id)
+        if not entity_id:
+            raise HTTP(404, f"Session ID {session_id} not found or expired")
+        
+        # Validate that session belongs to the entity from the execution
+        if not session_manager.validate_session(session_id, execution.entity_id):
+            raise HTTP(403, f"Session ID {session_id} does not match execution entity")
+        
+        # Update session activity
+        session_manager.update_session_activity(session_id)
         
         # Process response based on action type
         response_record = {
@@ -589,6 +967,14 @@ def submit_module_response():
         elif response_data["response_action"] == "ticker":
             response_record["ticker_text"] = response_data.get("ticker_text", "")
             response_record["ticker_duration"] = response_data.get("ticker_duration", 10)
+            
+        elif response_data["response_action"] == "form":
+            response_record["form_title"] = response_data.get("form_title", "")
+            response_record["form_description"] = response_data.get("form_description", "")
+            response_record["form_fields"] = response_data.get("form_fields", [])
+            response_record["form_submit_url"] = response_data.get("form_submit_url", "")
+            response_record["form_submit_method"] = response_data.get("form_submit_method", "POST")
+            response_record["form_callback_url"] = response_data.get("form_callback_url", "")
         
         # Insert response record
         response_id = db.module_responses.insert(**response_record)
@@ -634,6 +1020,13 @@ def get_module_responses(execution_id):
             elif resp.response_action == "ticker":
                 response_info["ticker_text"] = resp.ticker_text
                 response_info["ticker_duration"] = resp.ticker_duration
+            elif resp.response_action == "form":
+                response_info["form_title"] = resp.form_title
+                response_info["form_description"] = resp.form_description
+                response_info["form_fields"] = resp.form_fields
+                response_info["form_submit_url"] = resp.form_submit_url
+                response_info["form_submit_method"] = resp.form_submit_method
+                response_info["form_callback_url"] = resp.form_callback_url
             
             if resp.error_message:
                 response_info["error_message"] = resp.error_message
@@ -699,6 +1092,12 @@ def get_recent_responses():
             elif resp.response_action == "ticker":
                 response_info["ticker_text"] = resp.ticker_text[:50] + "..." if len(resp.ticker_text or "") > 50 else resp.ticker_text
                 response_info["ticker_duration"] = resp.ticker_duration
+            elif resp.response_action == "form":
+                response_info["form_title"] = resp.form_title
+                response_info["form_description"] = resp.form_description[:100] + "..." if len(resp.form_description or "") > 100 else resp.form_description
+                response_info["form_fields_count"] = len(resp.form_fields) if resp.form_fields else 0
+                response_info["form_submit_url"] = resp.form_submit_url
+                response_info["form_submit_method"] = resp.form_submit_method
             
             response_list.append(response_info)
         

@@ -56,6 +56,10 @@ db.define_table(
     Field('module_type', 'string', required=True),   # local, community (matches location)
     Field('module_id', 'string'),                    # Reference to marketplace module
     Field('version', 'string', default='1.0'),
+    Field('trigger_type', 'string', default='command'), # command, event, both
+    Field('event_types', 'json', default=[]),        # List of event types that trigger this module
+    Field('priority', 'integer', default=100),       # Lower number = higher priority
+    Field('execution_mode', 'string', default='sequential'), # sequential, parallel
     Field('created_at', 'datetime', default=datetime.utcnow),
     Field('updated_at', 'datetime', update=datetime.utcnow),
     migrate=True
@@ -162,13 +166,19 @@ db.define_table(
     Field('execution_id', 'string', required=True),  # Links to command_executions
     Field('module_name', 'string', required=True),    # Module that responded
     Field('success', 'boolean', required=True),       # Whether module ran properly
-    Field('response_action', 'string', required=True), # chat, media, ticker
+    Field('response_action', 'string', required=True), # chat, media, ticker, form
     Field('response_data', 'json'),                   # Response content
     Field('media_type', 'string'),                    # video, image, audio (for media action)
     Field('media_url', 'string'),                     # Media URL (for media action)
     Field('ticker_text', 'string'),                   # Ticker content (for ticker action)
     Field('ticker_duration', 'integer'),              # Ticker display duration in seconds
     Field('chat_message', 'text'),                    # Chat response (for chat action)
+    Field('form_title', 'string'),                    # Form title (for form action)
+    Field('form_description', 'text'),                # Form description (for form action)
+    Field('form_fields', 'json'),                     # Form field definitions (for form action)
+    Field('form_submit_url', 'string'),               # Form submission URL (for form action)
+    Field('form_submit_method', 'string', default='POST'), # Form submission method (for form action)
+    Field('form_callback_url', 'string'),             # Callback URL after form submission (for form action)
     Field('error_message', 'text'),                   # Error details if success=false
     Field('processing_time_ms', 'integer'),           # Module processing time
     Field('created_at', 'datetime', default=datetime.utcnow),
@@ -288,6 +298,147 @@ db.define_table(
     migrate=True
 )
 
+# Communities table for managing collections of entities
+db.define_table(
+    'communities',
+    Field('id', 'id'),
+    Field('name', 'string', required=True),
+    Field('owners', 'json', required=True),           # List of user IDs who can manage this community
+    Field('entity_groups', 'json', default=[]),       # List of entity group IDs
+    Field('member_ids', 'json', default=[]),          # List of user IDs who are members
+    Field('description', 'text'),
+    Field('is_active', 'boolean', default=True),
+    Field('settings', 'json', default={}),            # Community-specific settings
+    Field('created_by', 'string', required=True),     # User ID who created the community
+    Field('created_at', 'datetime', default=datetime.utcnow),
+    Field('updated_at', 'datetime', update=datetime.utcnow),
+    migrate=True
+)
+
+# Entity groups table for grouping entities by platform+server
+db.define_table(
+    'entity_groups',
+    Field('id', 'id'),
+    Field('name', 'string', required=True),
+    Field('platform', 'string', required=True),       # discord, slack, etc. (not twitch)
+    Field('server_id', 'string', required=True),      # guild_id, team_id, etc.
+    Field('entity_ids', 'json', default=[]),          # List of entity IDs in this group
+    Field('community_id', 'reference communities'),    # Which community this group belongs to
+    Field('is_active', 'boolean', default=True),
+    Field('created_by', 'string', required=True),
+    Field('created_at', 'datetime', default=datetime.utcnow),
+    Field('updated_at', 'datetime', update=datetime.utcnow),
+    migrate=True
+)
+
+# Reputation scoring configuration per community
+db.define_table(
+    'reputation_scoring',
+    Field('id', 'id'),
+    Field('event_name', 'string', required=True),     # follow, sub, message, reaction, etc.
+    Field('event_score', 'integer', required=True),   # Points to award/deduct
+    Field('community_id', 'reference communities', required=True),
+    Field('is_active', 'boolean', default=True),
+    Field('description', 'text'),                     # Description of what this event is
+    Field('created_by', 'string', required=True),
+    Field('created_at', 'datetime', default=datetime.utcnow),
+    Field('updated_at', 'datetime', update=datetime.utcnow),
+    migrate=True
+)
+
+# User reputation scores per community
+db.define_table(
+    'user_reputation',
+    Field('id', 'id'),
+    Field('user_id', 'string', required=True),        # User ID
+    Field('community_id', 'reference communities', required=True),
+    Field('current_score', 'integer', default=0),     # Current reputation score
+    Field('total_events', 'integer', default=0),      # Total number of events processed
+    Field('last_activity', 'datetime'),               # Last time score was updated
+    Field('created_at', 'datetime', default=datetime.utcnow),
+    Field('updated_at', 'datetime', update=datetime.utcnow),
+    migrate=True
+)
+
+# Reputation event log for tracking all scoring events
+db.define_table(
+    'reputation_events',
+    Field('id', 'id'),
+    Field('user_id', 'string', required=True),
+    Field('community_id', 'reference communities', required=True),
+    Field('entity_id', 'string', required=True),      # Which entity the event came from
+    Field('event_name', 'string', required=True),     # Event type that triggered scoring
+    Field('event_score', 'integer', required=True),   # Points awarded/deducted
+    Field('previous_score', 'integer', required=True), # User's score before this event
+    Field('new_score', 'integer', required=True),     # User's score after this event
+    Field('event_data', 'json'),                      # Additional event metadata
+    Field('processed_at', 'datetime', default=datetime.utcnow),
+    migrate=True
+)
+
+# Community membership table for tracking user memberships (simplified)
+db.define_table(
+    'community_memberships',
+    Field('id', 'id'),
+    Field('community_id', 'reference communities', required=True),
+    Field('user_id', 'string', required=True),
+    Field('joined_at', 'datetime', default=datetime.utcnow),
+    Field('is_active', 'boolean', default=True),
+    Field('invited_by', 'string'),                    # User ID who invited this user
+    migrate=True
+)
+
+# Community RBAC table for role-based access control (separate for performance)
+db.define_table(
+    'community_rbac',
+    Field('id', 'id'),
+    Field('community_id', 'reference communities', required=True),
+    Field('user_id', 'string', required=True),
+    Field('role', 'string', default='user'),          # user, moderator, owner
+    Field('permissions', 'json', default={}),         # Additional granular permissions
+    Field('assigned_by', 'string'),                   # User ID who assigned this role
+    Field('assigned_at', 'datetime', default=datetime.utcnow),
+    Field('is_active', 'boolean', default=True),
+    migrate=True
+)
+
+# RBAC permissions table for granular permissions
+db.define_table(
+    'rbac_permissions',
+    Field('id', 'id'),
+    Field('name', 'string', required=True, unique=True),  # Permission name
+    Field('description', 'text'),                     # Description of permission
+    Field('category', 'string', default='general'),   # Category (moderation, management, etc.)
+    Field('is_active', 'boolean', default=True),
+    Field('created_at', 'datetime', default=datetime.utcnow),
+    migrate=True
+)
+
+# Entity roles table for entity-specific permissions
+db.define_table(
+    'entity_roles',
+    Field('id', 'id'),
+    Field('entity_id', 'string', required=True),      # Entity ID
+    Field('user_id', 'string', required=True),        # User ID
+    Field('role', 'string', required=True),           # user, moderator, owner
+    Field('permissions', 'json', default={}),         # Additional granular permissions
+    Field('assigned_by', 'string'),                   # User ID who assigned this role
+    Field('assigned_at', 'datetime', default=datetime.utcnow),
+    Field('is_active', 'boolean', default=True),
+    migrate=True
+)
+
+# Default entity settings for entity groups
+db.define_table(
+    'entity_defaults',
+    Field('id', 'id'),
+    Field('entity_group_id', 'reference entity_groups', required=True),
+    Field('default_entity_id', 'string', required=True),  # Default entity for group operations
+    Field('is_active', 'boolean', default=True),
+    Field('created_at', 'datetime', default=datetime.utcnow),
+    migrate=True
+)
+
 # Copy table definitions to read replica for queries
 for table_name in db.tables:
     if hasattr(db, table_name):
@@ -333,9 +484,56 @@ try:
     db.executesql('CREATE INDEX IF NOT EXISTS idx_coordination_live ON coordination(platform, is_live, viewer_count);')
     db.executesql('CREATE INDEX IF NOT EXISTS idx_coordination_heartbeat ON coordination(claimed_by, last_check);')
     
+    # Index for community tables
+    db.executesql('CREATE INDEX IF NOT EXISTS idx_communities_name ON communities(name) WHERE is_active = true;')
+    db.executesql('CREATE INDEX IF NOT EXISTS idx_communities_created_by ON communities(created_by) WHERE is_active = true;')
+    
+    # Index for entity groups
+    db.executesql('CREATE INDEX IF NOT EXISTS idx_entity_groups_platform_server ON entity_groups(platform, server_id) WHERE is_active = true;')
+    db.executesql('CREATE INDEX IF NOT EXISTS idx_entity_groups_community ON entity_groups(community_id) WHERE is_active = true;')
+    
+    # Index for reputation scoring
+    db.executesql('CREATE INDEX IF NOT EXISTS idx_reputation_scoring_community_event ON reputation_scoring(community_id, event_name) WHERE is_active = true;')
+    db.executesql('CREATE INDEX IF NOT EXISTS idx_reputation_scoring_event_name ON reputation_scoring(event_name) WHERE is_active = true;')
+    
+    # Index for user reputation
+    db.executesql('CREATE INDEX IF NOT EXISTS idx_user_reputation_user_community ON user_reputation(user_id, community_id);')
+    db.executesql('CREATE INDEX IF NOT EXISTS idx_user_reputation_community_score ON user_reputation(community_id, current_score);')
+    db.executesql('CREATE INDEX IF NOT EXISTS idx_user_reputation_last_activity ON user_reputation(last_activity);')
+    
+    # Index for reputation events
+    db.executesql('CREATE INDEX IF NOT EXISTS idx_reputation_events_user_community ON reputation_events(user_id, community_id);')
+    db.executesql('CREATE INDEX IF NOT EXISTS idx_reputation_events_community_processed ON reputation_events(community_id, processed_at);')
+    db.executesql('CREATE INDEX IF NOT EXISTS idx_reputation_events_entity_event ON reputation_events(entity_id, event_name);')
+    
+    # Index for community memberships
+    db.executesql('CREATE INDEX IF NOT EXISTS idx_community_memberships_community_user ON community_memberships(community_id, user_id) WHERE is_active = true;')
+    db.executesql('CREATE INDEX IF NOT EXISTS idx_community_memberships_user ON community_memberships(user_id) WHERE is_active = true;')
+    
+    # Index for community RBAC
+    db.executesql('CREATE INDEX IF NOT EXISTS idx_community_rbac_community_user ON community_rbac(community_id, user_id) WHERE is_active = true;')
+    db.executesql('CREATE INDEX IF NOT EXISTS idx_community_rbac_user_role ON community_rbac(user_id, role) WHERE is_active = true;')
+    db.executesql('CREATE INDEX IF NOT EXISTS idx_community_rbac_community_role ON community_rbac(community_id, role) WHERE is_active = true;')
+    
+    # Index for RBAC permissions
+    db.executesql('CREATE INDEX IF NOT EXISTS idx_rbac_permissions_name ON rbac_permissions(name) WHERE is_active = true;')
+    db.executesql('CREATE INDEX IF NOT EXISTS idx_rbac_permissions_category ON rbac_permissions(category) WHERE is_active = true;')
+    
+    # Index for entity roles
+    db.executesql('CREATE INDEX IF NOT EXISTS idx_entity_roles_entity_user ON entity_roles(entity_id, user_id) WHERE is_active = true;')
+    db.executesql('CREATE INDEX IF NOT EXISTS idx_entity_roles_user_role ON entity_roles(user_id, role) WHERE is_active = true;')
+    db.executesql('CREATE INDEX IF NOT EXISTS idx_entity_roles_entity_role ON entity_roles(entity_id, role) WHERE is_active = true;')
+    
+    # Index for entity defaults
+    db.executesql('CREATE INDEX IF NOT EXISTS idx_entity_defaults_group ON entity_defaults(entity_group_id) WHERE is_active = true;')
+    db.executesql('CREATE INDEX IF NOT EXISTS idx_entity_defaults_entity ON entity_defaults(default_entity_id) WHERE is_active = true;')
+    
 except Exception as e:
     # Indexes might already exist or DB might not support them
     pass
+
+# Global community ID constant
+GLOBAL_COMMUNITY_ID = 1  # Reserved ID for global community
 
 # Commit the database changes
 db.commit()

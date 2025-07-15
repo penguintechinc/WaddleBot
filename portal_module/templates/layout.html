@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>[[=app_name]]</title>
+    <link href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .navbar-brand .title {
+            color: white !important;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .reputation-positive {
+            color: #48c774;
+        }
+        .reputation-negative {
+            color: #f14668;
+        }
+        .role-owner {
+            color: #3273dc;
+            font-weight: bold;
+        }
+        .role-moderator {
+            color: #ffdd57;
+            font-weight: bold;
+        }
+        .role-user {
+            color: #48c774;
+        }
+        .member-card {
+            border-left: 4px solid #dbdbdb;
+            padding: 1rem;
+        }
+        .member-card.owner {
+            border-left-color: #3273dc;
+        }
+        .member-card.moderator {
+            border-left-color: #ffdd57;
+        }
+        .member-card.user {
+            border-left-color: #48c774;
+        }
+        .module-core {
+            background-color: #f0f8ff;
+            border-left: 4px solid #3273dc;
+        }
+        .module-marketplace {
+            background-color: #fff8f0;
+            border-left: 4px solid #ff7b00;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar is-dark" role="navigation">
+        <div class="container">
+            <div class="navbar-brand">
+                <div class="navbar-item">
+                    <h1 class="title is-4">[[=app_name]]</h1>
+                </div>
+            </div>
+            
+            [[if user:]]
+            <div class="navbar-menu">
+                <div class="navbar-end">
+                    <div class="navbar-item has-dropdown is-hoverable">
+                        <a class="navbar-link">
+                            <i class="fas fa-user"></i>
+                            [[=user.get('display_name', user.get('user_id', 'User'))]]
+                        </a>
+                        <div class="navbar-dropdown">
+                            <a class="navbar-item" href="[[=dashboard_url]]">
+                                <i class="fas fa-dashboard"></i>
+                                Dashboard
+                            </a>
+                            <hr class="navbar-divider">
+                            <a class="navbar-item" href="[[=logout_url]]">
+                                <i class="fas fa-sign-out-alt"></i>
+                                Logout
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            [[pass]]
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="section">
+        <div class="container">
+            [[block content]]
+            [[end]]
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="content has-text-centered">
+            <p>
+                <strong>[[=app_name]]</strong> - Community Management Portal
+            </p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+</body>
+</html>

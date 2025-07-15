@@ -1,0 +1,62 @@
+[[extend 'layout.html']]
+
+[[block content]]
+<div class="columns is-centered">
+    <div class="column is-4">
+        <div class="box">
+            <h1 class="title has-text-centered">Login</h1>
+            <p class="subtitle has-text-centered">Community Portal Access</p>
+            
+            [[if error:]]
+            <div class="notification is-danger">
+                [[=error]]
+            </div>
+            [[pass]]
+            
+            <form method="post" action="[[=form_url]]">
+                <div class="field">
+                    <label class="label">User ID</label>
+                    <div class="control has-icons-left">
+                        <input class="input" type="text" name="user_id" placeholder="Your WaddleBot User ID" required>
+                        <span class="icon is-small is-left">
+                            <i class="fas fa-user"></i>
+                        </span>
+                    </div>
+                    <p class="help">Use your WaddleBot User ID (numerical or username)</p>
+                </div>
+                
+                <div class="field">
+                    <label class="label">Password</label>
+                    <div class="control has-icons-left">
+                        <input class="input" type="password" name="password" placeholder="Temporary password" required>
+                        <span class="icon is-small is-left">
+                            <i class="fas fa-lock"></i>
+                        </span>
+                    </div>
+                    <p class="help">Enter the temporary password sent to your email</p>
+                </div>
+                
+                <div class="field">
+                    <div class="control">
+                        <button class="button is-primary is-fullwidth" type="submit">
+                            <span class="icon">
+                                <i class="fas fa-sign-in-alt"></i>
+                            </span>
+                            <span>Login</span>
+                        </button>
+                    </div>
+                </div>
+            </form>
+            
+            <hr>
+            
+            <div class="has-text-centered">
+                <p class="is-size-7">
+                    <strong>Need access?</strong><br>
+                    Use the command <code>!community portal login add your@email.com</code> in chat to get a temporary password.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+[[end]]

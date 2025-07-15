@@ -1,0 +1,293 @@
+[[extend 'layout.html']]
+
+[[block content]]
+<div class="columns">
+    <div class="column">
+        <nav class="breadcrumb">
+            <ul>
+                <li><a href="[[=dashboard_url]]">Dashboard</a></li>
+                <li class="is-active"><a>[[=community['name']]]</a></li>
+            </ul>
+        </nav>
+        
+        <h1 class="title">
+            <i class="fas fa-users"></i>
+            [[=community['name']]]
+        </h1>
+        
+        [[if community.get('description'):]]
+        <p class="subtitle">[[=community['description']]]</p>
+        [[pass]]
+    </div>
+</div>
+
+<!-- Community Stats -->
+[[if stats:]]
+<div class="stats-grid">
+    <div class="box has-text-centered">
+        <p class="heading">Total Members</p>
+        <p class="title is-3">[[=stats['total_members']]]</p>
+    </div>
+    <div class="box has-text-centered">
+        <p class="heading">Total Reputation</p>
+        <p class="title is-3 [[='reputation-positive' if stats['total_reputation'] >= 0 else 'reputation-negative']]">
+            [[=stats['total_reputation']]]
+        </p>
+    </div>
+    <div class="box has-text-centered">
+        <p class="heading">Total Events</p>
+        <p class="title is-3">[[=stats['total_events']]]</p>
+    </div>
+    <div class="box has-text-centered">
+        <p class="heading">Recent Activity</p>
+        <p class="title is-3">[[=stats['recent_activity']]]</p>
+        <p class="help">Last 7 days</p>
+    </div>
+</div>
+[[pass]]
+
+<!-- Role Distribution -->
+[[if stats and stats.get('role_counts'):]]
+<div class="box">
+    <h2 class="title is-5">Role Distribution</h2>
+    <div class="columns">
+        <div class="column has-text-centered">
+            <p class="heading">Owners</p>
+            <p class="title is-4 role-owner">[[=stats['role_counts']['owner']]]</p>
+        </div>
+        <div class="column has-text-centered">
+            <p class="heading">Moderators</p>
+            <p class="title is-4 role-moderator">[[=stats['role_counts']['moderator']]]</p>
+        </div>
+        <div class="column has-text-centered">
+            <p class="heading">Users</p>
+            <p class="title is-4 role-user">[[=stats['role_counts']['user']]]</p>
+        </div>
+    </div>
+</div>
+[[pass]]
+
+<!-- Tabs -->
+<div class="tabs">
+    <ul>
+        <li class="is-active" data-tab="members">
+            <a>
+                <span class="icon is-small"><i class="fas fa-users"></i></span>
+                <span>Members</span>
+            </a>
+        </li>
+        <li data-tab="modules">
+            <a>
+                <span class="icon is-small"><i class="fas fa-puzzle-piece"></i></span>
+                <span>Modules</span>
+            </a>
+        </li>
+    </ul>
+</div>
+
+<!-- Members Tab -->
+<div id="members-tab" class="tab-content">
+    <h2 class="title is-5">Community Members</h2>
+    
+    [[if members:]]
+    <div class="columns is-multiline">
+        [[for member in members:]]
+        <div class="column is-6">
+            <div class="box member-card [[=member['role']]]">
+                <div class="media">
+                    <div class="media-left">
+                        <figure class="image is-48x48">
+                            <div class="has-background-grey-lighter is-flex is-align-items-center is-justify-content-center" style="width: 48px; height: 48px; border-radius: 50%;">
+                                <i class="fas fa-user"></i>
+                            </div>
+                        </figure>
+                    </div>
+                    <div class="media-content">
+                        <div class="content">
+                            <p>
+                                <strong>[[=member['display_name']]]</strong>
+                                <span class="tag is-small role-[[=member['role']]]">[[=member['role'].title()]]</span>
+                                <br>
+                                <small class="has-text-grey">ID: [[=member['user_id']]]</small>
+                            </p>
+                            
+                            <div class="columns is-mobile">
+                                <div class="column">
+                                    <p class="heading">Reputation</p>
+                                    <p class="title is-6 [[='reputation-positive' if member['reputation']['current_score'] >= 0 else 'reputation-negative']]">
+                                        [[=member['reputation']['current_score']]]
+                                    </p>
+                                </div>
+                                <div class="column">
+                                    <p class="heading">Events</p>
+                                    <p class="title is-6">[[=member['reputation']['total_events']]]</p>
+                                </div>
+                            </div>
+                            
+                            <p class="is-size-7 has-text-grey">
+                                Joined: [[=member['joined_at'].strftime('%Y-%m-%d') if member.get('joined_at') else 'N/A']]
+                                [[if member.get('last_activity'):]]
+                                | Last Activity: [[=member['reputation']['last_activity'].strftime('%Y-%m-%d') if member['reputation']['last_activity'] else 'N/A']]
+                                [[pass]]
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        [[pass]]
+    </div>
+    [[else:]]
+    <div class="notification is-info">
+        <p>No members found in this community.</p>
+    </div>
+    [[pass]]
+</div>
+
+<!-- Modules Tab -->
+<div id="modules-tab" class="tab-content" style="display: none;">
+    <h2 class="title is-5">Installed Modules</h2>
+    
+    <!-- Core Modules -->
+    [[if modules.get('core'):]]
+    <div class="box">
+        <h3 class="title is-6">
+            <i class="fas fa-cogs"></i>
+            Core Modules
+        </h3>
+        <p class="subtitle is-7">Built-in WaddleBot modules</p>
+        
+        <div class="columns is-multiline">
+            [[for module in modules['core']:]]
+            <div class="column is-6">
+                <div class="box module-core">
+                    <div class="media">
+                        <div class="media-left">
+                            <span class="icon is-large has-text-primary">
+                                <i class="fas fa-cog fa-2x"></i>
+                            </span>
+                        </div>
+                        <div class="media-content">
+                            <div class="content">
+                                <p>
+                                    <strong>[[=module['prefix']]][[=module['command']]]</strong>
+                                    <span class="tag is-small is-primary">Core</span>
+                                    <br>
+                                    [[=module.get('description', 'No description available')]]
+                                </p>
+                                
+                                <div class="columns is-mobile">
+                                    <div class="column">
+                                        <p class="heading">Usage</p>
+                                        <p class="title is-6">[[=module.get('usage_count', 0)]]</p>
+                                    </div>
+                                    <div class="column">
+                                        <p class="heading">Version</p>
+                                        <p class="title is-6">[[=module.get('version', '1.0')]]</p>
+                                    </div>
+                                </div>
+                                
+                                [[if module.get('last_used'):]]
+                                <p class="is-size-7 has-text-grey">
+                                    Last used: [[=module['last_used'].strftime('%Y-%m-%d %H:%M')]]
+                                </p>
+                                [[pass]]
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            [[pass]]
+        </div>
+    </div>
+    [[pass]]
+    
+    <!-- Marketplace Modules -->
+    [[if modules.get('marketplace'):]]
+    <div class="box">
+        <h3 class="title is-6">
+            <i class="fas fa-store"></i>
+            Marketplace Modules
+        </h3>
+        <p class="subtitle is-7">Community-installed modules</p>
+        
+        <div class="columns is-multiline">
+            [[for module in modules['marketplace']:]]
+            <div class="column is-6">
+                <div class="box module-marketplace">
+                    <div class="media">
+                        <div class="media-left">
+                            <span class="icon is-large has-text-warning">
+                                <i class="fas fa-puzzle-piece fa-2x"></i>
+                            </span>
+                        </div>
+                        <div class="media-content">
+                            <div class="content">
+                                <p>
+                                    <strong>[[=module['prefix']]][[=module['command']]]</strong>
+                                    <span class="tag is-small is-warning">Marketplace</span>
+                                    <br>
+                                    [[=module.get('description', 'No description available')]]
+                                </p>
+                                
+                                <div class="columns is-mobile">
+                                    <div class="column">
+                                        <p class="heading">Usage</p>
+                                        <p class="title is-6">[[=module.get('usage_count', 0)]]</p>
+                                    </div>
+                                    <div class="column">
+                                        <p class="heading">Version</p>
+                                        <p class="title is-6">[[=module.get('version', '1.0')]]</p>
+                                    </div>
+                                </div>
+                                
+                                [[if module.get('last_used'):]]
+                                <p class="is-size-7 has-text-grey">
+                                    Last used: [[=module['last_used'].strftime('%Y-%m-%d %H:%M')]]
+                                </p>
+                                [[pass]]
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            [[pass]]
+        </div>
+    </div>
+    [[pass]]
+    
+    [[if not modules.get('core') and not modules.get('marketplace'):]]
+    <div class="notification is-info">
+        <p>No modules installed in this community.</p>
+    </div>
+    [[pass]]
+</div>
+
+<script>
+// Tab switching
+document.addEventListener('DOMContentLoaded', function() {
+    const tabs = document.querySelectorAll('.tabs li');
+    const tabContents = document.querySelectorAll('.tab-content');
+    
+    tabs.forEach(tab => {
+        tab.addEventListener('click', function() {
+            const targetTab = this.dataset.tab;
+            
+            // Remove active class from all tabs
+            tabs.forEach(t => t.classList.remove('is-active'));
+            
+            // Add active class to clicked tab
+            this.classList.add('is-active');
+            
+            // Hide all tab contents
+            tabContents.forEach(content => {
+                content.style.display = 'none';
+            });
+            
+            // Show target tab content
+            document.getElementById(targetTab + '-tab').style.display = 'block';
+        });
+    });
+});
+</script>
+[[end]]

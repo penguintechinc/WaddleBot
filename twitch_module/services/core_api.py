@@ -209,6 +209,149 @@ class CoreAPIClient:
             logger.error(f"Error forwarding event: {str(e)}")
             return False
     
+    def send_command_to_router(self, message_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Send message to router for command processing"""
+        try:
+            # Ensure message_type is included
+            if "message_type" not in message_data:
+                message_data["message_type"] = "chatMessage"  # Default for user messages
+            
+            response = requests.post(
+                f"{self.base_url}/router/events",
+                json=message_data,
+                headers=self.headers,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                logger.info(f"Router processed message: {result.get('processed', False)}")
+                return result
+            else:
+                logger.warning(f"Router request failed: {response.status_code} - {response.text}")
+                return {"success": False, "error": f"HTTP {response.status_code}"}
+                
+        except requests.RequestException as e:
+            logger.error(f"Error sending message to router: {str(e)}")
+            return {"success": False, "error": str(e)}
+    
+    def get_module_responses(self, execution_id: str) -> Dict[str, Any]:
+        """Get module responses for an execution"""
+        try:
+            response = requests.get(
+                f"{self.base_url}/router/responses/{execution_id}",
+                headers=self.headers,
+                timeout=15
+            )
+            
+            if response.status_code == 200:
+                return response.json()
+            else:
+                logger.warning(f"Response request failed: {response.status_code} - {response.text}")
+                return {"success": False, "error": f"HTTP {response.status_code}"}
+                
+        except requests.RequestException as e:
+            logger.error(f"Error getting module responses: {str(e)}")
+            return {"success": False, "error": str(e)}
+    
+    def process_form_response(self, response_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Process form response for Twitch platform"""
+        try:
+            if response_data.get("response_action") != "form":
+                return {"success": False, "error": "Not a form response"}
+            
+            # Extract form data
+            form_data = {
+                "title": response_data.get("form_title", "Form"),
+                "description": response_data.get("form_description", ""),
+                "fields": response_data.get("form_fields", []),
+                "submit_url": response_data.get("form_submit_url", ""),
+                "submit_method": response_data.get("form_submit_method", "POST"),
+                "callback_url": response_data.get("form_callback_url", "")
+            }
+            
+            # For Twitch, we need to convert form to chat message format
+            # Since Twitch doesn't have native forms, we'll create a chat response
+            # with instructions on how to use the form
+            
+            form_message = f"📋 {form_data['title']}"
+            if form_data['description']:
+                form_message += f"\n{form_data['description']}"
+            
+            form_message += "\n\nFields:"
+            for field in form_data['fields']:
+                field_name = field.get('name', 'field')
+                field_type = field.get('type', 'text')
+                field_label = field.get('label', field_name)
+                field_required = field.get('required', False)
+                
+                form_message += f"\n• {field_label} ({field_type})"
+                if field_required:
+                    form_message += " *required*"
+                
+                # Add field options for select/radio fields
+                if field_type in ['select', 'radio', 'multiselect'] and field.get('options'):
+                    options = field.get('options', [])
+                    form_message += f" - Options: {', '.join(options)}"
+            
+            if form_data['submit_url']:
+                form_message += f"\n\nSubmit to: {form_data['submit_url']}"
+            
+            return {
+                "success": True,
+                "platform_response": {
+                    "type": "chat",
+                    "message": form_message,
+                    "form_data": form_data
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Error processing form response: {str(e)}")
+            return {"success": False, "error": str(e)}
+    
+    def send_twitch_event_to_router(self, event_type: str, user_id: str, user_name: str, 
+                                   channel_id: str, event_data: Dict[str, Any] = None) -> Dict[str, Any]:
+        """Send Twitch-specific events to router"""
+        try:
+            # Map Twitch event types to message types
+            event_type_mapping = {
+                "channel.follow": "follow",
+                "channel.subscribe": "subscription",
+                "channel.subscription.gift": "subgift",
+                "channel.subscription.message": "resub",
+                "channel.cheer": "cheer",
+                "channel.raid": "raid",
+                "channel.host": "host",
+                "channel.ban": "ban",
+                "channel.moderator.add": "member_join",
+                "channel.moderator.remove": "member_leave",
+                "user.message": "chatMessage"
+            }
+            
+            message_type = event_type_mapping.get(event_type, "chatMessage")
+            
+            # Prepare message data
+            message_data = {
+                "platform": "twitch",
+                "server_id": channel_id,
+                "channel_id": "",  # Twitch doesn't have sub-channels
+                "user_id": user_id,
+                "user_name": user_name,
+                "message_content": event_data.get("message", "") if event_data else "",
+                "message_type": message_type
+            }
+            
+            # Add event-specific data
+            if event_data:
+                message_data.update(event_data)
+            
+            return self.send_command_to_router(message_data)
+            
+        except Exception as e:
+            logger.error(f"Error sending Twitch event to router: {str(e)}")
+            return {"success": False, "error": str(e)}
+    
     def get_server_config(self, server_id: str) -> Optional[Dict[str, Any]]:
         """Get configuration for a specific server"""
         try:

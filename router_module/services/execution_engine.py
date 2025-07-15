@@ -44,7 +44,7 @@ class ExecutionEngine:
             self.session = aiohttp.ClientSession(timeout=timeout)
         return self.session
     
-    async def execute_command(self, command_def: Dict, request) -> ExecutionResult:
+    async def execute_command(self, command_def: Dict, request, user_context: Dict = None) -> ExecutionResult:
         """Execute command based on type and location"""
         command_type = command_def.get('type', 'lambda')  # container, lambda, openwhisk, webhook
         location = command_def.get('location', 'community')  # internal, community
@@ -63,13 +63,13 @@ class ExecutionEngine:
         
         try:
             if command_type == 'container':
-                result = await self._execute_container(command_def, request)
+                result = await self._execute_container(command_def, request, user_context)
             elif command_type == 'lambda':
-                result = await self._execute_lambda(command_def, request)
+                result = await self._execute_lambda(command_def, request, user_context)
             elif command_type == 'openwhisk':
-                result = await self._execute_openwhisk(command_def, request)
+                result = await self._execute_openwhisk(command_def, request, user_context)
             elif command_type == 'webhook':
-                result = await self._execute_webhook(command_def, request)
+                result = await self._execute_webhook(command_def, request, user_context)
             else:
                 result = ExecutionResult(
                     success=False,
@@ -96,10 +96,10 @@ class ExecutionEngine:
                 error_message=str(e)
             )
     
-    async def _execute_container(self, command_def: Dict, request) -> ExecutionResult:
+    async def _execute_container(self, command_def: Dict, request, user_context: Dict = None) -> ExecutionResult:
         """Execute local container interaction module"""
         try:
-            # Prepare container payload
+            # Prepare container payload with user context
             payload = {
                 "command": request.command,
                 "parameters": request.parameters,
@@ -115,7 +115,8 @@ class ExecutionEngine:
                     "message_id": request.message_id,
                     "timestamp": request.timestamp.isoformat()
                 },
-                "raw_message": request.raw_message
+                "raw_message": request.raw_message,
+                "user_context": user_context or {}
             }
             
             session = await self.get_session()
@@ -161,10 +162,10 @@ class ExecutionEngine:
                 error_message=str(e)
             )
     
-    async def _execute_lambda(self, command_def: Dict, request) -> ExecutionResult:
+    async def _execute_lambda(self, command_def: Dict, request, user_context: Dict = None) -> ExecutionResult:
         """Execute AWS Lambda function"""
         try:
-            # Prepare Lambda payload
+            # Prepare Lambda payload with user context
             payload = {
                 "command": request.command,
                 "parameters": request.parameters,
@@ -180,7 +181,8 @@ class ExecutionEngine:
                     "message_id": request.message_id,
                     "timestamp": request.timestamp.isoformat()
                 },
-                "raw_message": request.raw_message
+                "raw_message": request.raw_message,
+                "user_context": user_context or {}
             }
             
             # Execute with retries
@@ -242,7 +244,7 @@ class ExecutionEngine:
                 error_message=str(e)
             )
     
-    async def _execute_openwhisk(self, command_def: Dict, request) -> ExecutionResult:
+    async def _execute_openwhisk(self, command_def: Dict, request, user_context: Dict = None) -> ExecutionResult:
         """Execute OpenWhisk action"""
         try:
             # Prepare OpenWhisk payload
@@ -299,10 +301,10 @@ class ExecutionEngine:
                 error_message=str(e)
             )
     
-    async def _execute_webhook(self, command_def: Dict, request) -> ExecutionResult:
+    async def _execute_webhook(self, command_def: Dict, request, user_context: Dict = None) -> ExecutionResult:
         """Execute generic webhook"""
         try:
-            # Prepare webhook payload
+            # Prepare webhook payload with user context
             payload = {
                 "command": request.command,
                 "parameters": request.parameters,
@@ -318,7 +320,8 @@ class ExecutionEngine:
                     "message_id": request.message_id,
                     "timestamp": request.timestamp.isoformat()
                 },
-                "raw_message": request.raw_message
+                "raw_message": request.raw_message,
+                "user_context": user_context or {}
             }
             
             session = await self.get_session()

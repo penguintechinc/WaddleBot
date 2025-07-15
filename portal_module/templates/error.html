@@ -1,0 +1,17 @@
+[[extend 'layout.html']]
+
+[[block content]]
+<div class="columns is-centered">
+    <div class="column is-6">
+        <div class="notification is-danger">
+            <h1 class="title">Error</h1>
+            <p>[[=error]]</p>
+            <br>
+            <a href="[[=dashboard_url if 'dashboard_url' in globals() else '/']]" class="button is-primary">
+                <i class="fas fa-home"></i>
+                Back to Dashboard
+            </a>
+        </div>
+    </div>
+</div>
+[[end]]

@@ -134,10 +134,91 @@ class CommandProcessor:
     
     def generate_entity_id(self, platform: str, server_id: str, channel_id: str = None) -> str:
         """Generate unique entity ID for platform+server+channel combination"""
-        if channel_id:
-            return f"{platform}:{server_id}:{channel_id}"
+        # New format: platform+server+channel (using + instead of :)
+        if platform == "twitch":
+            # Twitch doesn't have sub-channels, so just platform+channel
+            return f"{platform}+{server_id}"
+        elif platform in ["discord", "slack"]:
+            # Discord/Slack have servers and channels
+            if channel_id:
+                return f"{platform}+{server_id}+{channel_id}"
+            else:
+                # Server-wide entity (default channel)
+                return f"{platform}+{server_id}"
         else:
-            return f"{platform}:{server_id}"
+            # Generic format for other platforms
+            if channel_id:
+                return f"{platform}+{server_id}+{channel_id}"
+            else:
+                return f"{platform}+{server_id}"
+    
+    def ensure_entity_exists(self, platform: str, server_id: str, channel_id: str = None, 
+                            owner: str = None) -> str:
+        """Ensure entity exists in database and return entity_id"""
+        try:
+            entity_id = self.generate_entity_id(platform, server_id, channel_id)
+            
+            # Check if entity already exists
+            existing_entity = db(db.entities.entity_id == entity_id).select().first()
+            
+            if not existing_entity:
+                # Create new entity
+                db.entities.insert(
+                    entity_id=entity_id,
+                    platform=platform,
+                    server_id=server_id,
+                    channel_id=channel_id or "",
+                    owner=owner or "system",
+                    is_active=True,
+                    config={}
+                )
+                db.commit()
+                logger.info(f"Created new entity: {entity_id}")
+                
+                # Auto-create server-wide entity group if this is a Discord/Slack server
+                if platform in ["discord", "slack"] and not channel_id:
+                    self.create_server_entity_group(platform, server_id, entity_id, owner)
+            
+            return entity_id
+            
+        except Exception as e:
+            logger.error(f"Error ensuring entity exists: {str(e)}")
+            return entity_id
+    
+    def create_server_entity_group(self, platform: str, server_id: str, 
+                                  default_entity_id: str, owner: str = None) -> None:
+        """Create server-wide entity group for Discord/Slack servers"""
+        try:
+            # Check if entity group already exists
+            existing_group = db(
+                (db.entity_groups.platform == platform) &
+                (db.entity_groups.server_id == server_id)
+            ).select().first()
+            
+            if not existing_group:
+                # Create entity group
+                group_id = db.entity_groups.insert(
+                    name=f"{platform.title()} Server {server_id}",
+                    platform=platform,
+                    server_id=server_id,
+                    entity_ids=[default_entity_id],
+                    community_id=None,  # Will be assigned when added to community
+                    is_active=True,
+                    created_by=owner or "system"
+                )
+                
+                # Create default entity mapping
+                db.entity_defaults.insert(
+                    entity_group_id=group_id,
+                    default_entity_id=default_entity_id,
+                    is_active=True
+                )
+                
+                db.commit()
+                logger.info(f"Created entity group for {platform} server {server_id}")
+                
+        except Exception as e:
+            logger.error(f"Error creating server entity group: {str(e)}")
     
     async def process_command_async(self, request: CommandRequest) -> CommandResult:
         """Process a single command asynchronously"""

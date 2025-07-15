@@ -1,0 +1,77 @@
+[[extend 'layout.html']]
+
+[[block content]]
+<div class="columns">
+    <div class="column">
+        <h1 class="title">
+            <i class="fas fa-dashboard"></i>
+            Community Dashboard
+        </h1>
+        <p class="subtitle">
+            Welcome, [[=user.get('display_name', user.get('user_id'))]]
+        </p>
+    </div>
+</div>
+
+[[if communities:]]
+<div class="columns is-multiline">
+    [[for community in communities:]]
+    <div class="column is-4">
+        <div class="card">
+            <div class="card-header">
+                <p class="card-header-title">
+                    <i class="fas fa-users"></i>
+                    [[=community['name']]]
+                </p>
+                <div class="card-header-icon">
+                    <span class="tag is-primary">Owner</span>
+                </div>
+            </div>
+            
+            <div class="card-content">
+                <div class="content">
+                    [[if community.get('description'):]]
+                    <p>[[=community['description']]]</p>
+                    [[pass]]
+                    
+                    <div class="stats-grid">
+                        <div class="has-text-centered">
+                            <p class="heading">Members</p>
+                            <p class="title is-5">[[=community['member_count']]]</p>
+                        </div>
+                        <div class="has-text-centered">
+                            <p class="heading">Entity Groups</p>
+                            <p class="title is-5">[[=community['entity_group_count']]]</p>
+                        </div>
+                    </div>
+                    
+                    <small class="has-text-grey">
+                        Created: [[=community['created_at'].strftime('%Y-%m-%d') if community.get('created_at') else 'N/A']]
+                    </small>
+                </div>
+            </div>
+            
+            <div class="card-footer">
+                <a href="/community/[[=community['id']]]" class="card-footer-item">
+                    <i class="fas fa-eye"></i>
+                    View Details
+                </a>
+            </div>
+        </div>
+    </div>
+    [[pass]]
+</div>
+[[else:]]
+<div class="columns">
+    <div class="column">
+        <div class="notification is-info">
+            <h2 class="title is-4">No Communities Found</h2>
+            <p>You don't own any communities yet. Create a community using the chat commands to get started!</p>
+            <br>
+            <p><strong>To create a community:</strong></p>
+            <p><code>!community create "Your Community Name"</code></p>
+        </div>
+    </div>
+</div>
+[[pass]]
+[[end]]
