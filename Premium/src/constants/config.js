@@ -62,6 +62,27 @@ export const ENDPOINTS = {
   MODULE_UNINSTALL: '/modules/uninstall',
   MODULE_TOGGLE: '/modules/toggle',
   
+  // Currency Management
+  CURRENCY_SETTINGS: '/communities/:id/currency',
+  CURRENCY_BALANCE: '/communities/:id/members/:memberId/currency',
+  CURRENCY_TRANSACTIONS: '/communities/:id/currency/transactions',
+  CURRENCY_EARN: '/communities/:id/currency/earn',
+  CURRENCY_SPEND: '/communities/:id/currency/spend',
+  
+  // Payment Integration
+  PAYMENT_METHODS: '/payment/methods',
+  PAYMENT_PROCESS: '/payment/process',
+  PAYMENT_VERIFY: '/payment/verify',
+  PAYMENT_HISTORY: '/payment/history',
+  
+  // Raffle & Giveaway System
+  RAFFLES: '/communities/:id/raffles',
+  RAFFLE_ENTRIES: '/communities/:id/raffles/:raffleId/entries',
+  RAFFLE_WINNERS: '/communities/:id/raffles/:raffleId/winners',
+  GIVEAWAYS: '/communities/:id/giveaways',
+  GIVEAWAY_ENTRIES: '/communities/:id/giveaways/:giveawayId/entries',
+  GIVEAWAY_WINNERS: '/communities/:id/giveaways/:giveawayId/winners',
+  
   // Analytics
   ANALYTICS: '/analytics',
   USAGE_STATS: '/analytics/usage',
@@ -96,6 +117,20 @@ export const SCREEN_NAMES = {
   SETTINGS: 'Settings',
   PROFILE: 'Profile',
   
+  // Currency & Payment
+  CURRENCY_SETTINGS: 'CurrencySettings',
+  CURRENCY_HISTORY: 'CurrencyHistory',
+  PAYMENT_METHODS: 'PaymentMethods',
+  PAYMENT_PROCESS: 'PaymentProcess',
+  
+  // Raffle & Giveaway
+  RAFFLES: 'Raffles',
+  RAFFLE_DETAIL: 'RaffleDetail',
+  CREATE_RAFFLE: 'CreateRaffle',
+  GIVEAWAYS: 'Giveaways',
+  GIVEAWAY_DETAIL: 'GiveawayDetail',
+  CREATE_GIVEAWAY: 'CreateGiveaway',
+  
   // Modals
   ADD_MEMBER: 'AddMember',
   EDIT_MEMBER: 'EditMember',
@@ -104,10 +139,10 @@ export const SCREEN_NAMES = {
 };
 
 export const ROLE_PERMISSIONS = {
-  OWNER: ['read', 'write', 'admin', 'manage_members', 'manage_modules', 'ban_members', 'unban_members', 'edit_reputation', 'view_logs'],
-  ADMIN: ['read', 'write', 'manage_members', 'manage_modules', 'ban_members', 'unban_members', 'edit_reputation', 'view_logs'],
-  MODERATOR: ['read', 'write', 'manage_members', 'ban_members'],
-  MEMBER: ['read'],
+  OWNER: ['read', 'write', 'admin', 'manage_members', 'manage_modules', 'ban_members', 'unban_members', 'edit_reputation', 'view_logs', 'manage_currency', 'manage_payments', 'create_raffles', 'create_giveaways'],
+  ADMIN: ['read', 'write', 'manage_members', 'manage_modules', 'ban_members', 'unban_members', 'edit_reputation', 'view_logs', 'manage_currency', 'manage_payments', 'create_raffles', 'create_giveaways'],
+  MODERATOR: ['read', 'write', 'manage_members', 'ban_members', 'create_raffles', 'create_giveaways'],
+  MEMBER: ['read', 'participate_raffles', 'participate_giveaways'],
 };
 
 export const REPUTATION_CONFIG = {
@@ -127,6 +162,57 @@ export const ACTIVITY_TYPES = {
   MODULE_UNINSTALL: 'module_uninstall',
   SETTING_CHANGE: 'setting_change',
   ROLE_CHANGE: 'role_change',
+  CURRENCY_EARNED: 'currency_earned',
+  CURRENCY_SPENT: 'currency_spent',
+  RAFFLE_CREATED: 'raffle_created',
+  RAFFLE_ENTRY: 'raffle_entry',
+  RAFFLE_WINNER: 'raffle_winner',
+  GIVEAWAY_CREATED: 'giveaway_created',
+  GIVEAWAY_ENTRY: 'giveaway_entry',
+  GIVEAWAY_WINNER: 'giveaway_winner',
+};
+
+export const CURRENCY_CONFIG = {
+  DEFAULT_NAME: 'Credits',
+  MIN_PRICE: 0.01,
+  MAX_PRICE: 999.99,
+  DEFAULT_CHAT_REWARD: 1,
+  DEFAULT_EVENT_REWARD: 5,
+  MIN_CHAT_REWARD: 0,
+  MAX_CHAT_REWARD: 100,
+  MIN_EVENT_REWARD: 0,
+  MAX_EVENT_REWARD: 1000,
+  INITIAL_BALANCE: 0,
+  MAX_BALANCE: 1000000,
+};
+
+export const PAYMENT_CONFIG = {
+  PAYPAL_CLIENT_ID: process.env.PAYPAL_CLIENT_ID || '',
+  STRIPE_PUBLISHABLE_KEY: process.env.STRIPE_PUBLISHABLE_KEY || '',
+  SUPPORTED_CURRENCIES: ['USD', 'EUR', 'GBP', 'CAD', 'AUD'],
+  DEFAULT_CURRENCY: 'USD',
+  MIN_TRANSACTION: 0.50,
+  MAX_TRANSACTION: 10000.00,
+};
+
+export const RAFFLE_CONFIG = {
+  MIN_COST: 1,
+  MAX_COST: 10000,
+  MIN_DURATION: 300, // 5 minutes
+  MAX_DURATION: 604800, // 7 days
+  DEFAULT_DURATION: 3600, // 1 hour
+  MAX_ENTRIES_PER_USER: 100,
+  MIN_ENTRIES_PER_USER: 1,
+};
+
+export const GIVEAWAY_CONFIG = {
+  MIN_COST: 1,
+  MAX_COST: 10000,
+  MIN_DURATION: 300, // 5 minutes
+  MAX_DURATION: 604800, // 7 days
+  DEFAULT_DURATION: 3600, // 1 hour
+  MAX_ENTRIES_PER_USER: 1,
+  MIN_ENTRIES_PER_USER: 1,
 };
 
 export const CHART_COLORS = {
@@ -148,6 +234,11 @@ export default {
   NOTIFICATION_TYPES,
   SCREEN_NAMES,
   ROLE_PERMISSIONS,
+  REPUTATION_CONFIG,
   ACTIVITY_TYPES,
+  CURRENCY_CONFIG,
+  PAYMENT_CONFIG,
+  RAFFLE_CONFIG,
+  GIVEAWAY_CONFIG,
   CHART_COLORS,
 };

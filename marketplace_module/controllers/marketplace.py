@@ -11,6 +11,7 @@ from py4web.utils.form import Form
 from ..models import db
 from ..services.module_manager import module_manager
 from ..services.router_sync import router_sync
+from ..services.subscription_service import subscription_service
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +73,7 @@ def browse_modules():
         sort = request.query.get("sort", "popular")  # popular, recent, rating, name
         page = int(request.query.get("page", "1"))
         per_page = min(int(request.query.get("per_page", "20")), 50)
+        entity_id = request.query.get("entity_id")  # Optional: check subscription for specific entity
         
         # Build query
         query = (db.marketplace_modules.is_active == True)
@@ -109,13 +111,38 @@ def browse_modules():
             limitby=(offset, offset + per_page)
         )
         
+        # Add subscription info if entity_id provided
+        module_list = []
+        for module in modules:
+            module_data = dict(module)
+            
+            # Add subscription requirements for paid modules
+            if module.price > 0 and entity_id:
+                access_check = subscription_service.can_install_paid_module(entity_id, module.price)
+                module_data["subscription_required"] = True
+                module_data["can_install"] = access_check["can_install"]
+                module_data["access_reason"] = access_check["reason"]
+                if not access_check["can_install"]:
+                    module_data["access_message"] = access_check.get("message", "Premium subscription required")
+            else:
+                module_data["subscription_required"] = module.price > 0
+                module_data["can_install"] = module.price <= 0  # Free modules can always be installed
+                module_data["access_reason"] = "free_module" if module.price <= 0 else "unknown"
+            
+            module_list.append(module_data)
+        
         # Calculate pagination info
         total_pages = (total_count + per_page - 1) // per_page
         has_prev = page > 1
         has_next = page < total_pages
         
+        # Get subscription info if entity_id provided
+        subscription_info = None
+        if entity_id:
+            subscription_info = subscription_service.get_subscription_status(entity_id)
+        
         return {
-            "modules": [dict(module) for module in modules],
+            "modules": module_list,
             "pagination": {
                 "page": page,
                 "per_page": per_page,
@@ -127,8 +154,10 @@ def browse_modules():
             "filters": {
                 "category": category,
                 "search": search,
-                "sort": sort
-            }
+                "sort": sort,
+                "entity_id": entity_id
+            },
+            "subscription_info": subscription_info
         }
         
     except Exception as e:
@@ -205,6 +234,36 @@ def install_module():
         if not module_manager.check_install_permission(entity_id, user_id):
             raise HTTP(403, "Insufficient permissions to install modules")
         
+        # Get module details to check if it's a paid module
+        module = db(
+            (db.marketplace_modules.module_id == module_id) &
+            (db.marketplace_modules.is_active == True)
+        ).select().first()
+        
+        if not module:
+            raise HTTP(404, "Module not found")
+        
+        # Check if community can install paid modules
+        if module.price > 0:
+            permission_check = subscription_service.can_install_paid_module(entity_id, module.price)
+            
+            if not permission_check["can_install"]:
+                subscription_status = subscription_service.get_subscription_status(entity_id)
+                
+                return {
+                    "success": False,
+                    "error": "subscription_required",
+                    "message": permission_check.get("message", "Premium subscription required"),
+                    "subscription_status": subscription_status,
+                    "module_price": module.price,
+                    "currency": "USD",
+                    "upgrade_required": True
+                }
+            
+            # Show warning if subscription is expiring soon
+            if permission_check["reason"] == "subscription_expiring":
+                logger.warning(f"Installing paid module {module_id} for entity {entity_id} with expiring subscription")
+        
         # Install the module
         result = await module_manager.install_module(module_id, entity_id, user_id, version)
         
@@ -212,11 +271,20 @@ def install_module():
             # Sync with router
             await router_sync.sync_module_commands(module_id, entity_id)
             
-            return {
+            response_data = {
                 "success": True,
                 "message": "Module installed successfully",
                 "installation_id": result["installation_id"]
             }
+            
+            # Add warning if subscription is expiring
+            if module.price > 0:
+                permission_check = subscription_service.can_install_paid_module(entity_id, module.price)
+                if permission_check["reason"] == "subscription_expiring":
+                    response_data["warning"] = permission_check.get("warning")
+                    response_data["expires_at"] = permission_check.get("expires_at")
+            
+            return response_data
         else:
             return {
                 "success": False,
@@ -430,3 +498,188 @@ def search_modules():
     except Exception as e:
         logger.error(f"Error searching modules: {str(e)}")
         raise HTTP(500, f"Error searching modules: {str(e)}")
+
+@action("marketplace/subscription/<entity_id>")
+def get_subscription_status(entity_id):
+    """Get subscription status for an entity"""
+    try:
+        subscription_status = subscription_service.get_subscription_status(entity_id)
+        return {
+            "entity_id": entity_id,
+            "subscription": subscription_status
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting subscription status for {entity_id}: {str(e)}")
+        raise HTTP(500, f"Error getting subscription status: {str(e)}")
+
+@action("marketplace/subscription/create", method=["POST"])
+def create_subscription():
+    """Create or update a subscription"""
+    try:
+        data = request.json
+        if not data:
+            raise HTTP(400, "No data provided")
+        
+        entity_id = data.get("entity_id")
+        subscription_type = data.get("subscription_type", "premium")
+        duration_days = data.get("duration_days", 30)
+        payment_method = data.get("payment_method")
+        payment_id = data.get("payment_id")
+        amount_paid = data.get("amount_paid", 0.0)
+        currency = data.get("currency", "USD")
+        
+        if not entity_id:
+            raise HTTP(400, "Missing required field: entity_id")
+        
+        result = subscription_service.create_subscription(
+            entity_id=entity_id,
+            subscription_type=subscription_type,
+            duration_days=duration_days,
+            payment_method=payment_method,
+            payment_id=payment_id,
+            amount_paid=amount_paid,
+            currency=currency
+        )
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error creating subscription: {str(e)}")
+        raise HTTP(500, f"Error creating subscription: {str(e)}")
+
+@action("marketplace/subscription/renew", method=["POST"])
+def renew_subscription():
+    """Renew an existing subscription"""
+    try:
+        data = request.json
+        if not data:
+            raise HTTP(400, "No data provided")
+        
+        entity_id = data.get("entity_id")
+        duration_days = data.get("duration_days", 30)
+        payment_method = data.get("payment_method")
+        payment_id = data.get("payment_id")
+        amount_paid = data.get("amount_paid", 0.0)
+        currency = data.get("currency", "USD")
+        
+        if not entity_id:
+            raise HTTP(400, "Missing required field: entity_id")
+        
+        result = subscription_service.renew_subscription(
+            entity_id=entity_id,
+            duration_days=duration_days,
+            payment_method=payment_method,
+            payment_id=payment_id,
+            amount_paid=amount_paid,
+            currency=currency
+        )
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error renewing subscription: {str(e)}")
+        raise HTTP(500, f"Error renewing subscription: {str(e)}")
+
+@action("marketplace/subscription/cancel", method=["POST"])
+def cancel_subscription():
+    """Cancel a subscription"""
+    try:
+        data = request.json
+        if not data:
+            raise HTTP(400, "No data provided")
+        
+        entity_id = data.get("entity_id")
+        reason = data.get("reason")
+        
+        if not entity_id:
+            raise HTTP(400, "Missing required field: entity_id")
+        
+        result = subscription_service.cancel_subscription(entity_id, reason)
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error cancelling subscription: {str(e)}")
+        raise HTTP(500, f"Error cancelling subscription: {str(e)}")
+
+@action("marketplace/subscription/<entity_id>/payments")
+def get_payment_history(entity_id):
+    """Get payment history for an entity"""
+    try:
+        limit = min(int(request.query.get("limit", "50")), 100)
+        payments = subscription_service.get_payment_history(entity_id, limit)
+        
+        return {
+            "entity_id": entity_id,
+            "payments": payments,
+            "total": len(payments)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting payment history for {entity_id}: {str(e)}")
+        raise HTTP(500, f"Error getting payment history: {str(e)}")
+
+@action("marketplace/subscription/payment", method=["POST"])
+def record_payment():
+    """Record a payment for subscription"""
+    try:
+        data = request.json
+        if not data:
+            raise HTTP(400, "No data provided")
+        
+        entity_id = data.get("entity_id")
+        payment_id = data.get("payment_id")
+        payment_method = data.get("payment_method")
+        amount = data.get("amount")
+        currency = data.get("currency", "USD")
+        payment_status = data.get("payment_status", "completed")
+        description = data.get("description")
+        metadata = data.get("metadata")
+        
+        if not all([entity_id, payment_id, payment_method, amount]):
+            raise HTTP(400, "Missing required fields: entity_id, payment_id, payment_method, amount")
+        
+        result = subscription_service.record_payment(
+            entity_id=entity_id,
+            payment_id=payment_id,
+            payment_method=payment_method,
+            amount=amount,
+            currency=currency,
+            payment_status=payment_status,
+            description=description,
+            metadata=metadata
+        )
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error recording payment: {str(e)}")
+        raise HTTP(500, f"Error recording payment: {str(e)}")
+
+@action("marketplace/subscription/check-paid-access", method=["POST"])
+def check_paid_module_access():
+    """Check if entity can access paid modules"""
+    try:
+        data = request.json
+        if not data:
+            raise HTTP(400, "No data provided")
+        
+        entity_id = data.get("entity_id")
+        module_price = data.get("module_price", 0.0)
+        
+        if not entity_id:
+            raise HTTP(400, "Missing required field: entity_id")
+        
+        result = subscription_service.can_install_paid_module(entity_id, module_price)
+        subscription_status = subscription_service.get_subscription_status(entity_id)
+        
+        return {
+            "entity_id": entity_id,
+            "module_price": module_price,
+            "access_check": result,
+            "subscription_status": subscription_status
+        }
+        
+    except Exception as e:
+        logger.error(f"Error checking paid module access: {str(e)}")
+        raise HTTP(500, f"Error checking paid module access: {str(e)}")

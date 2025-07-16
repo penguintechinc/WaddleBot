@@ -29,6 +29,30 @@ export const canManageModules = (userRole) => {
   return hasPermission(userRole, 'manage_modules');
 };
 
+export const canManageCurrency = (userRole) => {
+  return hasPermission(userRole, 'manage_currency');
+};
+
+export const canManagePayments = (userRole) => {
+  return hasPermission(userRole, 'manage_payments');
+};
+
+export const canCreateRaffles = (userRole) => {
+  return hasPermission(userRole, 'create_raffles');
+};
+
+export const canCreateGiveaways = (userRole) => {
+  return hasPermission(userRole, 'create_giveaways');
+};
+
+export const canParticipateRaffles = (userRole) => {
+  return hasPermission(userRole, 'participate_raffles');
+};
+
+export const canParticipateGiveaways = (userRole) => {
+  return hasPermission(userRole, 'participate_giveaways');
+};
+
 export const isAdminOrOwner = (userRole) => {
   return userRole?.toLowerCase() === 'owner' || userRole?.toLowerCase() === 'admin';
 };
@@ -72,6 +96,18 @@ export const getPermissionMessage = (userRole, action) => {
         return 'You do not have permission to manage members';
       case 'view_logs':
         return 'You do not have permission to view logs';
+      case 'manage_currency':
+        return 'Only community managers and admins can manage currency settings';
+      case 'manage_payments':
+        return 'Only community managers and admins can manage payment settings';
+      case 'create_raffles':
+        return 'You do not have permission to create raffles';
+      case 'create_giveaways':
+        return 'You do not have permission to create giveaways';
+      case 'participate_raffles':
+        return 'You do not have permission to participate in raffles';
+      case 'participate_giveaways':
+        return 'You do not have permission to participate in giveaways';
       default:
         return 'You do not have permission to perform this action';
     }
@@ -87,6 +123,12 @@ export default {
   canManageMembers,
   canViewLogs,
   canManageModules,
+  canManageCurrency,
+  canManagePayments,
+  canCreateRaffles,
+  canCreateGiveaways,
+  canParticipateRaffles,
+  canParticipateGiveaways,
   isAdminOrOwner,
   isModerator,
   canPerformAction,

@@ -205,6 +205,46 @@ db.define_table(
     migrate=True
 )
 
+# Community subscriptions for paid modules
+db.define_table(
+    'community_subscriptions',
+    Field('id', 'id'),
+    Field('entity_id', 'string', required=True, unique=True),
+    Field('subscription_type', 'string', required=True),  # 'free', 'premium', 'enterprise'
+    Field('subscription_status', 'string', required=True),  # 'active', 'expired', 'cancelled', 'suspended'
+    Field('subscription_start', 'datetime', required=True),
+    Field('subscription_end', 'datetime', required=True),
+    Field('auto_renew', 'boolean', default=True),
+    Field('payment_method', 'string'),  # 'stripe', 'paypal', 'manual'
+    Field('payment_id', 'string'),  # External payment system ID
+    Field('last_payment_date', 'datetime'),
+    Field('next_payment_date', 'datetime'),
+    Field('amount_paid', 'double', default=0.0),
+    Field('currency', 'string', default='USD'),
+    Field('grace_period_end', 'datetime'),  # Grace period after expiration
+    Field('cancellation_reason', 'string'),
+    Field('created_at', 'datetime', default=datetime.utcnow),
+    Field('updated_at', 'datetime', update=datetime.utcnow),
+    migrate=True
+)
+
+# Payment history for communities
+db.define_table(
+    'community_payments',
+    Field('id', 'id'),
+    Field('entity_id', 'string', required=True),
+    Field('payment_id', 'string', required=True),
+    Field('payment_method', 'string', required=True),  # 'stripe', 'paypal'
+    Field('amount', 'double', required=True),
+    Field('currency', 'string', required=True),
+    Field('payment_status', 'string', required=True),  # 'pending', 'completed', 'failed', 'refunded'
+    Field('payment_date', 'datetime', required=True),
+    Field('description', 'string'),
+    Field('metadata', 'json'),  # Payment processor metadata
+    Field('created_at', 'datetime', default=datetime.utcnow),
+    migrate=True
+)
+
 # Commands table (synchronized with router)
 db.define_table(
     'commands',
@@ -256,6 +296,13 @@ try:
     
     # Usage tracking
     db.executesql('CREATE INDEX IF NOT EXISTS idx_module_usage_stats_lookup ON module_usage_stats(module_id, entity_id, date);')
+    
+    # Subscription lookup
+    db.executesql('CREATE INDEX IF NOT EXISTS idx_community_subscriptions_entity ON community_subscriptions(entity_id, subscription_status);')
+    db.executesql('CREATE INDEX IF NOT EXISTS idx_community_subscriptions_expiry ON community_subscriptions(subscription_end, subscription_status);')
+    
+    # Payment history
+    db.executesql('CREATE INDEX IF NOT EXISTS idx_community_payments_entity ON community_payments(entity_id, payment_date);')
     
 except Exception as e:
     # Indexes might already exist

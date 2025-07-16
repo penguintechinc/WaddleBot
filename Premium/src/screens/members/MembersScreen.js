@@ -320,6 +320,82 @@ const MembersScreen = ({ navigation, route }) => {
     </TouchableOpacity>
   );
 
+  const ReputationModal = () => (
+    <Modal
+      visible={reputationModalVisible}
+      transparent={true}
+      animationType="slide"
+      onRequestClose={() => setReputationModalVisible(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Edit Reputation Score</Text>
+          <Text style={styles.modalSubtitle}>
+            {selectedMember?.displayName}
+          </Text>
+          
+          <View style={styles.currentScoreContainer}>
+            <Text style={styles.currentScoreLabel}>Current Score:</Text>
+            <Text style={[styles.currentScoreValue, { color: getReputationColor(selectedMember?.reputationScore || 650) }]}>
+              {selectedMember?.reputationScore} ({getReputationLabel(selectedMember?.reputationScore || 650)})
+            </Text>
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>New Reputation Score ({REPUTATION_CONFIG.MIN_SCORE}-{REPUTATION_CONFIG.MAX_SCORE}):</Text>
+            <TextInput
+              style={styles.reputationInput}
+              placeholder="Enter new score"
+              placeholderTextColor={COLORS.TEXT_MUTED}
+              value={newReputationScore}
+              onChangeText={setNewReputationScore}
+              keyboardType="numeric"
+              maxLength={3}
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Reason for change:</Text>
+            <TextInput
+              style={styles.reasonInput}
+              placeholder="Enter reason for reputation change..."
+              placeholderTextColor={COLORS.TEXT_MUTED}
+              value={reputationReason}
+              onChangeText={setReputationReason}
+              multiline
+              numberOfLines={3}
+            />
+          </View>
+
+          <View style={styles.scoreRanges}>
+            <Text style={styles.scoreRangesTitle}>Score Ranges:</Text>
+            <Text style={[styles.scoreRange, { color: COLORS.REPUTATION_EXCELLENT }]}>750-850: Excellent</Text>
+            <Text style={[styles.scoreRange, { color: COLORS.REPUTATION_GOOD }]}>650-749: Good</Text>
+            <Text style={[styles.scoreRange, { color: COLORS.REPUTATION_FAIR }]}>550-649: Fair</Text>
+            <Text style={[styles.scoreRange, { color: COLORS.REPUTATION_POOR }]}>500-549: Poor</Text>
+            <Text style={[styles.scoreRange, { color: COLORS.REPUTATION_BANNED }]}>450-499: Banned</Text>
+          </View>
+
+          <View style={styles.modalActions}>
+            <TouchableOpacity
+              style={styles.modalCancelButton}
+              onPress={() => setReputationModalVisible(false)}
+            >
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.modalSaveButton}
+              onPress={handleSaveReputation}
+            >
+              <Text style={styles.modalSaveText}>Update Reputation</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
   const ActionModal = () => (
     <Modal
       visible={actionModalVisible}
@@ -455,6 +531,7 @@ const MembersScreen = ({ navigation, route }) => {
       />
 
       <ActionModal />
+      <ReputationModal />
     </View>
   );
 };
@@ -649,6 +726,82 @@ const styles = StyleSheet.create({
   modalCancelText: {
     fontSize: SIZES.FONT_MEDIUM,
     color: COLORS.TEXT_SECONDARY,
+  },
+  currentScoreContainer: {
+    backgroundColor: COLORS.INPUT_BACKGROUND,
+    borderRadius: SIZES.BUTTON_RADIUS,
+    padding: SIZES.SPACING_MEDIUM,
+    marginBottom: SIZES.SPACING_MEDIUM,
+    alignItems: 'center',
+  },
+  currentScoreLabel: {
+    fontSize: SIZES.FONT_SMALL,
+    color: COLORS.TEXT_SECONDARY,
+    marginBottom: SIZES.SPACING_TINY,
+  },
+  currentScoreValue: {
+    fontSize: SIZES.FONT_LARGE,
+    fontWeight: FONTS.WEIGHT_BOLD,
+  },
+  inputContainer: {
+    marginBottom: SIZES.SPACING_MEDIUM,
+  },
+  inputLabel: {
+    fontSize: SIZES.FONT_MEDIUM,
+    color: COLORS.TEXT_PRIMARY,
+    marginBottom: SIZES.SPACING_SMALL,
+  },
+  reputationInput: {
+    height: SIZES.INPUT_HEIGHT,
+    backgroundColor: COLORS.INPUT_BACKGROUND,
+    borderWidth: 1,
+    borderColor: COLORS.INPUT_BORDER,
+    borderRadius: SIZES.BUTTON_RADIUS,
+    paddingHorizontal: SIZES.SPACING_MEDIUM,
+    fontSize: SIZES.FONT_MEDIUM,
+    color: COLORS.TEXT_PRIMARY,
+    textAlign: 'center',
+  },
+  reasonInput: {
+    backgroundColor: COLORS.INPUT_BACKGROUND,
+    borderWidth: 1,
+    borderColor: COLORS.INPUT_BORDER,
+    borderRadius: SIZES.BUTTON_RADIUS,
+    padding: SIZES.SPACING_MEDIUM,
+    fontSize: SIZES.FONT_MEDIUM,
+    color: COLORS.TEXT_PRIMARY,
+    textAlignVertical: 'top',
+    minHeight: 80,
+  },
+  scoreRanges: {
+    backgroundColor: COLORS.INPUT_BACKGROUND,
+    borderRadius: SIZES.BUTTON_RADIUS,
+    padding: SIZES.SPACING_MEDIUM,
+    marginBottom: SIZES.SPACING_LARGE,
+  },
+  scoreRangesTitle: {
+    fontSize: SIZES.FONT_MEDIUM,
+    fontWeight: FONTS.WEIGHT_MEDIUM,
+    color: COLORS.TEXT_PRIMARY,
+    marginBottom: SIZES.SPACING_SMALL,
+  },
+  scoreRange: {
+    fontSize: SIZES.FONT_SMALL,
+    marginBottom: SIZES.SPACING_TINY,
+    fontWeight: FONTS.WEIGHT_MEDIUM,
+  },
+  modalSaveButton: {
+    flex: 1,
+    backgroundColor: COLORS.SUCCESS,
+    paddingVertical: SIZES.SPACING_MEDIUM,
+    borderRadius: SIZES.BUTTON_RADIUS,
+    marginLeft: SIZES.SPACING_SMALL,
+  },
+  modalSaveText: {
+    fontSize: SIZES.FONT_MEDIUM,
+    color: COLORS.TEXT_LIGHT,
+    textAlign: 'center',
+    fontWeight: FONTS.WEIGHT_BOLD,
   },
 });
 

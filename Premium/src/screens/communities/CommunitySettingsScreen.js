@@ -11,9 +11,11 @@ import {
   Slider,
 } from 'react-native';
 import { COLORS, SIZES, FONTS, SHADOWS } from '../../constants/theme';
-import { REPUTATION_CONFIG } from '../../constants/config';
+import { REPUTATION_CONFIG, CURRENCY_CONFIG } from '../../constants/config';
 import { communityService } from '../../services/communityService';
+import { currencyService } from '../../services/currencyService';
 import { validateCommunityThreshold, getReputationLabel } from '../../utils/reputationUtils';
+import { canManageCurrency } from '../../utils/permissionUtils';
 
 const CommunitySettingsScreen = ({ navigation, route }) => {
   const { communityId } = route.params;
@@ -23,9 +25,15 @@ const CommunitySettingsScreen = ({ navigation, route }) => {
     name: '',
     description: '',
     isPublic: true,
+    // Currency settings
+    currencyEnabled: true,
+    currencyName: CURRENCY_CONFIG.DEFAULT_NAME,
+    chatMessageReward: CURRENCY_CONFIG.DEFAULT_CHAT_REWARD,
+    eventReward: CURRENCY_CONFIG.DEFAULT_EVENT_REWARD,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [userRole, setUserRole] = useState('admin'); // This should be fetched from user context
 
   useEffect(() => {
     loadCommunitySettings();
@@ -34,12 +42,28 @@ const CommunitySettingsScreen = ({ navigation, route }) => {
   const loadCommunitySettings = async () => {
     try {
       const communitySettings = await communityService.getCommunitySettings(communityId);
+      
+      // Load currency settings if user has permission
+      let currencySettings = {};
+      if (canManageCurrency(userRole)) {
+        try {
+          currencySettings = await currencyService.getCurrencySettings(communityId);
+        } catch (error) {
+          console.log('Currency settings not found, using defaults');
+        }
+      }
+      
       setSettings({
         autoBanThreshold: communitySettings.autoBanThreshold || REPUTATION_CONFIG.DEFAULT_AUTO_BAN_THRESHOLD,
         autoBanEnabled: communitySettings.autoBanEnabled !== false,
         name: communitySettings.name || '',
         description: communitySettings.description || '',
         isPublic: communitySettings.isPublic !== false,
+        // Currency settings
+        currencyEnabled: currencySettings.enabled !== false,
+        currencyName: currencySettings.name || CURRENCY_CONFIG.DEFAULT_NAME,
+        chatMessageReward: currencySettings.chatMessageReward || CURRENCY_CONFIG.DEFAULT_CHAT_REWARD,
+        eventReward: currencySettings.eventReward || CURRENCY_CONFIG.DEFAULT_EVENT_REWARD,
       });
     } catch (error) {
       Alert.alert('Error', 'Failed to load community settings');
@@ -57,9 +81,50 @@ const CommunitySettingsScreen = ({ navigation, route }) => {
       return;
     }
 
+    if (!currencyService.validateCurrencyName(settings.currencyName)) {
+      Alert.alert('Invalid Currency Name', 'Currency name must be between 1 and 50 characters.');
+      return;
+    }
+
+    if (!currencyService.validateRewardAmount(settings.chatMessageReward, 'chat')) {
+      Alert.alert(
+        'Invalid Chat Reward',
+        `Chat message reward must be between ${CURRENCY_CONFIG.MIN_CHAT_REWARD} and ${CURRENCY_CONFIG.MAX_CHAT_REWARD}.`
+      );
+      return;
+    }
+
+    if (!currencyService.validateRewardAmount(settings.eventReward, 'event')) {
+      Alert.alert(
+        'Invalid Event Reward',
+        `Event reward must be between ${CURRENCY_CONFIG.MIN_EVENT_REWARD} and ${CURRENCY_CONFIG.MAX_EVENT_REWARD}.`
+      );
+      return;
+    }
+
     setSaving(true);
     try {
-      await communityService.updateCommunitySettings(communityId, settings);
+      // Save community settings
+      const communitySettings = {
+        autoBanThreshold: settings.autoBanThreshold,
+        autoBanEnabled: settings.autoBanEnabled,
+        name: settings.name,
+        description: settings.description,
+        isPublic: settings.isPublic,
+      };
+      await communityService.updateCommunitySettings(communityId, communitySettings);
+
+      // Save currency settings if user has permission
+      if (canManageCurrency(userRole)) {
+        const currencySettings = {
+          enabled: settings.currencyEnabled,
+          name: settings.currencyName,
+          chatMessageReward: settings.chatMessageReward,
+          eventReward: settings.eventReward,
+        };
+        await currencyService.updateCurrencySettings(communityId, currencySettings);
+      }
+
       Alert.alert('Success', 'Community settings updated successfully');
       navigation.goBack();
     } catch (error) {
@@ -216,6 +281,118 @@ const CommunitySettingsScreen = ({ navigation, route }) => {
             )}
           </View>
         </View>
+
+        {canManageCurrency(userRole) && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Currency System</Text>
+            <View style={styles.card}>
+              <View style={styles.switchContainer}>
+                <View style={styles.switchInfo}>
+                  <Text style={styles.switchLabel}>Enable Currency System</Text>
+                  <Text style={styles.switchDescription}>
+                    Allow members to earn and spend community currency
+                  </Text>
+                </View>
+                <Switch
+                  value={settings.currencyEnabled}
+                  onValueChange={(value) => setSettings(prev => ({ ...prev, currencyEnabled: value }))}
+                  trackColor={{ false: COLORS.BORDER, true: COLORS.SECONDARY }}
+                  thumbColor={settings.currencyEnabled ? COLORS.PRIMARY : COLORS.TEXT_MUTED}
+                />
+              </View>
+
+              {settings.currencyEnabled && (
+                <>
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.inputLabel}>Currency Name</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={settings.currencyName}
+                      onChangeText={(text) => setSettings(prev => ({ ...prev, currencyName: text }))}
+                      placeholder="Enter currency name (e.g., Credits, Points, Coins)"
+                      placeholderTextColor={COLORS.TEXT_MUTED}
+                      maxLength={50}
+                    />
+                  </View>
+
+                  <View style={styles.rewardContainer}>
+                    <Text style={styles.inputLabel}>Chat Message Reward</Text>
+                    <Text style={styles.rewardDescription}>
+                      Amount of {settings.currencyName} earned per chat message (without commands)
+                    </Text>
+                    <View style={styles.rewardInputContainer}>
+                      <TextInput
+                        style={styles.rewardInput}
+                        value={settings.chatMessageReward.toString()}
+                        onChangeText={(text) => {
+                          const value = parseInt(text) || 0;
+                          setSettings(prev => ({ ...prev, chatMessageReward: value }));
+                        }}
+                        keyboardType="numeric"
+                        placeholder="0"
+                        placeholderTextColor={COLORS.TEXT_MUTED}
+                      />
+                      <Text style={styles.rewardSuffix}>{settings.currencyName}</Text>
+                    </View>
+                    <Text style={styles.rangeText}>
+                      Range: {CURRENCY_CONFIG.MIN_CHAT_REWARD} - {CURRENCY_CONFIG.MAX_CHAT_REWARD}
+                    </Text>
+                  </View>
+
+                  <View style={styles.rewardContainer}>
+                    <Text style={styles.inputLabel}>Event Reward</Text>
+                    <Text style={styles.rewardDescription}>
+                      Amount of {settings.currencyName} earned per event (follows, subscriptions, etc.)
+                    </Text>
+                    <View style={styles.rewardInputContainer}>
+                      <TextInput
+                        style={styles.rewardInput}
+                        value={settings.eventReward.toString()}
+                        onChangeText={(text) => {
+                          const value = parseInt(text) || 0;
+                          setSettings(prev => ({ ...prev, eventReward: value }));
+                        }}
+                        keyboardType="numeric"
+                        placeholder="0"
+                        placeholderTextColor={COLORS.TEXT_MUTED}
+                      />
+                      <Text style={styles.rewardSuffix}>{settings.currencyName}</Text>
+                    </View>
+                    <Text style={styles.rangeText}>
+                      Range: {CURRENCY_CONFIG.MIN_EVENT_REWARD} - {CURRENCY_CONFIG.MAX_EVENT_REWARD}
+                    </Text>
+                  </View>
+
+                  <View style={styles.currencyInfo}>
+                    <Text style={styles.infoTitle}>Currency Activities:</Text>
+                    <View style={styles.activityList}>
+                      <View style={styles.activityItem}>
+                        <Text style={styles.activityIcon}>💬</Text>
+                        <Text style={styles.activityText}>Chat Messages</Text>
+                        <Text style={styles.activityReward}>+{settings.chatMessageReward}</Text>
+                      </View>
+                      <View style={styles.activityItem}>
+                        <Text style={styles.activityIcon}>⭐</Text>
+                        <Text style={styles.activityText}>Subscriptions</Text>
+                        <Text style={styles.activityReward}>+{settings.eventReward}</Text>
+                      </View>
+                      <View style={styles.activityItem}>
+                        <Text style={styles.activityIcon}>👥</Text>
+                        <Text style={styles.activityText}>Follows</Text>
+                        <Text style={styles.activityReward}>+{settings.eventReward}</Text>
+                      </View>
+                      <View style={styles.activityItem}>
+                        <Text style={styles.activityIcon}>💝</Text>
+                        <Text style={styles.activityText}>Donations</Text>
+                        <Text style={styles.activityReward}>+{settings.eventReward}</Text>
+                      </View>
+                    </View>
+                  </View>
+                </>
+              )}
+            </View>
+          </View>
+        )}
 
         <View style={styles.actionContainer}>
           <TouchableOpacity
@@ -413,6 +590,72 @@ const styles = StyleSheet.create({
     fontSize: SIZES.FONT_MEDIUM,
     fontWeight: FONTS.WEIGHT_BOLD,
     color: COLORS.TEXT_PRIMARY,
+  },
+  // Currency styles
+  rewardContainer: {
+    marginBottom: SIZES.SPACING_LARGE,
+  },
+  rewardDescription: {
+    fontSize: SIZES.FONT_SMALL,
+    color: COLORS.TEXT_SECONDARY,
+    marginBottom: SIZES.SPACING_SMALL,
+  },
+  rewardInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SIZES.SPACING_SMALL,
+  },
+  rewardInput: {
+    flex: 1,
+    height: SIZES.INPUT_HEIGHT,
+    backgroundColor: COLORS.INPUT_BACKGROUND,
+    borderWidth: 1,
+    borderColor: COLORS.INPUT_BORDER,
+    borderRadius: SIZES.BUTTON_RADIUS,
+    paddingHorizontal: SIZES.SPACING_MEDIUM,
+    fontSize: SIZES.FONT_MEDIUM,
+    color: COLORS.TEXT_PRIMARY,
+    textAlign: 'center',
+  },
+  rewardSuffix: {
+    fontSize: SIZES.FONT_MEDIUM,
+    color: COLORS.TEXT_SECONDARY,
+    marginLeft: SIZES.SPACING_SMALL,
+    minWidth: 60,
+  },
+  rangeText: {
+    fontSize: SIZES.FONT_SMALL,
+    color: COLORS.TEXT_MUTED,
+    fontStyle: 'italic',
+  },
+  currencyInfo: {
+    marginTop: SIZES.SPACING_MEDIUM,
+    paddingTop: SIZES.SPACING_MEDIUM,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.BORDER,
+  },
+  activityList: {
+    marginTop: SIZES.SPACING_SMALL,
+  },
+  activityItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SIZES.SPACING_SMALL,
+  },
+  activityIcon: {
+    fontSize: SIZES.FONT_MEDIUM,
+    marginRight: SIZES.SPACING_SMALL,
+    width: 20,
+  },
+  activityText: {
+    flex: 1,
+    fontSize: SIZES.FONT_SMALL,
+    color: COLORS.TEXT_SECONDARY,
+  },
+  activityReward: {
+    fontSize: SIZES.FONT_SMALL,
+    fontWeight: FONTS.WEIGHT_MEDIUM,
+    color: COLORS.SUCCESS,
   },
 });
 
