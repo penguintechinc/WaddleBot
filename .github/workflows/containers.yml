@@ -1,0 +1,507 @@
+name: Container Builds
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'router_module/**'
+      - 'marketplace_module/**'
+      - 'portal_module/**'
+      - 'kong_admin_broker/**'
+      - 'twitch_module/**'
+      - 'discord_module/**'
+      - 'slack_module/**'
+      - 'ai_interaction_module/**'
+      - 'labels_core_module/**'
+      - 'alias_interaction_module/**'
+      - 'shoutout_interaction_module/**'
+      - 'libs/**'
+      - 'kong/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/containers.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'router_module/**'
+      - 'marketplace_module/**'
+      - 'portal_module/**'
+      - 'kong_admin_broker/**'
+      - 'twitch_module/**'
+      - 'discord_module/**'
+      - 'slack_module/**'
+      - 'ai_interaction_module/**'
+      - 'labels_core_module/**'
+      - 'alias_interaction_module/**'
+      - 'shoutout_interaction_module/**'
+      - 'libs/**'
+      - 'kong/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/containers.yml'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # Detect changed modules
+  detect-changes:
+    name: Detect Changed Modules
+    runs-on: ubuntu-latest
+    outputs:
+      router: ${{ steps.changes.outputs.router }}
+      marketplace: ${{ steps.changes.outputs.marketplace }}
+      portal: ${{ steps.changes.outputs.portal }}
+      kong-admin: ${{ steps.changes.outputs.kong-admin }}
+      twitch: ${{ steps.changes.outputs.twitch }}
+      discord: ${{ steps.changes.outputs.discord }}
+      slack: ${{ steps.changes.outputs.slack }}
+      ai-interaction: ${{ steps.changes.outputs.ai-interaction }}
+      labels-core: ${{ steps.changes.outputs.labels-core }}
+      alias-interaction: ${{ steps.changes.outputs.alias-interaction }}
+      shoutout-interaction: ${{ steps.changes.outputs.shoutout-interaction }}
+      libs: ${{ steps.changes.outputs.libs }}
+      kong: ${{ steps.changes.outputs.kong }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Detect changes
+        uses: dorny/paths-filter@v2
+        id: changes
+        with:
+          filters: |
+            router:
+              - 'router_module/**'
+              - 'libs/**'
+            marketplace:
+              - 'marketplace_module/**'
+              - 'libs/**'
+            portal:
+              - 'portal_module/**'
+              - 'libs/**'
+            kong-admin:
+              - 'kong_admin_broker/**'
+              - 'libs/**'
+            twitch:
+              - 'twitch_module/**'
+              - 'libs/**'
+            discord:
+              - 'discord_module/**'
+              - 'libs/**'
+            slack:
+              - 'slack_module/**'
+              - 'libs/**'
+            ai-interaction:
+              - 'ai_interaction_module/**'
+              - 'libs/**'
+            labels-core:
+              - 'labels_core_module/**'
+              - 'libs/**'
+            alias-interaction:
+              - 'alias_interaction_module/**'
+              - 'libs/**'
+            shoutout-interaction:
+              - 'shoutout_interaction_module/**'
+              - 'libs/**'
+            libs:
+              - 'libs/**'
+            kong:
+              - 'kong/**'
+
+  # Build core modules
+  build-core:
+    name: Build Core Modules
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.router == 'true' || needs.detect-changes.outputs.marketplace == 'true' || needs.detect-changes.outputs.portal == 'true' || needs.detect-changes.outputs.kong-admin == 'true' || needs.detect-changes.outputs.libs == 'true' || github.event_name == 'workflow_dispatch'
+    strategy:
+      matrix:
+        include:
+          - module: router_module
+            name: router
+            port: 8000
+            condition: ${{ needs.detect-changes.outputs.router == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - module: marketplace_module
+            name: marketplace
+            port: 8001
+            condition: ${{ needs.detect-changes.outputs.marketplace == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - module: portal_module
+            name: portal
+            port: 8002
+            condition: ${{ needs.detect-changes.outputs.portal == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - module: kong_admin_broker
+            name: kong-admin-broker
+            port: 8003
+            condition: ${{ needs.detect-changes.outputs.kong-admin == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        if: matrix.condition == 'true' || github.event_name == 'workflow_dispatch'
+        with:
+          context: .
+          file: ./${{ matrix.module }}/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          build-args: |
+            MODULE_NAME=${{ matrix.name }}
+            MODULE_PORT=${{ matrix.port }}
+
+      - name: Run container tests
+        if: matrix.condition == 'true' || github.event_name == 'workflow_dispatch'
+        run: |
+          # Test the built image
+          docker run --rm --name test-${{ matrix.name }} -d -p ${{ matrix.port }}:${{ matrix.port }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:latest
+          sleep 10
+          
+          # Health check
+          if curl -f http://localhost:${{ matrix.port }}/health; then
+            echo "✅ Health check passed for ${{ matrix.name }}"
+          else
+            echo "❌ Health check failed for ${{ matrix.name }}"
+            exit 1
+          fi
+          
+          # Stop container
+          docker stop test-${{ matrix.name }}
+
+  # Build collector modules
+  build-collectors:
+    name: Build Collector Modules
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.twitch == 'true' || needs.detect-changes.outputs.discord == 'true' || needs.detect-changes.outputs.slack == 'true' || needs.detect-changes.outputs.libs == 'true' || github.event_name == 'workflow_dispatch'
+    strategy:
+      matrix:
+        include:
+          - module: twitch_module
+            name: twitch-collector
+            port: 8010
+            condition: ${{ needs.detect-changes.outputs.twitch == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - module: discord_module
+            name: discord-collector
+            port: 8011
+            condition: ${{ needs.detect-changes.outputs.discord == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - module: slack_module
+            name: slack-collector
+            port: 8012
+            condition: ${{ needs.detect-changes.outputs.slack == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        if: matrix.condition == 'true' || github.event_name == 'workflow_dispatch'
+        with:
+          context: .
+          file: ./${{ matrix.module }}/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          build-args: |
+            MODULE_NAME=${{ matrix.name }}
+            MODULE_PORT=${{ matrix.port }}
+
+      - name: Run container tests
+        if: matrix.condition == 'true' || github.event_name == 'workflow_dispatch'
+        run: |
+          # Test the built image
+          docker run --rm --name test-${{ matrix.name }} -d -p ${{ matrix.port }}:${{ matrix.port }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:latest
+          sleep 10
+          
+          # Health check
+          if curl -f http://localhost:${{ matrix.port }}/health; then
+            echo "✅ Health check passed for ${{ matrix.name }}"
+          else
+            echo "❌ Health check failed for ${{ matrix.name }}"
+            exit 1
+          fi
+          
+          # Stop container
+          docker stop test-${{ matrix.name }}
+
+  # Build interaction modules
+  build-interactions:
+    name: Build Interaction Modules
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.ai-interaction == 'true' || needs.detect-changes.outputs.labels-core == 'true' || needs.detect-changes.outputs.alias-interaction == 'true' || needs.detect-changes.outputs.shoutout-interaction == 'true' || needs.detect-changes.outputs.libs == 'true' || github.event_name == 'workflow_dispatch'
+    strategy:
+      matrix:
+        include:
+          - module: ai_interaction_module
+            name: ai-interaction
+            port: 8020
+            condition: ${{ needs.detect-changes.outputs.ai-interaction == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - module: labels_core_module
+            name: labels-core
+            port: 8021
+            condition: ${{ needs.detect-changes.outputs.labels-core == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - module: alias_interaction_module
+            name: alias-interaction
+            port: 8022
+            condition: ${{ needs.detect-changes.outputs.alias-interaction == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - module: shoutout_interaction_module
+            name: shoutout-interaction
+            port: 8023
+            condition: ${{ needs.detect-changes.outputs.shoutout-interaction == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        if: matrix.condition == 'true' || github.event_name == 'workflow_dispatch'
+        with:
+          context: .
+          file: ./${{ matrix.module }}/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          build-args: |
+            MODULE_NAME=${{ matrix.name }}
+            MODULE_PORT=${{ matrix.port }}
+
+      - name: Run container tests
+        if: matrix.condition == 'true' || github.event_name == 'workflow_dispatch'
+        run: |
+          # Test the built image
+          docker run --rm --name test-${{ matrix.name }} -d -p ${{ matrix.port }}:${{ matrix.port }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:latest
+          sleep 10
+          
+          # Health check
+          if curl -f http://localhost:${{ matrix.port }}/health; then
+            echo "✅ Health check passed for ${{ matrix.name }}"
+          else
+            echo "❌ Health check failed for ${{ matrix.name }}"
+            exit 1
+          fi
+          
+          # Stop container
+          docker stop test-${{ matrix.name }}
+
+  # Build Kong infrastructure
+  build-kong:
+    name: Build Kong Infrastructure
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.kong == 'true' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/kong
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Kong image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./kong
+          file: ./kong/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha,scope=kong
+          cache-to: type=gha,mode=max,scope=kong
+
+  # Integration tests
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [build-core, build-collectors, build-interactions]
+    if: always() && (needs.build-core.result == 'success' || needs.build-collectors.result == 'success' || needs.build-interactions.result == 'success')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Compose
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y docker-compose
+
+      - name: Start services
+        run: |
+          # Use the latest built images
+          export REGISTRY=${{ env.REGISTRY }}
+          export IMAGE_NAME=${{ env.IMAGE_NAME }}
+          export TAG=latest
+          
+          # Start core services
+          docker-compose -f docker-compose.yml up -d postgres redis kong
+          
+          # Wait for services to be ready
+          sleep 30
+          
+          # Start application services
+          docker-compose -f docker-compose.yml up -d
+
+      - name: Run integration tests
+        run: |
+          # Wait for all services to be ready
+          sleep 60
+          
+          # Test router health
+          curl -f http://localhost:8000/health || exit 1
+          
+          # Test marketplace health
+          curl -f http://localhost:8001/health || exit 1
+          
+          # Test portal health
+          curl -f http://localhost:8002/health || exit 1
+          
+          # Test Kong gateway
+          curl -f http://localhost:8080/health || exit 1
+          
+          echo "✅ All integration tests passed"
+
+      - name: Cleanup
+        if: always()
+        run: docker-compose -f docker-compose.yml down -v
+
+  # Security scanning
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: [build-core, build-collectors, build-interactions]
+    if: always() && (needs.build-core.result == 'success' || needs.build-collectors.result == 'success' || needs.build-interactions.result == 'success')
+    strategy:
+      matrix:
+        image:
+          - router
+          - marketplace
+          - portal
+          - kong-admin-broker
+          - twitch-collector
+          - discord-collector
+          - slack-collector
+          - ai-interaction
+          - labels-core
+          - alias-interaction
+          - shoutout-interaction
+    steps:
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.image }}:latest
+          format: 'sarif'
+          output: 'trivy-${{ matrix.image }}.sarif'
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-${{ matrix.image }}.sarif'
+
+  # Notify on completion
+  notify:
+    name: Notify Build Status
+    runs-on: ubuntu-latest
+    needs: [build-core, build-collectors, build-interactions, integration-tests, security-scan]
+    if: always()
+    steps:
+      - name: Build Status Summary
+        run: |
+          echo "## Container Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Core Modules | ${{ needs.build-core.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Collector Modules | ${{ needs.build-collectors.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Interaction Modules | ${{ needs.build-interactions.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Integration Tests | ${{ needs.integration-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security Scan | ${{ needs.security-scan.result }} |" >> $GITHUB_STEP_SUMMARY

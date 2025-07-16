@@ -1,0 +1,368 @@
+name: WaddleBot CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # Security and Code Quality Checks
+  security:
+    name: Security & Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Run CodeQL Analysis
+        uses: github/codeql-action/analyze@v2
+        with:
+          languages: go, java, javascript
+
+  # Container Builds
+  containers:
+    name: Container Builds
+    runs-on: ubuntu-latest
+    needs: security
+    strategy:
+      matrix:
+        service:
+          - router_module
+          - marketplace_module
+          - portal_module
+          - kong_admin_broker
+          - twitch_module
+          - discord_module
+          - slack_module
+          - ai_interaction_module
+          - labels_core_module
+          - alias_interaction_module
+          - shoutout_interaction_module
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.service }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./${{ matrix.service }}
+          file: ./${{ matrix.service }}/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run container security scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.service }}:latest
+          format: 'sarif'
+          output: 'trivy-${{ matrix.service }}.sarif'
+
+      - name: Upload container scan results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-${{ matrix.service }}.sarif'
+
+  # Android App Build
+  android:
+    name: Android App Build
+    runs-on: ubuntu-latest
+    needs: security
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x Premium/Android/gradlew
+        working-directory: .
+
+      - name: Run Android tests
+        run: ./gradlew test
+        working-directory: Premium/Android
+
+      - name: Run Android lint
+        run: ./gradlew lint
+        working-directory: Premium/Android
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug
+        working-directory: Premium/Android
+
+      - name: Build release APK
+        run: ./gradlew assembleRelease
+        working-directory: Premium/Android
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+      - name: Upload APK artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: android-apks
+          path: |
+            Premium/Android/app/build/outputs/apk/debug/*.apk
+            Premium/Android/app/build/outputs/apk/release/*.apk
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: android-test-results
+          path: |
+            Premium/Android/app/build/reports/tests/
+            Premium/Android/app/build/reports/lint-results.html
+
+  # Golang Desktop Bridge Build
+  desktop-bridge:
+    name: Desktop Bridge Build
+    runs-on: ${{ matrix.os }}
+    needs: security
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        go-version: ['1.21']
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+        working-directory: Premium/Desktop
+
+      - name: Run Go vet
+        run: go vet ./...
+        working-directory: Premium/Desktop
+
+      - name: Run Go fmt check
+        run: |
+          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+            echo "Code is not formatted properly"
+            gofmt -s -l .
+            exit 1
+          fi
+        shell: bash
+        working-directory: Premium/Desktop
+
+      - name: Install test dependencies
+        run: |
+          go install github.com/jstemmer/go-junit-report/v2@latest
+          go install github.com/axw/gocov/gocov@latest
+          go install github.com/AlekSi/gocov-xml@latest
+        shell: bash
+
+      - name: Run unit tests with coverage
+        run: |
+          go test -v -race -coverprofile=coverage.out -covermode=atomic ./... 2>&1 | tee test-output.txt
+          go-junit-report -in test-output.txt -out test-results.xml
+          gocov convert coverage.out | gocov-xml > coverage.xml
+        working-directory: Premium/Desktop
+        shell: bash
+
+      - name: Run integration tests
+        run: go test -v -race -tags=integration ./... 2>&1 | tee integration-test-output.txt
+        working-directory: Premium/Desktop
+        shell: bash
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-results-${{ matrix.os }}
+          path: |
+            Premium/Desktop/test-results.xml
+            Premium/Desktop/coverage.xml
+            Premium/Desktop/coverage.out
+            Premium/Desktop/integration-test-output.txt
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: Premium/Desktop/coverage.out
+          flags: ${{ matrix.os }}
+          name: codecov-${{ matrix.os }}
+
+      - name: Build for current platform
+        run: |
+          mkdir -p build
+          go build -ldflags="-s -w -X main.version=${{ github.sha }}" -o build/waddlebot-bridge-${{ runner.os }}-${{ runner.arch }} ./cmd/
+        working-directory: Premium/Desktop
+        shell: bash
+
+      - name: Build cross-platform binaries (Linux only)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          # Windows
+          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X main.version=${{ github.sha }}" -o build/waddlebot-bridge-windows-amd64.exe ./cmd/
+          # macOS
+          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X main.version=${{ github.sha }}" -o build/waddlebot-bridge-darwin-amd64 ./cmd/
+          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X main.version=${{ github.sha }}" -o build/waddlebot-bridge-darwin-arm64 ./cmd/
+          # Linux
+          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.version=${{ github.sha }}" -o build/waddlebot-bridge-linux-amd64 ./cmd/
+          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X main.version=${{ github.sha }}" -o build/waddlebot-bridge-linux-arm64 ./cmd/
+        working-directory: Premium/Desktop
+        shell: bash
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: desktop-bridge-${{ matrix.os }}
+          path: Premium/Desktop/build/
+
+  # Performance Tests
+  performance:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    needs: [containers, desktop-bridge]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Run benchmarks
+        run: go test -bench=. -benchmem ./... | tee benchmark-results.txt
+        working-directory: Premium/Desktop
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v3
+        with:
+          name: benchmark-results
+          path: Premium/Desktop/benchmark-results.txt
+
+  # Deployment (only on main branch)
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: [containers, android, desktop-bridge]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+
+      - name: Deploy to staging
+        run: |
+          echo "Deploying containers to staging environment..."
+          # Add your deployment commands here
+          # kubectl apply -f k8s/staging/
+          # helm upgrade --install waddlebot ./helm-chart --namespace staging
+
+      - name: Run smoke tests
+        run: |
+          echo "Running smoke tests..."
+          # Add your smoke test commands here
+
+      - name: Deploy to production
+        if: success()
+        run: |
+          echo "Deploying to production..."
+          # Add your production deployment commands here
+          # kubectl apply -f k8s/production/
+          # helm upgrade --install waddlebot ./helm-chart --namespace production
+
+  # Notification
+  notify:
+    name: Notify
+    runs-on: ubuntu-latest
+    needs: [containers, android, desktop-bridge, deploy]
+    if: always()
+    steps:
+      - name: Notify on success
+        if: needs.containers.result == 'success' && needs.android.result == 'success' && needs.desktop-bridge.result == 'success'
+        run: |
+          echo "✅ All builds completed successfully!"
+          # Add notification logic here (Slack, Discord, etc.)
+
+      - name: Notify on failure
+        if: needs.containers.result == 'failure' || needs.android.result == 'failure' || needs.desktop-bridge.result == 'failure'
+        run: |
+          echo "❌ Some builds failed!"
+          # Add notification logic here (Slack, Discord, etc.)

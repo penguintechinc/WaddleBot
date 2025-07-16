@@ -1,0 +1,535 @@
+name: Android App Build
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'Premium/Android/**'
+      - '.github/workflows/android.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'Premium/Android/**'
+      - '.github/workflows/android.yml'
+  workflow_dispatch:
+
+env:
+  JAVA_VERSION: 17
+  ANDROID_API_LEVEL: 34
+  ANDROID_BUILD_TOOLS_VERSION: 34.0.0
+  ANDROID_NDK_VERSION: 26.1.10909125
+
+jobs:
+  # Static Analysis and Code Quality
+  static-analysis:
+    name: Static Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: ${{ env.ANDROID_API_LEVEL }}
+          build-tools: ${{ env.ANDROID_BUILD_TOOLS_VERSION }}
+          ndk: ${{ env.ANDROID_NDK_VERSION }}
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+        working-directory: Premium/Android
+
+      - name: Run Detekt (Kotlin static analysis)
+        run: ./gradlew detekt
+        working-directory: Premium/Android
+
+      - name: Run Android lint
+        run: ./gradlew lintDebug
+        working-directory: Premium/Android
+
+      - name: Upload lint results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: lint-results
+          path: Premium/Android/app/build/reports/lint-results-debug.html
+
+      - name: Upload Detekt results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: detekt-results
+          path: Premium/Android/app/build/reports/detekt/
+
+  # Unit Tests
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: ${{ env.ANDROID_API_LEVEL }}
+          build-tools: ${{ env.ANDROID_BUILD_TOOLS_VERSION }}
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+        working-directory: Premium/Android
+
+      - name: Run unit tests
+        run: ./gradlew testDebugUnitTest
+        working-directory: Premium/Android
+
+      - name: Generate test report
+        run: ./gradlew jacocoTestReport
+        working-directory: Premium/Android
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: unit-test-results
+          path: |
+            Premium/Android/app/build/reports/tests/testDebugUnitTest/
+            Premium/Android/app/build/reports/jacoco/jacocoTestReport/
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: Premium/Android/app/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml
+          flags: android
+          name: codecov-android
+
+  # Instrumentation Tests
+  instrumentation-tests:
+    name: Instrumentation Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        api-level: [28, 30, 33]
+        target: [default, google_apis]
+        arch: [x86_64]
+        include:
+          - api-level: 28
+            target: default
+            arch: x86_64
+          - api-level: 30
+            target: google_apis
+            arch: x86_64
+          - api-level: 33
+            target: google_apis
+            arch: x86_64
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: ${{ matrix.target }}
+          arch: ${{ matrix.arch }}
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+        working-directory: Premium/Android
+
+      - name: Enable KVM group perms
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run instrumentation tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: ${{ matrix.target }}
+          arch: ${{ matrix.arch }}
+          script: |
+            cd Premium/Android
+            ./gradlew connectedAndroidTest
+
+      - name: Upload instrumentation test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: instrumentation-test-results-${{ matrix.api-level }}
+          path: Premium/Android/app/build/reports/androidTests/connected/
+
+  # Build APKs
+  build-apk:
+    name: Build APK
+    runs-on: ubuntu-latest
+    needs: [static-analysis, unit-tests]
+    strategy:
+      matrix:
+        build-type: [debug, release]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: ${{ env.ANDROID_API_LEVEL }}
+          build-tools: ${{ env.ANDROID_BUILD_TOOLS_VERSION }}
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+        working-directory: Premium/Android
+
+      - name: Decode keystore
+        if: matrix.build-type == 'release'
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > Premium/Android/app/keystore.jks
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+
+      - name: Build debug APK
+        if: matrix.build-type == 'debug'
+        run: ./gradlew assembleDebug
+        working-directory: Premium/Android
+
+      - name: Build release APK
+        if: matrix.build-type == 'release'
+        run: ./gradlew assembleRelease
+        working-directory: Premium/Android
+        env:
+          KEYSTORE_FILE: keystore.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+      - name: Sign APK
+        if: matrix.build-type == 'release'
+        run: |
+          $ANDROID_HOME/build-tools/${{ env.ANDROID_BUILD_TOOLS_VERSION }}/apksigner sign \
+            --ks Premium/Android/app/keystore.jks \
+            --ks-key-alias ${{ secrets.KEY_ALIAS }} \
+            --ks-pass pass:${{ secrets.KEYSTORE_PASSWORD }} \
+            --key-pass pass:${{ secrets.KEY_PASSWORD }} \
+            --out Premium/Android/app/build/outputs/apk/release/app-release-signed.apk \
+            Premium/Android/app/build/outputs/apk/release/app-release-unsigned.apk
+
+      - name: Verify APK signature
+        if: matrix.build-type == 'release'
+        run: |
+          $ANDROID_HOME/build-tools/${{ env.ANDROID_BUILD_TOOLS_VERSION }}/apksigner verify \
+            --print-certs \
+            Premium/Android/app/build/outputs/apk/release/app-release-signed.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v3
+        with:
+          name: apk-${{ matrix.build-type }}
+          path: |
+            Premium/Android/app/build/outputs/apk/${{ matrix.build-type }}/*.apk
+
+  # Build AAB (Android App Bundle)
+  build-aab:
+    name: Build AAB
+    runs-on: ubuntu-latest
+    needs: [static-analysis, unit-tests]
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: ${{ env.ANDROID_API_LEVEL }}
+          build-tools: ${{ env.ANDROID_BUILD_TOOLS_VERSION }}
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+        working-directory: Premium/Android
+
+      - name: Decode keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > Premium/Android/app/keystore.jks
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+
+      - name: Build AAB
+        run: ./gradlew bundleRelease
+        working-directory: Premium/Android
+        env:
+          KEYSTORE_FILE: keystore.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+      - name: Upload AAB
+        uses: actions/upload-artifact@v3
+        with:
+          name: aab-release
+          path: Premium/Android/app/build/outputs/bundle/release/*.aab
+
+  # Security Analysis
+  security-analysis:
+    name: Security Analysis
+    runs-on: ubuntu-latest
+    needs: [build-apk]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download APK
+        uses: actions/download-artifact@v3
+        with:
+          name: apk-release
+          path: ./apk
+
+      - name: Run MobSF Security Analysis
+        run: |
+          # Install MobSF dependencies
+          pip install -r requirements.txt
+          
+          # Run security analysis
+          python manage.py runserver 0.0.0.0:8000 &
+          sleep 10
+          
+          # Upload APK for analysis
+          curl -X POST -F "file=@./apk/app-release.apk" http://localhost:8000/api/v1/upload
+          
+          # Wait for analysis
+          sleep 30
+          
+          # Get analysis results
+          curl -X GET http://localhost:8000/api/v1/report_json | jq '.'
+        continue-on-error: true
+
+      - name: Run QARK Security Analysis
+        run: |
+          pip install qark
+          qark --apk ./apk/app-release.apk --report-type json > qark-report.json
+        continue-on-error: true
+
+      - name: Upload security reports
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: security-reports
+          path: |
+            qark-report.json
+            mobsf-report.json
+
+  # Performance Testing
+  performance-test:
+    name: Performance Testing
+    runs-on: ubuntu-latest
+    needs: [build-apk]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: ${{ env.ANDROID_API_LEVEL }}
+          build-tools: ${{ env.ANDROID_BUILD_TOOLS_VERSION }}
+
+      - name: Download APK
+        uses: actions/download-artifact@v3
+        with:
+          name: apk-debug
+          path: ./apk
+
+      - name: Run performance benchmarks
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: google_apis
+          arch: x86_64
+          script: |
+            cd Premium/Android
+            ./gradlew connectedBenchmarkAndroidTest
+
+      - name: Upload performance results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: performance-results
+          path: Premium/Android/app/build/reports/benchmarks/
+
+  # Deploy to Play Store (Internal Track)
+  deploy-internal:
+    name: Deploy to Play Store (Internal)
+    runs-on: ubuntu-latest
+    needs: [build-aab, instrumentation-tests, security-analysis]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: play-store-internal
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download AAB
+        uses: actions/download-artifact@v3
+        with:
+          name: aab-release
+          path: ./aab
+
+      - name: Setup Google Play Service Account
+        run: |
+          echo "${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON }}" > service-account.json
+        env:
+          PLAY_STORE_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON }}
+
+      - name: Deploy to Play Store Internal Track
+        uses: r0adkll/upload-google-play@v1.1.3
+        with:
+          serviceAccountJson: service-account.json
+          packageName: com.waddlebot.premium
+          releaseFiles: ./aab/*.aab
+          track: internal
+          status: completed
+          whatsNewDirectory: Premium/Android/fastlane/metadata/android/en-US/changelogs/
+
+  # Generate and upload build artifacts summary
+  build-summary:
+    name: Build Summary
+    runs-on: ubuntu-latest
+    needs: [static-analysis, unit-tests, instrumentation-tests, build-apk, build-aab, security-analysis, performance-test]
+    if: always()
+    steps:
+      - name: Generate build summary
+        run: |
+          echo "## Android Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Static Analysis | ${{ needs.static-analysis.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Unit Tests | ${{ needs.unit-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Instrumentation Tests | ${{ needs.instrumentation-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| APK Build | ${{ needs.build-apk.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| AAB Build | ${{ needs.build-aab.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security Analysis | ${{ needs.security-analysis.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Performance Tests | ${{ needs.performance-test.result }} |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Comment PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const summary = `## 🤖 Android Build Results
+            
+            | Component | Status |
+            |-----------|--------|
+            | Static Analysis | ${{ needs.static-analysis.result }} |
+            | Unit Tests | ${{ needs.unit-tests.result }} |
+            | Instrumentation Tests | ${{ needs.instrumentation-tests.result }} |
+            | APK Build | ${{ needs.build-apk.result }} |
+            | AAB Build | ${{ needs.build-aab.result }} |
+            | Security Analysis | ${{ needs.security-analysis.result }} |
+            | Performance Tests | ${{ needs.performance-test.result }} |
+            
+            Build artifacts are available in the Actions tab.`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: summary
+            });
+
+  # Cleanup
+  cleanup:
+    name: Cleanup
+    runs-on: ubuntu-latest
+    needs: [build-summary]
+    if: always()
+    steps:
+      - name: Cleanup temporary files
+        run: |
+          echo "Cleaning up temporary files..."
+          # Any cleanup tasks can go here

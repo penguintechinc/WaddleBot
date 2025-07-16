@@ -1,0 +1,29 @@
+# Core dependencies
+py4web>=1.20231025.1
+pydal>=20231025.1
+uvicorn>=0.24.0
+fastapi>=0.104.1
+
+# Database drivers
+psycopg2-binary>=2.9.7
+sqlite3
+
+# Caching
+redis>=5.0.1
+
+# Testing
+pytest>=7.4.3
+pytest-asyncio>=0.21.1
+pytest-cov>=4.1.0
+pytest-mock>=3.11.1
+requests>=2.31.0
+
+# Development
+black>=23.10.1
+flake8>=6.1.0
+mypy>=1.7.0
+isort>=5.12.0
+
+# Monitoring and logging
+prometheus-client>=0.19.0
+structlog>=23.2.0

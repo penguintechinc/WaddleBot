@@ -1,0 +1,566 @@
+name: Desktop Bridge Build
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'Premium/Desktop/**'
+      - '.github/workflows/desktop-bridge.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'Premium/Desktop/**'
+      - '.github/workflows/desktop-bridge.yml'
+  workflow_dispatch:
+
+env:
+  GO_VERSION: '1.21'
+  CGO_ENABLED: 0
+
+jobs:
+  # Code Quality and Security
+  code-quality:
+    name: Code Quality & Security
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+        working-directory: Premium/Desktop
+
+      - name: Verify dependencies
+        run: go mod verify
+        working-directory: Premium/Desktop
+
+      - name: Run go vet
+        run: go vet ./...
+        working-directory: Premium/Desktop
+
+      - name: Run go fmt check
+        run: |
+          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+            echo "Code is not formatted properly:"
+            gofmt -s -l .
+            exit 1
+          fi
+        working-directory: Premium/Desktop
+
+      - name: Install security tools
+        run: |
+          go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
+          go install honnef.co/go/tools/cmd/staticcheck@latest
+
+      - name: Run gosec security scanner
+        run: gosec -fmt sarif -out gosec-report.sarif ./...
+        working-directory: Premium/Desktop
+        continue-on-error: true
+
+      - name: Upload gosec results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: Premium/Desktop/gosec-report.sarif
+
+      - name: Run staticcheck
+        run: staticcheck ./...
+        working-directory: Premium/Desktop
+
+  # Unit Tests
+  unit-tests:
+    name: Unit Tests
+    runs-on: ${{ matrix.os }}
+    needs: code-quality
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        go-version: ['1.21', '1.22']
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ matrix.go-version }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-${{ matrix.go-version }}-
+
+      - name: Download dependencies
+        run: go mod download
+        working-directory: Premium/Desktop
+
+      - name: Install test dependencies
+        run: |
+          go install github.com/jstemmer/go-junit-report/v2@latest
+          go install github.com/axw/gocov/gocov@latest
+          go install github.com/AlekSi/gocov-xml@latest
+        shell: bash
+
+      - name: Run unit tests
+        run: |
+          go test -v -race -coverprofile=coverage.out -covermode=atomic ./internal/... 2>&1 | tee test-output.txt
+          go-junit-report -in test-output.txt -out test-results.xml
+        working-directory: Premium/Desktop
+        shell: bash
+
+      - name: Generate coverage report
+        run: |
+          gocov convert coverage.out | gocov-xml > coverage.xml
+          go tool cover -html=coverage.out -o coverage.html
+        working-directory: Premium/Desktop
+        shell: bash
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-results-${{ matrix.os }}-go${{ matrix.go-version }}
+          path: |
+            Premium/Desktop/test-results.xml
+            Premium/Desktop/coverage.xml
+            Premium/Desktop/coverage.html
+            Premium/Desktop/coverage.out
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: Premium/Desktop/coverage.out
+          flags: ${{ matrix.os }}-go${{ matrix.go-version }}
+          name: codecov-${{ matrix.os }}-go${{ matrix.go-version }}
+
+  # Integration Tests
+  integration-tests:
+    name: Integration Tests
+    runs-on: ${{ matrix.os }}
+    needs: unit-tests
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+        working-directory: Premium/Desktop
+
+      - name: Run integration tests
+        run: go test -v -race -tags=integration ./... 2>&1 | tee integration-test-output.txt
+        working-directory: Premium/Desktop
+        shell: bash
+
+      - name: Upload integration test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: integration-test-results-${{ matrix.os }}
+          path: Premium/Desktop/integration-test-output.txt
+
+  # Build Binaries
+  build:
+    name: Build Binaries
+    runs-on: ${{ matrix.os }}
+    needs: unit-tests
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            binary_name: waddlebot-bridge-linux-amd64
+          - os: ubuntu-latest
+            goos: linux
+            goarch: arm64
+            binary_name: waddlebot-bridge-linux-arm64
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+            binary_name: waddlebot-bridge-windows-amd64.exe
+          - os: macos-latest
+            goos: darwin
+            goarch: amd64
+            binary_name: waddlebot-bridge-darwin-amd64
+          - os: macos-latest
+            goos: darwin
+            goarch: arm64
+            binary_name: waddlebot-bridge-darwin-arm64
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+        working-directory: Premium/Desktop
+
+      - name: Build binary
+        run: |
+          mkdir -p build
+          go build -ldflags="-s -w -X main.version=${{ github.sha }} -X main.buildTime=$(date -u +%Y-%m-%dT%H:%M:%S)Z" -o build/${{ matrix.binary_name }} ./cmd/
+        working-directory: Premium/Desktop
+        env:
+          CGO_ENABLED: ${{ env.CGO_ENABLED }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        shell: bash
+
+      - name: Test binary
+        if: matrix.goos == runner.os || (matrix.goos == 'linux' && runner.os == 'Linux') || (matrix.goos == 'windows' && runner.os == 'Windows') || (matrix.goos == 'darwin' && runner.os == 'macOS')
+        run: |
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            ./build/${{ matrix.binary_name }} --version
+          else
+            ./build/${{ matrix.binary_name }} --version
+          fi
+        working-directory: Premium/Desktop
+        shell: bash
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: binary-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: Premium/Desktop/build/${{ matrix.binary_name }}
+
+  # Build Docker Image
+  build-docker:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/desktop-bridge
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: Premium/Desktop
+          file: Premium/Desktop/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha,scope=desktop-bridge
+          cache-to: type=gha,mode=max,scope=desktop-bridge
+          build-args: |
+            VERSION=${{ github.sha }}
+            BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%S)Z
+
+  # Benchmarks
+  benchmarks:
+    name: Benchmarks
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+        working-directory: Premium/Desktop
+
+      - name: Run benchmarks
+        run: |
+          go test -bench=. -benchmem -run=^$ ./... | tee benchmark-results.txt
+          go test -bench=. -benchmem -run=^$ -cpuprofile=cpu.prof -memprofile=mem.prof ./...
+        working-directory: Premium/Desktop
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v3
+        with:
+          name: benchmark-results
+          path: |
+            Premium/Desktop/benchmark-results.txt
+            Premium/Desktop/cpu.prof
+            Premium/Desktop/mem.prof
+
+  # Generate Documentation
+  documentation:
+    name: Generate Documentation
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+        working-directory: Premium/Desktop
+
+      - name: Install documentation tools
+        run: go install golang.org/x/tools/cmd/godoc@latest
+
+      - name: Generate documentation
+        run: |
+          godoc -http=:6060 &
+          sleep 5
+          curl -s http://localhost:6060/pkg/waddlebot-bridge/ > documentation.html
+          pkill godoc
+        working-directory: Premium/Desktop
+
+      - name: Upload documentation
+        uses: actions/upload-artifact@v3
+        with:
+          name: documentation
+          path: Premium/Desktop/documentation.html
+
+  # Create Release
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [build, integration-tests, benchmarks, build-docker]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+
+      - name: Create release directory
+        run: mkdir -p release
+
+      - name: Prepare release assets
+        run: |
+          # Copy binaries
+          cp binary-*/waddlebot-bridge-* release/
+          
+          # Create checksums
+          cd release
+          sha256sum waddlebot-bridge-* > checksums.txt
+          
+          # Create release notes
+          echo "## WaddleBot Premium Desktop Bridge" > release-notes.md
+          echo "### Build Information" >> release-notes.md
+          echo "- Commit: ${{ github.sha }}" >> release-notes.md
+          echo "- Date: $(date -u +%Y-%m-%dT%H:%M:%S)Z" >> release-notes.md
+          echo "- Go Version: ${{ env.GO_VERSION }}" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "### Supported Platforms" >> release-notes.md
+          echo "- Linux (amd64, arm64)" >> release-notes.md
+          echo "- Windows (amd64)" >> release-notes.md
+          echo "- macOS (amd64, arm64)" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "### Installation" >> release-notes.md
+          echo "1. Download the appropriate binary for your platform" >> release-notes.md
+          echo "2. Make it executable (Linux/macOS): \`chmod +x waddlebot-bridge-*\`" >> release-notes.md
+          echo "3. Run: \`./waddlebot-bridge-* --help\`" >> release-notes.md
+
+      - name: Create pre-release
+        if: contains(github.ref, 'develop')
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ github.run_number }}-pre
+          name: Pre-release v${{ github.run_number }}
+          body_path: release/release-notes.md
+          files: |
+            release/waddlebot-bridge-*
+            release/checksums.txt
+          prerelease: true
+
+      - name: Create release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ github.run_number }}
+          name: Release v${{ github.run_number }}
+          body_path: release/release-notes.md
+          files: |
+            release/waddlebot-bridge-*
+            release/checksums.txt
+
+  # Performance Monitoring
+  performance-monitoring:
+    name: Performance Monitoring
+    runs-on: ubuntu-latest
+    needs: benchmarks
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download benchmark results
+        uses: actions/download-artifact@v3
+        with:
+          name: benchmark-results
+
+      - name: Store benchmark results
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Go Benchmarks
+          tool: 'go'
+          output-file-path: benchmark-results.txt
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+
+  # Build Summary
+  build-summary:
+    name: Build Summary
+    runs-on: ubuntu-latest
+    needs: [code-quality, unit-tests, integration-tests, build, build-docker, documentation]
+    if: always()
+    steps:
+      - name: Generate build summary
+        run: |
+          echo "## Desktop Bridge Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Code Quality | ${{ needs.code-quality.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Unit Tests | ${{ needs.unit-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Integration Tests | ${{ needs.integration-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Binary Build | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker Build | ${{ needs.build-docker.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Documentation | ${{ needs.documentation.result }} |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Comment PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const summary = `## 🖥️ Desktop Bridge Build Results
+            
+            | Component | Status |
+            |-----------|--------|
+            | Code Quality | ${{ needs.code-quality.result }} |
+            | Unit Tests | ${{ needs.unit-tests.result }} |
+            | Integration Tests | ${{ needs.integration-tests.result }} |
+            | Binary Build | ${{ needs.build.result }} |
+            | Docker Build | ${{ needs.build-docker.result }} |
+            | Documentation | ${{ needs.documentation.result }} |
+            
+            Build artifacts are available in the Actions tab.`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: summary
+            });
+
+  # Deployment
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: [build, build-docker]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: production
+    steps:
+      - name: Deploy to CDN
+        run: |
+          echo "Deploying binaries to CDN..."
+          # Add your CDN deployment commands here
+          
+      - name: Update download links
+        run: |
+          echo "Updating download links..."
+          # Add commands to update download links on website
+          
+      - name: Notify deployment
+        run: |
+          echo "Deployment completed successfully!"
+          # Add notification commands here
