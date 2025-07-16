@@ -51,6 +51,8 @@ WaddleBot is a multi-platform chat bot system with a modular, microservices arch
 
 ### Interaction Modules (py4web-based)
 - **ai_interaction_module/**: AI-powered interaction module supporting Ollama, OpenAI, and MCP providers for chat responses
+- **alias_interaction_module/**: Linux-style alias system for custom commands with variable substitution
+- **shoutout_interaction_module/**: Platform-specific user shoutouts with Twitch API integration and auto-shoutout functionality
 
 ### Administration Modules (py4web-based)
 - **kong_admin_broker/**: Kong super admin user management with automated consumer creation, API key management, and comprehensive audit logging
@@ -198,6 +200,16 @@ collector_modules (
 │   ├── templates/     # HTML templates
 │   ├── Dockerfile     # Container definition
 │   └── requirements.txt # Python dependencies including OpenAI
+├── alias_interaction_module/  # Linux-style alias system
+│   ├── app.py         # Main application with alias management
+│   ├── requirements.txt # Python dependencies
+│   ├── Dockerfile     # Container definition
+│   └── k8s/          # Kubernetes deployment configs
+├── shoutout_interaction_module/  # Platform-specific user shoutouts
+│   ├── app.py         # Main application with shoutout functionality
+│   ├── requirements.txt # Python dependencies
+│   ├── Dockerfile     # Container definition
+│   └── k8s/          # Kubernetes deployment configs
 ├── kong_admin_broker/  # Kong super admin user management
 │   ├── controllers/   # Admin user management endpoints
 │   │   └── admin.py   # Broker API endpoints for super admin management
@@ -216,7 +228,30 @@ collector_modules (
 ├── chat/              # Existing Matterbridge integration
 ├── gateway/          # Existing Flask gateway (DEPRECATED - migrated to Kong)
 ├── listener/         # Existing Twitch listeners (LEGACY)
-└── libs/            # Shared libraries
+├── libs/            # Shared libraries
+└── Premium/         # Premium mobile applications
+    ├── LICENSE        # Premium-only license
+    ├── Android/       # Native Android app (Kotlin/Jetpack Compose)
+    │   ├── app/src/main/java/com/waddlebot/premium/
+    │   │   ├── data/models/Models.kt      # Data models with subscription support
+    │   │   ├── data/repository/           # Repository layer
+    │   │   ├── presentation/              # UI screens and ViewModels
+    │   │   │   ├── license/               # License acceptance screens
+    │   │   │   ├── subscription/          # Subscription management
+    │   │   │   └── common/                # Shared components
+    │   │   └── ui/theme/                  # Material 3 theming
+    │   ├── build.gradle.kts               # Build configuration
+    │   ├── build.sh                       # Build script
+    │   ├── WaddleBot-Premium-debug.apk    # Compiled APK
+    │   └── .github/workflows/build.yml    # CI/CD pipeline
+    └── iOS/           # Native iOS app (Swift/SwiftUI)
+        ├── WaddleBotPremium/
+        │   ├── Models/Models.swift        # Data models with subscription support
+        │   ├── Services/                  # API services
+        │   ├── Views/                     # SwiftUI views
+        │   │   └── PremiumLicenseView.swift # License acceptance
+        │   └── Utils/                     # Utilities and extensions
+        └── WaddleBotPremium.xcodeproj     # Xcode project
 ```
 
 ## Integration Points
@@ -634,6 +669,41 @@ RESPOND_TO_EVENTS=true
 EVENT_RESPONSE_TYPES=subscription,follow,donation
 ```
 
+#### Alias Interaction Module (`alias_interaction_module/`)
+- **Linux-Style Aliases**: Commands work like Linux bash aliases with `!alias add !user "!so user"`
+- **Variable Substitution**: Support for `{user}`, `{args}`, `{arg1}`, `{arg2}`, `{all_args}` placeholders
+- **Alias Management**: Add, remove, list aliases with proper permission checking
+- **Command Execution**: Routes aliased commands through the router system
+- **Usage Statistics**: Track alias usage and performance
+
+**Key Features**:
+- `!alias add <alias_name> <command>` - Create new alias
+- `!alias remove <alias_name>` - Remove existing alias
+- `!alias list` - List all configured aliases
+- Variable substitution in commands
+- Integration with router for command execution
+
+#### Shoutout Interaction Module (`shoutout_interaction_module/`)
+- **Platform Integration**: Twitch API integration for user information and clips
+- **Auto-Shoutout**: Automatic shoutouts on follow/subscribe/raid events
+- **User Management**: Community managers can configure user-specific settings
+- **Twitch Features**: Pulls random clips for full-screen media display
+- **Custom Messages**: Personalized shoutout messages with additional links
+
+**Key Features**:
+- `!so <username>` or `!shoutout <username>` - Manual shoutout
+- Auto-shoutout on platform events with cooldown (1 hour)
+- Twitch API integration for user info and last game played
+- Random clip selection for full-screen OBS integration
+- Custom message and link management per user
+- Shoutout history and analytics
+
+**Twitch API Integration**:
+- User profile information lookup
+- Last game played detection
+- Random clip selection from past 7 days
+- Full-screen media response for OBS scenes
+
 ## Shared Patterns
 
 ### Database Schema (All Collectors)
@@ -946,6 +1016,7 @@ coordination (
 - **Router Sync**: Automatic command registration with router
 - **Version Control**: Support for multiple module versions
 - **Usage Analytics**: Track module performance and adoption
+- **Paid Subscription System**: Complete subscription management with payment blocking for expired subscriptions
 
 ### Core API Integration
 All collectors follow the same pattern:

@@ -271,6 +271,62 @@ services:
       timeout: 10s
       retries: 3
 
+  # Alias Interaction Module
+  alias-interaction:
+    image: waddlebot-alias-interaction
+    build:
+      context: .
+      dockerfile: alias_interaction_module/Dockerfile
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - ROUTER_API_URL=${ROUTER_API_URL}
+      - MODULE_NAME=${MODULE_NAME_ALIAS}
+      - MODULE_VERSION=${MODULE_VERSION}
+    networks:
+      - waddlebotnet
+    ports:
+      - "8010:8010"
+    depends_on:
+      router:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8010/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Shoutout Interaction Module
+  shoutout-interaction:
+    image: waddlebot-shoutout-interaction
+    build:
+      context: .
+      dockerfile: shoutout_interaction_module/Dockerfile
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - ROUTER_API_URL=${ROUTER_API_URL}
+      - MODULE_NAME=${MODULE_NAME_SHOUTOUT}
+      - MODULE_VERSION=${MODULE_VERSION}
+      # Twitch API Configuration
+      - TWITCH_CLIENT_ID=${TWITCH_CLIENT_ID}
+      - TWITCH_CLIENT_SECRET=${TWITCH_CLIENT_SECRET}
+      - TWITCH_ACCESS_TOKEN=${TWITCH_ACCESS_TOKEN}
+    networks:
+      - waddlebotnet
+    ports:
+      - "8011:8011"
+    depends_on:
+      router:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8011/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   # Kong Admin Broker Service
   kong-admin-broker:
     image: waddlebot-kong-admin-broker

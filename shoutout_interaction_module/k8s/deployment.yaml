@@ -1,0 +1,117 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shoutout-interaction-module
+  labels:
+    app: shoutout-interaction-module
+    component: interaction-module
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: shoutout-interaction-module
+  template:
+    metadata:
+      labels:
+        app: shoutout-interaction-module
+        component: interaction-module
+    spec:
+      containers:
+      - name: shoutout-interaction-module
+        image: waddlebot/shoutout-interaction-module:latest
+        ports:
+        - containerPort: 8011
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: waddlebot-secrets
+              key: database-url
+        - name: MODULE_NAME
+          value: "shoutout_interaction"
+        - name: MODULE_VERSION
+          value: "1.0.0"
+        - name: ROUTER_API_URL
+          value: "http://router-service:8000/router"
+        - name: TWITCH_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: waddlebot-secrets
+              key: twitch-client-id
+        - name: TWITCH_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: waddlebot-secrets
+              key: twitch-client-secret
+        - name: TWITCH_ACCESS_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: waddlebot-secrets
+              key: twitch-access-token
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8011
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8011
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: shoutout-interaction-service
+  labels:
+    app: shoutout-interaction-module
+spec:
+  selector:
+    app: shoutout-interaction-module
+  ports:
+  - port: 8011
+    targetPort: 8011
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: shoutout-interaction-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: shoutout-interaction-module
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80

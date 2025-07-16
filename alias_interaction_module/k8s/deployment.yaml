@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alias-interaction-module
+  labels:
+    app: alias-interaction-module
+    component: interaction-module
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: alias-interaction-module
+  template:
+    metadata:
+      labels:
+        app: alias-interaction-module
+        component: interaction-module
+    spec:
+      containers:
+      - name: alias-interaction-module
+        image: waddlebot/alias-interaction-module:latest
+        ports:
+        - containerPort: 8010
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: waddlebot-secrets
+              key: database-url
+        - name: MODULE_NAME
+          value: "alias_interaction"
+        - name: MODULE_VERSION
+          value: "1.0.0"
+        - name: ROUTER_API_URL
+          value: "http://router-service:8000/router"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8010
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8010
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alias-interaction-service
+  labels:
+    app: alias-interaction-module
+spec:
+  selector:
+    app: alias-interaction-module
+  ports:
+  - port: 8010
+    targetPort: 8010
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: alias-interaction-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: alias-interaction-module
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
