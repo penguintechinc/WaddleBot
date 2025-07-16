@@ -1,0 +1,160 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: labels-core-module
+  namespace: waddlebot
+  labels:
+    app: labels-core-module
+    tier: core
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: labels-core-module
+  template:
+    metadata:
+      labels:
+        app: labels-core-module
+        tier: core
+    spec:
+      containers:
+      - name: labels-core-module
+        image: waddlebot-labels-core:latest
+        ports:
+        - containerPort: 8012
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: waddlebot-secrets
+              key: database-url
+        - name: REDIS_HOST
+          value: "redis-service"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: REDIS_DB
+          value: "0"
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: waddlebot-secrets
+              key: redis-password
+        - name: CORE_API_URL
+          value: "http://router-service:8000"
+        - name: ROUTER_API_URL
+          value: "http://router-service:8000/router"
+        - name: MAX_WORKERS
+          value: "20"
+        - name: CACHE_TTL
+          value: "300"
+        - name: BULK_OPERATION_SIZE
+          value: "1000"
+        - name: REQUEST_TIMEOUT
+          value: "30"
+        - name: MODULE_NAME
+          value: "labels_core"
+        - name: MODULE_VERSION
+          value: "1.0.0"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8012
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8012
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: tmp-volume
+          mountPath: /tmp
+      volumes:
+      - name: tmp-volume
+        emptyDir: {}
+      restartPolicy: Always
+      securityContext:
+        fsGroup: 1000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: labels-core-service
+  namespace: waddlebot
+  labels:
+    app: labels-core-module
+    tier: core
+spec:
+  selector:
+    app: labels-core-module
+  ports:
+  - protocol: TCP
+    port: 8012
+    targetPort: 8012
+    name: http
+  type: ClusterIP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: labels-core-module-hpa
+  namespace: waddlebot
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: labels-core-module
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
+      - type: Pods
+        value: 4
+        periodSeconds: 15
+      selectPolicy: Max

@@ -54,6 +54,9 @@ WaddleBot is a multi-platform chat bot system with a modular, microservices arch
 - **alias_interaction_module/**: Linux-style alias system for custom commands with variable substitution
 - **shoutout_interaction_module/**: Platform-specific user shoutouts with Twitch API integration and auto-shoutout functionality
 
+### Core System Modules (py4web-based)
+- **labels_core_module/**: High-performance multi-threaded label management system for communities, users, modules, and entity groups with user identity verification
+
 ### Administration Modules (py4web-based)
 - **kong_admin_broker/**: Kong super admin user management with automated consumer creation, API key management, and comprehensive audit logging
 
@@ -208,6 +211,11 @@ collector_modules (
 ├── shoutout_interaction_module/  # Platform-specific user shoutouts
 │   ├── app.py         # Main application with shoutout functionality
 │   ├── requirements.txt # Python dependencies
+│   ├── Dockerfile     # Container definition
+│   └── k8s/          # Kubernetes deployment configs
+├── labels_core_module/  # High-performance multi-threaded label management system
+│   ├── app.py         # Main application with labels, user verification, and entity groups
+│   ├── requirements.txt # Python dependencies (py4web, redis, requests)
 │   ├── Dockerfile     # Container definition
 │   └── k8s/          # Kubernetes deployment configs
 ├── kong_admin_broker/  # Kong super admin user management
@@ -566,6 +574,32 @@ MODULE_NAME=marketplace
 MODULE_VERSION=1.0.0
 ```
 
+#### Labels Core Module
+```bash
+# Database
+DATABASE_URL=postgresql://user:pass@host:5432/waddlebot
+
+# Redis Configuration
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_DB=0
+REDIS_PASSWORD=your_redis_password
+
+# Core API Integration
+CORE_API_URL=http://router-service:8000
+ROUTER_API_URL=http://router-service:8000/router
+
+# Performance Settings
+MAX_WORKERS=20
+CACHE_TTL=300
+BULK_OPERATION_SIZE=1000
+REQUEST_TIMEOUT=30
+
+# Module Info
+MODULE_NAME=labels_core
+MODULE_VERSION=1.0.0
+```
+
 ## System Components Details
 
 ### Router Module (`router_module/`) - CORE COMPONENT
@@ -598,6 +632,18 @@ MODULE_VERSION=1.0.0
 - **Database Schema**: Dedicated tables for users, audit logs, sessions, and backups
 - **Kong Consumer Lifecycle**: Full lifecycle management from creation to deactivation
 - **Permission System**: Role-based access with super-admin, admin, and service tiers
+
+### Labels Core Module (`labels_core_module/`) - CORE COMPONENT
+- **High-Performance Architecture**: Multi-threaded processing with ThreadPoolExecutor (configurable max workers)
+- **Redis Caching**: High-performance caching layer with fallback to local cache
+- **Bulk Operations**: Support for up to 1000 items per batch operation for high-volume requests
+- **Label Management**: Track labels on communities, modules, users, and entityGroups (up to 5 labels per community, 5 per user per community)
+- **User Identity Verification**: Time-limited verification codes to link platform identities to bot identities
+- **Entity Group Management**: Auto-role assignment in Discord, Slack, and Twitch based on user labels
+- **Search Functionality**: Search modules, users, and entities by labels with caching
+- **Background Processing**: Asynchronous task queue for long-running operations
+- **Performance Monitoring**: Real-time metrics and health monitoring in health endpoint
+- **Database Optimization**: Proper indexing and connection pooling for thousands of requests per second
 
 ### Collector Modules
 

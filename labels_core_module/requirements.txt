@@ -1,0 +1,5 @@
+py4web==1.20231025.1
+redis==5.0.1
+requests==2.31.0
+psycopg2-binary==2.9.7
+pydal==20231025.1

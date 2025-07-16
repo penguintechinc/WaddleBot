@@ -371,6 +371,43 @@ services:
       timeout: 10s
       retries: 3
 
+  # Labels Core Module
+  labels-core:
+    image: waddlebot-labels-core
+    build:
+      context: .
+      dockerfile: labels_core_module/Dockerfile
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_DB=${REDIS_DB}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - CORE_API_URL=${CORE_API_URL}
+      - ROUTER_API_URL=${ROUTER_API_URL}
+      - MAX_WORKERS=${MAX_WORKERS}
+      - CACHE_TTL=${CACHE_TTL}
+      - BULK_OPERATION_SIZE=${BULK_OPERATION_SIZE}
+      - REQUEST_TIMEOUT=${REQUEST_TIMEOUT}
+      - MODULE_NAME=${MODULE_NAME_LABELS}
+      - MODULE_VERSION=${MODULE_VERSION}
+    networks:
+      - waddlebotnet
+    ports:
+      - "8012:8012"
+    depends_on:
+      router:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8012/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   # Legacy/Optional Services
   chat:
     image: waddlebot-chat
