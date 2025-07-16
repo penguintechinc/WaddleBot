@@ -1,0 +1,66 @@
+{
+  "name": "WaddleBotPremium",
+  "displayName": "WaddleBot Premium",
+  "description": "WaddleBot Premium Mobile App - Community Manager Portal",
+  "version": "1.0.0",
+  "author": "WaddleBot",
+  "homepage": "https://waddlebot.com",
+  "license": "SEE LICENSE IN LICENSE",
+  "orientation": "portrait",
+  "primaryColor": "#FFD700",
+  "backgroundColor": "#FFFFFF",
+  "splash": {
+    "image": "./assets/splash.png",
+    "resizeMode": "contain",
+    "backgroundColor": "#FFFFFF"
+  },
+  "icon": "./assets/icon.png",
+  "platforms": ["ios", "android"],
+  "android": {
+    "package": "com.waddlebot.premium",
+    "versionCode": 1,
+    "compileSdkVersion": 34,
+    "targetSdkVersion": 34,
+    "buildToolsVersion": "34.0.0",
+    "permissions": [
+      "android.permission.INTERNET",
+      "android.permission.ACCESS_NETWORK_STATE",
+      "android.permission.CAMERA",
+      "android.permission.READ_EXTERNAL_STORAGE",
+      "android.permission.WRITE_EXTERNAL_STORAGE",
+      "android.permission.VIBRATE",
+      "android.permission.WAKE_LOCK",
+      "android.permission.RECEIVE_BOOT_COMPLETED"
+    ],
+    "icon": {
+      "adaptive": {
+        "foreground": "./assets/adaptive-icon.png",
+        "background": "#FFFFFF"
+      }
+    },
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
+    }
+  },
+  "ios": {
+    "bundleIdentifier": "com.waddlebot.premium",
+    "buildNumber": "1",
+    "supportsTablet": true,
+    "infoPlist": {
+      "NSCameraUsageDescription": "This app uses the camera to capture profile pictures and community images.",
+      "NSPhotoLibraryUsageDescription": "This app accesses your photo library to select images for profiles and communities.",
+      "NSLocationWhenInUseUsageDescription": "This app may use location for community-specific features.",
+      "CFBundleDisplayName": "WaddleBot Premium",
+      "CFBundleShortVersionString": "1.0.0",
+      "CFBundleVersion": "1"
+    },
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
+    }
+  }
+}
