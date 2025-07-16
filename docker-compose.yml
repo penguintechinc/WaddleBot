@@ -2,16 +2,24 @@
 version: '3.8'
 
 services:
+  # Database Services
   db:
-    image: postgres
+    image: postgres:15
     environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: waddlebot_db
+      POSTGRES_USER: waddlebot
+      POSTGRES_PASSWORD: waddlebot_password
+      POSTGRES_DB: waddlebot
     networks:
       - waddlebotnet
     volumes:
-        - db_data:/var/lib/postgresql/data
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U waddlebot"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
   
   redis:
     image: redis:7-alpine
@@ -22,37 +30,299 @@ services:
       - redis_data:/data
     ports:
       - "6379:6379"
-  dbm:
-    image: ghcr.io/penguincloud/waddledbm:main
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Core Services
+  router:
+    image: waddlebot-router
+    build:
+      context: .
+      dockerfile: router_module/Dockerfile
+    environment:
+      - DATABASE_URL=postgresql://waddlebot:waddlebot_password@db:5432/waddlebot
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - ROUTER_MAX_WORKERS=20
+      - ROUTER_MAX_CONCURRENT=100
+      - MODULE_NAME=router
+      - MODULE_VERSION=1.0.0
     networks:
       - waddlebotnet
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/router/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  marketplace:
+    image: waddlebot-marketplace
+    build:
+      context: .
+      dockerfile: marketplace_module/Dockerfile
+    environment:
+      - DATABASE_URL=postgresql://waddlebot:waddlebot_password@db:5432/waddlebot
+      - CORE_API_URL=http://router:8000
+      - ROUTER_API_URL=http://router:8000/router
+      - MODULE_NAME=marketplace
+      - MODULE_VERSION=1.0.0
+    networks:
+      - waddlebotnet
+    ports:
+      - "8001:8000"
+    depends_on:
+      router:
+        condition: service_healthy
+
+  portal:
+    image: waddlebot-portal
+    build:
+      context: .
+      dockerfile: portal_module/Dockerfile
+    environment:
+      - DATABASE_URL=postgresql://waddlebot:waddlebot_password@db:5432/waddlebot
+      - CORE_API_URL=http://router:8000
+      - SMTP_HOST=
+      - SMTP_USERNAME=
+      - SMTP_PASSWORD=
+      - SMTP_TLS=true
+      - SMTP_PORT=587
+    networks:
+      - waddlebotnet
+    ports:
+      - "8002:8000"
+    depends_on:
+      router:
+        condition: service_healthy
+
+  # Collector Services
+  twitch:
+    image: waddlebot-twitch
+    build:
+      context: .
+      dockerfile: twitch_module/Dockerfile
+    environment:
+      - DATABASE_URL=postgresql://waddlebot:waddlebot_password@db:5432/waddlebot
+      - CORE_API_URL=http://router:8000
+      - CONTEXT_API_URL=http://router:8000/api/context
+      - REPUTATION_API_URL=http://router:8000/api/reputation
+      - GATEWAY_ACTIVATE_URL=http://router:8000/api/gateway/activate
+      - TWITCH_APP_ID=
+      - TWITCH_APP_SECRET=
+      - TWITCH_WEBHOOK_SECRET=
+      - TWITCH_WEBHOOK_CALLBACK_URL=https://your-domain.com/twitch/webhook
+      - TWITCH_REDIRECT_URI=https://your-domain.com/twitch/auth/callback
+      - MAX_CLAIMS=5
+      - HEARTBEAT_INTERVAL=300
+      - CONTAINER_ID=twitch_container_1
+      - MODULE_NAME=twitch
+      - MODULE_VERSION=1.0.0
+    networks:
+      - waddlebotnet
+    ports:
+      - "8003:8000"
+    depends_on:
+      router:
+        condition: service_healthy
+
+  discord:
+    image: waddlebot-discord
+    build:
+      context: .
+      dockerfile: discord_module/Dockerfile
+    environment:
+      - DATABASE_URL=postgresql://waddlebot:waddlebot_password@db:5432/waddlebot
+      - CORE_API_URL=http://router:8000
+      - CONTEXT_API_URL=http://router:8000/api/context
+      - REPUTATION_API_URL=http://router:8000/api/reputation
+      - GATEWAY_ACTIVATE_URL=http://router:8000/api/gateway/activate
+      - DISCORD_BOT_TOKEN=
+      - DISCORD_APPLICATION_ID=
+      - DISCORD_PUBLIC_KEY=
+      - DISCORD_COMMAND_PREFIX=!
+      - MAX_CLAIMS=5
+      - HEARTBEAT_INTERVAL=300
+      - CONTAINER_ID=discord_container_1
+      - MODULE_NAME=discord
+      - MODULE_VERSION=1.0.0
+    networks:
+      - waddlebotnet
+    ports:
+      - "8004:8000"
+    depends_on:
+      router:
+        condition: service_healthy
+
+  slack:
+    image: waddlebot-slack
+    build:
+      context: .
+      dockerfile: slack_module/Dockerfile
+    environment:
+      - DATABASE_URL=postgresql://waddlebot:waddlebot_password@db:5432/waddlebot
+      - CORE_API_URL=http://router:8000
+      - CONTEXT_API_URL=http://router:8000/api/context
+      - REPUTATION_API_URL=http://router:8000/api/reputation
+      - GATEWAY_ACTIVATE_URL=http://router:8000/api/gateway/activate
+      - SLACK_BOT_TOKEN=
+      - SLACK_APP_TOKEN=
+      - SLACK_CLIENT_ID=
+      - SLACK_CLIENT_SECRET=
+      - SLACK_SIGNING_SECRET=
+      - SLACK_OAUTH_REDIRECT_URI=https://your-domain.com/slack/oauth/callback
+      - SLACK_SOCKET_MODE=false
+      - MAX_CLAIMS=5
+      - HEARTBEAT_INTERVAL=300
+      - CONTAINER_ID=slack_container_1
+      - MODULE_NAME=slack
+      - MODULE_VERSION=1.0.0
+    networks:
+      - waddlebotnet
+    ports:
+      - "8005:8000"
+    depends_on:
+      router:
+        condition: service_healthy
+
+  # AI/Interaction Services
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    networks:
+      - waddlebotnet
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  ai-interaction:
+    image: waddlebot-ai-interaction
+    build:
+      context: .
+      dockerfile: ai_interaction_module/Dockerfile
+    environment:
+      - DATABASE_URL=postgresql://waddlebot:waddlebot_password@db:5432/waddlebot
+      - CORE_API_URL=http://router:8000
+      - ROUTER_API_URL=http://router:8000/router
+      # AI Provider Configuration
+      - AI_PROVIDER=ollama
+      - AI_HOST=http://ollama:11434
+      - AI_PORT=11434
+      - AI_API_KEY=
+      - AI_MODEL=llama3.2
+      - AI_TEMPERATURE=0.7
+      - AI_MAX_TOKENS=500
+      # OpenAI Configuration (if using OpenAI provider)
+      - OPENAI_API_KEY=
+      - OPENAI_MODEL=gpt-3.5-turbo
+      - OPENAI_BASE_URL=https://api.openai.com/v1
+      # MCP Configuration (if using MCP provider)
+      - MCP_SERVER_URL=http://mcp-server:8080
+      - MCP_TIMEOUT=30
+      # System Configuration
+      - SYSTEM_PROMPT=You are a helpful chatbot assistant. Provide friendly, concise, and helpful responses to users in chat.
+      - QUESTION_TRIGGERS=?
+      - RESPONSE_PREFIX=🤖 
+      - MODULE_NAME=ai_interaction
+      - MODULE_VERSION=1.0.0
+      - MAX_CONCURRENT_REQUESTS=10
+      - REQUEST_TIMEOUT=30
+      - ENABLE_CHAT_CONTEXT=true
+      - CONTEXT_HISTORY_LIMIT=5
+      - RESPOND_TO_EVENTS=true
+      - EVENT_RESPONSE_TYPES=subscription,follow,donation,cheer,raid,boost,member_join
+    networks:
+      - waddlebotnet
+    ports:
+      - "8005:8000"
+    depends_on:
+      router:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Kong Admin Broker Service
+  kong-admin-broker:
+    image: waddlebot-kong-admin-broker
+    build:
+      context: .
+      dockerfile: kong_admin_broker/Dockerfile
+    environment:
+      - DATABASE_URL=postgresql://waddlebot:waddlebot_password@db:5432/waddlebot
+      # Kong Admin API Configuration
+      - KONG_ADMIN_URL=http://kong:8001
+      - KONG_ADMIN_USERNAME=
+      - KONG_ADMIN_PASSWORD=
+      # Broker Configuration
+      - BROKER_SECRET_KEY=waddlebot_broker_secret_key_change_me_in_production
+      - BROKER_API_KEY=wbot_broker_master_key_placeholder
+      - SUPER_ADMIN_GROUP=super-admins
+      - API_KEY_LENGTH=64
+      - REQUIRE_EMAIL_VERIFICATION=false
+      - LOG_LEVEL=INFO
+      # Email Configuration (optional)
+      - SMTP_HOST=
+      - SMTP_PORT=587
+      - SMTP_USERNAME=
+      - SMTP_PASSWORD=
+      - SMTP_TLS=true
+      - FROM_EMAIL=noreply@waddlebot.com
+      # Module Info
+      - MODULE_NAME=kong_admin_broker
+      - MODULE_VERSION=1.0.0
+      - MAX_CONCURRENT_REQUESTS=10
+      - REQUEST_TIMEOUT=30
+    networks:
+      - waddlebotnet
+    ports:
+      - "8007:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Legacy/Optional Services
   chat:
     image: waddlebot-chat
     build: chat/
     networks:
-        - waddlebotnet
-  gateway:
-    image: waddlebot-gateway
-    build: gateway/
-    networks:
       - waddlebotnet
-    ports:
-      - "8080:8080"
-
-  listener:
-    image: waddlebot-listener
-    build: listener/
-    networks:
-      - waddlebotnet
-    ports:
-      - "6000:6000"
-  marketplace:
-    image: waddlebot-marketplace
-    build: marketplace/
-    networks:
-      - waddlebotnet
-    ports:
-      - "7000:7000"
+    depends_on:
+      - router
 networks:
   waddlebotnet:
     driver: bridge
@@ -60,3 +330,4 @@ networks:
 volumes:
   db_data:
   redis_data:
+  ollama_data:

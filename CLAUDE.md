@@ -23,11 +23,13 @@ WaddleBot is a multi-platform chat bot system with a modular, microservices arch
 
 ### Technology Stack
 - **Primary Framework**: py4web on Python 3.12
+- **API Gateway**: Kong (open source) with declarative configuration
 - **Database**: PostgreSQL with read replicas
 - **Session Management**: Redis for session ID tracking
 - **Containerization**: Docker containers
 - **Orchestration**: Kubernetes (longer term)
 - **Cloud Functions**: AWS Lambda for actions
+- **Authentication**: Kong API Key authentication with consumer groups
 - **Future Migration**: Parts may migrate to Golang later
 
 ## Current Implementation
@@ -36,8 +38,9 @@ WaddleBot is a multi-platform chat bot system with a modular, microservices arch
 - **router_module/**: High-performance command router with multi-threading, caching, and read replicas
 - **marketplace_module/**: py4web-based community module marketplace and management system
 - **portal_module/**: py4web-based community management portal with authentication and user dashboard
+- **kong_admin_broker/**: Kong super admin user management service with full audit trail
 - **chat/**: Matterbridge-based chat integration
-- **gateway/**: Flask-based API gateway (to be migrated to py4web)
+- **gateway/**: Flask-based API gateway (DEPRECATED - migrated to Kong)
 - **listener/**: Legacy Twitch authentication and activity listeners
 - **libs/**: Shared libraries across modules
 
@@ -45,6 +48,12 @@ WaddleBot is a multi-platform chat bot system with a modular, microservices arch
 - **twitch_module/**: Complete Twitch collector with EventSub webhooks, OAuth, and API integration
 - **discord_module/**: Discord collector using py-cord library for bot events and slash commands
 - **slack_module/**: Slack collector using Slack SDK for events and slash commands
+
+### Interaction Modules (py4web-based)
+- **ai_interaction_module/**: AI-powered interaction module supporting Ollama, OpenAI, and MCP providers for chat responses
+
+### Administration Modules (py4web-based)
+- **kong_admin_broker/**: Kong super admin user management with automated consumer creation, API key management, and comprehensive audit logging
 
 ### Collector Architecture
 Each collector module:
@@ -176,13 +185,80 @@ collector_modules (
 │   ├── config.py      # Slack app configuration
 │   ├── services/      # Core API communication
 │   └── requirements.txt # Python dependencies
+├── ai_interaction_module/  # AI-powered interaction module
+│   ├── controllers/    # Main interaction endpoints
+│   ├── models.py      # Database models for AI interactions
+│   ├── config.py      # AI provider configuration (Ollama/OpenAI/MCP)
+│   ├── services/      # AI service providers and router communication
+│   │   ├── ai_service.py      # Unified AI service abstraction
+│   │   ├── ollama_provider.py # Ollama AI provider implementation
+│   │   ├── openai_provider.py # OpenAI API provider implementation
+│   │   ├── mcp_provider.py    # Model Context Protocol provider
+│   │   └── router_service.py  # Router communication service
+│   ├── templates/     # HTML templates
+│   ├── Dockerfile     # Container definition
+│   └── requirements.txt # Python dependencies including OpenAI
+├── kong_admin_broker/  # Kong super admin user management
+│   ├── controllers/   # Admin user management endpoints
+│   │   └── admin.py   # Broker API endpoints for super admin management
+│   ├── models.py     # Database models for users, audit log, backups
+│   ├── config.py     # Broker and Kong admin configuration
+│   ├── services/     # Kong integration and user management services
+│   │   ├── kong_client.py     # Kong Admin API client for consumer management
+│   │   └── user_manager.py    # Super admin user management service
+│   ├── Dockerfile    # Container definition
+│   ├── requirements.txt # Python dependencies
+│   └── API.md        # Comprehensive API documentation
+├── kong/             # Kong API Gateway configuration
+│   ├── docker-compose.yml    # Kong deployment with PostgreSQL
+│   ├── kong.yml      # Declarative Kong configuration
+│   └── scripts/      # Kong setup and management scripts
 ├── chat/              # Existing Matterbridge integration
-├── gateway/          # Existing Flask gateway (DEPRECATED)
+├── gateway/          # Existing Flask gateway (DEPRECATED - migrated to Kong)
 ├── listener/         # Existing Twitch listeners (LEGACY)
 └── libs/            # Shared libraries
 ```
 
 ## Integration Points
+
+### Kong API Gateway Integration
+
+All WaddleBot APIs are unified through Kong API Gateway for centralized routing, authentication, and rate limiting:
+
+**Kong Services:**
+- **router-service**: Core routing and command processing (`http://router-service:8000`)
+- **marketplace-service**: Module marketplace and management (`http://marketplace-service:8001`)
+- **ai-interaction**: AI services with multi-provider support (`http://ai-interaction:8005`)
+- **kong-admin-broker**: Super admin user management (`http://kong-admin-broker:8000`)
+- **twitch-collector**: Twitch platform integration (`http://twitch-collector:8002`)
+- **discord-collector**: Discord platform integration (`http://discord-collector:8003`)
+- **slack-collector**: Slack platform integration (`http://slack-collector:8004`)
+
+**Kong Routes:**
+- `/api/router/*` → Router API (with authentication)
+- `/api/marketplace/*` → Marketplace API (with authentication)
+- `/api/ai/*` → AI Interaction API (with authentication)
+- `/api/broker/*` → Kong Admin Broker API (broker key authentication)
+- `/webhooks/twitch/*` → Twitch webhooks (with authentication)
+- `/webhooks/discord/*` → Discord webhooks (with authentication)
+- `/webhooks/slack/*` → Slack webhooks (with authentication)
+- `/health` → Health checks (no authentication)
+- `/ai/health` → AI health check (no authentication)
+- `/broker/health` → Broker health check (no authentication)
+
+**Authentication & Authorization:**
+- API Key authentication via `X-API-Key` header
+- Broker Key authentication via `X-Broker-Key` header (admin operations)
+- Consumer groups: `collectors`, `admins`, `services`, `api-users`, `super-admins`
+- Rate limiting per service and consumer group
+- CORS support for web applications
+
+**Rate Limiting:**
+- Router: 1000/min, 10000/hour
+- Marketplace: 500/min, 5000/hour
+- AI Interaction: 1000/min, 10000/hour
+- Kong Admin Broker: 100/min, 1000/hour
+- Collectors: 200/min, 2000/hour
 
 ### Router API Endpoints (Core Component)
 - `POST /router/events` - Single event processing from collectors (returns session_id)
@@ -219,6 +295,29 @@ collector_modules (
 - `POST /marketplace/uninstall` - Remove module from entity
 - `GET /marketplace/entity/<id>/modules` - List entity's installed modules
 - `POST /marketplace/entity/<id>/toggle` - Enable/disable module
+
+### AI Interaction API Endpoints
+- `POST /api/ai/v1/chat/completions` - OpenAI-compatible chat completions
+- `POST /api/ai/v1/generate` - Simple text generation
+- `GET /api/ai/v1/models` - List available AI models
+- `GET /api/ai/v1/health` - AI service health check (no auth)
+- `GET /api/ai/v1/config` - Get AI configuration
+- `PUT /api/ai/v1/config` - Update AI configuration
+- `GET /api/ai/v1/providers` - List available AI providers
+
+### Kong Admin Broker API Endpoints
+- `POST /api/broker/v1/super-admins` - Create Kong super admin user
+- `GET /api/broker/v1/super-admins` - List all super admin users
+- `GET /api/broker/v1/super-admins/{username}` - Get specific super admin user
+- `PUT /api/broker/v1/super-admins/{username}` - Update super admin user
+- `POST /api/broker/v1/super-admins/{username}/deactivate` - Deactivate super admin user
+- `POST /api/broker/v1/super-admins/{username}/regenerate-key` - Regenerate API key
+- `GET /api/broker/v1/audit-log` - Get comprehensive audit trail
+- `POST /api/broker/v1/backup` - Backup all super admin users
+- `GET /api/broker/v1/kong/info` - Get Kong server information
+- `GET /api/broker/v1/kong/consumers` - List all Kong consumers
+- `GET /api/broker/v1/statistics` - Get broker and Kong statistics
+- `GET /api/broker/v1/health` - Broker health check (no auth)
 
 ### Legacy Core API Endpoints
 - `POST /api/modules/register` - Module registration
@@ -296,6 +395,53 @@ MODULE_NAME=slack
 MODULE_VERSION=1.0.0
 ```
 
+#### AI Interaction Module
+```bash
+# AI Provider Configuration
+AI_PROVIDER=ollama  # 'ollama', 'openai', or 'mcp'
+AI_HOST=http://ollama:11434
+AI_PORT=11434
+AI_API_KEY=your_api_key
+
+# Model Configuration
+AI_MODEL=llama3.2
+AI_TEMPERATURE=0.7
+AI_MAX_TOKENS=500
+
+# OpenAI Specific Configuration
+OPENAI_API_KEY=sk-your-openai-key
+OPENAI_MODEL=gpt-3.5-turbo
+OPENAI_BASE_URL=https://api.openai.com/v1
+
+# MCP Configuration
+MCP_SERVER_URL=http://mcp-server:8080
+MCP_TIMEOUT=30
+
+# System Behavior
+SYSTEM_PROMPT="You are a helpful chatbot assistant. Provide friendly, concise, and helpful responses to users in chat."
+QUESTION_TRIGGERS=?
+RESPONSE_PREFIX="🤖 "
+RESPOND_TO_EVENTS=true
+EVENT_RESPONSE_TYPES=subscription,follow,donation
+
+# Performance Settings
+MAX_CONCURRENT_REQUESTS=10
+REQUEST_TIMEOUT=30
+ENABLE_CHAT_CONTEXT=true
+CONTEXT_HISTORY_LIMIT=5
+
+# Database
+DATABASE_URL=postgresql://user:pass@host:5432/waddlebot
+
+# Core API Integration
+CORE_API_URL=http://router:8000
+ROUTER_API_URL=http://router:8000/router
+
+# Module Info
+MODULE_NAME=ai_interaction
+MODULE_VERSION=1.0.0
+```
+
 #### Router Module
 ```bash
 # Database (Primary + Read Replica)
@@ -336,6 +482,41 @@ MODULE_NAME=router
 MODULE_VERSION=1.0.0
 ```
 
+#### Kong Admin Broker Module
+```bash
+# Kong Admin API Configuration
+KONG_ADMIN_URL=http://kong:8001
+KONG_ADMIN_USERNAME=admin
+KONG_ADMIN_PASSWORD=admin_password
+
+# Broker Security Configuration
+BROKER_SECRET_KEY=waddlebot_broker_secret_key_change_me_in_production
+BROKER_API_KEY=wbot_broker_master_key_placeholder
+SUPER_ADMIN_GROUP=super-admins
+API_KEY_LENGTH=64
+REQUIRE_EMAIL_VERIFICATION=false
+
+# Database
+DATABASE_URL=postgresql://user:pass@host:5432/waddlebot
+
+# Email Configuration (optional)
+SMTP_HOST=smtp.company.com
+SMTP_PORT=587
+SMTP_USERNAME=broker@company.com
+SMTP_PASSWORD=smtp_password
+SMTP_TLS=true
+FROM_EMAIL=noreply@waddlebot.com
+
+# Performance Settings
+MAX_CONCURRENT_REQUESTS=10
+REQUEST_TIMEOUT=30
+LOG_LEVEL=INFO
+
+# Module Info
+MODULE_NAME=kong_admin_broker
+MODULE_VERSION=1.0.0
+```
+
 #### Marketplace Module
 ```bash
 # Database
@@ -371,6 +552,18 @@ MODULE_VERSION=1.0.0
 - **Usage Analytics**: Track module usage and performance statistics
 - **Category System**: Hierarchical module categorization
 
+### Kong Admin Broker Module (`kong_admin_broker/`) - ADMINISTRATION COMPONENT
+- **Super Admin Management**: Complete CRUD operations for Kong super admin users
+- **Automated Kong Integration**: Creates Kong consumers, API keys, and ACL group memberships
+- **Audit Trail**: Comprehensive logging of all administrative actions with full context
+- **API Key Management**: Secure 64-character API key generation and rotation capabilities
+- **Backup & Recovery**: Complete backup system for Kong consumer configurations
+- **Health Monitoring**: Kong Admin API connectivity and status monitoring
+- **Security Features**: Broker-level authentication, rate limiting, and access control
+- **Database Schema**: Dedicated tables for users, audit logs, sessions, and backups
+- **Kong Consumer Lifecycle**: Full lifecycle management from creation to deactivation
+- **Permission System**: Role-based access with super-admin, admin, and service tiers
+
 ### Collector Modules
 
 #### Twitch Module (`twitch_module/`)
@@ -392,6 +585,54 @@ MODULE_VERSION=1.0.0
 - **Slack SDK**: Uses official Slack SDK for Python
 - **User Caching**: Caches user information for performance
 - **Activity Points**: message=5, file_share=15, reaction=3, member_join=10, app_mention=8
+
+### Interaction Modules
+
+#### AI Interaction Module (`ai_interaction_module/`)
+- **Multi-Provider Support**: Unified interface supporting Ollama, OpenAI, and MCP (Model Context Protocol) providers
+- **Provider Configuration**: Environment variable `AI_PROVIDER` selects between 'ollama', 'openai', or 'mcp'
+- **Configurable System Prompt**: Default helpful chatbot assistant prompt, customizable via `SYSTEM_PROMPT` environment variable
+- **Conversation Context**: Optional conversation history tracking for contextual responses
+- **Event Response Support**: Responds to subscription, follow, donation, and other platform events
+- **Question Detection**: Configurable triggers (default: '?') to determine when to respond to chat messages
+- **Response Modes**: Supports chat responses with configurable prefix
+- **Health Monitoring**: Provider-specific health checks and failover capabilities
+- **Dynamic Configuration**: Runtime configuration updates for model, temperature, tokens, and provider settings
+
+**Provider Implementations**:
+- **Ollama Provider**: Uses LangChain with Ollama for local LLM hosting
+- **OpenAI Provider**: Direct OpenAI API integration with chat completions
+- **MCP Provider**: Model Context Protocol for standardized AI model communication
+
+**Configuration**:
+```bash
+# AI Provider Selection
+AI_PROVIDER=ollama  # 'ollama', 'openai', or 'mcp'
+AI_HOST=http://ollama:11434
+AI_PORT=11434
+AI_API_KEY=your_api_key
+
+# Model Configuration
+AI_MODEL=llama3.2
+AI_TEMPERATURE=0.7
+AI_MAX_TOKENS=500
+
+# OpenAI Specific
+OPENAI_API_KEY=sk-your-key
+OPENAI_MODEL=gpt-3.5-turbo
+OPENAI_BASE_URL=https://api.openai.com/v1
+
+# MCP Configuration
+MCP_SERVER_URL=http://mcp-server:8080
+MCP_TIMEOUT=30
+
+# System Behavior
+SYSTEM_PROMPT="You are a helpful chatbot assistant. Provide friendly, concise, and helpful responses to users in chat."
+QUESTION_TRIGGERS=?
+RESPONSE_PREFIX=> 
+RESPOND_TO_EVENTS=true
+EVENT_RESPONSE_TYPES=subscription,follow,donation
+```
 
 ## Shared Patterns
 

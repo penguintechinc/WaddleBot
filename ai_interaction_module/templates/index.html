@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WaddleBot Ollama Interaction Module</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .status { padding: 10px; border-radius: 5px; margin: 10px 0; }
+        .healthy { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .config { background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0; }
+        pre { background-color: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 WaddleBot Ollama Interaction Module</h1>
+        
+        <div class="status healthy">
+            <strong>Status:</strong> {{=status}}
+        </div>
+        
+        <div class="info">
+            <strong>Module:</strong> {{=module}} v{{=version}}
+        </div>
+        
+        <div class="config">
+            <h3>Configuration</h3>
+            <p><strong>Ollama Host:</strong> {{=ollama_host}}</p>
+            <p><strong>Model:</strong> {{=model}}</p>
+        </div>
+        
+        <div class="config">
+            <h3>Endpoints</h3>
+            <ul>
+                <li><strong>Health Check:</strong> <code>GET /health</code></li>
+                <li><strong>Interaction:</strong> <code>POST /interaction</code></li>
+                <li><strong>Configure:</strong> <code>POST /configure</code></li>
+                <li><strong>Test:</strong> <code>POST /test</code></li>
+            </ul>
+        </div>
+        
+        <div class="config">
+            <h3>Features</h3>
+            <ul>
+                <li>✅ Question detection (responds to messages containing "?")</li>
+                <li>✅ Event responses (subscriptions, follows, donations, etc.)</li>
+                <li>✅ LangChain integration with Ollama</li>
+                <li>✅ Conversation context memory</li>
+                <li>✅ Configurable AI model and parameters</li>
+                <li>✅ Integration with WaddleBot router system</li>
+            </ul>
+        </div>
+        
+        <div class="config">
+            <h3>Usage</h3>
+            <p>This module automatically responds to:</p>
+            <ul>
+                <li>Chat messages containing question marks (?)</li>
+                <li>Platform events like subscriptions, follows, donations</li>
+                <li>Direct commands: <code>!ai &lt;question&gt;</code> or <code>!ask &lt;question&gt;</code></li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

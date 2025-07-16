@@ -108,6 +108,71 @@ services:
           hour: 2000
           policy: local
 
+  # AI Interaction Service
+  - name: ai-interaction
+    url: http://ai-interaction:8005
+    tags:
+      - waddlebot
+      - interaction
+      - ai
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 1000
+          hour: 10000
+          policy: local
+      - name: cors
+        config:
+          origins:
+            - "*"
+          methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - OPTIONS
+          headers:
+            - Accept
+            - Authorization
+            - Content-Type
+            - X-API-Key
+          exposed_headers:
+            - X-Auth-Token
+          credentials: true
+          max_age: 3600
+
+  # Kong Admin Broker Service
+  - name: kong-admin-broker
+    url: http://kong-admin-broker:8000
+    tags:
+      - waddlebot
+      - admin
+      - broker
+      - super-admin
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 100
+          hour: 1000
+          policy: local
+      - name: cors
+        config:
+          origins:
+            - "*"
+          methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - OPTIONS
+          headers:
+            - Accept
+            - Authorization
+            - Content-Type
+            - X-Broker-Key
+          credentials: true
+          max_age: 3600
+
 routes:
   # Router API Routes
   - name: router-api
@@ -186,6 +251,38 @@ routes:
       - slack
       - webhooks
 
+  # AI Interaction API Routes
+  - name: ai-api
+    service: ai-interaction
+    paths:
+      - /api/ai
+    strip_path: true
+    preserve_host: false
+    tags:
+      - ai
+      - api
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - X-API-Key
+            - apikey
+          key_in_body: false
+          key_in_header: true
+          key_in_query: true
+          hide_credentials: true
+
+  # AI Interaction Web UI (if any)
+  - name: ai-interaction-web
+    service: ai-interaction
+    paths:
+      - /ai
+    strip_path: false
+    preserve_host: false
+    tags:
+      - ai
+      - web
+
   # Health Check Routes (No Authentication)
   - name: health-checks
     service: router-service
@@ -194,6 +291,49 @@ routes:
     strip_path: false
     preserve_host: false
     tags:
+      - health
+
+  # AI Health Check (No Authentication)
+  - name: ai-health-check
+    service: ai-interaction
+    paths:
+      - /ai/health
+    strip_path: false
+    preserve_host: false
+    tags:
+      - ai
+      - health
+
+  # Kong Admin Broker API Routes (Restricted Access)
+  - name: broker-api
+    service: kong-admin-broker
+    paths:
+      - /api/broker
+    strip_path: true
+    preserve_host: false
+    tags:
+      - broker
+      - admin
+      - api
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - X-Broker-Key
+          key_in_body: false
+          key_in_header: true
+          key_in_query: true
+          hide_credentials: true
+
+  # Broker Health Check (No Authentication)
+  - name: broker-health-check
+    service: kong-admin-broker
+    paths:
+      - /broker/health
+    strip_path: false
+    preserve_host: false
+    tags:
+      - broker
       - health
 
 plugins:
@@ -273,6 +413,34 @@ consumers:
       - marketplace
       - admin
 
+  - username: ai-interaction-service
+    keyauth_credentials:
+      - key: "wbot_ai_interaction_key_placeholder"
+    tags:
+      - ai
+      - interaction
+
+  - username: ai-api-user
+    keyauth_credentials:
+      - key: "wbot_ai_api_user_key_placeholder"
+    tags:
+      - ai
+      - api
+
+  - username: kong-admin-broker
+    keyauth_credentials:
+      - key: "wbot_broker_master_key_placeholder"
+    tags:
+      - broker
+      - super-admin
+
+  - username: super-admin-primary
+    keyauth_credentials:
+      - key: "wbot_super_admin_primary_key_placeholder"
+    tags:
+      - super-admin
+      - admin
+
 # ACL Groups for Role-Based Access
 acls:
   - consumer: twitch-collector-primary
@@ -283,6 +451,14 @@ acls:
     group: collectors
   - consumer: marketplace-admin
     group: admins
+  - consumer: ai-interaction-service
+    group: services
+  - consumer: ai-api-user
+    group: api-users
+  - consumer: kong-admin-broker
+    group: super-admins
+  - consumer: super-admin-primary
+    group: super-admins
 
 # Rate Limiting by Consumer Group
 upstreams:
@@ -308,4 +484,28 @@ upstreams:
         weight: 100
     tags:
       - marketplace
+      - upstream
+
+  - name: ai-interaction-upstream
+    algorithm: round-robin
+    hash_on: none
+    hash_fallback: none
+    slots: 10000
+    targets:
+      - target: ai-interaction:8005
+        weight: 100
+    tags:
+      - ai
+      - upstream
+
+  - name: kong-admin-broker-upstream
+    algorithm: round-robin
+    hash_on: none
+    hash_fallback: none
+    slots: 10000
+    targets:
+      - target: kong-admin-broker:8000
+        weight: 100
+    tags:
+      - broker
       - upstream
