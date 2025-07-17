@@ -15,7 +15,7 @@ WaddleBot is a multi-platform chat bot system with a modular, microservices arch
 - **Router/Core**: py4web-based API layer that handles routing to Lambda functions
 - **Collectors**: Individual Docker containers, each with py4web implementation
 - **Actions**: AWS Lambda functions for processing
-- **Database**: PostgreSQL server storing:
+- **Database**: Default using PostgreSQL db server storing:
   - `servers` table: owner, platform (twitch/discord/slack), channel, configuration
   - Routes to Lambda functions
   - User logins, roles, permissions
@@ -24,12 +24,12 @@ WaddleBot is a multi-platform chat bot system with a modular, microservices arch
 ### Technology Stack
 - **Primary Framework**: py4web on Python 3.12
 - **API Gateway**: Kong (open source) with declarative configuration
-- **Database**: PostgreSQL with read replicas
+- **Database**: PyDAL library with a default of PostgreSQL with read replicas
 - **Session Management**: Redis for session ID tracking
 - **Containerization**: Docker containers
 - **Orchestration**: Kubernetes (longer term)
-- **Cloud Functions**: AWS Lambda for actions
-- **Authentication**: Kong API Key authentication with consumer groups
+- **Cloud Functions**: AWS Lambda and Apache OpenWHisk (longer term) for actions
+- **Authentication**: Kong API Key authentication with consumer groups 
 - **Future Migration**: Parts may migrate to Golang later
 
 ## Current Implementation
@@ -53,9 +53,13 @@ WaddleBot is a multi-platform chat bot system with a modular, microservices arch
 - **ai_interaction_module/**: AI-powered interaction module supporting Ollama, OpenAI, and MCP providers for chat responses
 - **alias_interaction_module/**: Linux-style alias system for custom commands with variable substitution
 - **shoutout_interaction_module/**: Platform-specific user shoutouts with Twitch API integration and auto-shoutout functionality
+- **inventory_interaction_module/**: Multi-threaded inventory management system for tracking any item (IRL or in-game) with label support and comprehensive AAA logging
+- **youtube_music_interaction_module/**: YouTube Music integration with search, playback control, and media browser source output
+- **spotify_interaction_module/**: Spotify integration with OAuth authentication, search, playback control, and media browser source output
 
 ### Core System Modules (py4web-based)
 - **labels_core_module/**: High-performance multi-threaded label management system for communities, users, modules, and entity groups with user identity verification
+- **browser_source_core_module/**: Multi-threaded browser source management system for OBS integration with ticker, media, and general display sources
 
 ### Administration Modules (py4web-based)
 - **kong_admin_broker/**: Kong super admin user management with automated consumer creation, API key management, and comprehensive audit logging
@@ -67,7 +71,8 @@ Each collector module:
 - Pulls monitored servers/channels from PostgreSQL `servers` table
 - Communicates with core via API when receiving chat/events
 - Registers itself with core API
-- All configuration comes from environment variables
+- Designed for handling a 1000+ chat channels at a time
+- All configuration comes from environment variables passed through docker
 
 ### Database Schema (Key Tables)
 ```sql
@@ -108,20 +113,59 @@ collector_modules (
 - Include database migrations
 - Follow security best practices (webhook signature verification, token management)
 
+### Comprehensive Logging Requirements (ALL MODULES)
+All WaddleBot container modules MUST implement comprehensive Authentication, Authorization, and Auditing (AAA) logging:
+
+**Required Logging Outputs:**
+- **Console**: All logs output to stdout/stderr for container orchestration
+- **File Logging**: Structured logs to `/var/log/waddlebotlog/` with rotation (10MB, 5 backups)
+- **Syslog (Optional)**: Configurable syslog support for centralized logging
+
+**Log Categories:**
+- `AUTH`: Authentication events (login, logout, token refresh, failures)
+- `AUTHZ`: Authorization events (permission checks, access grants/denials)
+- `AUDIT`: User actions and system changes (CRUD operations, configuration changes)
+- `ERROR`: Error conditions and exceptions
+- `SYSTEM`: System events (startup, shutdown, health checks)
+
+**Required Log Structure:**
+```
+[timestamp] LEVEL module:version EVENT_TYPE community=X user=Y action=Z result=STATUS [additional_fields]
+```
+
+**Log Configuration (Environment Variables):**
+```bash
+LOG_LEVEL=INFO                    # DEBUG, INFO, WARNING, ERROR
+LOG_DIR=/var/log/waddlebotlog    # Log directory path
+ENABLE_SYSLOG=false              # Enable syslog output
+SYSLOG_HOST=localhost            # Syslog server host
+SYSLOG_PORT=514                  # Syslog server port
+SYSLOG_FACILITY=LOCAL0           # Syslog facility
+```
+
+**Implementation Requirements:**
+- Use structured logging with consistent field names
+- Include execution time for performance monitoring
+- Log all user actions with community context
+- Implement log rotation and retention policies
+- Thread-safe logging for concurrent operations
+- Decorator patterns for automatic audit logging
+- Comprehensive error context and stack traces
+
 ### Performance Considerations
 - **Threading**: Utilize ThreadPoolExecutor for concurrent operations when dealing with thousands of entities
   - RBAC service uses 10 worker threads for bulk operations
   - Bulk permission checks, role assignments, and user management operations
   - Concurrent processing for thousands of users/entities simultaneously
-- **Database**: Separate RBAC operations into dedicated `community_rbac` table for better locking performance
-  - Reduces contention on main community_memberships table
+- **Database**: Separate each module and router operations into dedicated tables for better locking performance
+  - Reduces contention on small number of tables
   - Allows concurrent role assignments without blocking membership operations
 - **Bulk Operations**: Implement bulk processing methods for role assignments, permission checks, and user management
   - `check_permissions_bulk()` - Check multiple permissions concurrently
   - `assign_roles_bulk()` - Assign roles to multiple users concurrently
   - `ensure_users_in_global_community_bulk()` - Batch user onboarding
   - `get_user_roles_bulk()` - Retrieve roles for multiple users concurrently
-- **Caching**: Use in-memory caching for frequently accessed permissions and roles
+- **Caching**: Use Redis caching for frequently accessed permissions and roles
 - **Connection Pooling**: Leverage database connection pooling for high-concurrency scenarios
 
 ### Activity Processing
@@ -218,6 +262,57 @@ collector_modules (
 │   ├── requirements.txt # Python dependencies (py4web, redis, requests)
 │   ├── Dockerfile     # Container definition
 │   └── k8s/          # Kubernetes deployment configs
+├── inventory_interaction_module/  # Multi-threaded inventory management system
+│   ├── app.py        # Main application with inventory CRUD operations
+│   ├── models.py     # Database models for inventory items and activity
+│   ├── config.py     # Configuration and environment variables
+│   ├── logging_config.py # Comprehensive AAA logging system
+│   ├── services/     # Inventory services and router communication
+│   ├── tests/        # Comprehensive unit tests
+│   │   ├── test_inventory_service.py  # Service layer tests
+│   │   ├── test_api.py                # API endpoint tests
+│   │   └── __init__.py
+│   ├── Dockerfile    # Container definition
+│   ├── requirements.txt # Python dependencies
+│   └── k8s/         # Kubernetes deployment configs
+├── youtube_music_interaction_module/  # YouTube Music integration
+│   ├── app.py        # Main application with YouTube Music commands
+│   ├── models.py     # Database models for now playing, search cache, activity
+│   ├── config.py     # YouTube API configuration
+│   ├── services/     # YouTube Music service and router communication
+│   │   ├── youtube_music_service.py  # YouTube Data API integration
+│   │   └── router_service.py         # Router communication service
+│   ├── Dockerfile    # Container definition
+│   ├── requirements.txt # Python dependencies
+│   └── k8s/         # Kubernetes deployment configs
+├── spotify_interaction_module/  # Spotify integration
+│   ├── app.py        # Main application with Spotify commands and OAuth
+│   ├── models.py     # Database models for tokens, now playing, search cache
+│   ├── config.py     # Spotify API configuration
+│   ├── services/     # Spotify service and router communication
+│   │   ├── spotify_service.py        # Spotify Web API integration
+│   │   └── router_service.py         # Router communication service
+│   ├── Dockerfile    # Container definition
+│   ├── requirements.txt # Python dependencies
+│   └── k8s/         # Kubernetes deployment configs
+├── browser_source_core_module/  # Browser source management system
+│   ├── app.py        # Main application with WebSocket and browser source handling
+│   ├── models.py     # Database models for tokens, history, access logs
+│   ├── config.py     # Browser source configuration
+│   ├── services/     # Browser source services
+│   │   ├── browser_source_service.py  # Browser source management
+│   │   ├── websocket_service.py       # WebSocket handling
+│   │   └── router_service.py          # Router communication service
+│   ├── templates/    # HTML templates for browser sources
+│   │   ├── ticker.html    # Ticker browser source template
+│   │   ├── media.html     # Media browser source template
+│   │   └── general.html   # General browser source template
+│   ├── static/       # CSS and JavaScript for browser sources
+│   │   ├── css/      # Styling for different source types
+│   │   └── js/       # JavaScript for WebSocket and animations
+│   ├── Dockerfile    # Container definition
+│   ├── requirements.txt # Python dependencies
+│   └── k8s/         # Kubernetes deployment configs
 ├── kong_admin_broker/  # Kong super admin user management
 │   ├── controllers/   # Admin user management endpoints
 │   │   └── admin.py   # Broker API endpoints for super admin management
@@ -276,18 +371,27 @@ All WaddleBot APIs are unified through Kong API Gateway for centralized routing,
 - **twitch-collector**: Twitch platform integration (`http://twitch-collector:8002`)
 - **discord-collector**: Discord platform integration (`http://discord-collector:8003`)
 - **slack-collector**: Slack platform integration (`http://slack-collector:8004`)
+- **youtube-music**: YouTube Music integration (`http://youtube-music:8025`)
+- **spotify-interaction**: Spotify integration (`http://spotify-interaction:8026`)
+- **browser-source**: Browser source management (`http://browser-source:8027`)
 
 **Kong Routes:**
-- `/api/router/*` → Router API (with authentication)
-- `/api/marketplace/*` → Marketplace API (with authentication)
-- `/api/ai/*` → AI Interaction API (with authentication)
-- `/api/broker/*` → Kong Admin Broker API (broker key authentication)
+- `/router/*` → Router API (with authentication)
+- `/marketplace/*` → Marketplace API (with authentication)
+- `/ai/*` → AI Interaction API (with authentication)
+- `/broker/*` → Kong Admin Broker API (broker key authentication)
 - `/webhooks/twitch/*` → Twitch webhooks (with authentication)
 - `/webhooks/discord/*` → Discord webhooks (with authentication)
 - `/webhooks/slack/*` → Slack webhooks (with authentication)
+- `/youtube/*` → YouTube Music API (with authentication)
+- `/spotify/*` → Spotify API (with authentication)
+- `/browser/*` → Browser Source API (with authentication)
 - `/health` → Health checks (no authentication)
 - `/ai/health` → AI health check (no authentication)
 - `/broker/health` → Broker health check (no authentication)
+- `/youtube/health` → YouTube Music health check (no authentication)
+- `/spotify/health` → Spotify health check (no authentication)
+- `/browser/health` → Browser Source health check (no authentication)
 
 **Authentication & Authorization:**
 - API Key authentication via `X-API-Key` header
@@ -361,6 +465,18 @@ All WaddleBot APIs are unified through Kong API Gateway for centralized routing,
 - `GET /api/broker/v1/kong/consumers` - List all Kong consumers
 - `GET /api/broker/v1/statistics` - Get broker and Kong statistics
 - `GET /api/broker/v1/health` - Broker health check (no auth)
+
+### Browser Source API Endpoints
+- `POST /browser/source/display` - Receive display data from router and distribute to browser sources
+- `GET /browser/source/{token}/{source_type}` - Browser source display endpoint for OBS (no auth)
+- `GET /browser/source/admin/tokens` - Get community browser source tokens
+- `POST /browser/source/admin/tokens` - Generate new browser source tokens
+- `GET /browser/source/api/communities/{community_id}/urls` - Get browser source URLs for community
+- `POST /browser/source/admin/tokens/{token}/regenerate` - Regenerate browser source token
+- `DELETE /browser/source/admin/tokens/{token}` - Deactivate browser source token
+- `GET /browser/source/health` - Browser source health check (no auth)
+- `GET /browser/source/stats` - Get browser source statistics and connection info
+- `WebSocket /ws/{token}/{source_type}` - WebSocket endpoint for real-time browser source updates
 
 ### Legacy Core API Endpoints
 - `POST /api/modules/register` - Module registration
@@ -600,6 +716,163 @@ MODULE_NAME=labels_core
 MODULE_VERSION=1.0.0
 ```
 
+#### Inventory Interaction Module
+```bash
+# Database
+DATABASE_URL=postgresql://user:pass@host:5432/waddlebot
+
+# Core API Integration
+CORE_API_URL=http://router-service:8000
+ROUTER_API_URL=http://router-service:8000/router
+
+# Performance Settings
+MAX_WORKERS=20
+MAX_LABELS_PER_ITEM=5
+CACHE_TTL=300
+REQUEST_TIMEOUT=30
+
+# AAA Logging Configuration
+LOG_LEVEL=INFO
+LOG_DIR=/var/log/waddlebotlog
+ENABLE_SYSLOG=false
+SYSLOG_HOST=localhost
+SYSLOG_PORT=514
+SYSLOG_FACILITY=LOCAL0
+
+# Module Info
+MODULE_NAME=inventory_interaction_module
+MODULE_VERSION=1.0.0
+MODULE_PORT=8024
+```
+
+#### YouTube Music Interaction Module
+```bash
+# YouTube API Configuration
+YOUTUBE_API_KEY=your_youtube_api_key_here
+YOUTUBE_API_VERSION=v3
+YOUTUBE_MUSIC_CATEGORY_ID=10
+YOUTUBE_REGION_CODE=US
+
+# Database
+DATABASE_URL=postgresql://user:pass@host:5432/waddlebot
+
+# Core API Integration
+CORE_API_URL=http://router-service:8000
+ROUTER_API_URL=http://router-service:8000/router
+
+# Browser Source Integration
+BROWSER_SOURCE_API_URL=http://browser-source:8027/browser/source
+
+# Performance Settings
+MAX_SEARCH_RESULTS=10
+CACHE_TTL=300
+REQUEST_TIMEOUT=30
+MAX_QUEUE_SIZE=50
+
+# Feature Flags
+ENABLE_PLAYLISTS=true
+ENABLE_QUEUE=true
+ENABLE_HISTORY=true
+ENABLE_AUTOPLAY=true
+
+# AAA Logging Configuration
+LOG_LEVEL=INFO
+LOG_DIR=/var/log/waddlebotlog
+ENABLE_SYSLOG=false
+
+# Module Info
+MODULE_NAME=youtube_music_interaction
+MODULE_VERSION=1.0.0
+MODULE_PORT=8025
+```
+
+#### Spotify Interaction Module
+```bash
+# Spotify API Configuration
+SPOTIFY_CLIENT_ID=your_spotify_client_id
+SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
+SPOTIFY_REDIRECT_URI=http://localhost:8026/spotify/auth/callback
+SPOTIFY_SCOPES=user-read-playback-state user-modify-playback-state user-read-currently-playing streaming
+
+# Database
+DATABASE_URL=postgresql://user:pass@host:5432/waddlebot
+
+# Core API Integration
+CORE_API_URL=http://router-service:8000
+ROUTER_API_URL=http://router-service:8000/router
+
+# Browser Source Integration
+BROWSER_SOURCE_API_URL=http://browser-source:8027/browser/source
+
+# Performance Settings
+MAX_SEARCH_RESULTS=10
+CACHE_TTL=300
+REQUEST_TIMEOUT=30
+TOKEN_REFRESH_BUFFER=300
+
+# Feature Flags
+ENABLE_PLAYLISTS=true
+ENABLE_QUEUE=true
+ENABLE_HISTORY=true
+ENABLE_DEVICE_CONTROL=true
+
+# Media Display Settings
+MEDIA_DISPLAY_DURATION=30
+SHOW_ALBUM_ART=true
+SHOW_PROGRESS_BAR=true
+
+# AAA Logging Configuration
+LOG_LEVEL=INFO
+LOG_DIR=/var/log/waddlebotlog
+ENABLE_SYSLOG=false
+
+# Module Info
+MODULE_NAME=spotify_interaction
+MODULE_VERSION=1.0.0
+MODULE_PORT=8026
+```
+
+#### Browser Source Core Module
+```bash
+# Database
+DATABASE_URL=postgresql://user:pass@host:5432/waddlebot
+
+# Core API Integration
+CORE_API_URL=http://router-service:8000
+ROUTER_API_URL=http://router-service:8000/router
+
+# WebSocket Configuration
+WEBSOCKET_HOST=0.0.0.0
+WEBSOCKET_PORT=8028
+MAX_CONNECTIONS=1000
+
+# Performance Settings
+MAX_WORKERS=50
+QUEUE_PROCESSING_INTERVAL=1
+CLEANUP_INTERVAL=300
+TICKER_QUEUE_SIZE=100
+
+# Browser Source Settings
+BASE_URL=http://localhost:8027
+TOKEN_LENGTH=32
+ACCESS_LOG_RETENTION_DAYS=30
+
+# Display Settings
+DEFAULT_TICKER_DURATION=10
+DEFAULT_MEDIA_DURATION=30
+MAX_TICKER_LENGTH=200
+
+# AAA Logging Configuration
+LOG_LEVEL=INFO
+LOG_DIR=/var/log/waddlebotlog
+ENABLE_SYSLOG=false
+
+# Module Info
+MODULE_NAME=browser_source_core
+MODULE_VERSION=1.0.0
+MODULE_PORT=8027
+```
+
 ## System Components Details
 
 ### Router Module (`router_module/`) - CORE COMPONENT
@@ -750,6 +1023,193 @@ EVENT_RESPONSE_TYPES=subscription,follow,donation
 - Random clip selection from past 7 days
 - Full-screen media response for OBS scenes
 
+#### Inventory Interaction Module (`inventory_interaction_module/`)
+- **Multi-Threaded Architecture**: ThreadPoolExecutor for concurrent operations (20 workers)
+- **Item Management**: Track any item whether IRL or in-game with comprehensive CRUD operations
+- **Label System**: Support up to 5 labels per item for categorization and filtering
+- **Caching**: High-performance caching with thread-safe operations
+- **Comprehensive AAA Logging**: Full Authentication, Authorization, and Auditing logging system
+
+**Key Features**:
+- `!inventory add <item_name> <description> [labels]` - Add new item to inventory
+- `!inventory checkout <item_name> <username>` - Check out item to user
+- `!inventory checkin <item_name>` - Check item back in
+- `!inventory delete <item_name>` - Remove item from inventory
+- `!inventory list [all|available|checkedout]` - List items with filtering
+- `!inventory search <query>` - Search items by name, description, or labels
+- `!inventory status <item_name>` - Get item status and checkout information
+- `!inventory stats` - Get inventory statistics and metrics
+- `!inventory labels <item_name> <add|remove> <label>` - Manage item labels
+
+**Database Schema**:
+```sql
+inventory_items (
+    id, community_id, item_name, description, labels,
+    is_checked_out, checked_out_to, checked_out_at, checked_in_at,
+    created_by, created_at, updated_at
+)
+
+inventory_activity (
+    id, community_id, item_id, action, performed_by,
+    details, created_at
+)
+```
+
+**Performance Features**:
+- Thread-safe caching with TTL for frequently accessed data
+- Bulk operations support for high-volume communities
+- Connection pooling for database operations
+- Background activity logging for audit trails
+- Health monitoring with comprehensive metrics
+
+#### YouTube Music Interaction Module (`youtube_music_interaction_module/`)
+- **YouTube Data API v3 Integration**: Direct integration with YouTube API for music search and metadata
+- **Search and Playback**: Search YouTube Music tracks and queue for playback
+- **Media Browser Source Output**: Sends track information with album art to browser source for OBS
+- **Now Playing Tracking**: Stores current playing track information per community
+- **Search Result Caching**: Caches search results for quick access via number selection
+- **Playlist Management**: Support for community playlists and queue management
+- **Activity Logging**: Comprehensive tracking of all music commands and playback
+
+**Key Features**:
+- `!ytmusic search <query>` - Search YouTube Music
+- `!ytmusic play <url/number>` - Play track or search result
+- `!ytmusic current` - Show current playing track with ticker display
+- `!ytmusic stop` - Stop playback and clear now playing
+- Media browser source integration for OBS with track art and metadata
+- Search result numbering for quick selection
+- Playback history and analytics
+
+**Database Schema**:
+```sql
+youtube_now_playing (
+    community_id, video_id, title, artist, album, duration,
+    thumbnail_url, requested_by, started_at, updated_at
+)
+
+youtube_search_cache (
+    community_id, user_id, query, results, created_at
+)
+
+youtube_activity (
+    community_id, user_id, action, details, created_at
+)
+```
+
+#### Spotify Interaction Module (`spotify_interaction_module/`)
+- **Spotify Web API Integration**: OAuth 2.0 authentication with full playback control
+- **Real-time Playback Control**: Play, pause, skip, volume control on user's Spotify devices
+- **Device Management**: List and control playback on multiple Spotify devices
+- **Media Browser Source Output**: Rich media display with album art, progress bars, and track info
+- **Token Management**: Automatic token refresh and secure storage
+- **Search and Queue**: Advanced search with playlist integration
+- **Multi-User Support**: Per-user authentication within communities
+
+**Key Features**:
+- `!spotify search <query>` - Search Spotify catalog
+- `!spotify play <uri/number>` - Play track on user's Spotify device
+- `!spotify current` - Show current playback with progress and device info
+- `!spotify pause/resume` - Control playback state
+- `!spotify skip` - Skip to next track
+- `!spotify devices` - List available Spotify devices
+- OAuth authentication flow with secure token management
+- Media browser source with real-time progress updates
+
+**Database Schema**:
+```sql
+spotify_tokens (
+    community_id, user_id, access_token, refresh_token,
+    expires_at, scope, created_at, updated_at
+)
+
+spotify_now_playing (
+    community_id, track_uri, track_name, artists, album,
+    duration_ms, album_art_url, is_playing, progress_ms,
+    requested_by, started_at, updated_at
+)
+
+spotify_search_cache (
+    community_id, user_id, query, results, created_at
+)
+```
+
+#### Browser Source Core Module (`browser_source_core_module/`)
+- **Multi-threaded Architecture**: ThreadPoolExecutor for handling hundreds of concurrent browser sources
+- **WebSocket Communication**: Real-time updates to browser sources via WebSocket connections
+- **Three Source Types**: Ticker, Media, and General browser sources for different display needs
+- **Unique Community URLs**: Each community gets unique URLs for each source type with secure tokens
+- **OBS Integration**: Optimized for OBS Studio browser source plugin with auto-refresh and styling
+- **Router Integration**: Receives display data from interaction modules via router
+- **Portal Integration**: Community admins can view and manage browser source URLs
+
+**Browser Source Types**:
+- **Ticker Source**: Scrolling text messages at bottom of screen for notifications and alerts
+- **Media Source**: Rich media display for music, videos, images with metadata and progress
+- **General Source**: Custom HTML/CSS content for forms, announcements, and interactive elements
+
+**Key Features**:
+- Unique URLs per community: `/browser/source/{token}/ticker`, `/browser/source/{token}/media`, `/browser/source/{token}/general`
+- WebSocket real-time updates for immediate display changes
+- Queue management for ticker messages with priority and duration
+- Media attribution display with artist, song name, album art, and progress bars
+- Responsive design that works across different OBS scene sizes
+- Access logging and analytics for browser source usage
+- Token management with regeneration capabilities
+
+**Database Schema**:
+```sql
+browser_source_tokens (
+    community_id, source_type, token, is_active, created_at
+)
+
+browser_source_history (
+    community_id, source_type, content, session_id, created_at
+)
+
+browser_source_access_log (
+    community_id, source_type, ip_address, user_agent, accessed_at
+)
+```
+
+**Integration Flow**:
+1. **Module Response**: Interaction module sends response with browser source data
+2. **Router Processing**: Router routes browser source responses to browser source core module
+3. **WebSocket Distribution**: Browser source module distributes updates via WebSocket to connected sources
+4. **OBS Display**: Browser sources in OBS receive updates and display content in real-time
+5. **Portal Management**: Community admins can view URLs and manage settings through portal
+
+**Music Module Browser Source Integration**:
+- YouTube Music and Spotify modules send media responses to browser source core
+- Media browser source displays track information with album art and attribution
+- Real-time progress updates for Spotify playback
+- Automatic timeout and cleanup for media displays
+- Responsive design for different OBS scene layouts
+
+**Browser Source Implementation Details**:
+- **Transparent Backgrounds**: All browser source templates use `background: transparent;` for proper OBS compositing
+- **WebSocket Communication**: Real-time bidirectional communication between browser sources and core module
+- **Multi-threaded Processing**: ThreadPoolExecutor handles hundreds of concurrent connections
+- **Connection Management**: Automatic connection tracking, cleanup, and stale connection removal
+- **Queue System**: Priority-based message queuing for ticker with overflow protection
+- **Analytics Integration**: Comprehensive tracking of browser source usage and interactions
+- **Template System**: Modular HTML/CSS/JS templates for each source type
+- **Responsive Design**: Works across different OBS scene sizes and aspect ratios
+- **Security**: Token-based authentication with unique URLs per community and source type
+
+**Browser Source Templates**:
+- **Ticker Template**: Scrolling text with animations, priority queuing, and style variants
+- **Media Template**: Music display with album art, progress bars, and service indicators
+- **General Template**: Flexible content display with HTML, forms, announcements, and alerts
+- **CSS Framework**: Modern CSS with animations, transitions, and responsive design
+- **JavaScript**: WebSocket handling, automatic reconnection, and analytics tracking
+
+**OBS Integration Features**:
+- **Transparent Backgrounds**: Proper alpha channel support for overlay compositing
+- **Auto-refresh**: Automatic reconnection on connection loss
+- **Performance Optimized**: Minimal resource usage with efficient DOM updates
+- **Cross-browser**: Compatible with OBS browser source engine
+- **Responsive Layouts**: Adapts to different scene sizes and orientations
+
 ## Shared Patterns
 
 ### Database Schema (All Collectors)
@@ -867,11 +1327,16 @@ coordination (
 12. **Module Response Processing**: Interaction modules respond back to router with:
     - **Session ID**: Required session_id for tracking
     - **Success Status**: Whether module executed properly
-    - **Response Action**: chat, media, ticker, or form
+    - **Response Action**: chat, media, ticker, general, or form
     - **Response Data**: Content specific to action type
-13. **Session Validation**: Router validates session_id matches entity_id
-14. **Response Handling**: Return result to collector for user response and OBS integration
-15. **Logging**: Record execution, performance metrics, usage stats, string match statistics, and module responses
+13. **Browser Source Routing**: Router routes browser source responses to browser source core module:
+    - **Media Responses**: Music/video with album art and metadata
+    - **Ticker Responses**: Scrolling text with priority and styling
+    - **General Responses**: HTML content, forms, announcements, and alerts
+    - **WebSocket Distribution**: Browser source core distributes to connected OBS sources
+14. **Session Validation**: Router validates session_id matches entity_id
+15. **Response Handling**: Return result to collector for user response and OBS integration
+16. **Logging**: Record execution, performance metrics, usage stats, string match statistics, and module responses
 
 ### Command Prefix Architecture
 - **`!` (Local Container Modules)**: Interaction modules running in local containers
@@ -961,8 +1426,9 @@ coordination (
 - **Response Actions**: Support for chat, media, ticker, and form responses
 - **Response Types**:
   - `chat`: Text-based chat response back to user
-  - `media`: Full-screen media display (video, image, audio) for OBS integration
-  - `ticker`: Scrolling text ticker for OBS browser source overlay
+  - `media`: Rich media display for music/video with album art and metadata
+  - `ticker`: Scrolling text ticker for notifications and alerts
+  - `general`: Flexible content display for HTML, forms, announcements, and alerts
   - `form`: Interactive form for user input with field definitions
 - **Form Response Structure**:
   - `form_title`: Title of the form
@@ -972,11 +1438,15 @@ coordination (
   - `form_submit_method`: HTTP method for submission (default: POST)
   - `form_callback_url`: URL to redirect after form submission
   - **Field Types**: text, textarea, select, multiselect, radio, checkbox, number, email, url, date, time
-- **OBS Integration**:
-  - **Media Response**: Full-screen video/image display in OBS scene
-  - **Ticker Response**: Browser source with scrolling text overlay at bottom of screen
-  - **Form Response**: Interactive form overlay for user input
-  - **Configurable Duration**: Set how long ticker text displays (default: 10 seconds)
+- **Browser Source Integration**:
+  - **Media Response**: Rich media display with album art, track info, and progress bars
+  - **Ticker Response**: Scrolling text overlay with priority queuing and animations
+  - **General Response**: Flexible content display for HTML, forms, announcements, and alerts
+  - **Form Response**: Interactive form overlay with field validation and submission
+  - **Transparent Backgrounds**: All browser sources use transparent backgrounds for OBS compositing
+  - **WebSocket Updates**: Real-time updates via WebSocket connections
+  - **Configurable Duration**: Set display duration for each response type
+  - **Responsive Design**: Adapts to different OBS scene sizes and layouts
 - **Success Tracking**: Monitor whether modules executed successfully
 - **Performance Metrics**: Track module processing times and response rates
 - **Error Handling**: Capture and log module errors for debugging
@@ -1071,6 +1541,44 @@ All collectors follow the same pattern:
 - **Server List**: Pull monitored servers/channels from core
 - **Context API**: Lookup user identity for reputation tracking
 - **Event Forwarding**: Send processed events to router for command processing
+
+## CI/CD and Build System
+
+### GitHub Actions Workflows
+WaddleBot uses comprehensive GitHub Actions for automated building, testing, and deployment:
+
+**Main CI/CD Pipeline (`.github/workflows/ci-cd.yml`)**:
+- **Multi-Platform Builds**: Docker containers for linux/amd64 and linux/arm64
+- **Security Scanning**: Trivy vulnerability scanning and CodeQL analysis
+- **Comprehensive Testing**: Unit tests, integration tests, and code coverage reporting
+- **Container Registry**: Automated pushing to container registries
+- **Quality Gates**: All tests must pass before deployment
+
+**Container-Specific Pipeline (`.github/workflows/containers.yml`)**:
+- **Change Detection**: Only builds containers that have been modified
+- **Matrix Builds**: Parallel builds for all core, collector, and interaction modules
+- **Integration Testing**: Cross-module integration tests
+- **Performance Testing**: Load testing for high-volume modules
+
+**Android App Pipeline (`.github/workflows/android.yml`)**:
+- **Static Analysis**: Lint checking and code quality analysis
+- **Unit Testing**: JUnit tests with coverage reporting
+- **Instrumentation Testing**: UI and integration tests on Android emulator
+- **Build Artifacts**: APK and AAB generation for distribution
+- **Play Store Deployment**: Automated deployment to internal testing track
+
+**Desktop Bridge Pipeline (`.github/workflows/desktop-bridge.yml`)**:
+- **Cross-Platform Compilation**: Windows, macOS, and Linux builds
+- **Go Testing**: Comprehensive testing including benchmarks
+- **Release Management**: Automated release creation with checksums
+- **Binary Distribution**: Multi-platform binary artifacts
+
+**Required CI/CD Standards**:
+- All modules must have comprehensive unit tests (>90% coverage)
+- Integration tests for API endpoints and database operations
+- Dockerfile optimization with multi-stage builds and security scanning
+- Kubernetes deployment manifests with health checks and resource limits
+- Performance benchmarking for high-throughput modules
 
 ## Next Steps
 

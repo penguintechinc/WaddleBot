@@ -1,0 +1,9 @@
+py4web>=1.20230507.1
+pydal>=20230521.1
+yatl>=20230507.3
+requests>=2.31.0
+python-dotenv>=1.0.0
+websockets>=11.0.3
+asyncio>=3.4.3
+redis>=4.5.5
+python-dateutil>=2.8.2

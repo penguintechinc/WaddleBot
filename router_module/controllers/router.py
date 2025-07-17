@@ -923,7 +923,7 @@ def submit_module_response():
             raise HTTP(400, f"Missing required fields: {', '.join(missing_fields)}")
         
         # Validate response_action
-        valid_actions = ["chat", "media", "ticker", "form"]
+        valid_actions = ["chat", "media", "ticker", "form", "general"]
         if response_data["response_action"] not in valid_actions:
             raise HTTP(400, f"Invalid response_action. Must be one of: {', '.join(valid_actions)}")
         
@@ -975,10 +975,50 @@ def submit_module_response():
             response_record["form_submit_url"] = response_data.get("form_submit_url", "")
             response_record["form_submit_method"] = response_data.get("form_submit_method", "POST")
             response_record["form_callback_url"] = response_data.get("form_callback_url", "")
+            
+        elif response_data["response_action"] == "general":
+            response_record["content_type"] = response_data.get("content_type", "html")
+            response_record["content"] = response_data.get("content", "")
+            response_record["duration"] = response_data.get("duration", 10)
+            response_record["style"] = response_data.get("style", {})
         
         # Insert response record
         response_id = db.module_responses.insert(**response_record)
         db.commit()
+        
+        # Route general responses to browser source core module
+        if response_data["response_action"] == "general":
+            try:
+                # Send to browser source core module
+                browser_source_url = os.environ.get("BROWSER_SOURCE_API_URL", "http://browser-source-core:8027/browser/source")
+                
+                # Prepare payload for browser source
+                browser_payload = {
+                    "entity_id": execution.entity_id,
+                    "type": response_data.get("content_type", "html"),
+                    "content": response_data.get("content", ""),
+                    "duration": response_data.get("duration", 10),
+                    "style": response_data.get("style", {}),
+                    "source_module": response_data["module_name"],
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+                
+                # Send to browser source general endpoint
+                browser_response = requests.post(
+                    f"{browser_source_url}/general",
+                    json=browser_payload,
+                    headers={"Content-Type": "application/json"},
+                    timeout=5
+                )
+                
+                if browser_response.status_code == 200:
+                    logger.info(f"General response routed to browser source successfully for entity {execution.entity_id}")
+                else:
+                    logger.warning(f"Failed to route general response to browser source: {browser_response.status_code}")
+                    
+            except Exception as e:
+                logger.error(f"Error routing general response to browser source: {str(e)}")
+                # Don't fail the entire request if browser source routing fails
         
         return {
             "success": True,
@@ -1027,6 +1067,11 @@ def get_module_responses(execution_id):
                 response_info["form_submit_url"] = resp.form_submit_url
                 response_info["form_submit_method"] = resp.form_submit_method
                 response_info["form_callback_url"] = resp.form_callback_url
+            elif resp.response_action == "general":
+                response_info["content_type"] = resp.content_type
+                response_info["content"] = resp.content
+                response_info["duration"] = resp.duration
+                response_info["style"] = resp.style
             
             if resp.error_message:
                 response_info["error_message"] = resp.error_message
@@ -1098,6 +1143,11 @@ def get_recent_responses():
                 response_info["form_fields_count"] = len(resp.form_fields) if resp.form_fields else 0
                 response_info["form_submit_url"] = resp.form_submit_url
                 response_info["form_submit_method"] = resp.form_submit_method
+            elif resp.response_action == "general":
+                response_info["content_type"] = resp.content_type
+                response_info["content"] = resp.content[:100] + "..." if len(resp.content or "") > 100 else resp.content
+                response_info["duration"] = resp.duration
+                response_info["style"] = resp.style
             
             response_list.append(response_info)
         

@@ -408,6 +408,48 @@ services:
       timeout: 10s
       retries: 3
 
+  # Inventory Interaction Module
+  inventory-interaction:
+    image: waddlebot-inventory-interaction
+    build:
+      context: .
+      dockerfile: inventory_interaction_module/Dockerfile
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - CORE_API_URL=${CORE_API_URL}
+      - ROUTER_API_URL=${ROUTER_API_URL}
+      - MAX_WORKERS=${MAX_WORKERS}
+      - MAX_LABELS_PER_ITEM=${MAX_LABELS_PER_ITEM}
+      - CACHE_TTL=${CACHE_TTL}
+      - REQUEST_TIMEOUT=${REQUEST_TIMEOUT}
+      # AAA Logging Configuration
+      - LOG_LEVEL=${LOG_LEVEL}
+      - LOG_DIR=${LOG_DIR}
+      - ENABLE_SYSLOG=${ENABLE_SYSLOG}
+      - SYSLOG_HOST=${SYSLOG_HOST}
+      - SYSLOG_PORT=${SYSLOG_PORT}
+      - SYSLOG_FACILITY=${SYSLOG_FACILITY}
+      # Module Info
+      - MODULE_NAME=${MODULE_NAME_INVENTORY}
+      - MODULE_VERSION=${MODULE_VERSION}
+      - MODULE_PORT=${MODULE_PORT_INVENTORY}
+    networks:
+      - waddlebotnet
+    ports:
+      - "8024:8024"
+    depends_on:
+      router:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8024/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    volumes:
+      - /var/log/waddlebotlog:/var/log/waddlebotlog
+
   # Legacy/Optional Services
   chat:
     image: waddlebot-chat

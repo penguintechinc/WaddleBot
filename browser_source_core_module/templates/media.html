@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WaddleBot Media Display</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: transparent;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        .media-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 400px;
+            min-height: 120px;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(15px);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            transform: translateX(100%);
+            transition: transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            z-index: 1000;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .media-container.show {
+            transform: translateX(0);
+        }
+        
+        .media-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .media-icon {
+            font-size: 24px;
+            margin-right: 10px;
+        }
+        
+        .media-title {
+            color: #ffffff;
+            font-size: 16px;
+            font-weight: 600;
+            opacity: 0.9;
+        }
+        
+        .media-content {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .media-artwork {
+            width: 80px;
+            height: 80px;
+            border-radius: 10px;
+            background: linear-gradient(45deg, #333, #555);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+        
+        .media-artwork img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 10px;
+        }
+        
+        .media-info {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-width: 0;
+        }
+        
+        .media-track {
+            color: #ffffff;
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .media-artist {
+            color: #bbbbbb;
+            font-size: 14px;
+            font-weight: 400;
+            margin-bottom: 5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .media-album {
+            color: #888888;
+            font-size: 12px;
+            font-weight: 400;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .media-progress {
+            margin-top: 10px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .media-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #1db954, #1ed760);
+            border-radius: 2px;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+        
+        .media-time {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 5px;
+            font-size: 11px;
+            color: #999999;
+        }
+        
+        .media-service {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: white;
+        }
+        
+        .service-spotify {
+            background: #1db954;
+        }
+        
+        .service-youtube {
+            background: #ff0000;
+        }
+        
+        .service-soundcloud {
+            background: #ff8800;
+        }
+        
+        .media-controls {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 10px;
+            opacity: 0.7;
+        }
+        
+        .media-control {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+        
+        .media-control:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .media-requested {
+            margin-top: 10px;
+            text-align: center;
+            font-size: 11px;
+            color: #666666;
+        }
+        
+        .media-visualizer {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, rgba(29, 185, 84, 0.5), transparent);
+            animation: visualizer 2s ease-in-out infinite;
+        }
+        
+        @keyframes visualizer {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
+        
+        .media-youtube {
+            border-color: rgba(255, 0, 0, 0.3);
+        }
+        
+        .media-spotify {
+            border-color: rgba(29, 185, 84, 0.3);
+        }
+        
+        .media-soundcloud {
+            border-color: rgba(255, 136, 0, 0.3);
+        }
+        
+        .media-error {
+            background: rgba(220, 53, 69, 0.9);
+            color: white;
+            text-align: center;
+            padding: 20px;
+            border-radius: 10px;
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+    <div class="media-container" id="mediaContainer">
+        <div class="media-service" id="mediaService">🎵</div>
+        
+        <div class="media-header">
+            <div class="media-icon" id="mediaIcon">🎵</div>
+            <div class="media-title" id="mediaTitle">Now Playing</div>
+        </div>
+        
+        <div class="media-content" id="mediaContent">
+            <div class="media-artwork" id="mediaArtwork">
+                🎵
+            </div>
+            
+            <div class="media-info">
+                <div class="media-track" id="mediaTrack">Waiting for music...</div>
+                <div class="media-artist" id="mediaArtist">No artist</div>
+                <div class="media-album" id="mediaAlbum">No album</div>
+            </div>
+        </div>
+        
+        <div class="media-progress" id="mediaProgress" style="display: none;">
+            <div class="media-progress-bar" id="mediaProgressBar"></div>
+        </div>
+        
+        <div class="media-time" id="mediaTime" style="display: none;">
+            <span id="currentTime">0:00</span>
+            <span id="totalTime">0:00</span>
+        </div>
+        
+        <div class="media-requested" id="mediaRequested">
+            Requested by: <span id="requestedBy">System</span>
+        </div>
+        
+        <div class="media-visualizer" id="mediaVisualizer"></div>
+    </div>
+    
+    <script>
+        class MediaDisplayManager {
+            constructor() {
+                this.ws = null;
+                this.container = document.getElementById('mediaContainer');
+                this.serviceIcon = document.getElementById('mediaService');
+                this.icon = document.getElementById('mediaIcon');
+                this.title = document.getElementById('mediaTitle');
+                this.artwork = document.getElementById('mediaArtwork');
+                this.track = document.getElementById('mediaTrack');
+                this.artist = document.getElementById('mediaArtist');
+                this.album = document.getElementById('mediaAlbum');
+                this.progress = document.getElementById('mediaProgress');
+                this.progressBar = document.getElementById('mediaProgressBar');
+                this.timeDisplay = document.getElementById('mediaTime');
+                this.currentTime = document.getElementById('currentTime');
+                this.totalTime = document.getElementById('totalTime');
+                this.requestedBy = document.getElementById('requestedBy');
+                this.visualizer = document.getElementById('mediaVisualizer');
+                
+                this.currentMedia = null;
+                this.progressInterval = null;
+                this.hideTimeout = null;
+                
+                this.connectWebSocket();
+                this.startHeartbeat();
+            }
+            
+            connectWebSocket() {
+                try {
+                    this.ws = new WebSocket('[[=ws_url]]');
+                    
+                    this.ws.onopen = () => {
+                        console.log('Media WebSocket connected');
+                        this.sendAnalytics('connection', 'connected');
+                    };
+                    
+                    this.ws.onmessage = (event) => {
+                        try {
+                            const data = JSON.parse(event.data);
+                            this.handleMessage(data);
+                        } catch (error) {
+                            console.error('Failed to parse message:', error);
+                        }
+                    };
+                    
+                    this.ws.onclose = () => {
+                        console.log('Media WebSocket closed, attempting to reconnect...');
+                        setTimeout(() => this.connectWebSocket(), 5000);
+                    };
+                    
+                    this.ws.onerror = (error) => {
+                        console.error('Media WebSocket error:', error);
+                        this.sendAnalytics('error', 'websocket_error');
+                    };
+                    
+                } catch (error) {
+                    console.error('Failed to connect Media WebSocket:', error);
+                    setTimeout(() => this.connectWebSocket(), 5000);
+                }
+            }
+            
+            handleMessage(data) {
+                switch (data.type) {
+                    case 'connected':
+                        console.log('Connected to community media:', data.community_id);
+                        break;
+                        
+                    case 'media':
+                        this.displayMedia(data);
+                        break;
+                        
+                    case 'pong':
+                        // Heartbeat response
+                        break;
+                        
+                    default:
+                        console.log('Unknown media message type:', data.type);
+                }
+            }
+            
+            displayMedia(data) {
+                this.currentMedia = data;
+                
+                // Clear any existing timeout
+                if (this.hideTimeout) {
+                    clearTimeout(this.hideTimeout);
+                    this.hideTimeout = null;
+                }
+                
+                // Stop any existing progress updates
+                if (this.progressInterval) {
+                    clearInterval(this.progressInterval);
+                    this.progressInterval = null;
+                }
+                
+                const mediaType = data.media_type || 'unknown';
+                const mediaData = data.media_data || {};
+                
+                // Set service-specific styling
+                this.container.className = `media-container show media-${mediaType}`;
+                
+                // Set service icon
+                const serviceIcons = {
+                    'spotify': '🎵',
+                    'youtube': '📺',
+                    'soundcloud': '🎧',
+                    'apple_music': '🍎',
+                    'default': '🎵'
+                };
+                
+                this.serviceIcon.textContent = serviceIcons[mediaType] || serviceIcons.default;
+                this.serviceIcon.className = `media-service service-${mediaType}`;
+                
+                // Set main icon
+                this.icon.textContent = serviceIcons[mediaType] || serviceIcons.default;
+                
+                // Set title
+                this.title.textContent = this.getMediaTitle(mediaType);
+                
+                // Set track info
+                this.track.textContent = mediaData.title || mediaData.track_name || 'Unknown Track';
+                this.artist.textContent = mediaData.artist || mediaData.artists || 'Unknown Artist';
+                this.album.textContent = mediaData.album || 'Unknown Album';
+                
+                // Set artwork
+                this.setArtwork(mediaData);
+                
+                // Set requester
+                this.requestedBy.textContent = mediaData.requested_by || 'System';
+                
+                // Handle progress for Spotify
+                if (mediaType === 'spotify' && mediaData.progress !== undefined && mediaData.duration !== undefined) {
+                    this.showProgress(mediaData.progress, mediaData.duration);
+                    this.startProgressUpdates(mediaData.progress, mediaData.duration);
+                } else {
+                    this.hideProgress();
+                }
+                
+                // Add fade-in animation
+                this.container.classList.add('fade-in');
+                setTimeout(() => this.container.classList.remove('fade-in'), 500);
+                
+                // Auto-hide after duration
+                const duration = (data.duration || 30) * 1000;
+                this.hideTimeout = setTimeout(() => {
+                    this.hideMedia();
+                }, duration);
+                
+                // Analytics
+                this.sendAnalytics('display', 'media_shown', {
+                    media_type: mediaType,
+                    track: mediaData.title || mediaData.track_name,
+                    artist: mediaData.artist || mediaData.artists
+                });
+            }
+            
+            setArtwork(mediaData) {
+                const artworkUrl = mediaData.album_art || mediaData.thumbnail || mediaData.album_art_url;
+                
+                if (artworkUrl) {
+                    const img = document.createElement('img');
+                    img.src = artworkUrl;
+                    img.alt = 'Album Art';
+                    img.onload = () => {
+                        this.artwork.innerHTML = '';
+                        this.artwork.appendChild(img);
+                    };
+                    img.onerror = () => {
+                        this.artwork.innerHTML = '🎵';
+                    };
+                } else {
+                    this.artwork.innerHTML = '🎵';
+                }
+            }
+            
+            getMediaTitle(mediaType) {
+                const titles = {
+                    'spotify': 'Spotify',
+                    'youtube': 'YouTube Music',
+                    'soundcloud': 'SoundCloud',
+                    'apple_music': 'Apple Music',
+                    'default': 'Now Playing'
+                };
+                
+                return titles[mediaType] || titles.default;
+            }
+            
+            showProgress(progress, duration) {
+                this.progress.style.display = 'block';
+                this.timeDisplay.style.display = 'flex';
+                
+                const progressPercent = (progress / duration) * 100;
+                this.progressBar.style.width = `${progressPercent}%`;
+                
+                this.currentTime.textContent = this.formatTime(progress);
+                this.totalTime.textContent = this.formatTime(duration);
+            }
+            
+            hideProgress() {
+                this.progress.style.display = 'none';
+                this.timeDisplay.style.display = 'none';
+            }
+            
+            startProgressUpdates(initialProgress, duration) {
+                let currentProgress = initialProgress;
+                
+                this.progressInterval = setInterval(() => {
+                    currentProgress += 1000; // Add 1 second
+                    
+                    if (currentProgress >= duration) {
+                        clearInterval(this.progressInterval);
+                        this.progressInterval = null;
+                        return;
+                    }
+                    
+                    const progressPercent = (currentProgress / duration) * 100;
+                    this.progressBar.style.width = `${progressPercent}%`;
+                    this.currentTime.textContent = this.formatTime(currentProgress);
+                }, 1000);
+            }
+            
+            formatTime(milliseconds) {
+                const totalSeconds = Math.floor(milliseconds / 1000);
+                const minutes = Math.floor(totalSeconds / 60);
+                const seconds = totalSeconds % 60;
+                return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            }
+            
+            hideMedia() {
+                this.container.classList.remove('show');
+                
+                if (this.progressInterval) {
+                    clearInterval(this.progressInterval);
+                    this.progressInterval = null;
+                }
+                
+                this.sendAnalytics('display', 'media_hidden');
+            }
+            
+            sendAnalytics(eventType, action, data = {}) {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify({
+                        type: 'analytics',
+                        event_type: eventType,
+                        event_data: {
+                            action: action,
+                            timestamp: new Date().toISOString(),
+                            user_agent: navigator.userAgent,
+                            ...data
+                        }
+                    }));
+                }
+            }
+            
+            startHeartbeat() {
+                setInterval(() => {
+                    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                        this.ws.send(JSON.stringify({
+                            type: 'ping',
+                            timestamp: new Date().toISOString()
+                        }));
+                    }
+                }, 30000); // Every 30 seconds
+            }
+        }
+        
+        // Initialize media display manager when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new MediaDisplayManager();
+        });
+        
+        // Handle page visibility changes
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                // Page is hidden, reduce activity
+            } else {
+                // Page is visible, resume normal activity
+            }
+        });
+    </script>
+</body>
+</html>

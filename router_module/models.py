@@ -166,7 +166,7 @@ db.define_table(
     Field('execution_id', 'string', required=True),  # Links to command_executions
     Field('module_name', 'string', required=True),    # Module that responded
     Field('success', 'boolean', required=True),       # Whether module ran properly
-    Field('response_action', 'string', required=True), # chat, media, ticker, form
+    Field('response_action', 'string', required=True), # chat, media, ticker, form, general
     Field('response_data', 'json'),                   # Response content
     Field('media_type', 'string'),                    # video, image, audio (for media action)
     Field('media_url', 'string'),                     # Media URL (for media action)
@@ -179,6 +179,10 @@ db.define_table(
     Field('form_submit_url', 'string'),               # Form submission URL (for form action)
     Field('form_submit_method', 'string', default='POST'), # Form submission method (for form action)
     Field('form_callback_url', 'string'),             # Callback URL after form submission (for form action)
+    Field('content_type', 'string'),                  # Content type (for general action)
+    Field('content', 'text'),                         # HTML/text content (for general action)
+    Field('duration', 'integer'),                     # Display duration in seconds (for general action)
+    Field('style', 'json'),                           # Style information (for general action)
     Field('error_message', 'text'),                   # Error details if success=false
     Field('processing_time_ms', 'integer'),           # Module processing time
     Field('created_at', 'datetime', default=datetime.utcnow),

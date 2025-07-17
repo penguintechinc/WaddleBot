@@ -12,6 +12,7 @@ on:
       - 'discord_module/**'
       - 'slack_module/**'
       - 'ai_interaction_module/**'
+      - 'inventory_interaction_module/**'
       - 'labels_core_module/**'
       - 'alias_interaction_module/**'
       - 'shoutout_interaction_module/**'
@@ -30,6 +31,7 @@ on:
       - 'discord_module/**'
       - 'slack_module/**'
       - 'ai_interaction_module/**'
+      - 'inventory_interaction_module/**'
       - 'labels_core_module/**'
       - 'alias_interaction_module/**'
       - 'shoutout_interaction_module/**'
@@ -57,6 +59,7 @@ jobs:
       discord: ${{ steps.changes.outputs.discord }}
       slack: ${{ steps.changes.outputs.slack }}
       ai-interaction: ${{ steps.changes.outputs.ai-interaction }}
+      inventory-interaction: ${{ steps.changes.outputs.inventory-interaction }}
       labels-core: ${{ steps.changes.outputs.labels-core }}
       alias-interaction: ${{ steps.changes.outputs.alias-interaction }}
       shoutout-interaction: ${{ steps.changes.outputs.shoutout-interaction }}
@@ -94,6 +97,9 @@ jobs:
               - 'libs/**'
             ai-interaction:
               - 'ai_interaction_module/**'
+              - 'libs/**'
+            inventory-interaction:
+              - 'inventory_interaction_module/**'
               - 'libs/**'
             labels-core:
               - 'labels_core_module/**'
@@ -278,7 +284,7 @@ jobs:
     name: Build Interaction Modules
     runs-on: ubuntu-latest
     needs: detect-changes
-    if: needs.detect-changes.outputs.ai-interaction == 'true' || needs.detect-changes.outputs.labels-core == 'true' || needs.detect-changes.outputs.alias-interaction == 'true' || needs.detect-changes.outputs.shoutout-interaction == 'true' || needs.detect-changes.outputs.libs == 'true' || github.event_name == 'workflow_dispatch'
+    if: needs.detect-changes.outputs.ai-interaction == 'true' || needs.detect-changes.outputs.inventory-interaction == 'true' || needs.detect-changes.outputs.labels-core == 'true' || needs.detect-changes.outputs.alias-interaction == 'true' || needs.detect-changes.outputs.shoutout-interaction == 'true' || needs.detect-changes.outputs.libs == 'true' || github.event_name == 'workflow_dispatch'
     strategy:
       matrix:
         include:
@@ -286,6 +292,10 @@ jobs:
             name: ai-interaction
             port: 8020
             condition: ${{ needs.detect-changes.outputs.ai-interaction == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - module: inventory_interaction_module
+            name: inventory-interaction
+            port: 8024
+            condition: ${{ needs.detect-changes.outputs.inventory-interaction == 'true' || needs.detect-changes.outputs.libs == 'true' }}
           - module: labels_core_module
             name: labels-core
             port: 8021
@@ -471,6 +481,7 @@ jobs:
           - discord-collector
           - slack-collector
           - ai-interaction
+          - inventory-interaction
           - labels-core
           - alias-interaction
           - shoutout-interaction
