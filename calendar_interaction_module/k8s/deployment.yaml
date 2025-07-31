@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: calendar-interaction-module
+  namespace: waddlebot
+  labels:
+    app: calendar-interaction-module
+    component: interaction-module
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: calendar-interaction-module
+  template:
+    metadata:
+      labels:
+        app: calendar-interaction-module
+        component: interaction-module
+    spec:
+      containers:
+      - name: calendar-interaction-module
+        image: waddlebot/calendar-interaction-module:latest
+        ports:
+        - containerPort: 8030
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: waddlebot-db
+              key: database-url
+        - name: CORE_API_URL
+          value: "http://router-service:8000"
+        - name: ROUTER_API_URL
+          value: "http://router-service:8000/router"
+        - name: LABELS_API_URL
+          value: "http://labels-core-service:8025"
+        - name: MODULE_NAME
+          value: "calendar_interaction_module"
+        - name: MODULE_VERSION
+          value: "1.0.0"
+        - name: MODULE_PORT
+          value: "8030"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8030
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8030
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      restartPolicy: Always
+      securityContext:
+        fsGroup: 1000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: calendar-interaction-service
+  namespace: waddlebot
+  labels:
+    app: calendar-interaction-module
+spec:
+  selector:
+    app: calendar-interaction-module
+  ports:
+  - port: 8030
+    targetPort: 8030
+    protocol: TCP
+  type: ClusterIP

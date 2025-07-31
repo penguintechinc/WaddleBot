@@ -54,12 +54,15 @@ WaddleBot is a multi-platform chat bot system with a modular, microservices arch
 - **alias_interaction_module/**: Linux-style alias system for custom commands with variable substitution
 - **shoutout_interaction_module/**: Platform-specific user shoutouts with Twitch API integration and auto-shoutout functionality
 - **inventory_interaction_module/**: Multi-threaded inventory management system for tracking any item (IRL or in-game) with label support and comprehensive AAA logging
+- **calendar_interaction_module/**: Event management system with approval workflows, recurring events, and label-based auto-approval
+- **memories_interaction_module/**: Community memory management system for quotes, reminders, and URLs with label-based permissions
 - **youtube_music_interaction_module/**: YouTube Music integration with search, playback control, and media browser source output
-- **spotify_interaction_module/**: Spotify integration with OAuth authentication, search, playback control, and media browser source output
+- **spotify_interaction_module/**: Spotify integration with OAuth authentication, search, playbook control, and media browser source output
 
 ### Core System Modules (py4web-based)
 - **labels_core_module/**: High-performance multi-threaded label management system for communities, users, modules, and entity groups with user identity verification
 - **browser_source_core_module/**: Multi-threaded browser source management system for OBS integration with ticker, media, and general display sources
+- **identity_core_module/**: Cross-platform identity linking and verification system built on py4web Auth with comprehensive API key management
 
 ### Administration Modules (py4web-based)
 - **kong_admin_broker/**: Kong super admin user management with automated consumer creation, API key management, and comprehensive audit logging
@@ -275,6 +278,16 @@ SYSLOG_FACILITY=LOCAL0           # Syslog facility
 │   ├── Dockerfile    # Container definition
 │   ├── requirements.txt # Python dependencies
 │   └── k8s/         # Kubernetes deployment configs
+├── calendar_interaction_module/  # Event management system
+│   ├── app.py        # Main application with calendar functionality
+│   ├── Dockerfile    # Container definition
+│   ├── requirements.txt # Python dependencies
+│   └── k8s/         # Kubernetes deployment configs
+├── memories_interaction_module/  # Community memory management system
+│   ├── app.py        # Main application with memories functionality
+│   ├── Dockerfile    # Container definition
+│   ├── requirements.txt # Python dependencies
+│   └── k8s/         # Kubernetes deployment configs
 ├── youtube_music_interaction_module/  # YouTube Music integration
 │   ├── app.py        # Main application with YouTube Music commands
 │   ├── models.py     # Database models for now playing, search cache, activity
@@ -368,6 +381,7 @@ All WaddleBot APIs are unified through Kong API Gateway for centralized routing,
 - **marketplace-service**: Module marketplace and management (`http://marketplace-service:8001`)
 - **ai-interaction**: AI services with multi-provider support (`http://ai-interaction:8005`)
 - **kong-admin-broker**: Super admin user management (`http://kong-admin-broker:8000`)
+- **identity-core**: Cross-platform identity linking and verification (`http://identity-core:8050`)
 - **twitch-collector**: Twitch platform integration (`http://twitch-collector:8002`)
 - **discord-collector**: Discord platform integration (`http://discord-collector:8003`)
 - **slack-collector**: Slack platform integration (`http://slack-collector:8004`)
@@ -380,6 +394,8 @@ All WaddleBot APIs are unified through Kong API Gateway for centralized routing,
 - `/marketplace/*` → Marketplace API (with authentication)
 - `/ai/*` → AI Interaction API (with authentication)
 - `/broker/*` → Kong Admin Broker API (broker key authentication)
+- `/identity/*` → Identity Core API (with authentication)
+- `/auth/*` → User authentication API (with authentication)
 - `/webhooks/twitch/*` → Twitch webhooks (with authentication)
 - `/webhooks/discord/*` → Discord webhooks (with authentication)
 - `/webhooks/slack/*` → Slack webhooks (with authentication)
@@ -389,6 +405,7 @@ All WaddleBot APIs are unified through Kong API Gateway for centralized routing,
 - `/health` → Health checks (no authentication)
 - `/ai/health` → AI health check (no authentication)
 - `/broker/health` → Broker health check (no authentication)
+- `/identity/health` → Identity health check (no authentication)
 - `/youtube/health` → YouTube Music health check (no authentication)
 - `/spotify/health` → Spotify health check (no authentication)
 - `/browser/health` → Browser Source health check (no authentication)
@@ -477,6 +494,26 @@ All WaddleBot APIs are unified through Kong API Gateway for centralized routing,
 - `GET /browser/source/health` - Browser source health check (no auth)
 - `GET /browser/source/stats` - Get browser source statistics and connection info
 - `WebSocket /ws/{token}/{source_type}` - WebSocket endpoint for real-time browser source updates
+
+### Identity Core API Endpoints
+- `POST /identity/link` - Initiate cross-platform identity linking with verification
+- `POST /identity/verify` - Verify identity with whisper/DM code
+- `GET /identity/user/<user_id>` - Get user's linked platform identities
+- `GET /identity/platform/<platform>/<platform_id>` - Get WaddleBot user for platform user
+- `DELETE /identity/unlink` - Unlink a platform identity from user
+- `GET /identity/pending` - Get pending verification requests
+- `POST /identity/resend` - Resend verification code to platform
+- `POST /identity/api-keys` - Create user API key for programmatic access
+- `GET /identity/api-keys` - List user's active API keys
+- `DELETE /identity/api-keys/<key_id>` - Revoke user API key
+- `POST /identity/api-keys/<key_id>/regenerate` - Regenerate user API key
+- `POST /auth/register` - Register new WaddleBot user account (py4web Auth)
+- `POST /auth/login` - Login to WaddleBot user session (py4web Auth)
+- `POST /auth/logout` - Logout from WaddleBot user session (py4web Auth)
+- `GET /auth/profile` - Get authenticated user profile information
+- `PUT /auth/profile` - Update authenticated user profile
+- `GET /identity/stats` - Get identity module statistics and metrics
+- `GET /identity/health` - Identity module health check (no auth)
 
 ### Legacy Core API Endpoints
 - `POST /api/modules/register` - Module registration
@@ -676,6 +713,31 @@ MODULE_NAME=kong_admin_broker
 MODULE_VERSION=1.0.0
 ```
 
+#### Portal Module
+```bash
+# Database
+DATABASE_URL=postgresql://user:pass@host:5432/waddlebot
+
+# Portal Configuration
+PORTAL_URL=http://localhost:8000
+APP_NAME=WaddleBot Community Portal
+
+# Email Configuration (py4web Mailer)
+SMTP_HOST=smtp.company.com
+SMTP_PORT=587
+SMTP_USERNAME=portal@company.com
+SMTP_PASSWORD=smtp_password
+SMTP_TLS=true
+FROM_EMAIL=noreply@waddlebot.com
+
+# Browser Source Integration
+BROWSER_SOURCE_BASE_URL=http://browser-source-core:8027
+
+# Module Info
+MODULE_NAME=portal
+MODULE_VERSION=1.0.0
+```
+
 #### Marketplace Module
 ```bash
 # Database
@@ -743,6 +805,42 @@ SYSLOG_FACILITY=LOCAL0
 MODULE_NAME=inventory_interaction_module
 MODULE_VERSION=1.0.0
 MODULE_PORT=8024
+```
+
+#### Calendar Interaction Module
+```bash
+# Database
+DATABASE_URL=postgresql://user:pass@host:5432/waddlebot
+
+# Core API Integration
+CORE_API_URL=http://router-service:8000
+ROUTER_API_URL=http://router-service:8000/router
+
+# Labels Core Integration (for event-autoapprove label)
+LABELS_API_URL=http://labels-core-service:8025
+
+# Module Info
+MODULE_NAME=calendar_interaction_module
+MODULE_VERSION=1.0.0
+MODULE_PORT=8030
+```
+
+#### Memories Interaction Module
+```bash
+# Database
+DATABASE_URL=postgresql://user:pass@host:5432/waddlebot
+
+# Core API Integration
+CORE_API_URL=http://router-service:8000
+ROUTER_API_URL=http://router-service:8000/router
+
+# Labels Core Integration (for memories label permission)
+LABELS_API_URL=http://labels-core-service:8025
+
+# Module Info
+MODULE_NAME=memories_interaction_module
+MODULE_VERSION=1.0.0
+MODULE_PORT=8031
 ```
 
 #### YouTube Music Interaction Module
@@ -873,6 +971,78 @@ MODULE_VERSION=1.0.0
 MODULE_PORT=8027
 ```
 
+#### Identity Core Module
+```bash
+# Module Configuration
+MODULE_NAME=identity_core_module
+MODULE_VERSION=1.0.0
+MODULE_PORT=8050
+
+# Database
+DATABASE_URL=postgresql://user:pass@host:5432/waddlebot
+
+# Redis Configuration
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_DB=0
+REDIS_PASSWORD=your_redis_password
+
+# Session and Security
+SECRET_KEY=waddlebot_identity_secret_key_change_me_in_production
+SESSION_TTL=3600
+
+# API Keys
+VALID_API_KEYS=system_key1,system_key2
+MAX_API_KEYS_PER_USER=5
+API_KEY_DEFAULT_EXPIRY_DAYS=365
+
+# Core API Integration
+CORE_API_URL=http://router-service:8000
+ROUTER_API_URL=http://router-service:8000/router
+
+# Platform APIs (for whisper/DM functionality)
+TWITCH_API_URL=http://twitch-collector:8002
+DISCORD_API_URL=http://discord-collector:8003
+SLACK_API_URL=http://slack-collector:8004
+
+# Verification Settings
+VERIFICATION_CODE_LENGTH=6
+VERIFICATION_TIMEOUT_MINUTES=10
+RESEND_COOLDOWN_SECONDS=60
+MAX_VERIFICATION_ATTEMPTS=5
+
+# Email Configuration (py4web Mailer)
+SMTP_HOST=smtp.company.com
+SMTP_PORT=587
+SMTP_USERNAME=identity@company.com
+SMTP_PASSWORD=smtp_password
+SMTP_TLS=true
+FROM_EMAIL=noreply@waddlebot.com
+
+# Performance Settings
+MAX_WORKERS=20
+CACHE_TTL=300
+REQUEST_TIMEOUT=30
+BULK_OPERATION_SIZE=100
+
+# Rate Limiting
+RATE_LIMIT_REQUESTS=60
+RATE_LIMIT_WINDOW=60
+
+# Logging Configuration
+LOG_LEVEL=INFO
+LOG_DIR=/var/log/waddlebotlog
+ENABLE_SYSLOG=false
+SYSLOG_HOST=localhost
+SYSLOG_PORT=514
+SYSLOG_FACILITY=LOCAL0
+
+# Feature Flags
+ENABLE_EMAIL_VERIFICATION=false
+ENABLE_TWO_FACTOR=false
+ENABLE_OAUTH_PROVIDERS=false
+```
+
 ## System Components Details
 
 ### Router Module (`router_module/`) - CORE COMPONENT
@@ -905,6 +1075,26 @@ MODULE_PORT=8027
 - **Database Schema**: Dedicated tables for users, audit logs, sessions, and backups
 - **Kong Consumer Lifecycle**: Full lifecycle management from creation to deactivation
 - **Permission System**: Role-based access with super-admin, admin, and service tiers
+
+### Identity Core Module (`identity_core_module/`) - CORE COMPONENT
+- **py4web Auth Foundation**: Built on py4web's robust authentication system with extended user fields
+- **Cross-Platform Linking**: Secure identity verification between Discord, Twitch, and Slack accounts
+- **Whisper/DM Verification**: Platform-specific verification via whispers and direct messages
+- **User API Key Management**: Self-service API key generation with same permissions as user identity
+- **Comprehensive Security**: SHA-256 hashed API keys, time-limited verification codes, rate limiting
+- **Multi-threaded Processing**: ThreadPoolExecutor for concurrent verification operations
+- **Redis Caching**: High-performance caching for identity lookups and session management
+- **Comprehensive AAA Logging**: Full Authentication, Authorization, and Auditing with structured output
+
+**Key Features:**
+- **Identity Linking Flow**: Users type `!identity link twitch username` → verification code sent via whisper → `!verify CODE` confirms link
+- **API Key System**: Users can create, regenerate, and revoke their own API keys for programmatic access
+- **Session Management**: py4web session-based authentication with configurable expiration
+- **Platform Integration**: Communicates with Twitch, Discord, and Slack collectors for whisper/DM delivery
+- **Database Schema**: Extended py4web auth_user table with WaddleBot-specific fields (display_name, primary_platform, reputation_score)
+- **Verification Security**: 6-character alphanumeric codes (excluding ambiguous characters) with 10-minute expiration
+- **Rate Limiting**: Sliding window rate limiting to prevent spam and abuse
+- **Health Monitoring**: Comprehensive health checks for all platform APIs and dependencies
 
 ### Labels Core Module (`labels_core_module/`) - CORE COMPONENT
 - **High-Performance Architecture**: Multi-threaded processing with ThreadPoolExecutor (configurable max workers)
@@ -1030,7 +1220,87 @@ EVENT_RESPONSE_TYPES=subscription,follow,donation
 - **Caching**: High-performance caching with thread-safe operations
 - **Comprehensive AAA Logging**: Full Authentication, Authorization, and Auditing logging system
 
+#### Calendar Interaction Module (`calendar_interaction_module/`)
+- **Event Management**: Complete event lifecycle management with CRUD operations
+- **Approval Workflow**: Events require approval by community admins/moderators unless user has 'event-autoapprove' label
+- **Recurring Events**: Support for daily, weekly, monthly, and yearly recurring events
+- **Attendee Management**: Users can join/leave events with capacity limits
+- **Event Reminders**: Automatic reminder system (1 day, 1 hour, 15 minutes before)
+- **Label Integration**: Integrates with labels_core_module for permission checking
+
+#### Memories Interaction Module (`memories_interaction_module/`)
+- **Multi-Type Memory System**: Supports quotes, URLs, and notes with different display formats
+- **Permission System**: Community managers, moderators, and users with 'memories' label can manage content
+- **Reminder System**: Personal reminders with natural language time parsing and automatic scheduling
+- **Search & Organization**: Full-text search, tagging system, and categorization
+- **Usage Tracking**: Tracks memory usage statistics and popularity
+- **Background Processing**: Automatic reminder processor with recurring reminder support
+
 **Key Features**:
+- `!memories add quote "Quote text" [author]` - Add a quote to community memories
+- `!memories add url "Title" "URL" [description]` - Add a URL with title and description
+- `!memories add note "Title" "Content" [tags]` - Add a note with optional tags
+- `!memories list [quote|url|note]` - List memories by type
+- `!memories search "search term"` - Search memories by content
+- `!memories get <memory_id>` - Get specific memory details
+- `!memories edit <memory_id> <field> "new_value"` - Edit memory fields
+- `!memories delete <memory_id>` - Delete memory (with permissions)
+- `!memories remind "reminder text" in "time"` - Set personal reminder
+- `!memories quotes` - Get random quote from community
+- `!memories urls` - List all community URLs
+
+**Database Schema**:
+```sql
+memories (
+    id, community_id, entity_id, memory_type, title, content, url,
+    author, context, tags, created_by, created_by_name, created_at,
+    updated_at, is_active, usage_count, last_used
+)
+
+reminders (
+    id, memory_id, community_id, entity_id, user_id, user_name,
+    reminder_text, remind_at, created_at, is_sent, sent_at,
+    is_recurring, recurring_pattern, recurring_end
+)
+
+memory_reactions (
+    id, memory_id, user_id, reaction_type, created_at
+)
+
+memory_categories (
+    id, community_id, name, description, color, icon, created_by, created_at
+)
+```
+
+**Calendar Module Key Features**:
+- `!calendar create "Event Title" "YYYY-MM-DD HH:MM" [description] [location] [max_attendees]` - Create new event
+- `!calendar list [pending|approved|rejected]` - List events by status
+- `!calendar join <event_id>` - Join an event
+- `!calendar leave <event_id>` - Leave an event
+- `!calendar approve <event_id>` - Approve pending event (admin/moderator only)
+- `!calendar reject <event_id> "reason"` - Reject pending event (admin/moderator only)
+- `!calendar cancel <event_id>` - Cancel event (creator only)
+
+**Database Schema**:
+```sql
+events (
+    id, community_id, entity_id, title, description, event_date, end_date,
+    location, max_attendees, created_by, created_by_name, status,
+    approved_by, approved_by_name, approved_at, rejection_reason,
+    attendees, tags, is_recurring, recurring_pattern, recurring_end_date,
+    notification_sent, created_at, updated_at
+)
+
+event_attendees (
+    id, event_id, user_id, user_name, status, joined_at
+)
+
+event_reminders (
+    id, event_id, reminder_time, reminder_type, message, sent, created_at
+)
+```
+
+**Inventory Module Key Features**:
 - `!inventory add <item_name> <description> [labels]` - Add new item to inventory
 - `!inventory checkout <item_name> <username>` - Check out item to user
 - `!inventory checkin <item_name>` - Check item back in
@@ -1392,6 +1662,13 @@ coordination (
   - Monitor installed modules (core vs marketplace)
   - Community statistics and activity metrics
   - User management with numerical IDs and display names
+  - **Browser Source URLs**: Unique URLs for each community's browser sources (ticker, media, general)
+- **Browser Source Integration**:
+  - Three browser source types: ticker (scrolling text), media (music display), general (flexible HTML)
+  - Unique token-based URLs for each community and source type
+  - Copy-to-clipboard functionality for easy OBS integration
+  - Recommended OBS settings for each source type
+  - Security notice about URL privacy
 - **Authentication**: py4web Auth with custom WaddleBot user fields
 - **Email Configuration**: 
   - SMTP_HOST, SMTP_USERNAME, SMTP_PASSWORD, SMTP_TLS, SMTP_PORT environment variables

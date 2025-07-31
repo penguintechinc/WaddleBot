@@ -113,13 +113,37 @@ def process_interaction_sync(session_id, message_type, message_content, user_id,
         response_context = {}
         
         if message_type == 'chatMessage':
-            # Check for question triggers
-            for trigger in Config.QUESTION_TRIGGERS:
-                if trigger in message_content:
+            # Check for greeting patterns
+            greeting_patterns = ['o7', 'hi', 'hello', 'hey', 'howdy', 'greetings', 'sup', 'hiya', 'morning', 'evening', 'afternoon']
+            farewell_patterns = ['!lurk', 'bye', 'goodbye', 'later', 'cya', 'see ya', 'take care', 'gotta go', 'gtg', 'peace out', 'catch you later']
+            
+            message_lower = message_content.lower().strip()
+            
+            # Check for greetings
+            for pattern in greeting_patterns:
+                if pattern in message_lower or message_lower == pattern:
                     should_respond = True
-                    response_context['trigger_type'] = 'question'
-                    response_context['trigger'] = trigger
+                    response_context['trigger_type'] = 'greeting'
+                    response_context['trigger'] = pattern
                     break
+            
+            # Check for farewells
+            if not should_respond:
+                for pattern in farewell_patterns:
+                    if pattern in message_lower or message_lower == pattern:
+                        should_respond = True
+                        response_context['trigger_type'] = 'farewell'
+                        response_context['trigger'] = pattern
+                        break
+            
+            # Check for question triggers
+            if not should_respond:
+                for trigger in Config.QUESTION_TRIGGERS:
+                    if trigger in message_content:
+                        should_respond = True
+                        response_context['trigger_type'] = 'question'
+                        response_context['trigger'] = trigger
+                        break
         elif message_type in Config.EVENT_RESPONSE_TYPES and Config.RESPOND_TO_EVENTS:
             should_respond = True
             response_context['trigger_type'] = 'event'

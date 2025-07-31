@@ -1,0 +1,11 @@
+py4web>=1.20240909.1
+PyDAL>=20240906.1
+psycopg2-binary>=2.9.0
+redis>=5.0.0
+requests>=2.31.0
+cryptography>=41.0.0
+PyJWT>=2.8.0
+python-multipart>=0.0.6
+Pillow>=10.0.0
+yatl>=20230507.3
+pydal>=20231110.1

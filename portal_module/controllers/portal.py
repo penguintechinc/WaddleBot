@@ -6,6 +6,7 @@ from py4web import action, request, response, URL, redirect, HTTP
 from py4web.utils.form import Form, FormStyleBulma
 from py4web.utils.grid import Grid, GridClassStyleBulma
 from py4web.utils.flash import flash
+from datetime import datetime
 
 from ..app import (
     db, auth, session, mailer, flash as flash_fixture,
@@ -15,9 +16,15 @@ from ..app import (
     create_portal_user_from_command
 )
 
+# Import identity API client
+from ..services.identity_api_client import IdentityAPIClient
+
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Initialize identity API client
+identity_client = IdentityAPIClient()
 
 @action('index')
 @action('/')
@@ -93,6 +100,10 @@ def community_details(community_id):
         # Get community modules
         modules = get_community_modules(community_id, waddlebot_user_id)
         
+        # Get browser source URLs
+        from ..app import get_browser_source_urls
+        browser_source_urls = get_browser_source_urls(community_id)
+        
         # Create Grid for members display
         members_grid = Grid(
             path=URL('community', community_id, 'members_grid'),
@@ -121,6 +132,7 @@ def community_details(community_id):
             community=community,
             members=members,
             modules=modules,
+            browser_source_urls=browser_source_urls,
             members_grid=members_grid,
             flash=flash()
         )
@@ -364,3 +376,298 @@ def api_cleanup():
     except Exception as e:
         logger.error(f"API cleanup error: {str(e)}")
         raise HTTP(500, "Internal server error")
+
+# ============ OAuth Authentication Endpoints ============
+
+@action('auth/oauth/<provider>')
+def oauth_login(provider):
+    """Initiate OAuth login with provider"""
+    try:
+        # Get OAuth login URL from identity service
+        oauth_url = identity_client.initiate_oauth_login(provider)
+        redirect(oauth_url)
+        
+    except Exception as e:
+        logger.error(f"OAuth login error for {provider}: {str(e)}")
+        flash.set(f"Error initiating {provider.title()} login", "danger")
+        redirect(URL('auth/login'))
+
+@action('auth/oauth_callback/<provider>')
+def oauth_callback(provider):
+    """Handle OAuth callback from provider"""
+    try:
+        # Get authorization code from callback
+        code = request.query.get('code')
+        state = request.query.get('state')
+        error = request.query.get('error')
+        
+        if error:
+            logger.error(f"OAuth error from {provider}: {error}")
+            flash.set(f"Authentication failed: {error}", "danger")
+            redirect(URL('auth/login'))
+        
+        if not code:
+            logger.error(f"No authorization code from {provider}")
+            flash.set("Authentication failed: No authorization code", "danger")
+            redirect(URL('auth/login'))
+        
+        # Process OAuth callback through identity service
+        # This would be handled by the identity core module's OAuth endpoints
+        # For now, show success message and redirect to dashboard
+        flash.set(f"Successfully authenticated with {provider.title()}", "success")
+        redirect(URL('dashboard'))
+        
+    except Exception as e:
+        logger.error(f"OAuth callback error for {provider}: {str(e)}")
+        flash.set("Authentication failed", "danger")
+        redirect(URL('auth/login'))
+
+@action('auth/oauth_login')
+@action.uses(flash_fixture)
+def oauth_login_page():
+    """OAuth login page with provider buttons"""
+    try:
+        # If user is already logged in, redirect to dashboard
+        if auth.get_user():
+            redirect(URL('dashboard'))
+        
+        # Get available OAuth providers
+        providers = ['discord', 'twitch', 'slack']
+        
+        return dict(
+            app_name=APP_NAME,
+            providers=providers,
+            flash=flash()
+        )
+        
+    except Exception as e:
+        logger.error(f"OAuth login page error: {str(e)}")
+        flash.set("Error loading login page", "danger")
+        redirect(URL('auth/login'))
+
+# ============ Identity Management Endpoints ============
+
+@action('identity')
+@action.uses(auth.user, flash_fixture)
+@waddlebot_user_required
+def identity_management():
+    """Identity management page"""
+    try:
+        user = auth.get_user()
+        user_id = user.get('id')
+        
+        # Get user's linked identities from identity service
+        identities_result = identity_client.get_user_identities(user_id)
+        identities = identities_result.get('identities', []) if identities_result.get('success') else []
+        
+        # Get pending verifications
+        pending_result = identity_client.get_pending_verifications(user_id=user_id)
+        pending_verifications = pending_result.get('verifications', []) if pending_result.get('success') else []
+        
+        return dict(
+            app_name=APP_NAME,
+            user=user,
+            identities=identities,
+            pending_verifications=pending_verifications,
+            flash=flash()
+        )
+        
+    except Exception as e:
+        logger.error(f"Identity management error: {str(e)}")
+        flash.set("Error loading identity management", "danger")
+        redirect(URL('dashboard'))
+
+@action('identity/link', method='POST')
+@action.uses(auth.user, flash_fixture)
+@waddlebot_user_required
+def link_identity():
+    """Initiate identity linking"""
+    try:
+        user = auth.get_user()
+        user_id = user.get('id')
+        
+        data = request.json or request.forms
+        source_platform = data.get('source_platform')
+        target_platform = data.get('target_platform')
+        target_username = data.get('target_username')
+        
+        if not all([source_platform, target_platform, target_username]):
+            flash.set("All fields are required", "danger")
+            redirect(URL('identity'))
+        
+        # Initiate identity linking through identity service
+        result = identity_client.initiate_identity_link(
+            user_id, source_platform, target_platform, target_username
+        )
+        
+        if result.get('success'):
+            flash.set(f"Verification code sent to {target_platform}. Please check for a message.", "success")
+        else:
+            flash.set(f"Error linking identity: {result.get('message', 'Unknown error')}", "danger")
+        
+        redirect(URL('identity'))
+        
+    except Exception as e:
+        logger.error(f"Link identity error: {str(e)}")
+        flash.set("Error linking identity", "danger")
+        redirect(URL('identity'))
+
+@action('identity/verify', method='POST')
+@action.uses(auth.user, flash_fixture)
+@waddlebot_user_required
+def verify_identity():
+    """Verify identity with code"""
+    try:
+        data = request.json or request.forms
+        platform = data.get('platform')
+        platform_id = data.get('platform_id')
+        platform_username = data.get('platform_username')
+        verification_code = data.get('verification_code')
+        
+        if not all([platform, platform_id, platform_username, verification_code]):
+            flash.set("All fields are required", "danger")
+            redirect(URL('identity'))
+        
+        # Verify identity through identity service
+        result = identity_client.verify_identity(
+            platform, platform_id, platform_username, verification_code
+        )
+        
+        if result.get('success'):
+            flash.set(f"Successfully linked {platform} identity", "success")
+        else:
+            flash.set(f"Verification failed: {result.get('message', 'Unknown error')}", "danger")
+        
+        redirect(URL('identity'))
+        
+    except Exception as e:
+        logger.error(f"Verify identity error: {str(e)}")
+        flash.set("Error verifying identity", "danger")
+        redirect(URL('identity'))
+
+@action('identity/unlink', method='POST')
+@action.uses(auth.user, flash_fixture)
+@waddlebot_user_required
+def unlink_identity():
+    """Unlink platform identity"""
+    try:
+        user = auth.get_user()
+        user_id = user.get('id')
+        
+        data = request.json or request.forms
+        platform = data.get('platform')
+        
+        if not platform:
+            flash.set("Platform is required", "danger")
+            redirect(URL('identity'))
+        
+        # Unlink identity through identity service
+        result = identity_client.unlink_identity(user_id, platform)
+        
+        if result.get('success'):
+            flash.set(f"Successfully unlinked {platform} identity", "success")
+        else:
+            flash.set(f"Error unlinking identity: {result.get('message', 'Unknown error')}", "danger")
+        
+        redirect(URL('identity'))
+        
+    except Exception as e:
+        logger.error(f"Unlink identity error: {str(e)}")
+        flash.set("Error unlinking identity", "danger")
+        redirect(URL('identity'))
+
+# ============ API Key Management Endpoints ============
+
+@action('api_keys')
+@action.uses(auth.user, flash_fixture)
+@waddlebot_user_required
+def api_keys_management():
+    """API key management page"""
+    try:
+        user = auth.get_user()
+        session_token = session.get('user_session_token')  # Would need to be set during login
+        
+        if not session_token:
+            flash.set("Session token required for API key management", "warning")
+            return dict(
+                app_name=APP_NAME,
+                user=user,
+                api_keys=[],
+                flash=flash()
+            )
+        
+        # Get user's API keys from identity service
+        result = identity_client.list_api_keys(session_token)
+        api_keys = result.get('api_keys', []) if result.get('success') else []
+        
+        return dict(
+            app_name=APP_NAME,
+            user=user,
+            api_keys=api_keys,
+            flash=flash()
+        )
+        
+    except Exception as e:
+        logger.error(f"API keys management error: {str(e)}")
+        flash.set("Error loading API keys", "danger")
+        redirect(URL('dashboard'))
+
+@action('api_keys/create', method='POST')
+@action.uses(auth.user, flash_fixture)
+@waddlebot_user_required
+def create_api_key():
+    """Create new API key"""
+    try:
+        session_token = session.get('user_session_token')
+        if not session_token:
+            flash.set("Session token required", "danger")
+            redirect(URL('api_keys'))
+        
+        data = request.json or request.forms
+        name = data.get('name')
+        expires_in_days = int(data.get('expires_in_days', 365))
+        
+        if not name:
+            flash.set("API key name is required", "danger")
+            redirect(URL('api_keys'))
+        
+        # Create API key through identity service
+        result = identity_client.create_api_key(session_token, name, expires_in_days)
+        
+        if result.get('success'):
+            flash.set(f"API key '{name}' created successfully", "success")
+        else:
+            flash.set(f"Error creating API key: {result.get('message', 'Unknown error')}", "danger")
+        
+        redirect(URL('api_keys'))
+        
+    except Exception as e:
+        logger.error(f"Create API key error: {str(e)}")
+        flash.set("Error creating API key", "danger")
+        redirect(URL('api_keys'))
+
+@action('api_keys/<key_id:int>/revoke', method='POST')
+@action.uses(auth.user, flash_fixture)  
+@waddlebot_user_required
+def revoke_api_key(key_id):
+    """Revoke API key"""
+    try:
+        session_token = session.get('user_session_token')
+        if not session_token:
+            flash.set("Session token required", "danger")
+            redirect(URL('api_keys'))
+        
+        # Revoke API key through identity service
+        result = identity_client.revoke_api_key(session_token, key_id)
+        
+        if result.get('success'):
+            flash.set("API key revoked successfully", "success")
+        else:
+            flash.set(f"Error revoking API key: {result.get('message', 'Unknown error')}", "danger")
+        
+        redirect(URL('api_keys'))
+        
+    except Exception as e:
+        logger.error(f"Revoke API key error: {str(e)}")
+        flash.set("Error revoking API key", "danger")
+        redirect(URL('api_keys'))

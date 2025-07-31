@@ -1,0 +1,290 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: waddlebot-portal
+  labels:
+    app: waddlebot-portal
+    component: core
+    tier: web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: waddlebot-portal
+  template:
+    metadata:
+      labels:
+        app: waddlebot-portal
+        component: core
+        tier: web
+    spec:
+      containers:
+      - name: portal
+        image: waddlebot/portal:latest
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        # Database Configuration
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: waddlebot-db-secret
+              key: portal-database-url
+        
+        # Portal Configuration
+        - name: PORTAL_URL
+          value: "https://portal.waddlebot.com"
+        - name: APP_NAME
+          value: "WaddleBot Community Portal"
+        
+        # SMTP Configuration
+        - name: SMTP_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: waddlebot-config
+              key: smtp-host
+              optional: true
+        - name: SMTP_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: waddlebot-config
+              key: smtp-port
+              optional: true
+        - name: SMTP_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: waddlebot-smtp-secret
+              key: username
+              optional: true
+        - name: SMTP_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: waddlebot-smtp-secret
+              key: password
+              optional: true
+        - name: SMTP_TLS
+          value: "true"
+        - name: FROM_EMAIL
+          value: "noreply@waddlebot.com"
+        
+        # Identity Service Integration
+        - name: IDENTITY_API_URL
+          value: "http://identity-core-service:8050"
+        - name: PORTAL_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: waddlebot-api-keys
+              key: portal-api-key
+        - name: API_TIMEOUT
+          value: "30"
+        
+        # Browser Source Integration
+        - name: BROWSER_SOURCE_BASE_URL
+          value: "http://browser-source-service:8027"
+        
+        # Logging Configuration
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: LOG_DIR
+          value: "/var/log/waddlebotlog"
+        - name: ENABLE_SYSLOG
+          value: "false"
+        
+        # Performance Settings
+        - name: MAX_WORKERS
+          value: "10"
+        - name: REQUEST_TIMEOUT
+          value: "30"
+        - name: SESSION_TTL
+          value: "28800"
+        
+        # Module Info
+        - name: MODULE_NAME
+          value: "portal"
+        - name: MODULE_VERSION
+          value: "1.0.0"
+        - name: MODULE_PORT
+          value: "8000"
+        
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        
+        livenessProbe:
+          httpGet:
+            path: /api/cleanup
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /api/cleanup
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        volumeMounts:
+        - name: logs
+          mountPath: /var/log/waddlebotlog
+        - name: app-data
+          mountPath: /app/databases
+        
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false
+      
+      volumes:
+      - name: logs
+        emptyDir: {}
+      - name: app-data
+        persistentVolumeClaim:
+          claimName: waddlebot-portal-data
+      
+      securityContext:
+        fsGroup: 1000
+      
+      restartPolicy: Always
+      
+      # Node selection and affinity
+      nodeSelector:
+        waddlebot/node-type: "web"
+      
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - waddlebot-portal
+              topologyKey: kubernetes.io/hostname
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: waddlebot-portal-service
+  labels:
+    app: waddlebot-portal
+    component: core
+    tier: web
+spec:
+  selector:
+    app: waddlebot-portal
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000
+    protocol: TCP
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: waddlebot-portal-data
+  labels:
+    app: waddlebot-portal
+    component: core
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: fast-ssd
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: waddlebot-portal-ingress
+  labels:
+    app: waddlebot-portal
+    component: core
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "30"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+  - hosts:
+    - portal.waddlebot.com
+    secretName: waddlebot-portal-tls
+  rules:
+  - host: portal.waddlebot.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: waddlebot-portal-service
+            port:
+              number: 8000
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: waddlebot-portal-hpa
+  labels:
+    app: waddlebot-portal
+    component: core
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: waddlebot-portal
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 60

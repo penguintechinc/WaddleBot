@@ -1,114 +1,244 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>[[=app_name]]</title>
-    <link href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>[[=globals().get('title', 'WaddleBot Community Portal')]]</title>
+    
+    <!-- Bulma CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+    
+    <!-- Font Awesome (includes brand icons) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- Custom CSS -->
     <style>
-        .navbar-brand .title {
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .navbar-brand {
+            font-weight: bold;
+        }
+        
+        /* Platform-specific colors */
+        .is-discord {
+            background-color: #5865F2 !important;
+            border-color: #5865F2 !important;
             color: white !important;
         }
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-bottom: 2rem;
+        
+        .is-twitch {
+            background-color: #9146FF !important;
+            border-color: #9146FF !important;
+            color: white !important;
         }
-        .reputation-positive {
-            color: #48c774;
+        
+        .is-slack {
+            background-color: #4A154B !important;
+            border-color: #4A154B !important;
+            color: white !important;
         }
-        .reputation-negative {
-            color: #f14668;
+        
+        .has-text-discord { color: #5865F2 !important; }
+        .has-text-twitch { color: #9146FF !important; }
+        .has-text-slack { color: #4A154B !important; }
+        
+        /* Hover effects */
+        .is-discord:hover {
+            background-color: #4752C4 !important;
+            border-color: #4752C4 !important;
         }
-        .role-owner {
-            color: #3273dc;
-            font-weight: bold;
+        
+        .is-twitch:hover {
+            background-color: #7928CA !important;
+            border-color: #7928CA !important;
         }
-        .role-moderator {
-            color: #ffdd57;
-            font-weight: bold;
-        }
-        .role-user {
-            color: #48c774;
-        }
-        .member-card {
-            border-left: 4px solid #dbdbdb;
-            padding: 1rem;
-        }
-        .member-card.owner {
-            border-left-color: #3273dc;
-        }
-        .member-card.moderator {
-            border-left-color: #ffdd57;
-        }
-        .member-card.user {
-            border-left-color: #48c774;
-        }
-        .module-core {
-            background-color: #f0f8ff;
-            border-left: 4px solid #3273dc;
-        }
-        .module-marketplace {
-            background-color: #fff8f0;
-            border-left: 4px solid #ff7b00;
+        
+        .is-slack:hover {
+            background-color: #350d37 !important;
+            border-color: #350d37 !important;
         }
     </style>
 </head>
 <body>
     <!-- Navigation -->
-    <nav class="navbar is-dark" role="navigation">
+    <nav class="navbar is-dark" role="navigation" aria-label="main navigation">
         <div class="container">
             <div class="navbar-brand">
-                <div class="navbar-item">
-                    <h1 class="title is-4">[[=app_name]]</h1>
-                </div>
+                <a class="navbar-item" href="[[=URL('index')]]">
+                    <span class="icon">
+                        <i class="fas fa-robot"></i>
+                    </span>
+                    <span class="has-text-weight-bold ml-2">WaddleBot Portal</span>
+                </a>
+                
+                <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false" data-target="navbarMain">
+                    <span aria-hidden="true"></span>
+                    <span aria-hidden="true"></span>
+                    <span aria-hidden="true"></span>
+                </a>
             </div>
             
-            [[if user:]]
-            <div class="navbar-menu">
+            <div id="navbarMain" class="navbar-menu">
+                <div class="navbar-start">
+                    <a class="navbar-item" href="[[=URL('dashboard')]]">
+                        <span class="icon">
+                            <i class="fas fa-tachometer-alt"></i>
+                        </span>
+                        <span>Dashboard</span>
+                    </a>
+                    
+                    [[if auth and auth.get_user():]]
+                    <a class="navbar-item" href="[[=URL('identity')]]">
+                        <span class="icon">
+                            <i class="fas fa-link"></i>
+                        </span>
+                        <span>Identity</span>
+                    </a>
+                    
+                    <a class="navbar-item" href="[[=URL('api_keys')]]">
+                        <span class="icon">
+                            <i class="fas fa-key"></i>
+                        </span>
+                        <span>API Keys</span>
+                    </a>
+                    [[pass]]
+                </div>
+                
                 <div class="navbar-end">
+                    [[if auth and auth.get_user():]]
                     <div class="navbar-item has-dropdown is-hoverable">
                         <a class="navbar-link">
-                            <i class="fas fa-user"></i>
-                            [[=user.get('display_name', user.get('user_id', 'User'))]]
+                            <span class="icon">
+                                <i class="fas fa-user-circle"></i>
+                            </span>
+                            <span>[[=auth.get_user().get('display_name') or auth.get_user().get('username', 'User')]]</span>
                         </a>
-                        <div class="navbar-dropdown">
-                            <a class="navbar-item" href="[[=dashboard_url]]">
-                                <i class="fas fa-dashboard"></i>
-                                Dashboard
+                        
+                        <div class="navbar-dropdown is-right">
+                            <a class="navbar-item" href="[[=URL('profile')]]">
+                                <span class="icon">
+                                    <i class="fas fa-user"></i>
+                                </span>
+                                <span>Profile</span>
                             </a>
+                            
+                            <a class="navbar-item" href="[[=URL('identity')]]">
+                                <span class="icon">
+                                    <i class="fas fa-link"></i>
+                                </span>
+                                <span>Identity</span>
+                            </a>
+                            
+                            <a class="navbar-item" href="[[=URL('api_keys')]]">
+                                <span class="icon">
+                                    <i class="fas fa-key"></i>
+                                </span>
+                                <span>API Keys</span>
+                            </a>
+                            
                             <hr class="navbar-divider">
-                            <a class="navbar-item" href="[[=logout_url]]">
-                                <i class="fas fa-sign-out-alt"></i>
-                                Logout
+                            
+                            <a class="navbar-item" href="[[=URL('auth/logout')]]">
+                                <span class="icon">
+                                    <i class="fas fa-sign-out-alt"></i>
+                                </span>
+                                <span>Logout</span>
                             </a>
                         </div>
                     </div>
+                    [[else:]]
+                    <div class="navbar-item">
+                        <div class="buttons">
+                            <a class="button is-primary" href="[[=URL('auth/oauth_login')]]">
+                                <span class="icon">
+                                    <i class="fas fa-rocket"></i>
+                                </span>
+                                <span>Quick Login</span>
+                            </a>
+                            
+                            <a class="button is-light" href="[[=URL('auth/login')]]">
+                                <span class="icon">
+                                    <i class="fas fa-sign-in-alt"></i>
+                                </span>
+                                <span>Login</span>
+                            </a>
+                        </div>
+                    </div>
+                    [[pass]]
                 </div>
             </div>
-            [[pass]]
         </div>
     </nav>
-
-    <!-- Main Content -->
-    <main class="section">
-        <div class="container">
-            [[block content]]
-            [[end]]
+    
+    <!-- Flash Messages -->
+    [[if response.flash:]]
+    <div class="container mt-3">
+        <div class="notification is-info is-light">
+            <button class="delete" onclick="this.parentElement.style.display='none'"></button>
+            [[=response.flash]]
         </div>
+    </div>
+    [[pass]]
+    
+    <!-- Main Content -->
+    <main>
+        [[include]]
     </main>
-
+    
     <!-- Footer -->
-    <footer class="footer">
-        <div class="content has-text-centered">
-            <p>
-                <strong>[[=app_name]]</strong> - Community Management Portal
-            </p>
+    <footer class="footer has-background-dark has-text-white mt-6">
+        <div class="container">
+            <div class="columns">
+                <div class="column">
+                    <h5 class="title is-5 has-text-white">
+                        <span class="icon">
+                            <i class="fas fa-robot"></i>
+                        </span>
+                        WaddleBot Community Portal
+                    </h5>
+                    <p class="subtitle is-6 has-text-grey-light">
+                        Unified community management and identity platform
+                    </p>
+                </div>
+                <div class="column has-text-right">
+                    <p class="content">
+                        <a href="[[=URL('api/cleanup')]]" class="has-text-grey-lighter">System Status</a> |
+                        <a href="[[=URL('admin/users')]]" class="has-text-grey-lighter">Admin</a>
+                    </p>
+                </div>
+            </div>
         </div>
     </footer>
-
-    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    
+    <!-- Bulma Navbar JS -->
+    <script>
+        // Toggle mobile navbar
+        document.addEventListener('DOMContentLoaded', () => {
+            const $navbarBurgers = Array.prototype.slice.call(document.querySelectorAll('.navbar-burger'), 0);
+            
+            if ($navbarBurgers.length > 0) {
+                $navbarBurgers.forEach(el => {
+                    el.addEventListener('click', () => {
+                        const target = el.dataset.target;
+                        const $target = document.getElementById(target);
+                        
+                        el.classList.toggle('is-active');
+                        $target.classList.toggle('is-active');
+                    });
+                });
+            }
+        });
+        
+        // Auto-hide flash messages after 5 seconds
+        setTimeout(function() {
+            const notifications = document.querySelectorAll('.notification');
+            notifications.forEach(notification => {
+                notification.style.display = 'none';
+            });
+        }, 5000);
+    </script>
 </body>
 </html>

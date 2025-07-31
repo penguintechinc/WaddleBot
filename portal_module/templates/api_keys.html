@@ -1,0 +1,206 @@
+[[extend 'layout.html']]
+
+<div class="container is-max-desktop mt-5">
+    <div class="hero is-primary">
+        <div class="hero-body">
+            <h1 class="title">API Key Management</h1>
+            <h2 class="subtitle">Manage your WaddleBot API keys</h2>
+        </div>
+    </div>
+    
+    [[=flash.render()]]
+    
+    <!-- Create New API Key -->
+    <div class="box mt-5">
+        <h3 class="title is-4">
+            <span class="icon">
+                <i class="fas fa-plus"></i>
+            </span>
+            Create New API Key
+        </h3>
+        
+        <form method="post" action="[[=URL('api_keys/create')]]">
+            <div class="field">
+                <label class="label">Key Name</label>
+                <div class="control">
+                    <input class="input" type="text" name="name" placeholder="My API Key" required>
+                </div>
+                <p class="help">Give your API key a descriptive name</p>
+            </div>
+            
+            <div class="field">
+                <label class="label">Expires In</label>
+                <div class="control">
+                    <div class="select is-fullwidth">
+                        <select name="expires_in_days">
+                            <option value="30">30 days</option>
+                            <option value="90">90 days</option>
+                            <option value="365" selected>1 year</option>
+                            <option value="730">2 years</option>
+                            <option value="0">Never expires</option>
+                        </select>
+                    </div>
+                </div>
+                <p class="help">Choose when this API key should expire</p>
+            </div>
+            
+            <div class="field">
+                <div class="control">
+                    <button type="submit" class="button is-primary">
+                        <span class="icon">
+                            <i class="fas fa-key"></i>
+                        </span>
+                        <span>Create API Key</span>
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+    
+    <!-- Existing API Keys -->
+    <div class="box">
+        <h3 class="title is-4">
+            <span class="icon">
+                <i class="fas fa-list"></i>
+            </span>
+            Your API Keys
+        </h3>
+        
+        [[if api_keys:]]
+            <div class="table-container">
+                <table class="table is-fullwidth is-striped">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Key ID</th>
+                            <th>Created</th>
+                            <th>Expires</th>
+                            <th>Last Used</th>
+                            <th>Usage Count</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        [[for key in api_keys:]]
+                        <tr>
+                            <td><strong>[[=key['name']]]</strong></td>
+                            <td><code>[[=key['key_id']]]</code></td>
+                            <td>[[=key.get('created_at', 'Unknown')]]</td>
+                            <td>
+                                [[if key.get('expires_at'):]]
+                                    [[=key['expires_at']]]
+                                [[else:]]
+                                    <span class="tag is-success">Never</span>
+                                [[pass]]
+                            </td>
+                            <td>
+                                [[if key.get('last_used_at'):]]
+                                    [[=key['last_used_at']]]
+                                [[else:]]
+                                    <span class="has-text-grey">Never</span>
+                                [[pass]]
+                            </td>
+                            <td>
+                                <span class="tag is-light">[[=key.get('usage_count', 0)]]</span>
+                            </td>
+                            <td>
+                                [[if key.get('is_active', True):]]
+                                    <span class="tag is-success">Active</span>
+                                [[else:]]
+                                    <span class="tag is-danger">Revoked</span>
+                                [[pass]]
+                            </td>
+                            <td>
+                                [[if key.get('is_active', True):]]
+                                    <form method="post" action="[[=URL('api_keys', key['key_id'], 'revoke')]]" style="display: inline;">
+                                        <button type="submit" class="button is-small is-danger" 
+                                                onclick="return confirm('Are you sure you want to revoke this API key? This action cannot be undone.')">
+                                            <span class="icon is-small">
+                                                <i class="fas fa-trash"></i>
+                                            </span>
+                                            <span>Revoke</span>
+                                        </button>
+                                    </form>
+                                [[else:]]
+                                    <span class="has-text-grey">Revoked</span>
+                                [[pass]]
+                            </td>
+                        </tr>
+                        [[pass]]
+                    </tbody>
+                </table>
+            </div>
+        [[else:]]
+            <div class="notification is-info">
+                <span class="icon">
+                    <i class="fas fa-info-circle"></i>
+                </span>
+                You don't have any API keys yet. Create your first API key above to get started.
+            </div>
+        [[pass]]
+    </div>
+    
+    <!-- API Key Information -->
+    <div class="box">
+        <h3 class="title is-4">
+            <span class="icon">
+                <i class="fas fa-info-circle"></i>
+            </span>
+            About API Keys
+        </h3>
+        
+        <div class="content">
+            <p><strong>API keys</strong> allow you to authenticate with WaddleBot services programmatically. Use them to:</p>
+            
+            <ul>
+                <li>Access WaddleBot APIs from your applications</li>
+                <li>Integrate with third-party services</li>
+                <li>Automate community management tasks</li>
+                <li>Build custom bots and tools</li>
+            </ul>
+            
+            <div class="notification is-warning">
+                <span class="icon">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </span>
+                <strong>Security Note:</strong> Keep your API keys secure and never share them publicly. 
+                API keys provide access to your WaddleBot account and communities.
+            </div>
+            
+            <div class="notification is-info">
+                <span class="icon">
+                    <i class="fas fa-code"></i>
+                </span>
+                <strong>Usage:</strong> Include your API key in the <code>X-API-Key</code> header when making requests to WaddleBot APIs.
+            </div>
+            
+            <h4 class="title is-5">Rate Limits</h4>
+            <ul>
+                <li><strong>Standard:</strong> 1000 requests per hour</li>
+                <li><strong>Burst:</strong> 100 requests per minute</li>
+                <li><strong>Daily:</strong> 10,000 requests per day</li>
+            </ul>
+            
+            <h4 class="title is-5">Key Limits</h4>
+            <ul>
+                <li><strong>Maximum:</strong> 5 active API keys per user</li>
+                <li><strong>Expiration:</strong> Keys can be set to expire automatically</li>
+                <li><strong>Revocation:</strong> Keys can be revoked at any time</li>
+            </ul>
+        </div>
+    </div>
+    
+    <!-- Session Token Warning -->
+    [[if not session.get('user_session_token'):]]
+    <div class="box">
+        <div class="notification is-warning">
+            <span class="icon">
+                <i class="fas fa-exclamation-triangle"></i>
+            </span>
+            <strong>Session Token Required:</strong> API key management requires a valid session token. 
+            Please log in again or contact support if this issue persists.
+        </div>
+    </div>
+    [[pass]]
+</div>

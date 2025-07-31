@@ -82,6 +82,12 @@
                 <span>Modules</span>
             </a>
         </li>
+        <li data-tab="browser-sources">
+            <a>
+                <span class="icon is-small"><i class="fas fa-tv"></i></span>
+                <span>Browser Sources</span>
+            </a>
+        </li>
     </ul>
 </div>
 
@@ -262,6 +268,167 @@
     </div>
     [[pass]]
 </div>
+
+<!-- Browser Sources Tab -->
+<div id="browser-sources-tab" class="tab-content" style="display: none;">
+    <h2 class="title is-5">Browser Source URLs</h2>
+    <p class="subtitle is-6">Use these URLs in OBS Studio Browser Sources for your live streams and recordings</p>
+    
+    <div class="columns is-multiline">
+        <!-- Ticker Browser Source -->
+        <div class="column is-12">
+            <div class="box">
+                <h3 class="title is-6">
+                    <i class="fas fa-scroll"></i>
+                    Ticker Browser Source
+                </h3>
+                <p class="subtitle is-7">Displays scrolling text messages at the bottom of your stream</p>
+                
+                <div class="field">
+                    <label class="label">URL for OBS Browser Source:</label>
+                    <div class="control">
+                        <input class="input" type="text" value="[[=browser_source_urls['ticker']]]" readonly>
+                    </div>
+                </div>
+                
+                <div class="field">
+                    <div class="control">
+                        <button class="button is-primary is-small" onclick="copyToClipboard('[[=browser_source_urls['ticker']]]')">
+                            <span class="icon is-small"><i class="fas fa-copy"></i></span>
+                            <span>Copy URL</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="content">
+                    <p><strong>Recommended OBS Settings:</strong></p>
+                    <ul>
+                        <li>Width: 1920, Height: 100</li>
+                        <li>Position: Bottom of screen</li>
+                        <li>Refresh browser source when scene becomes active</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Media Browser Source -->
+        <div class="column is-12">
+            <div class="box">
+                <h3 class="title is-6">
+                    <i class="fas fa-music"></i>
+                    Media Browser Source
+                </h3>
+                <p class="subtitle is-7">Displays music information and album artwork</p>
+                
+                <div class="field">
+                    <label class="label">URL for OBS Browser Source:</label>
+                    <div class="control">
+                        <input class="input" type="text" value="[[=browser_source_urls['media']]]" readonly>
+                    </div>
+                </div>
+                
+                <div class="field">
+                    <div class="control">
+                        <button class="button is-primary is-small" onclick="copyToClipboard('[[=browser_source_urls['media']]]')">
+                            <span class="icon is-small"><i class="fas fa-copy"></i></span>
+                            <span>Copy URL</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="content">
+                    <p><strong>Recommended OBS Settings:</strong></p>
+                    <ul>
+                        <li>Width: 400, Height: 300</li>
+                        <li>Position: Bottom right corner</li>
+                        <li>Refresh browser source when scene becomes active</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <!-- General Browser Source -->
+        <div class="column is-12">
+            <div class="box">
+                <h3 class="title is-6">
+                    <i class="fas fa-desktop"></i>
+                    General Browser Source
+                </h3>
+                <p class="subtitle is-7">Displays general content like shoutouts, announcements, and custom HTML</p>
+                
+                <div class="field">
+                    <label class="label">URL for OBS Browser Source:</label>
+                    <div class="control">
+                        <input class="input" type="text" value="[[=browser_source_urls['general']]]" readonly>
+                    </div>
+                </div>
+                
+                <div class="field">
+                    <div class="control">
+                        <button class="button is-primary is-small" onclick="copyToClipboard('[[=browser_source_urls['general']]]')">
+                            <span class="icon is-small"><i class="fas fa-copy"></i></span>
+                            <span>Copy URL</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="content">
+                    <p><strong>Recommended OBS Settings:</strong></p>
+                    <ul>
+                        <li>Width: 1920, Height: 1080 (Full screen)</li>
+                        <li>Position: Center of screen</li>
+                        <li>Refresh browser source when scene becomes active</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="notification is-info">
+        <p><strong>Important:</strong> These URLs are unique to your community and should not be shared publicly. Anyone with access to these URLs can view your browser source content.</p>
+    </div>
+</div>
+
+<script>
+// Copy to clipboard function
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(function() {
+        // Show success notification
+        const notification = document.createElement('div');
+        notification.className = 'notification is-success is-light';
+        notification.innerHTML = '<button class="delete"></button>URL copied to clipboard!';
+        document.body.appendChild(notification);
+        
+        // Auto-remove notification after 3 seconds
+        setTimeout(function() {
+            notification.remove();
+        }, 3000);
+        
+        // Add click handler to close button
+        notification.querySelector('.delete').addEventListener('click', function() {
+            notification.remove();
+        });
+    }).catch(function(err) {
+        console.error('Failed to copy text: ', err);
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        
+        // Show success notification
+        const notification = document.createElement('div');
+        notification.className = 'notification is-success is-light';
+        notification.innerHTML = '<button class="delete"></button>URL copied to clipboard!';
+        document.body.appendChild(notification);
+        
+        setTimeout(function() {
+            notification.remove();
+        }, 3000);
+    });
+}
 
 <script>
 // Tab switching

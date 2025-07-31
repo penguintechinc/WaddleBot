@@ -1,0 +1,140 @@
+[[extend 'layout.html']]
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white text-center">
+                    <h4><i class="fas fa-robot"></i> WaddleBot Identity</h4>
+                    <p class="mb-0">Login or Sign Up</p>
+                </div>
+                <div class="card-body">
+                    
+                    <!-- OAuth Login Buttons -->
+                    [[if ENABLE_OAUTH_PROVIDERS:]]
+                    <div class="mb-4">
+                        <h5 class="text-center mb-3">Quick Login with Your Platform</h5>
+                        
+                        [[if oauth_providers.get('discord', {}).get('enabled'):]]
+                        <a href="[[=URL('auth/oauth/discord')]]" class="btn btn-discord btn-block mb-2">
+                            <i class="fab fa-discord"></i> Login with Discord
+                        </a>
+                        [[pass]]
+                        
+                        [[if oauth_providers.get('twitch', {}).get('enabled'):]]
+                        <a href="[[=URL('auth/oauth/twitch')]]" class="btn btn-twitch btn-block mb-2">
+                            <i class="fab fa-twitch"></i> Login with Twitch
+                        </a>
+                        [[pass]]
+                        
+                        [[if oauth_providers.get('slack', {}).get('enabled'):]]
+                        <a href="[[=URL('auth/oauth/slack')]]" class="btn btn-slack btn-block mb-2">
+                            <i class="fab fa-slack"></i> Login with Slack
+                        </a>
+                        [[pass]]
+                        
+                        <div class="text-center my-3">
+                            <span class="text-muted">or</span>
+                        </div>
+                    </div>
+                    [[pass]]
+                    
+                    <!-- Traditional Login Form -->
+                    <form action="[[=URL('auth/login')]]" method="post">
+                        <div class="form-group mb-3">
+                            <label for="email">Email or Username</label>
+                            <input type="text" class="form-control" id="email" name="email" required>
+                        </div>
+                        
+                        <div class="form-group mb-3">
+                            <label for="password">Password</label>
+                            <input type="password" class="form-control" id="password" name="password" required>
+                        </div>
+                        
+                        <div class="form-check mb-3">
+                            <input type="checkbox" class="form-check-input" id="remember" name="remember">
+                            <label class="form-check-label" for="remember">Remember me</label>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary btn-block">
+                            <i class="fas fa-sign-in-alt"></i> Login
+                        </button>
+                    </form>
+                    
+                    <hr class="my-4">
+                    
+                    <!-- Sign Up Link -->
+                    <div class="text-center">
+                        <p class="mb-2">Don't have an account?</p>
+                        <a href="[[=URL('auth/register')]]" class="btn btn-outline-primary">
+                            <i class="fas fa-user-plus"></i> Create Account
+                        </a>
+                    </div>
+                    
+                    <!-- Forgot Password -->
+                    <div class="text-center mt-3">
+                        <a href="[[=URL('auth/request-reset-password')]]" class="text-muted">
+                            <small>Forgot your password?</small>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Features Info -->
+            <div class="card mt-4">
+                <div class="card-body">
+                    <h6 class="card-title">Why link your platforms?</h6>
+                    <ul class="list-unstyled mb-0">
+                        <li><i class="fas fa-check text-success"></i> Single identity across Discord, Twitch, and Slack</li>
+                        <li><i class="fas fa-check text-success"></i> Unified reputation and activity tracking</li>
+                        <li><i class="fas fa-check text-success"></i> Generate API keys for bot development</li>
+                        <li><i class="fas fa-check text-success"></i> Access community management features</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.btn-discord {
+    background-color: #5865F2;
+    border-color: #5865F2;
+    color: white;
+}
+.btn-discord:hover {
+    background-color: #4752C4;
+    border-color: #4752C4;
+    color: white;
+}
+
+.btn-twitch {
+    background-color: #9146FF;
+    border-color: #9146FF;
+    color: white;
+}
+.btn-twitch:hover {
+    background-color: #7928CA;
+    border-color: #7928CA;
+    color: white;
+}
+
+.btn-slack {
+    background-color: #4A154B;
+    border-color: #4A154B;
+    color: white;
+}
+.btn-slack:hover {
+    background-color: #611f69;
+    border-color: #611f69;
+    color: white;
+}
+
+.btn-block {
+    width: 100%;
+}
+
+.card-shadow {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+</style>

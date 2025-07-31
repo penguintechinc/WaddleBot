@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>[[=globals().get('title', 'WaddleBot Identity')]]</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- Custom CSS -->
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .navbar-brand {
+            font-weight: bold;
+        }
+        
+        .card {
+            border: none;
+            border-radius: 10px;
+        }
+        
+        .btn {
+            border-radius: 8px;
+        }
+        
+        .text-discord { color: #5865F2; }
+        .text-twitch { color: #9146FF; }
+        .text-slack { color: #4A154B; }
+        
+        .bg-discord { background-color: #5865F2; }
+        .bg-twitch { background-color: #9146FF; }
+        .bg-slack { background-color: #4A154B; }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="[[=URL('index')]]">
+                <i class="fas fa-robot"></i> WaddleBot Identity
+            </a>
+            
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="[[=URL('index')]]">
+                            <i class="fas fa-home"></i> Home
+                        </a>
+                    </li>
+                    [[if auth and auth.user_id:]]
+                    <li class="nav-item">
+                        <a class="nav-link" href="[[=URL('auth/profile')]]">
+                            <i class="fas fa-user"></i> Profile
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="[[=URL('identity/api-keys')]]">
+                            <i class="fas fa-key"></i> API Keys
+                        </a>
+                    </li>
+                    [[pass]]
+                </ul>
+                
+                <ul class="navbar-nav">
+                    [[if auth and auth.user_id:]]
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-user-circle"></i> [[=auth.user.waddlebot_display_name or auth.user.username]]
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="[[=URL('auth/profile')]]">
+                                <i class="fas fa-user"></i> Profile
+                            </a></li>
+                            <li><a class="dropdown-item" href="[[=URL('identity/api-keys')]]">
+                                <i class="fas fa-key"></i> API Keys
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="[[=URL('auth/logout')]]">
+                                <i class="fas fa-sign-out-alt"></i> Logout
+                            </a></li>
+                        </ul>
+                    </li>
+                    [[else:]]
+                    <li class="nav-item">
+                        <a class="nav-link" href="[[=URL('auth/login')]]">
+                            <i class="fas fa-sign-in-alt"></i> Login
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="[[=URL('auth/register')]]">
+                            <i class="fas fa-user-plus"></i> Sign Up
+                        </a>
+                    </li>
+                    [[pass]]
+                </ul>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- Flash Messages -->
+    [[if response.flash:]]
+    <div class="container mt-3">
+        <div class="alert alert-info alert-dismissible fade show" role="alert">
+            [[=response.flash]]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    </div>
+    [[pass]]
+    
+    <!-- Main Content -->
+    <main>
+        [[include]]
+    </main>
+    
+    <!-- Footer -->
+    <footer class="bg-dark text-white mt-5 py-4">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-6">
+                    <h5><i class="fas fa-robot"></i> WaddleBot Identity</h5>
+                    <p class="mb-0">Cross-platform identity management for communities</p>
+                </div>
+                <div class="col-md-6 text-end">
+                    <p class="mb-0">
+                        <a href="[[=URL('health')]]" class="text-white-50">System Status</a> |
+                        <a href="[[=URL('identity/stats')]]" class="text-white-50">Statistics</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+    
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Custom JS -->
+    <script>
+        // Auto-hide flash messages after 5 seconds
+        setTimeout(function() {
+            const alerts = document.querySelectorAll('.alert');
+            alerts.forEach(alert => {
+                const bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            });
+        }, 5000);
+    </script>
+</body>
+</html>

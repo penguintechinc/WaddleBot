@@ -1,0 +1,232 @@
+[[extend 'layout.html']]
+
+<div class="container is-max-desktop mt-5">
+    <div class="hero is-primary">
+        <div class="hero-body">
+            <h1 class="title">Identity Management</h1>
+            <h2 class="subtitle">Link your platform accounts to WaddleBot</h2>
+        </div>
+    </div>
+    
+    [[=flash.render()]]
+    
+    <!-- Linked Identities -->
+    <div class="box mt-5">
+        <h3 class="title is-4">
+            <span class="icon">
+                <i class="fas fa-link"></i>
+            </span>
+            Linked Platforms
+        </h3>
+        
+        [[if identities:]]
+            <div class="table-container">
+                <table class="table is-fullwidth is-striped">
+                    <thead>
+                        <tr>
+                            <th>Platform</th>
+                            <th>Username</th>
+                            <th>Platform ID</th>
+                            <th>Linked At</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        [[for identity in identities:]]
+                        <tr>
+                            <td>
+                                <span class="tag is-info">
+                                    [[=identity['platform'].title()]]
+                                </span>
+                            </td>
+                            <td>[[=identity['platform_username']]]</td>
+                            <td><code>[[=identity['platform_id']]]</code></td>
+                            <td>[[=identity.get('created_at', 'Unknown')]]</td>
+                            <td>
+                                <form method="post" action="[[=URL('identity/unlink')]]" style="display: inline;">
+                                    <input type="hidden" name="platform" value="[[=identity['platform']]]">
+                                    <button type="submit" class="button is-small is-danger" 
+                                            onclick="return confirm('Are you sure you want to unlink this [[=identity['platform']]] account?')">
+                                        <span class="icon is-small">
+                                            <i class="fas fa-unlink"></i>
+                                        </span>
+                                        <span>Unlink</span>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        [[pass]]
+                    </tbody>
+                </table>
+            </div>
+        [[else:]]
+            <div class="notification is-warning">
+                <span class="icon">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </span>
+                No platform identities linked yet. Link your first platform account below.
+            </div>
+        [[pass]]
+    </div>
+    
+    <!-- Link New Identity -->
+    <div class="box">
+        <h3 class="title is-4">
+            <span class="icon">
+                <i class="fas fa-plus"></i>
+            </span>
+            Link New Platform
+        </h3>
+        
+        <form method="post" action="[[=URL('identity/link')]]">
+            <div class="field">
+                <label class="label">Source Platform (where you're typing the command)</label>
+                <div class="control">
+                    <div class="select is-fullwidth">
+                        <select name="source_platform" required>
+                            <option value="">Select source platform</option>
+                            <option value="discord">Discord</option>
+                            <option value="twitch">Twitch</option>
+                            <option value="slack">Slack</option>
+                        </select>
+                    </div>
+                </div>
+                <p class="help">The platform where you'll type the !identity command</p>
+            </div>
+            
+            <div class="field">
+                <label class="label">Target Platform (platform to link)</label>
+                <div class="control">
+                    <div class="select is-fullwidth">
+                        <select name="target_platform" required>
+                            <option value="">Select target platform</option>
+                            <option value="discord">Discord</option>
+                            <option value="twitch">Twitch</option>
+                            <option value="slack">Slack</option>
+                        </select>
+                    </div>
+                </div>
+                <p class="help">The platform account you want to link</p>
+            </div>
+            
+            <div class="field">
+                <label class="label">Target Username</label>
+                <div class="control">
+                    <input class="input" type="text" name="target_username" placeholder="username" required>
+                </div>
+                <p class="help">Your username on the target platform (without @)</p>
+            </div>
+            
+            <div class="field">
+                <div class="control">
+                    <button type="submit" class="button is-primary">
+                        <span class="icon">
+                            <i class="fas fa-paper-plane"></i>
+                        </span>
+                        <span>Send Verification Code</span>
+                    </button>
+                </div>
+            </div>
+        </form>
+        
+        <div class="notification is-info mt-4">
+            <span class="icon">
+                <i class="fas fa-info-circle"></i>
+            </span>
+            <strong>How it works:</strong> After submitting this form, you'll receive a verification code 
+            via DM/whisper on the target platform. Use the verification form below to complete the linking.
+        </div>
+    </div>
+    
+    <!-- Pending Verifications -->
+    [[if pending_verifications:]]
+    <div class="box">
+        <h3 class="title is-4">
+            <span class="icon">
+                <i class="fas fa-hourglass-half"></i>
+            </span>
+            Pending Verifications
+        </h3>
+        
+        [[for verification in pending_verifications:]]
+        <div class="card mb-4">
+            <div class="card-content">
+                <div class="level">
+                    <div class="level-left">
+                        <div class="level-item">
+                            <div>
+                                <p class="title is-6">[[=verification['target_platform'].title()]]</p>
+                                <p class="subtitle is-7">@[[=verification['target_username']]]</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="level-right">
+                        <div class="level-item">
+                            <span class="tag is-warning">Pending</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <form method="post" action="[[=URL('identity/verify')]]">
+                    <input type="hidden" name="platform" value="[[=verification['target_platform']]]">
+                    <input type="hidden" name="platform_id" value="[[=verification.get('platform_id', '')]]">
+                    <input type="hidden" name="platform_username" value="[[=verification['target_username']]]">
+                    
+                    <div class="field has-addons">
+                        <div class="control is-expanded">
+                            <input class="input" type="text" name="verification_code" 
+                                   placeholder="Enter verification code" required>
+                        </div>
+                        <div class="control">
+                            <button type="submit" class="button is-success">
+                                <span class="icon">
+                                    <i class="fas fa-check"></i>
+                                </span>
+                                <span>Verify</span>
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        [[pass]]
+    </div>
+    [[pass]]
+    
+    <!-- Instructions -->
+    <div class="box">
+        <h3 class="title is-4">
+            <span class="icon">
+                <i class="fas fa-question-circle"></i>
+            </span>
+            How to Link Platforms
+        </h3>
+        
+        <div class="content">
+            <ol>
+                <li><strong>Choose Platforms:</strong> Select the source platform (where you'll type commands) and target platform (account to link)</li>
+                <li><strong>Enter Username:</strong> Provide your username on the target platform</li>
+                <li><strong>Send Code:</strong> Click "Send Verification Code" to receive a DM/whisper</li>
+                <li><strong>Check Messages:</strong> Look for a verification code in your DMs on the target platform</li>
+                <li><strong>Verify:</strong> Enter the code in the verification form above</li>
+                <li><strong>Complete:</strong> Your platforms are now linked to your WaddleBot identity</li>
+            </ol>
+            
+            <div class="notification is-warning">
+                <span class="icon">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </span>
+                <strong>Note:</strong> Make sure you have DMs enabled on the target platform to receive verification codes.
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Auto-refresh pending verifications every 30 seconds
+setTimeout(function() {
+    if (document.querySelectorAll('.card').length > 0) {
+        location.reload();
+    }
+}, 30000);
+</script>

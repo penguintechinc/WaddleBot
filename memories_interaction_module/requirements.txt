@@ -1,0 +1,5 @@
+py4web>=1.20240906.1
+pydal>=20240906.1
+requests>=2.31.0
+psycopg2-binary>=2.9.7
+python-dateutil>=2.8.2

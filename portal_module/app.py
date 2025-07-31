@@ -397,6 +397,34 @@ def get_community_modules(community_id: int, waddlebot_user_id: str) -> Dict[str
         logger.error(f"Error getting community modules: {str(e)}")
         return {"core": [], "marketplace": []}
 
+def get_browser_source_urls(community_id: int) -> Dict[str, str]:
+    """Get browser source URLs for a community"""
+    try:
+        # Get browser source core module URL from environment
+        browser_source_base_url = os.environ.get('BROWSER_SOURCE_BASE_URL', 'http://localhost:8027')
+        
+        # Generate unique tokens for each browser source type
+        ticker_token = secrets.token_urlsafe(32)
+        media_token = secrets.token_urlsafe(32)
+        general_token = secrets.token_urlsafe(32)
+        
+        # Create browser source URLs with unique tokens
+        urls = {
+            "ticker": f"{browser_source_base_url}/ticker/{community_id}?token={ticker_token}",
+            "media": f"{browser_source_base_url}/media/{community_id}?token={media_token}",
+            "general": f"{browser_source_base_url}/general/{community_id}?token={general_token}"
+        }
+        
+        return urls
+        
+    except Exception as e:
+        logger.error(f"Error generating browser source URLs: {str(e)}")
+        return {
+            "ticker": "Error generating URL",
+            "media": "Error generating URL", 
+            "general": "Error generating URL"
+        }
+
 # Update CLAUDE.md context note
 CLAUDE_MD_CONTEXT = """
 IMPORTANT: Always keep CLAUDE.md updated with any context changes!

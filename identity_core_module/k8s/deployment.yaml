@@ -1,0 +1,129 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: identity-core-deployment
+  labels:
+    app: identity-core
+    module: identity-core-module
+    version: v1.0.0
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: identity-core
+  template:
+    metadata:
+      labels:
+        app: identity-core
+        module: identity-core-module
+    spec:
+      containers:
+      - name: identity-core
+        image: waddlebot/identity-core-module:latest
+        ports:
+        - containerPort: 8050
+        env:
+        - name: MODULE_NAME
+          value: "identity_core_module"
+        - name: MODULE_VERSION
+          value: "1.0.0"
+        - name: MODULE_PORT
+          value: "8050"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: waddlebot-secrets
+              key: database-url
+        - name: REDIS_HOST
+          value: "redis"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: waddlebot-secrets
+              key: redis-password
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: waddlebot-secrets
+              key: identity-secret-key
+        - name: VALID_API_KEYS
+          valueFrom:
+            secretKeyRef:
+              name: waddlebot-secrets
+              key: identity-api-keys
+        - name: CORE_API_URL
+          value: "http://router-service:8000"
+        - name: ROUTER_API_URL
+          value: "http://router-service:8000/router"
+        - name: TWITCH_API_URL
+          value: "http://twitch-collector:8002"
+        - name: DISCORD_API_URL
+          value: "http://discord-collector:8003"
+        - name: SLACK_API_URL
+          value: "http://slack-collector:8004"
+        - name: SMTP_HOST
+          valueFrom:
+            secretKeyRef:
+              name: waddlebot-secrets
+              key: smtp-host
+        - name: SMTP_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: waddlebot-secrets
+              key: smtp-username
+        - name: SMTP_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: waddlebot-secrets
+              key: smtp-password
+        - name: FROM_EMAIL
+          value: "noreply@waddlebot.com"
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: LOG_DIR
+          value: "/var/log/waddlebotlog"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8050
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8050
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+        volumeMounts:
+        - name: log-volume
+          mountPath: /var/log/waddlebotlog
+      volumes:
+      - name: log-volume
+        emptyDir: {}
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: identity-core-service
+  labels:
+    app: identity-core
+spec:
+  selector:
+    app: identity-core
+  ports:
+  - port: 8050
+    targetPort: 8050
+    name: http
+  type: ClusterIP
