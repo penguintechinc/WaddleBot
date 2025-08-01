@@ -1,0 +1,214 @@
+# WaddleBot Development Environment with MinIO S3-Compatible Storage
+version: '3.8'
+
+services:
+  # MinIO S3-Compatible Object Storage
+  minio:
+    image: minio/minio:RELEASE.2024-01-16T16-07-38Z
+    container_name: waddlebot-minio
+    ports:
+      - "9000:9000"   # MinIO API
+      - "9001:9001"   # MinIO Console
+    environment:
+      MINIO_ROOT_USER: waddlebot
+      MINIO_ROOT_PASSWORD: waddlebot123
+      MINIO_DOMAIN: localhost
+      MINIO_SERVER_URL: http://localhost:9000
+      MINIO_BROWSER_REDIRECT_URL: http://localhost:9001
+    volumes:
+      - minio_data:/data
+      - ./minio/config:/root/.minio
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - waddlebot-network
+    restart: unless-stopped
+
+  # MinIO Client for setup
+  minio-setup:
+    image: minio/mc:RELEASE.2024-01-13T08-44-48Z
+    container_name: waddlebot-minio-setup
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: waddlebot
+      MINIO_SECRET_KEY: waddlebot123
+      BUCKET_NAME: waddlebot-assets
+    volumes:
+      - ./minio/setup.sh:/setup.sh:ro
+    entrypoint: >
+      /bin/sh -c "
+      echo 'Setting up MinIO for WaddleBot...';
+      mc alias set waddlebot http://minio:9000 waddlebot waddlebot123;
+      
+      echo 'Creating bucket: waddlebot-assets';
+      mc mb waddlebot/waddlebot-assets --ignore-existing;
+      
+      echo 'Setting public read policy for images';
+      mc anonymous set public waddlebot/waddlebot-assets/images;
+      
+      echo 'Creating sample directories';
+      mc cp /dev/null waddlebot/waddlebot-assets/images/.keep;
+      mc cp /dev/null waddlebot/waddlebot-assets/images/avatar/.keep;
+      mc cp /dev/null waddlebot/waddlebot-assets/images/community_icon/.keep;
+      mc cp /dev/null waddlebot/waddlebot-assets/images/general/.keep;
+      
+      echo 'MinIO setup complete!';
+      echo 'MinIO Console: http://localhost:9001';
+      echo 'Username: waddlebot';
+      echo 'Password: waddlebot123';
+      exit 0;
+      "
+    networks:
+      - waddlebot-network
+
+  # Redis for session management and caching
+  redis:
+    image: redis:7-alpine
+    container_name: waddlebot-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - waddlebot-network
+    restart: unless-stopped
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: waddlebot-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: waddlebot
+      POSTGRES_USER: waddlebot
+      POSTGRES_PASSWORD: waddlebot123
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U waddlebot"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - waddlebot-network
+    restart: unless-stopped
+
+  # WaddleBot Portal with S3 Storage
+  portal:
+    build:
+      context: ./portal_module
+      dockerfile: Dockerfile
+    container_name: waddlebot-portal
+    ports:
+      - "8000:8000"
+    environment:
+      # Database
+      DATABASE_URL: postgresql://waddlebot:waddlebot123@postgres:5432/waddlebot
+      
+      # Portal Configuration
+      PORTAL_URL: http://localhost:8000
+      APP_NAME: WaddleBot Community Portal
+      
+      # S3 Storage Configuration (MinIO)
+      S3_STORAGE_ENABLED: "true"
+      S3_BUCKET_NAME: waddlebot-assets
+      S3_REGION: us-east-1
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_ACCESS_KEY_ID: waddlebot
+      S3_SECRET_ACCESS_KEY: waddlebot123
+      S3_PUBLIC_BASE_URL: http://localhost:9000/waddlebot-assets
+      S3_CDN_BASE_URL: http://localhost:9000/waddlebot-assets
+      
+      # Image Settings
+      S3_MAX_FILE_SIZE: "10485760"  # 10MB
+      S3_ALLOWED_EXTENSIONS: jpg,jpeg,png,gif,webp,svg
+      S3_IMAGE_QUALITY: "85"
+      S3_GENERATE_THUMBNAILS: "true"
+      S3_FALLBACK_STORAGE: /app/static/uploads
+      
+      # Redis Configuration
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      
+      # Identity Service (would be separate container in production)
+      IDENTITY_API_URL: http://localhost:8050
+      PORTAL_API_KEY: dev_portal_key
+      
+      # Browser Source Integration
+      BROWSER_SOURCE_BASE_URL: http://localhost:8027
+      
+      # Development Settings
+      LOG_LEVEL: DEBUG
+      MODULE_NAME: portal
+      MODULE_VERSION: 1.0.0-dev
+      MODULE_PORT: 8000
+    volumes:
+      - ./portal_module:/app:ro
+      - portal_uploads:/app/static/uploads
+      - portal_logs:/var/log/waddlebotlog
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/cleanup"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - waddlebot-network
+    restart: unless-stopped
+
+  # Nginx Proxy for development (optional)
+  nginx:
+    image: nginx:alpine
+    container_name: waddlebot-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/dev.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - portal
+      - minio
+    networks:
+      - waddlebot-network
+    restart: unless-stopped
+
+volumes:
+  minio_data:
+    driver: local
+  redis_data:
+    driver: local
+  postgres_data:
+    driver: local
+  portal_uploads:
+    driver: local
+  portal_logs:
+    driver: local
+
+networks:
+  waddlebot-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

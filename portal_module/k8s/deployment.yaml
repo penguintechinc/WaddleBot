@@ -83,6 +83,56 @@ spec:
         - name: BROWSER_SOURCE_BASE_URL
           value: "http://browser-source-service:8027"
         
+        # S3 Storage Configuration
+        - name: S3_STORAGE_ENABLED
+          value: "true"
+        - name: S3_BUCKET_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: waddlebot-config
+              key: s3-bucket-name
+        - name: S3_REGION
+          valueFrom:
+            configMapKeyRef:
+              name: waddlebot-config
+              key: s3-region
+        - name: S3_ENDPOINT_URL
+          valueFrom:
+            configMapKeyRef:
+              name: waddlebot-config
+              key: s3-endpoint-url
+              optional: true
+        - name: S3_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: waddlebot-s3-secret
+              key: access-key-id
+        - name: S3_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: waddlebot-s3-secret
+              key: secret-access-key
+        - name: S3_PUBLIC_BASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: waddlebot-config
+              key: s3-public-base-url
+        - name: S3_CDN_BASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: waddlebot-config
+              key: s3-cdn-base-url
+        
+        # Image Settings
+        - name: S3_MAX_FILE_SIZE
+          value: "10485760"
+        - name: S3_ALLOWED_EXTENSIONS
+          value: "jpg,jpeg,png,gif,webp,svg"
+        - name: S3_IMAGE_QUALITY
+          value: "85"
+        - name: S3_GENERATE_THUMBNAILS
+          value: "true"
+        
         # Logging Configuration
         - name: LOG_LEVEL
           value: "INFO"

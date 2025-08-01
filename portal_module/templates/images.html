@@ -1,0 +1,350 @@
+[[extend 'layout.html']]
+
+<div class="container is-max-desktop mt-5">
+    <div class="hero is-primary">
+        <div class="hero-body">
+            <h1 class="title">Image Gallery</h1>
+            <h2 class="subtitle">Manage your images and assets</h2>
+        </div>
+    </div>
+    
+    [[=flash.render()]]
+    
+    <!-- Storage Status -->
+    <div class="box mt-5">
+        <div class="level">
+            <div class="level-left">
+                <div class="level-item">
+                    <div>
+                        <h3 class="title is-4">
+                            <span class="icon">
+                                <i class="fas fa-cloud"></i>
+                            </span>
+                            Storage Status
+                        </h3>
+                    </div>
+                </div>
+            </div>
+            <div class="level-right">
+                <div class="level-item">
+                    [[if storage_health['healthy']:]]
+                        <span class="tag is-success is-large">
+                            <span class="icon">
+                                <i class="fas fa-check-circle"></i>
+                            </span>
+                            <span>Healthy</span>
+                        </span>
+                    [[else:]]
+                        <span class="tag is-danger is-large">
+                            <span class="icon">
+                                <i class="fas fa-exclamation-triangle"></i>
+                            </span>
+                            <span>Unhealthy</span>
+                        </span>
+                    [[pass]]
+                </div>
+            </div>
+        </div>
+        
+        <div class="content">
+            <div class="columns">
+                <div class="column">
+                    <strong>Storage Type:</strong> [[=storage_health['storage_type'].title()]]
+                </div>
+                <div class="column">
+                    <strong>Location:</strong> [[=storage_health['bucket_name']]]
+                </div>
+                <div class="column">
+                    <strong>Enabled:</strong> 
+                    [[if storage_health['enabled']:]]
+                        <span class="tag is-success">Yes</span>
+                    [[else:]]
+                        <span class="tag is-warning">Local Only</span>
+                    [[pass]]
+                </div>
+            </div>
+            
+            [[if storage_health.get('error'):]]
+                <div class="notification is-warning">
+                    <span class="icon">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </span>
+                    <strong>Error:</strong> [[=storage_health['error']]]
+                </div>
+            [[pass]]
+        </div>
+    </div>
+    
+    <!-- Upload Section -->
+    <div class="box">
+        <h3 class="title is-4">
+            <span class="icon">
+                <i class="fas fa-upload"></i>
+            </span>
+            Upload New Image
+        </h3>
+        
+        <form method="post" action="[[=URL('images/upload')]]" enctype="multipart/form-data">
+            <div class="field">
+                <label class="label">Image Type</label>
+                <div class="control">
+                    <div class="select is-fullwidth">
+                        <select name="image_type" id="imageType" onchange="toggleCommunitySelect()">
+                            <option value="avatar">Avatar/Profile Picture</option>
+                            <option value="general">General Image</option>
+                            [[if user.get('is_community_owner'):]]
+                            <option value="community_icon">Community Icon</option>
+                            [[pass]]
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Community selection (hidden by default) -->
+            [[if user.get('is_community_owner'):]]
+            <div class="field" id="communityField" style="display: none;">
+                <label class="label">Community</label>
+                <div class="control">
+                    <div class="select is-fullwidth">
+                        <select name="community_id">
+                            <option value="">Select Community</option>
+                            <!-- This would be populated by the communities the user owns -->
+                        </select>
+                    </div>
+                </div>
+                <p class="help">Select which community this icon is for</p>
+            </div>
+            [[pass]]
+            
+            <div class="field">
+                <label class="label">Image File</label>
+                <div class="control">
+                    <div class="file has-name is-fullwidth">
+                        <label class="file-label">
+                            <input class="file-input" type="file" name="image_file" accept="[[=','.join('.' + ext for ext in allowed_extensions)]]" onchange="updateFileName(this)" required>
+                            <span class="file-cta">
+                                <span class="file-icon">
+                                    <i class="fas fa-upload"></i>
+                                </span>
+                                <span class="file-label">Choose image...</span>
+                            </span>
+                            <span class="file-name" id="fileName">No file selected</span>
+                        </label>
+                    </div>
+                </div>
+                <p class="help">
+                    Allowed formats: [[=', '.join(allowed_extensions)]]<br>
+                    Maximum size: [[=f"{max_file_size // 1048576}MB"]]
+                </p>
+            </div>
+            
+            <div class="field">
+                <div class="control">
+                    <button type="submit" class="button is-primary">
+                        <span class="icon">
+                            <i class="fas fa-upload"></i>
+                        </span>
+                        <span>Upload Image</span>
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+    
+    <!-- User Images -->
+    <div class="box">
+        <h3 class="title is-4">
+            <span class="icon">
+                <i class="fas fa-user"></i>
+            </span>
+            Your Images
+        </h3>
+        
+        [[if user_images:]]
+            <div class="columns is-multiline">
+                [[for image in user_images:]]
+                <div class="column is-one-quarter">
+                    <div class="card">
+                        <div class="card-image">
+                            <figure class="image is-square">
+                                <img src="[[=image['cdn_url']]]" alt="User image" loading="lazy">
+                            </figure>
+                        </div>
+                        <div class="card-content">
+                            <div class="content is-small">
+                                <p><strong>Size:</strong> [[=f"{image['size'] // 1024}KB"]]</p>
+                                <p><strong>Uploaded:</strong> [[=image['last_modified'][:10]]]</p>
+                            </div>
+                        </div>
+                        <footer class="card-footer">
+                            <a href="[[=image['cdn_url']]]" target="_blank" class="card-footer-item">
+                                <span class="icon">
+                                    <i class="fas fa-external-link-alt"></i>
+                                </span>
+                                <span>View</span>
+                            </a>
+                            <a href="[[=URL('images/delete', image['key'].replace('/', '|'))]]" 
+                               class="card-footer-item has-text-danger"
+                               onclick="return confirm('Are you sure you want to delete this image?')">
+                                <span class="icon">
+                                    <i class="fas fa-trash"></i>
+                                </span>
+                                <span>Delete</span>
+                            </a>
+                        </footer>
+                    </div>
+                </div>
+                [[pass]]
+            </div>
+        [[else:]]
+            <div class="notification is-info">
+                <span class="icon">
+                    <i class="fas fa-info-circle"></i>
+                </span>
+                You haven't uploaded any images yet. Upload your first image above!
+            </div>
+        [[pass]]
+    </div>
+    
+    <!-- Community Images (if user is community owner) -->
+    [[if user.get('is_community_owner') and community_images:]]
+    <div class="box">
+        <h3 class="title is-4">
+            <span class="icon">
+                <i class="fas fa-users"></i>
+            </span>
+            Community Images
+        </h3>
+        
+        <div class="columns is-multiline">
+            [[for image in community_images:]]
+            <div class="column is-one-quarter">
+                <div class="card">
+                    <div class="card-image">
+                        <figure class="image is-square">
+                            <img src="[[=image['cdn_url']]]" alt="Community image" loading="lazy">
+                        </figure>
+                    </div>
+                    <div class="card-content">
+                        <div class="content is-small">
+                            <p><strong>Size:</strong> [[=f"{image['size'] // 1024}KB"]]</p>
+                            <p><strong>Uploaded:</strong> [[=image['last_modified'][:10]]]</p>
+                        </div>
+                    </div>
+                    <footer class="card-footer">
+                        <a href="[[=image['cdn_url']]]" target="_blank" class="card-footer-item">
+                            <span class="icon">
+                                <i class="fas fa-external-link-alt"></i>
+                            </span>
+                            <span>View</span>
+                        </a>
+                        <a href="[[=URL('images/delete', image['key'].replace('/', '|'))]]" 
+                           class="card-footer-item has-text-danger"
+                           onclick="return confirm('Are you sure you want to delete this community image?')">
+                            <span class="icon">
+                                <i class="fas fa-trash"></i>
+                            </span>
+                            <span>Delete</span>
+                        </a>
+                    </footer>
+                </div>
+            </div>
+            [[pass]]
+        </div>
+    </div>
+    [[pass]]
+    
+    <!-- Usage Guidelines -->
+    <div class="box">
+        <h3 class="title is-4">
+            <span class="icon">
+                <i class="fas fa-info-circle"></i>
+            </span>
+            Image Guidelines
+        </h3>
+        
+        <div class="content">
+            <div class="columns">
+                <div class="column">
+                    <h4 class="title is-5">Avatar Images</h4>
+                    <ul>
+                        <li>Recommended size: 512x512 pixels</li>
+                        <li>Used as your profile picture across WaddleBot</li>
+                        <li>Automatically generates thumbnails</li>
+                        <li>Square format works best</li>
+                    </ul>
+                </div>
+                <div class="column">
+                    <h4 class="title is-5">Community Icons</h4>
+                    <ul>
+                        <li>Recommended size: 256x256 pixels</li>
+                        <li>Represents your community</li>
+                        <li>Used in community listings</li>
+                        <li>PNG format recommended for transparency</li>
+                    </ul>
+                </div>
+                <div class="column">
+                    <h4 class="title is-5">General Images</h4>
+                    <ul>
+                        <li>Any size up to [[=f"{max_file_size // 1048576}MB"]]</li>
+                        <li>For banners, backgrounds, etc.</li>
+                        <li>Automatically optimized</li>
+                        <li>Multiple thumbnail sizes generated</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="notification is-warning">
+                <span class="icon">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </span>
+                <strong>Note:</strong> All uploaded images are publicly accessible via CDN URLs. 
+                Don't upload sensitive or private content.
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function updateFileName(input) {
+    const fileName = document.getElementById('fileName');
+    if (input.files.length > 0) {
+        fileName.textContent = input.files[0].name;
+        
+        // Show file size
+        const size = input.files[0].size;
+        const sizeText = size > 1048576 ? 
+            `${(size / 1048576).toFixed(1)}MB` : 
+            `${(size / 1024).toFixed(1)}KB`;
+        fileName.textContent += ` (${sizeText})`;
+    } else {
+        fileName.textContent = 'No file selected';
+    }
+}
+
+function toggleCommunitySelect() {
+    const imageType = document.getElementById('imageType').value;
+    const communityField = document.getElementById('communityField');
+    
+    if (imageType === 'community_icon') {
+        communityField.style.display = 'block';
+    } else {
+        communityField.style.display = 'none';
+    }
+}
+
+// Auto-refresh storage status every 30 seconds
+setInterval(async function() {
+    try {
+        const response = await fetch('/api/images/storage-status');
+        const data = await response.json();
+        
+        if (data.success) {
+            // Update storage status indicator if needed
+            console.log('Storage status:', data.storage);
+        }
+    } catch (e) {
+        // Ignore errors for background refresh
+    }
+}, 30000);
+</script>

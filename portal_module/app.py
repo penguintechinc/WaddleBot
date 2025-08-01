@@ -58,6 +58,7 @@ auth.db.auth_user._add_field('is_community_owner', 'boolean', default=False)
 auth.db.auth_user._add_field('temp_password_expires', 'datetime')
 auth.db.auth_user._add_field('created_by_command', 'boolean', default=False)
 auth.db.auth_user._add_field('last_portal_login', 'datetime')
+auth.db.auth_user._add_field('avatar_url', 'string')
 
 # Configure auth settings
 auth.settings.login_url = URL('auth/login')

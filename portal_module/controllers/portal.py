@@ -7,6 +7,8 @@ from py4web.utils.form import Form, FormStyleBulma
 from py4web.utils.grid import Grid, GridClassStyleBulma
 from py4web.utils.flash import flash
 from datetime import datetime
+import mimetypes
+import os
 
 from ..app import (
     db, auth, session, mailer, flash as flash_fixture,
@@ -19,12 +21,16 @@ from ..app import (
 # Import identity API client
 from ..services.identity_api_client import IdentityAPIClient
 
+# Import S3 storage service
+from ..services.s3_storage_service import S3StorageService
+
 import logging
 
 logger = logging.getLogger(__name__)
 
-# Initialize identity API client
+# Initialize identity API client and storage service
 identity_client = IdentityAPIClient()
+storage_service = S3StorageService()
 
 @action('index')
 @action('/')
@@ -671,3 +677,283 @@ def revoke_api_key(key_id):
         logger.error(f"Revoke API key error: {str(e)}")
         flash.set("Error revoking API key", "danger")
         redirect(URL('api_keys'))
+
+# ============ Image Management Endpoints ============
+
+@action('images')
+@action.uses(auth.user, flash_fixture)
+@waddlebot_user_required
+def image_gallery():
+    """Image gallery and management page"""
+    try:
+        user = auth.get_user()
+        user_id = user.get('waddlebot_user_id')
+        
+        # Get user's uploaded images
+        user_images = storage_service.list_images(f'images/avatar/user_{user_id}/', 50)
+        
+        # Get community images if user is community owner
+        community_images = []
+        if user.get('is_community_owner'):
+            communities = get_user_communities(user_id)
+            for community in communities:
+                comm_images = storage_service.list_images(f'images/community_icon/community_{community["id"]}/', 20)
+                community_images.extend(comm_images)
+        
+        # Get storage health status
+        storage_health = storage_service.get_health_status()
+        
+        return dict(
+            app_name=APP_NAME,
+            user=user,
+            user_images=user_images,
+            community_images=community_images,
+            storage_health=storage_health,
+            max_file_size=storage_service.max_file_size,
+            allowed_extensions=list(storage_service.allowed_extensions),
+            flash=flash()
+        )
+        
+    except Exception as e:
+        logger.error(f"Image gallery error: {str(e)}")
+        flash.set("Error loading image gallery", "danger")
+        redirect(URL('dashboard'))
+
+@action('images/upload', method='POST')
+@action.uses(auth.user, flash_fixture)
+@waddlebot_user_required
+def upload_image():
+    """Upload image file"""
+    try:
+        user = auth.get_user()
+        user_id = user.get('waddlebot_user_id')
+        
+        # Get form data
+        image_type = request.forms.get('image_type', 'general')
+        community_id = request.forms.get('community_id')
+        uploaded_file = request.files.get('image_file')
+        
+        if not uploaded_file:
+            flash.set("No file selected", "danger")
+            redirect(URL('images'))
+        
+        # Validate image type and permissions
+        if image_type == 'community_icon' and community_id:
+            # Check if user owns the community
+            communities = get_user_communities(user_id)
+            community_ids = [str(c['id']) for c in communities]
+            if community_id not in community_ids:
+                flash.set("Access denied: You don't own this community", "danger")
+                redirect(URL('images'))
+        
+        # Read file data
+        file_data = uploaded_file.file.read()
+        filename = uploaded_file.filename
+        
+        # Upload image
+        result = storage_service.upload_image(
+            file_data=file_data,
+            filename=filename,
+            image_type=image_type,
+            user_id=user_id if image_type in ['avatar', 'general'] else None,
+            community_id=community_id if image_type == 'community_icon' else None
+        )
+        
+        if result['success']:
+            flash.set(f"Image uploaded successfully", "success")
+            
+            # Update user avatar if applicable
+            if image_type == 'avatar':
+                db(db.auth_user.id == user['id']).update(
+                    avatar_url=result['cdn_url']
+                )
+                db.commit()
+            
+        else:
+            flash.set(f"Upload failed: {result['error']}", "danger")
+        
+        redirect(URL('images'))
+        
+    except Exception as e:
+        logger.error(f"Image upload error: {str(e)}")
+        flash.set("Error uploading image", "danger")
+        redirect(URL('images'))
+
+@action('images/delete/<path:path>')
+@action.uses(auth.user, flash_fixture)
+@waddlebot_user_required
+def delete_image(path):
+    """Delete image"""
+    try:
+        user = auth.get_user()
+    
+        # Decode S3 key from path
+        s3_key = path.replace('|', '/')
+        
+        # Validate user can delete this image
+        user_id = user.get('waddlebot_user_id')
+        
+        # Check ownership
+        can_delete = False
+        if f'user_{user_id}' in s3_key:
+            can_delete = True
+        elif 'community_' in s3_key and user.get('is_community_owner'):
+            # Extract community ID and verify ownership
+            communities = get_user_communities(user_id)
+            community_ids = [f'community_{c["id"]}' for c in communities]
+            can_delete = any(comm_id in s3_key for comm_id in community_ids)
+        
+        if not can_delete:
+            flash.set("Access denied: You cannot delete this image", "danger")
+            redirect(URL('images'))
+        
+        # Delete image
+        success = storage_service.delete_image(s3_key)
+        
+        if success:
+            flash.set("Image deleted successfully", "success")
+            
+            # Clear user avatar if deleted
+            if 'avatar' in s3_key and f'user_{user_id}' in s3_key:
+                db(db.auth_user.id == user['id']).update(avatar_url=None)
+                db.commit()
+                
+        else:
+            flash.set("Error deleting image", "danger")
+        
+        redirect(URL('images'))
+        
+    except Exception as e:
+        logger.error(f"Image delete error: {str(e)}")
+        flash.set("Error deleting image", "danger")
+        redirect(URL('images'))
+
+@action('images/info/<path:path>')
+@action.uses(auth.user, flash_fixture)
+@waddlebot_user_required
+def image_info(path):
+    """Get image information"""
+    try:
+        # Decode S3 key from path
+        s3_key = path.replace('|', '/')
+        
+        # Get image info
+        info = storage_service.get_image_info(s3_key)
+        
+        if info:
+            return dict(
+                app_name=APP_NAME,
+                user=auth.get_user(),
+                image_info=info,
+                flash=flash()
+            )
+        else:
+            flash.set("Image not found", "danger")
+            redirect(URL('images'))
+        
+    except Exception as e:
+        logger.error(f"Image info error: {str(e)}")
+        flash.set("Error getting image info", "danger")
+        redirect(URL('images'))
+
+# ============ CDN-Style Image Serving Endpoints ============
+
+@action('cdn/images/<path:path>')
+def serve_image(path):
+    """Serve images from storage (fallback for local storage)"""
+    try:
+        if not storage_service.enabled:
+            # Serve from local storage
+            s3_key = path.replace('|', '/')
+            local_path = os.path.join(storage_service.fallback_storage, s3_key)
+            
+            if os.path.exists(local_path):
+                # Get content type
+                content_type = mimetypes.guess_type(local_path)[0] or 'application/octet-stream'
+                
+                # Set caching headers
+                response.headers['Content-Type'] = content_type
+                response.headers['Cache-Control'] = 'public, max-age=31536000'  # 1 year
+                response.headers['ETag'] = f'"{os.path.getmtime(local_path)}"'
+                
+                # Serve file
+                with open(local_path, 'rb') as f:
+                    return f.read()
+            else:
+                raise HTTP(404, "Image not found")
+        else:
+            # Redirect to S3/CDN URL
+            s3_key = path.replace('|', '/')
+            cdn_url = storage_service._get_cdn_url(s3_key)
+            redirect(cdn_url)
+            
+    except HTTP as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Error serving image {path}: {e}")
+        raise HTTP(500, "Internal server error")
+
+@action('api/images/presigned-upload', method='POST')
+@action.uses(auth.user)
+@waddlebot_user_required
+def generate_presigned_upload():
+    """Generate presigned URL for direct upload"""
+    try:
+        user = auth.get_user()
+        data = request.json
+        
+        if not data:
+            raise HTTP(400, "No data provided")
+        
+        image_type = data.get('image_type', 'general')
+        filename = data.get('filename')
+        content_type = data.get('content_type', 'image/jpeg')
+        
+        if not filename:
+            raise HTTP(400, "Filename required")
+        
+        # Generate S3 key
+        user_id = user.get('waddlebot_user_id')
+        timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+        file_ext = storage_service._get_file_extension(filename, content_type)
+        s3_key = f"images/{image_type}/user_{user_id}/{timestamp}_{filename}"
+        
+        # Generate presigned URL
+        presigned_url = storage_service.generate_presigned_upload_url(s3_key, content_type)
+        
+        if presigned_url:
+            return {
+                'success': True,
+                'upload_url': presigned_url,
+                's3_key': s3_key,
+                'public_url': storage_service._get_public_url(s3_key)
+            }
+        else:
+            return {
+                'success': False,
+                'error': 'Failed to generate upload URL'
+            }
+            
+    except HTTP as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Presigned upload error: {str(e)}")
+        raise HTTP(500, "Internal server error")
+
+@action('api/images/storage-status')
+@action.uses(auth.user)
+def storage_status():
+    """Get storage service status"""
+    try:
+        status = storage_service.get_health_status()
+        return {
+            'success': True,
+            'storage': status
+        }
+        
+    except Exception as e:
+        logger.error(f"Storage status error: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }

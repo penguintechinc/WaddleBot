@@ -50,6 +50,23 @@ ENV API_TIMEOUT="30"
 # Browser Source Integration
 ENV BROWSER_SOURCE_BASE_URL="http://browser-source:8027"
 
+# S3 Storage Configuration
+ENV S3_STORAGE_ENABLED="false"
+ENV S3_BUCKET_NAME="waddlebot-assets"
+ENV S3_REGION="us-east-1"
+ENV S3_ENDPOINT_URL=""
+ENV S3_ACCESS_KEY_ID=""
+ENV S3_SECRET_ACCESS_KEY=""
+ENV S3_PUBLIC_BASE_URL=""
+ENV S3_CDN_BASE_URL=""
+
+# Image Settings
+ENV S3_MAX_FILE_SIZE="10485760"
+ENV S3_ALLOWED_EXTENSIONS="jpg,jpeg,png,gif,webp,svg"
+ENV S3_IMAGE_QUALITY="85"
+ENV S3_GENERATE_THUMBNAILS="true"
+ENV S3_FALLBACK_STORAGE="/app/static/uploads"
+
 # Logging Configuration
 ENV LOG_LEVEL="INFO"
 ENV LOG_DIR="/var/log/waddlebotlog"

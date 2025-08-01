@@ -57,6 +57,13 @@ The portal serves as a unified interface that:
 - **Create API Key**: `POST /api_keys/create` - Create new API key
 - **Revoke API Key**: `POST /api_keys/<key_id:int>/revoke` - Revoke API key
 
+### Image Management & CDN
+- **Image Gallery**: `GET /images` - View and manage uploaded images
+- **Upload Image**: `POST /images/upload` - Upload new image with automatic optimization
+- **Delete Image**: `DELETE /images/delete/<path>` - Delete image with ownership validation
+- **Image Info**: `GET /images/info/<path>` - Get image metadata and details
+- **Serve Images**: `GET /cdn/images/<path>` - CDN-style image serving with caching
+
 ## API Endpoints
 
 ### Community Integration APIs
@@ -397,5 +404,132 @@ pytest --cov=portal_module tests/
 - Lazy loading of community data
 - Efficient database queries with proper indexing
 - Redis session storage (optional)
+
+## S3-Compatible Image Storage & CDN
+
+The portal includes a comprehensive S3-compatible image storage system with CDN functionality:
+
+### Storage Features
+- **Multi-Format Support**: JPEG, PNG, GIF, WebP, SVG
+- **Automatic Optimization**: Image compression and format conversion
+- **Thumbnail Generation**: Multiple sizes (64x64, 128x128, 256x256, 512x512)
+- **Deduplication**: SHA256 hash-based duplicate detection
+- **Fallback Storage**: Local filesystem when S3 is unavailable
+
+### Image Management API Endpoints
+
+#### Upload Image
+```http
+POST /images/upload
+Content-Type: multipart/form-data
+
+Form Data:
+- image_file: file (required)
+- image_type: string (avatar|community_icon|general)
+- community_id: string (required for community_icon)
+```
+
+**Response**:
+```json
+{
+    "success": true,
+    "url": "https://cdn.waddlebot.com/images/avatar/user_123/20240101_120000_abc123.jpg",
+    "cdn_url": "https://cdn.waddlebot.com/images/avatar/user_123/20240101_120000_abc123.jpg",
+    "thumbnails": {
+        "small": "https://cdn.waddlebot.com/images/avatar/user_123/20240101_120000_abc123_small.jpg",
+        "medium": "https://cdn.waddlebot.com/images/avatar/user_123/20240101_120000_abc123_medium.jpg",
+        "large": "https://cdn.waddlebot.com/images/avatar/user_123/20240101_120000_abc123_large.jpg"
+    },
+    "s3_key": "images/avatar/user_123/20240101_120000_abc123.jpg",
+    "metadata": {
+        "filename": "profile.jpg",
+        "size": 245760,
+        "width": 1024,
+        "height": 1024,
+        "format": "jpeg",
+        "uploaded_at": "2024-01-01T12:00:00.000Z"
+    }
+}
+```
+
+#### Generate Presigned Upload URL
+```http
+POST /api/images/presigned-upload
+Content-Type: application/json
+
+{
+    "image_type": "avatar",
+    "filename": "profile.jpg",
+    "content_type": "image/jpeg"
+}
+```
+
+#### Storage Service Status
+```http
+GET /api/images/storage-status
+```
+
+#### CDN Image Serving
+```http
+GET /cdn/images/<path>
+```
+
+### S3 Configuration
+
+#### Required Environment Variables
+```bash
+# Enable S3 storage
+S3_STORAGE_ENABLED=true
+S3_BUCKET_NAME=waddlebot-assets
+S3_REGION=us-east-1
+
+# AWS S3 Configuration
+S3_ACCESS_KEY_ID=your_access_key
+S3_SECRET_ACCESS_KEY=your_secret_key
+
+# S3-Compatible Services (MinIO, DigitalOcean Spaces, etc.)
+S3_ENDPOINT_URL=http://minio:9000
+
+# Public URLs
+S3_PUBLIC_BASE_URL=https://s3.amazonaws.com/waddlebot-assets
+S3_CDN_BASE_URL=https://cdn.waddlebot.com
+```
+
+#### Image Settings
+```bash
+S3_MAX_FILE_SIZE=10485760          # 10MB
+S3_ALLOWED_EXTENSIONS=jpg,jpeg,png,gif,webp,svg
+S3_IMAGE_QUALITY=85                # JPEG quality
+S3_GENERATE_THUMBNAILS=true        # Generate thumbnails
+S3_FALLBACK_STORAGE=/app/static/uploads
+```
+
+### Storage Structure
+```
+waddlebot-assets/
+├── images/
+│   ├── avatar/
+│   │   └── user_123/
+│   │       ├── 20240101_120000_abc123.jpg
+│   │       ├── 20240101_120000_abc123_small.jpg
+│   │       ├── 20240101_120000_abc123_medium.jpg
+│   │       └── 20240101_120000_abc123_large.jpg
+│   ├── community_icon/
+│   │   └── community_1/
+│   └── general/
+└── static/
+```
+
+### Security & Access Control
+- **Public Read Access**: Images are publicly accessible via CDN URLs
+- **Upload Authentication**: Only authenticated users can upload
+- **Ownership Validation**: Users can only delete their own images
+- **Community Permissions**: Community owners manage community images
+
+### Performance & Caching
+- **CDN Distribution**: Global content delivery via CloudFront or similar
+- **Browser Caching**: 1-year cache headers for images
+- **Thumbnail Serving**: Optimized sizes for different use cases
+- **Gzip Compression**: Automatic compression for applicable content
 
 This API documentation provides comprehensive coverage of the WaddleBot Unified Community Portal's capabilities, integrations, and usage patterns.
