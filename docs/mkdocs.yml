@@ -4,6 +4,7 @@ site_description: Multi-Platform Chat Bot System Documentation
 site_author: WaddleBot Team
 repo_url: https://github.com/WaddleBot/WaddleBot
 repo_name: WaddleBot/WaddleBot
+docs_dir: 'docs'
 
 theme:
   name: material
@@ -55,8 +56,8 @@ markdown_extensions:
   - pymdownx.caret
   - pymdownx.details
   - pymdownx.emoji:
-      emoji_generator: !!python/name:materialx.emoji.to_svg
-      emoji_index: !!python/name:materialx.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.inlinehilite
@@ -87,46 +88,13 @@ nav:
     - Contributing: CONTRIBUTION.md
   - Architecture:
     - System Overview: architecture/index.md
-    - Core Components: architecture/core-components.md
-    - Collector Modules: architecture/collectors.md
-    - Interaction Modules: architecture/interactions.md
   - Core Modules:
     - Overview: core-modules/index.md
-    - Router Module: core-modules/router.md
-    - Marketplace: core-modules/marketplace.md
-    - Identity Core: core-modules/identity.md
-    - Labels Core: core-modules/labels.md
-    - Browser Sources: core-modules/browser-sources.md
   - Interaction Modules:
     - Overview: interaction-modules/index.md
-    - AI Interaction: interaction-modules/ai.md
-    - Alias System: interaction-modules/alias.md
-    - Shoutouts: interaction-modules/shoutouts.md
     - Inventory Management: inventory-interaction-module.md
-    - Calendar Events: interaction-modules/calendar.md
-    - Memories System: interaction-modules/memories.md
-    - YouTube Music: interaction-modules/youtube-music.md
-    - Spotify: interaction-modules/spotify.md
-  - Platform Integration:
-    - Overview: platforms/index.md
-    - Discord: platforms/discord.md
-    - Twitch: platforms/twitch.md
-    - Slack: platforms/slack.md
   - Administration:
-    - Portal Management: admin/portal.md
-    - Kong Admin: admin/kong.md
     - Monitoring: logging-and-monitoring.md
-  - SDK & API:
-    - Getting Started: sdk/GETTING_STARTED.MD
-    - Available APIs: sdk/AVAILABLE-APIs.MD
-    - Metadata: sdk/METADATA.MD
-    - Return Values: sdk/RETURN-VALUES.MD
-    - Onboarding: sdk/ONBOARDING.MD
-  - Legacy:
-    - Chat System: chat/SETUP.md
-    - Listener: listener/USAGE.md
-    - Marketplace: marketplace/USAGE.md
-    - Archive: archive/index.md
 
 extra:
   social:
