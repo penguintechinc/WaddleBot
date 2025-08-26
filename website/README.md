@@ -22,8 +22,14 @@ Connect your repository to Cloudflare Pages with these settings:
 - **Root directory**: `website`
 
 ### Manual Deployment
+For manual deployment with Wrangler CLI:
 ```bash
-npm run deploy
+# Install Wrangler globally
+npm install -g wrangler
+
+# Deploy to Cloudflare Pages
+npm run build
+wrangler pages publish out --project-name=waddlebot-website
 ```
 
 ## Features

@@ -7,8 +7,7 @@
     "build": "next build --turbopack",
     "start": "next start",
     "lint": "eslint",
-    "deploy": "npm run build && wrangler pages publish out",
-    "preview": "wrangler pages dev out"
+    "export": "npm run build"
   },
   "dependencies": {
     "react": "19.1.0",
