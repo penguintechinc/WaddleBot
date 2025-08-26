@@ -312,7 +312,7 @@ export default function Home() {
               </Link>
             </div>
             <p className="text-blue-200 text-sm mt-4">
-              Free forever • Deploy anywhere • MIT Licensed • No vendor lock-in
+              Free forever • Deploy anywhere • Fair & AGPL3 Licensed • No vendor lock-in
             </p>
           </div>
         </div>
