@@ -12,7 +12,7 @@ export default function Pricing() {
           <Link href="/features" className="hover:text-blue-300 transition-colors">Features</Link>
           <Link href="/pricing" className="text-blue-300">Pricing</Link>
           <Link href="/solutions" className="hover:text-blue-300 transition-colors">Solutions</Link>
-          <a href="/docs" className="hover:text-blue-300 transition-colors">Documentation</a>
+          <a href="https://docs.waddlebot.io" className="hover:text-blue-300 transition-colors">Documentation</a>
           <Link href="/contact" className="hover:text-blue-300 transition-colors">Contact</Link>
         </div>
         <div className="flex gap-4">
@@ -484,7 +484,7 @@ export default function Pricing() {
                 <div><Link href="/features" className="hover:text-white transition-colors">Features</Link></div>
                 <div><Link href="/pricing" className="hover:text-white transition-colors">Pricing</Link></div>
                 <div><Link href="/solutions" className="hover:text-white transition-colors">Solutions</Link></div>
-                <div><a href="/docs" className="hover:text-white transition-colors">Documentation</a></div>
+                <div><a href="https://docs.waddlebot.io" className="hover:text-white transition-colors">Documentation</a></div>
               </div>
             </div>
             <div>
