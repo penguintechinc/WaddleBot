@@ -240,7 +240,7 @@ export default function Home() {
                   </div>
                 </div>
                 <p className="text-gray-300 mb-4">
-                  "WaddleBot transformed our community management. We went from spending 20 hours a week on moderation to just 3 hours, while our engagement increased 45%."
+                  &ldquo;WaddleBot transformed our community management. We went from spending 20 hours a week on moderation to just 3 hours, while our engagement increased 45%.&rdquo;
                 </p>
                 <div className="text-sm text-blue-400">- Sarah Chen, Community Manager</div>
               </div>
@@ -256,7 +256,7 @@ export default function Home() {
                   </div>
                 </div>
                 <p className="text-gray-300 mb-4">
-                  "The music integration and OBS browser sources are game-changers. Our stream production quality went up dramatically and chat engagement doubled."
+                  &ldquo;The music integration and OBS browser sources are game-changers. Our stream production quality went up dramatically and chat engagement doubled.&rdquo;
                 </p>
                 <div className="text-sm text-purple-400">- Mike Rodriguez, Twitch Streamer</div>
               </div>
@@ -272,7 +272,7 @@ export default function Home() {
                   </div>
                 </div>
                 <p className="text-gray-300 mb-4">
-                  "Having unified Slack and Discord management was exactly what we needed. The AI assistant handles 80% of common questions automatically."
+                  &ldquo;Having unified Slack and Discord management was exactly what we needed. The AI assistant handles 80% of common questions automatically.&rdquo;
                 </p>
                 <div className="text-sm text-green-400">- Alex Thompson, Head of Operations</div>
               </div>
@@ -289,7 +289,7 @@ export default function Home() {
               Ready to Transform Your Community?
             </h2>
             <p className="text-xl mb-8 text-blue-100">
-              Join thousands of community managers who've already upgraded to WaddleBot
+              Join thousands of community managers who&rsquo;ve already upgraded to WaddleBot
             </p>
             <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
               <a
@@ -312,7 +312,7 @@ export default function Home() {
               </Link>
             </div>
             <p className="text-blue-200 text-sm mt-4">
-              Free forever • Deploy anywhere • MIT Licensed • No vendor lock-in
+              Free forever • Deploy anywhere • Fair & AGPL3 Licensed • No vendor lock-in
             </p>
           </div>
         </div>
