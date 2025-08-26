@@ -13,13 +13,14 @@ RUN apt-get update && apt-get install -y \
 RUN groupadd -r waddlebot && useradd -r -g waddlebot waddlebot
 
 # Copy requirements first for better caching
-COPY requirements.txt .
+COPY identity_core_module/requirements.txt .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY . .
+COPY identity_core_module/ .
+COPY libs/ ./libs/
 
 # Create log directory
 RUN mkdir -p /var/log/waddlebotlog && chown -R waddlebot:waddlebot /var/log/waddlebotlog
