@@ -46,6 +46,9 @@ class AIService:
             elif provider_type == 'openai':
                 from .openai_provider import OpenAIProvider
                 self.provider = OpenAIProvider()
+            elif provider_type == 'anthropic':
+                from .anthropic_provider import AnthropicProvider
+                self.provider = AnthropicProvider()
             elif provider_type == 'mcp':
                 from .mcp_provider import MCPProvider
                 self.provider = MCPProvider()

@@ -12,7 +12,7 @@ class Config:
     ROUTER_API_URL = os.getenv('ROUTER_API_URL', 'http://localhost:8000/router')
     
     # AI Provider Configuration
-    AI_PROVIDER = os.getenv('AI_PROVIDER', 'ollama')  # 'ollama', 'openai', or 'mcp'
+    AI_PROVIDER = os.getenv('AI_PROVIDER', 'ollama')  # 'ollama', 'openai', 'anthropic', or 'mcp'
     AI_HOST = os.getenv('AI_HOST', 'http://ollama:11434')
     AI_PORT = int(os.getenv('AI_PORT', '11434'))
     AI_API_KEY = os.getenv('AI_API_KEY', '')
@@ -26,6 +26,10 @@ class Config:
     OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
     OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo')
     OPENAI_BASE_URL = os.getenv('OPENAI_BASE_URL', 'https://api.openai.com/v1')
+    
+    # Anthropic Specific Configuration
+    ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')
+    ANTHROPIC_MODEL = os.getenv('ANTHROPIC_MODEL', 'claude-3-5-sonnet-20241022')
     
     # MCP Configuration
     MCP_SERVER_URL = os.getenv('MCP_SERVER_URL', 'http://mcp-server:8080')

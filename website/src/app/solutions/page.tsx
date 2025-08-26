@@ -348,53 +348,6 @@ export default function Solutions() {
         </div>
       </section>
 
-      {/* Case Studies Preview */}
-      <section className="py-20">
-        <div className="container mx-auto px-6">
-          <div className="max-w-4xl mx-auto text-center">
-            <h2 className="text-4xl font-bold mb-8">
-              Success Stories
-            </h2>
-            <p className="text-xl text-gray-300 mb-12">
-              See how different types of communities are thriving with WaddleBot
-            </p>
-            
-            <div className="grid md:grid-cols-2 gap-8">
-              <div className="bg-white/5 p-6 rounded-xl border border-white/10 text-left">
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-xl font-bold">
-                    G
-                  </div>
-                  <div>
-                    <div className="font-semibold">GameDev Central</div>
-                    <div className="text-gray-400 text-sm">50K+ Gaming Community</div>
-                  </div>
-                </div>
-                <p className="text-gray-300 mb-4">
-                  &ldquo;Reduced moderation workload by 80% while increasing member engagement by 45%. The AI assistant handles most common questions automatically.&rdquo;
-                </p>
-                <div className="text-blue-400 text-sm">Gaming Community • Discord + Twitch</div>
-              </div>
-              
-              <div className="bg-white/5 p-6 rounded-xl border border-white/10 text-left">
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-r from-green-500 to-blue-500 flex items-center justify-center text-xl font-bold">
-                    T
-                  </div>
-                  <div>
-                    <div className="font-semibold">TechStartup Co.</div>
-                    <div className="text-gray-400 text-sm">500+ Employee Organization</div>
-                  </div>
-                </div>
-                <p className="text-gray-300 mb-4">
-                  &ldquo;Unified our Slack and Discord communities seamlessly. The enterprise deployment gave us the security and control we needed.&rdquo;
-                </p>
-                <div className="text-green-400 text-sm">Enterprise • Slack + Discord</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* CTA Section */}
       <section className="bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 py-20">

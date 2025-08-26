@@ -220,66 +220,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Social Proof */}
-      <section className="py-20">
-        <div className="container mx-auto px-6">
-          <div className="max-w-6xl mx-auto">
-            <h2 className="text-4xl font-bold text-center mb-16">
-              Trusted by Leading Communities
-            </h2>
-            
-            <div className="grid md:grid-cols-3 gap-8">
-              <div className="bg-white/5 p-8 rounded-xl border border-white/10">
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-xl font-bold">
-                    G
-                  </div>
-                  <div>
-                    <div className="font-semibold">GameDev Central</div>
-                    <div className="text-gray-400 text-sm">50K+ members</div>
-                  </div>
-                </div>
-                <p className="text-gray-300 mb-4">
-                  &ldquo;WaddleBot transformed our community management. We went from spending 20 hours a week on moderation to just 3 hours, while our engagement increased 45%.&rdquo;
-                </p>
-                <div className="text-sm text-blue-400">- Sarah Chen, Community Manager</div>
-              </div>
-              
-              <div className="bg-white/5 p-8 rounded-xl border border-white/10">
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center text-xl font-bold">
-                    S
-                  </div>
-                  <div>
-                    <div className="font-semibold">StreamerHub</div>
-                    <div className="text-gray-400 text-sm">25K+ followers</div>
-                  </div>
-                </div>
-                <p className="text-gray-300 mb-4">
-                  &ldquo;The music integration and OBS browser sources are game-changers. Our stream production quality went up dramatically and chat engagement doubled.&rdquo;
-                </p>
-                <div className="text-sm text-purple-400">- Mike Rodriguez, Twitch Streamer</div>
-              </div>
-              
-              <div className="bg-white/5 p-8 rounded-xl border border-white/10">
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-r from-green-500 to-blue-500 flex items-center justify-center text-xl font-bold">
-                    T
-                  </div>
-                  <div>
-                    <div className="font-semibold">TechStartup Co.</div>
-                    <div className="text-gray-400 text-sm">500+ employees</div>
-                  </div>
-                </div>
-                <p className="text-gray-300 mb-4">
-                  &ldquo;Having unified Slack and Discord management was exactly what we needed. The AI assistant handles 80% of common questions automatically.&rdquo;
-                </p>
-                <div className="text-sm text-green-400">- Alex Thompson, Head of Operations</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* CTA Section */}
       <section className="bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 py-20">
