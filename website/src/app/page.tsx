@@ -291,6 +291,7 @@ export default function Home() {
               <h4 className="font-semibold mb-4">Company</h4>
               <div className="space-y-2 text-gray-400">
                 <div><Link href="/contact" className="hover:text-white transition-colors">Contact</Link></div>
+                <div><a href="https://www.penguintech.io" className="hover:text-white transition-colors">Penguin Technologies</a></div>
               </div>
             </div>
             <div>
