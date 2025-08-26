@@ -1,0 +1,136 @@
+site_name: WaddleBot Documentation
+site_url: https://docs.waddlebot.io
+site_description: Multi-Platform Chat Bot System Documentation
+site_author: WaddleBot Team
+repo_url: https://github.com/WaddleBot/WaddleBot
+repo_name: WaddleBot/WaddleBot
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: blue
+      accent: purple
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: blue
+      accent: purple
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.path
+    - navigation.indexes
+    - toc.follow
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+
+plugins:
+  - search
+  - git-revision-date-localized:
+      enable_creation_date: true
+  - minify:
+      minify_html: true
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_generator: !!python/name:materialx.emoji.to_svg
+      emoji_index: !!python/name:materialx.emoji.twemoji
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.magiclink:
+      repo_url_shorthand: true
+      user: WaddleBot
+      repo: WaddleBot
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Overview: getting-started/index.md
+    - Quick Start: USAGE.md
+    - Deployment Guide: deployment-guide.md
+    - Contributing: CONTRIBUTION.md
+  - Architecture:
+    - System Overview: architecture/index.md
+    - Core Components: architecture/core-components.md
+    - Collector Modules: architecture/collectors.md
+    - Interaction Modules: architecture/interactions.md
+  - Core Modules:
+    - Overview: core-modules/index.md
+    - Router Module: core-modules/router.md
+    - Marketplace: core-modules/marketplace.md
+    - Identity Core: core-modules/identity.md
+    - Labels Core: core-modules/labels.md
+    - Browser Sources: core-modules/browser-sources.md
+  - Interaction Modules:
+    - Overview: interaction-modules/index.md
+    - AI Interaction: interaction-modules/ai.md
+    - Alias System: interaction-modules/alias.md
+    - Shoutouts: interaction-modules/shoutouts.md
+    - Inventory Management: inventory-interaction-module.md
+    - Calendar Events: interaction-modules/calendar.md
+    - Memories System: interaction-modules/memories.md
+    - YouTube Music: interaction-modules/youtube-music.md
+    - Spotify: interaction-modules/spotify.md
+  - Platform Integration:
+    - Overview: platforms/index.md
+    - Discord: platforms/discord.md
+    - Twitch: platforms/twitch.md
+    - Slack: platforms/slack.md
+  - Administration:
+    - Portal Management: admin/portal.md
+    - Kong Admin: admin/kong.md
+    - Monitoring: logging-and-monitoring.md
+  - SDK & API:
+    - Getting Started: sdk/GETTING_STARTED.MD
+    - Available APIs: sdk/AVAILABLE-APIs.MD
+    - Metadata: sdk/METADATA.MD
+    - Return Values: sdk/RETURN-VALUES.MD
+    - Onboarding: sdk/ONBOARDING.MD
+  - Legacy:
+    - Chat System: chat/SETUP.md
+    - Listener: listener/USAGE.md
+    - Marketplace: marketplace/USAGE.md
+    - Archive: archive/index.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/WaddleBot
+  version:
+    provider: mike
