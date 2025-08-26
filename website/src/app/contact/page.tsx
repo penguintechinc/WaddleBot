@@ -242,7 +242,8 @@ export default function Contact() {
                 <h3 className="font-semibold mb-3 text-purple-300">Community</h3>
                 <div className="space-y-2 text-sm text-gray-400">
                   <div><a href="https://discord.gg/waddlebot" className="hover:text-white transition-colors">Discord Server</a></div>
-                  <div><a href="https://twitter.com/waddlebot" className="hover:text-white transition-colors">Twitter</a></div>
+                  <div><a href="https://x.com/penguintechgrp" className="hover:text-white transition-colors">X (Twitter)</a></div>
+
                   <div><a href="https://reddit.com/r/waddlebot" className="hover:text-white transition-colors">Reddit</a></div>
                 </div>
               </div>
@@ -306,8 +307,10 @@ export default function Contact() {
                 The future of multi-platform community management
               </p>
               <div className="flex gap-4">
-                <a href="https://twitter.com/waddlebot" className="text-gray-400 hover:text-blue-400 transition-colors">
-                  Twitter
+
+                <a href="https://x.com/penguintechgrp" className="text-gray-400 hover:text-blue-400 transition-colors">
+                  X (Twitter)
+
                 </a>
                 <a href="https://github.com/WaddleBot" className="text-gray-400 hover:text-blue-400 transition-colors">
                   GitHub
@@ -326,19 +329,14 @@ export default function Contact() {
             <div>
               <h4 className="font-semibold mb-4">Company</h4>
               <div className="space-y-2 text-gray-400">
-                <div><Link href="/about" className="hover:text-white transition-colors">About</Link></div>
+
                 <div><Link href="/contact" className="hover:text-white transition-colors">Contact</Link></div>
-                <div><Link href="/blog" className="hover:text-white transition-colors">Blog</Link></div>
-                <div><Link href="/careers" className="hover:text-white transition-colors">Careers</Link></div>
               </div>
             </div>
             <div>
-              <h4 className="font-semibold mb-4">Support</h4>
+              <h4 className="font-semibold mb-4">Legal</h4>
               <div className="space-y-2 text-gray-400">
-                <div><Link href="/help" className="hover:text-white transition-colors">Help Center</Link></div>
-                <div><Link href="/status" className="hover:text-white transition-colors">Status</Link></div>
-                <div><Link href="/privacy" className="hover:text-white transition-colors">Privacy</Link></div>
-                <div><Link href="/terms" className="hover:text-white transition-colors">Terms</Link></div>
+                <div><Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link></div>
               </div>
             </div>
           </div>
