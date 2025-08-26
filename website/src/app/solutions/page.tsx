@@ -249,6 +249,46 @@ export default function Solutions() {
               </div>
             </div>
 
+            {/* Infrastructure Teams */}
+            <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-8 hover:border-orange-500/50 transition-colors relative">
+              <div className="absolute top-4 right-4">
+                <span className="px-2 py-1 bg-orange-500/20 text-orange-300 rounded-full text-xs font-semibold">
+                  Coming Soon
+                </span>
+              </div>
+              <div className="text-4xl mb-4">⚡</div>
+              <h3 className="text-2xl font-bold mb-4 text-orange-300">Infrastructure Teams</h3>
+              <p className="text-gray-300 mb-6">
+                Monitor and manage cloud infrastructure with automated alerts, status updates, and incident response coordination across team channels.
+              </p>
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-5 h-5 rounded-full bg-orange-500 flex items-center justify-center">
+                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <span className="text-sm">Cloud resource monitoring</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-5 h-5 rounded-full bg-orange-500 flex items-center justify-center">
+                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <span className="text-sm">Automated incident response</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-5 h-5 rounded-full bg-orange-500 flex items-center justify-center">
+                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <span className="text-sm">Multi-cloud status dashboards</span>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
       </section>
