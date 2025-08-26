@@ -29,7 +29,7 @@ export default function Contact() {
             Get in Touch
           </h1>
           <p className="text-xl md:text-2xl mb-8 text-gray-200">
-            Ready to transform your community management? Let's talk about how WaddleBot can help.
+            Ready to transform your community management? Let&rsquo;s talk about how WaddleBot can help.
           </p>
         </div>
       </section>
@@ -195,7 +195,7 @@ export default function Contact() {
                   className="w-4 h-4 text-blue-600 bg-white/10 border border-white/20 rounded focus:ring-blue-500"
                 />
                 <label htmlFor="newsletter" className="text-sm text-gray-300">
-                  I'd like to receive updates about WaddleBot features and community news
+                  I&rsquo;d like to receive updates about WaddleBot features and community news
                 </label>
               </div>
 
@@ -265,7 +265,7 @@ export default function Contact() {
         <div className="container mx-auto px-6">
           <div className="max-w-4xl mx-auto text-center">
             <h2 className="text-3xl font-bold mb-8">
-              We're a Global Team
+              We&rsquo;re a Global Team
             </h2>
             <p className="text-xl text-gray-300 mb-12">
               While WaddleBot is open source and distributed, our core team operates remotely with contributors worldwide.
