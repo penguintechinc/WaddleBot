@@ -442,6 +442,7 @@ export default function Solutions() {
                 The future of multi-platform community management
               </p>
               <div className="flex gap-4">
+
                 <a href="https://x.com/penguintechgrp" className="text-gray-400 hover:text-blue-400 transition-colors">
                   X (Twitter)
                 </a>
@@ -469,6 +470,7 @@ export default function Solutions() {
               <h4 className="font-semibold mb-4">Legal</h4>
               <div className="space-y-2 text-gray-400">
                 <div><Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link></div>
+
               </div>
             </div>
           </div>
