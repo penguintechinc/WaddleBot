@@ -1,0 +1,5 @@
+- Create a next.js website to be deployed to cloudflare pages via workers in the top level directory website/
+- Review the code and create the intial CLAUDE.md with context
+- Update and keep fresh the docs in the docs folder, make this folder into a mkdocsII site for cloudflare pages to be deployed to docs.waddlebot.io 
+- Test the builds of each app / docker container
+- Ensure the docker-compose.yml files are up to date and test a deployment

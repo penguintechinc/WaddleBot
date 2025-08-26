@@ -1,0 +1,24 @@
+name = "waddlebot-website"
+compatibility_date = "2024-12-01"
+pages_build_output_dir = "out"
+
+[build]
+command = "npm run build"
+
+[[redirects]]
+from = "/docs"
+to = "https://docs.waddlebot.io/"
+status = 301
+
+[[headers]]
+for = "/*"
+[headers.values]
+X-Frame-Options = "DENY"
+X-Content-Type-Options = "nosniff"
+Referrer-Policy = "strict-origin-when-cross-origin"
+X-XSS-Protection = "1; mode=block"
+
+[[headers]]
+for = "/_next/static/*"
+[headers.values]
+Cache-Control = "public, immutable, max-age=31536000"

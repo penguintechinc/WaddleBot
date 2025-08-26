@@ -1,0 +1,3 @@
+# Cloudflare Pages redirects
+/docs https://docs.waddlebot.io/ 301
+/api/* /404 404
