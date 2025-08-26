@@ -326,7 +326,7 @@ export default function Pricing() {
               <div>
                 <h3 className="text-lg font-bold mb-2 text-orange-300">Marketplace Modules</h3>
                 <p className="text-gray-300 mb-2">
-                  While WaddleBot's core features are included in your plan, some specialized modules from our marketplace may require additional subscriptions or one-time payments.
+                  While WaddleBot&rsquo;s core features are included in your plan, some specialized modules from our marketplace may require additional subscriptions or one-time payments.
                 </p>
                 <div className="text-sm text-gray-400">
                   Examples include premium AI models, advanced analytics packages, or third-party integrations developed by our community partners.
@@ -370,7 +370,7 @@ export default function Pricing() {
             
             <div className="space-y-8">
               <div className="bg-white/5 rounded-xl p-6">
-                <h3 className="text-xl font-bold mb-3 text-blue-300">What counts as a "channel"?</h3>
+                <h3 className="text-xl font-bold mb-3 text-blue-300">What counts as a &ldquo;channel&rdquo;?</h3>
                 <p className="text-gray-300">
                   A channel is any individual Discord channel, Twitch stream, or Slack channel where WaddleBot is active. For Discord servers, each text channel counts separately. For Twitch, each stream channel counts as one. For Slack, each workspace channel counts as one.
                 </p>
@@ -384,7 +384,7 @@ export default function Pricing() {
               </div>
 
               <div className="bg-white/5 rounded-xl p-6">
-                <h3 className="text-xl font-bold mb-3 text-blue-300">What's included in the free trial?</h3>
+                <h3 className="text-xl font-bold mb-3 text-blue-300">What&rsquo;s included in the free trial?</h3>
                 <p className="text-gray-300">
                   The 14-day free trial includes full access to all Cloud Hosted features for up to 3 channels. No credit card required. You can test all core functionality before deciding to subscribe.
                 </p>
