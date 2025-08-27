@@ -1,0 +1,122 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat-filter-module
+  labels:
+    app: chat-filter-module
+    version: "1.0.0"
+spec:
+  replicas: 3  # High availability for chat filtering
+  selector:
+    matchLabels:
+      app: chat-filter-module
+  template:
+    metadata:
+      labels:
+        app: chat-filter-module
+        version: "1.0.0"
+    spec:
+      containers:
+      - name: chat-filter
+        image: waddlebot/chat-filter-module:latest
+        ports:
+        - containerPort: 8040
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: waddlebot-secrets
+              key: database-url
+        - name: MODULE_NAME
+          value: "chat_filter_module"
+        - name: MODULE_VERSION
+          value: "1.0.0"
+        - name: MODULE_PORT
+          value: "8040"
+        - name: MAX_WORKERS
+          value: "20"  # High concurrency for chat filtering
+        - name: CACHE_TTL
+          value: "300"
+        - name: REQUEST_TIMEOUT
+          value: "30"
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: ENABLE_PROFANITY_FILTER
+          value: "true"
+        - name: ENABLE_SPAM_DETECTION
+          value: "true"
+        - name: ENABLE_URL_BLOCKING
+          value: "true"
+        - name: ROUTER_API_URL
+          value: "http://router-service:8000/router"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"  # Higher CPU for text processing
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8040
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8040
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+        volumeMounts:
+        - name: logs
+          mountPath: /var/log/waddlebotlog
+      volumes:
+      - name: logs
+        emptyDir: {}
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chat-filter-service
+  labels:
+    app: chat-filter-module
+spec:
+  selector:
+    app: chat-filter-module
+  ports:
+  - name: http
+    port: 8040
+    targetPort: 8040
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: chat-filter-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: chat-filter-module
+  minReplicas: 3
+  maxReplicas: 10  # Can scale up for high chat volume
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
