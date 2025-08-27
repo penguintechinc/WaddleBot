@@ -195,6 +195,49 @@ services:
       router:
         condition: service_healthy
 
+  # Filter Services
+  chat-filter:
+    image: waddlebot-chat-filter
+    build:
+      context: .
+      dockerfile: chat_filter_module/Dockerfile
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - CORE_API_URL=${CORE_API_URL}
+      - ROUTER_API_URL=${ROUTER_API_URL}
+      # AI Service Integration
+      - AI_SERVICE_URL=${AI_SERVICE_URL}
+      - AI_SPAM_DETECTION_ENABLED=${AI_SPAM_DETECTION_ENABLED}
+      - AI_SPAM_THRESHOLD=${AI_SPAM_THRESHOLD}
+      - AI_REQUEST_TIMEOUT=${AI_REQUEST_TIMEOUT}
+      # Filter Configuration
+      - ENABLE_PROFANITY_FILTER=${ENABLE_PROFANITY_FILTER}
+      - ENABLE_SPAM_DETECTION=${ENABLE_SPAM_DETECTION}
+      - ENABLE_URL_BLOCKING=${ENABLE_URL_BLOCKING}
+      - MAX_WORKERS=${MAX_WORKERS}
+      - CACHE_TTL=${CACHE_TTL}
+      - REQUEST_TIMEOUT=${REQUEST_TIMEOUT}
+      - LOG_LEVEL=${LOG_LEVEL}
+      - MODULE_NAME=${MODULE_NAME_CHAT_FILTER}
+      - MODULE_VERSION=${MODULE_VERSION}
+      - MODULE_PORT=${MODULE_PORT_CHAT_FILTER}
+    networks:
+      - waddlebotnet
+    ports:
+      - "8040:8040"
+    depends_on:
+      router:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      ai-interaction:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8040/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   # AI/Interaction Services
   ollama:
     image: ollama/ollama:latest

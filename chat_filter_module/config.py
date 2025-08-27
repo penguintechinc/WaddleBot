@@ -11,6 +11,12 @@ class Config:
     CORE_API_URL = os.getenv('CORE_API_URL', 'http://localhost:8000')
     ROUTER_API_URL = os.getenv('ROUTER_API_URL', 'http://localhost:8000/router')
     
+    # AI Service Configuration
+    AI_SERVICE_URL = os.getenv('AI_SERVICE_URL', 'http://ai-interaction:8005')
+    AI_SPAM_DETECTION_ENABLED = os.getenv('AI_SPAM_DETECTION_ENABLED', 'true').lower() == 'true'
+    AI_SPAM_THRESHOLD = float(os.getenv('AI_SPAM_THRESHOLD', '0.8'))  # 0.0-1.0 confidence threshold
+    AI_REQUEST_TIMEOUT = int(os.getenv('AI_REQUEST_TIMEOUT', '5'))  # seconds
+    
     # Module Information
     MODULE_NAME = os.getenv('MODULE_NAME', 'chat_filter_module')
     MODULE_VERSION = os.getenv('MODULE_VERSION', '1.0.0')

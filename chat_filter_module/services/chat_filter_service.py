@@ -16,6 +16,7 @@ import threading
 
 from models import db
 from config import Config
+from .ai_service import AIFilterService
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +129,10 @@ class ChatFilterService:
         self._words_cache = {}
         self._patterns_cache = {}
         self._url_settings_cache = {}
+        self._user_roles_cache = {}
+        
+        # Initialize AI service
+        self.ai_service = AIFilterService()
         
         # Compile regex patterns for better performance
         self._compiled_suspicious_urls = [re.compile(pattern, re.IGNORECASE) for pattern in SUSPICIOUS_URL_PATTERNS]
@@ -191,6 +196,95 @@ class ChatFilterService:
                 processed_results.append(result)
         
         return processed_results
+    
+    async def get_user_roles(self, user_id: str, community_id: str, platform: str) -> List[str]:
+        """Get user roles from labels core service (cached)"""
+        cache_key = f"{community_id}:{user_id}:{platform}"
+        
+        # Check cache first
+        with self.cache_lock:
+            if cache_key in self._user_roles_cache:
+                cached_time = self._user_roles_cache[cache_key].get('cached_at', 0)
+                if datetime.utcnow().timestamp() - cached_time < Config.CACHE_TTL:
+                    return self._user_roles_cache[cache_key]['roles']
+        
+        try:
+            # Query labels core service for user roles
+            import aiohttp
+            session = await self.ai_service.get_session()
+            
+            async with session.get(
+                f"http://labels-core:8012/api/users/{user_id}/labels",
+                params={
+                    'community_id': community_id,
+                    'platform': platform
+                },
+                timeout=aiohttp.ClientTimeout(total=3)
+            ) as response:
+                
+                if response.status == 200:
+                    data = await response.json()
+                    roles = data.get('labels', [])
+                else:
+                    roles = []
+        
+        except Exception as e:
+            logger.warning(f"Failed to get user roles for {user_id}: {e}")
+            roles = []
+        
+        # Cache the result
+        with self.cache_lock:
+            self._user_roles_cache[cache_key] = {
+                'roles': roles,
+                'cached_at': datetime.utcnow().timestamp()
+            }
+        
+        return roles
+    
+    def is_admin_or_moderator(self, roles: List[str]) -> bool:
+        """Check if user has admin or moderator roles"""
+        admin_roles = {'admin', 'administrator', 'moderator', 'mod', 'owner', 'community-admin', 'community-moderator'}
+        return any(role.lower() in admin_roles for role in roles)
+    
+    async def check_ai_spam_detection(self, message: str, community_id: str, user_id: str, platform: str) -> Dict:
+        """Use AI to analyze message for spam and prompt injection"""
+        if not Config.AI_SPAM_DETECTION_ENABLED:
+            return {
+                'ai_spam_detected': False,
+                'ai_confidence': 0.0,
+                'ai_reasoning': 'AI spam detection disabled',
+                'prompt_injection_detected': False,
+                'ai_categories': []
+            }
+        
+        try:
+            # Prepare context for AI analysis
+            context = {
+                'platform': platform,
+                'community_id': community_id,
+                'user_id': user_id
+            }
+            
+            # Get AI analysis
+            ai_result = await self.ai_service.analyze_message_for_spam(message, context)
+            
+            return {
+                'ai_spam_detected': ai_result['is_spam'],
+                'ai_confidence': ai_result['confidence'],
+                'ai_reasoning': ai_result['reasoning'],
+                'prompt_injection_detected': ai_result['prompt_injection_detected'],
+                'ai_categories': ai_result['categories']
+            }
+        
+        except Exception as e:
+            logger.error(f"Error in AI spam detection: {e}")
+            return {
+                'ai_spam_detected': False,
+                'ai_confidence': 0.0,
+                'ai_reasoning': f'AI analysis failed: {str(e)}',
+                'prompt_injection_detected': False,
+                'ai_categories': []
+            }
     
     def get_community_settings(self, community_id: str) -> Dict:
         """Get community filter settings with caching"""
@@ -457,8 +551,8 @@ class ChatFilterService:
             'allowed_urls': allowed_urls
         }
     
-    def check_message(self, message: str, community_id: str, user_id: str, platform: str) -> Dict:
-        """Comprehensive message filtering"""
+    async def check_message_comprehensive(self, message: str, community_id: str, user_id: str, platform: str) -> Dict:
+        """Comprehensive async message filtering with AI integration"""
         settings = self.get_community_settings(community_id)
         
         # Initialize results
@@ -470,29 +564,60 @@ class ChatFilterService:
             'action': 'pass'
         }
         
+        # Get user roles for admin/moderator bypass
+        user_roles = await self.get_user_roles(user_id, community_id, platform)
+        is_admin_mod = self.is_admin_or_moderator(user_roles)
+        
         # Check if user is whitelisted
         if self._is_user_whitelisted(user_id, community_id):
             return result
         
-        # Check profanity
+        # Run AI spam detection first (for prompt injection detection)
+        ai_result = await self.check_ai_spam_detection(message, community_id, user_id, platform)
+        
+        # If prompt injection is detected, block regardless of admin status
+        if ai_result['prompt_injection_detected']:
+            result.update({
+                'clean': False,
+                'filter_type': 'prompt_injection',
+                'severity': 'severe',
+                'action': 'block',
+                'ai_reasoning': ai_result['ai_reasoning'],
+                'prompt_injection_detected': True
+            })
+            
+            # Log this critical violation
+            if settings.get('log_violations', True):
+                self._log_violation(community_id, user_id, platform, result)
+            
+            return result
+        
+        # Admin/moderator bypass for regular spam detection (but not prompt injection)
+        if is_admin_mod:
+            logger.info(f"Admin/moderator {user_id} bypassing chat filter in {community_id}")
+            return result
+        
+        # Check profanity (admins/mods can be filtered for profanity but have lower thresholds)
         profanity_result = {}
         if settings.get('profanity_enabled', True):
             profanity_result = self.check_profanity(message, community_id)
             if profanity_result['has_profanity']:
-                result.update({
-                    'clean': False,
-                    'filter_type': 'profanity',
-                    'violations': profanity_result['violations'],
-                    'censored': profanity_result['censored'],
-                    'severity': profanity_result['severity']
-                })
+                # More lenient for admins/mods - only block severe profanity
+                if not is_admin_mod or profanity_result['severity'] == 'severe':
+                    result.update({
+                        'clean': False,
+                        'filter_type': 'profanity',
+                        'violations': profanity_result['violations'],
+                        'censored': profanity_result['censored'],
+                        'severity': profanity_result['severity']
+                    })
         
-        # Check spam
+        # Check traditional spam patterns
         spam_result = {}
         if settings.get('spam_detection_enabled', True):
             spam_result = self.check_spam(message, community_id)
             if spam_result['is_spam']:
-                if result['clean'] or spam_result['spam_score'] > 50:  # Override if higher severity
+                if result['clean'] or spam_result['spam_score'] > 50:
                     result.update({
                         'clean': False,
                         'filter_type': 'spam' if result['clean'] else 'combined',
@@ -501,6 +626,26 @@ class ChatFilterService:
                         'suspicious_urls': spam_result.get('suspicious_urls', []),
                         'severity': 'high' if spam_result['spam_score'] >= 50 else 'moderate'
                     })
+        
+        # Check AI spam detection (high confidence required to override)
+        if ai_result['ai_spam_detected'] and ai_result['ai_confidence'] >= Config.AI_SPAM_THRESHOLD:
+            # Check if user is on explicit allow list for AI spam detection
+            if not self._is_ai_spam_allowed(user_id, community_id):
+                if result['clean'] or ai_result['ai_confidence'] > 0.9:  # Very high confidence to override
+                    result.update({
+                        'clean': False,
+                        'filter_type': 'ai_spam' if result['clean'] else 'combined',
+                        'ai_spam_detected': True,
+                        'ai_confidence': ai_result['ai_confidence'],
+                        'ai_reasoning': ai_result['ai_reasoning'],
+                        'ai_categories': ai_result['ai_categories'],
+                        'severity': 'high' if ai_result['ai_confidence'] > 0.9 else 'moderate'
+                    })
+        
+        # Add AI analysis to result for logging/debugging
+        result.update({
+            'ai_analysis': ai_result
+        })
         
         # Check URLs
         url_result = {}
@@ -525,6 +670,20 @@ class ChatFilterService:
             self._log_violation(community_id, user_id, platform, result)
         
         return result
+    
+    def check_message(self, message: str, community_id: str, user_id: str, platform: str) -> Dict:
+        """Sync wrapper for comprehensive message filtering"""
+        # For backward compatibility, run async method in thread pool
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        try:
+            result = loop.run_until_complete(
+                self.check_message_comprehensive(message, community_id, user_id, platform)
+            )
+            return result
+        finally:
+            loop.close()
     
     def _check_suspicious_urls(self, message: str) -> List[str]:
         """Check for suspicious URL patterns"""
@@ -624,6 +783,27 @@ class ChatFilterService:
             return whitelist_entry is not None
         except Exception as e:
             logger.error(f"Error checking whitelist: {e}")
+            return False
+    
+    def _is_ai_spam_allowed(self, user_id: str, community_id: str) -> bool:
+        """Check if user is explicitly allowed for AI spam detection bypass"""
+        if not self.db:
+            return False
+        
+        try:
+            # Check for AI spam specific whitelist entry
+            allow_entry = self.db(
+                (self.db.filter_whitelist.community_id == community_id) &
+                (self.db.filter_whitelist.user_id == user_id) &
+                ((self.db.filter_whitelist.whitelist_type == 'ai_spam') | 
+                 (self.db.filter_whitelist.whitelist_type == 'all')) &
+                ((self.db.filter_whitelist.expires_at == None) | 
+                 (self.db.filter_whitelist.expires_at > datetime.utcnow()))
+            ).select().first()
+            
+            return allow_entry is not None
+        except Exception as e:
+            logger.error(f"Error checking AI spam allow list: {e}")
             return False
     
     def _censor_message(self, message: str, violations: List[str]) -> str:

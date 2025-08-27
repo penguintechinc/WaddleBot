@@ -130,17 +130,27 @@ def filter_message():
         
         # Add chat response based on action
         if result['action'] == 'block':
-            if result['filter_type'] == 'profanity':
+            if result['filter_type'] == 'prompt_injection':
+                filter_response['chat_message'] = "🚫 Message blocked - prompt injection detected."
+            elif result['filter_type'] == 'ai_spam':
+                filter_response['chat_message'] = "🤖 Message blocked - AI detected spam content."
+            elif result['filter_type'] == 'profanity':
                 filter_response['chat_message'] = "⚠️ Message blocked due to inappropriate content."
             elif result['filter_type'] == 'spam':
                 filter_response['chat_message'] = "🚫 Message blocked - spam detected."
             elif result['filter_type'] == 'url':
                 filter_response['chat_message'] = "🔗 Message blocked - unauthorized URL."
+            elif result['filter_type'] == 'combined':
+                filter_response['chat_message'] = "🚫 Message blocked - multiple violations detected."
         elif result['action'] == 'warn':
-            if result['filter_type'] == 'profanity':
+            if result['filter_type'] == 'ai_spam':
+                filter_response['chat_message'] = "🤖 Warning: AI detected potential spam content."
+            elif result['filter_type'] == 'profanity':
                 filter_response['chat_message'] = "⚠️ Warning: Please watch your language."
             elif result['filter_type'] == 'spam':
                 filter_response['chat_message'] = "⚠️ Warning: Your message appears to contain promotional content."
+            elif result['filter_type'] == 'combined':
+                filter_response['chat_message'] = "⚠️ Warning: Multiple content issues detected."
         
         return filter_response
     
@@ -224,17 +234,27 @@ def filter_messages_batch():
             
             # Add chat response based on action
             if result.get('action') == 'block':
-                if result.get('filter_type') == 'profanity':
+                if result.get('filter_type') == 'prompt_injection':
+                    filter_response['chat_message'] = "🚫 Message blocked - prompt injection detected."
+                elif result.get('filter_type') == 'ai_spam':
+                    filter_response['chat_message'] = "🤖 Message blocked - AI detected spam content."
+                elif result.get('filter_type') == 'profanity':
                     filter_response['chat_message'] = "⚠️ Message blocked due to inappropriate content."
                 elif result.get('filter_type') == 'spam':
                     filter_response['chat_message'] = "🚫 Message blocked - spam detected."
                 elif result.get('filter_type') == 'url':
                     filter_response['chat_message'] = "🔗 Message blocked - unauthorized URL."
+                elif result.get('filter_type') == 'combined':
+                    filter_response['chat_message'] = "🚫 Message blocked - multiple violations detected."
             elif result.get('action') == 'warn':
-                if result.get('filter_type') == 'profanity':
+                if result.get('filter_type') == 'ai_spam':
+                    filter_response['chat_message'] = "🤖 Warning: AI detected potential spam content."
+                elif result.get('filter_type') == 'profanity':
                     filter_response['chat_message'] = "⚠️ Warning: Please watch your language."
                 elif result.get('filter_type') == 'spam':
                     filter_response['chat_message'] = "⚠️ Warning: Your message appears to contain promotional content."
+                elif result.get('filter_type') == 'combined':
+                    filter_response['chat_message'] = "⚠️ Warning: Multiple content issues detected."
             
             batch_response['results'].append(filter_response)
         
@@ -458,14 +478,149 @@ def get_community_settings():
         response.status = 500
         return {'error': str(e)}
 
+@action('/ai-spam/whitelist', method=['GET'])
+@cors.enable
+def get_ai_spam_whitelist():
+    """Get AI spam whitelist for community"""
+    try:
+        community_id = request.query.get('community_id')
+        if not community_id:
+            response.status = 400
+            return {'error': 'Missing community_id parameter'}
+        
+        # Get whitelist entries for AI spam
+        whitelist_entries = db(
+            (db.filter_whitelist.community_id == community_id) &
+            ((db.filter_whitelist.whitelist_type == 'ai_spam') | 
+             (db.filter_whitelist.whitelist_type == 'all'))
+        ).select()
+        
+        entries = []
+        for entry in whitelist_entries:
+            entries.append({
+                'user_id': entry.user_id,
+                'user_name': entry.user_name,
+                'whitelist_type': entry.whitelist_type,
+                'reason': entry.reason,
+                'added_by': entry.added_by,
+                'expires_at': entry.expires_at.isoformat() if entry.expires_at else None,
+                'created_at': entry.created_at.isoformat()
+            })
+        
+        return {
+            'success': True,
+            'community_id': community_id,
+            'whitelist_entries': entries
+        }
+    
+    except Exception as e:
+        logger.error(f"Error getting AI spam whitelist: {str(e)}")
+        response.status = 500
+        return {'error': str(e)}
+
+@action('/ai-spam/whitelist', method=['POST'])
+@cors.enable
+def add_ai_spam_whitelist():
+    """Add user to AI spam whitelist (admin only)"""
+    try:
+        data = request.json
+        
+        community_id = data.get('community_id')
+        user_id = data.get('user_id')
+        user_name = data.get('user_name', '')
+        reason = data.get('reason', 'AI spam detection bypass')
+        added_by = data.get('added_by', 'admin')
+        expires_at = data.get('expires_at')  # Optional expiration
+        
+        if not community_id or not user_id:
+            response.status = 400
+            return {'error': 'Missing community_id or user_id'}
+        
+        # Parse expiration date if provided
+        expires_datetime = None
+        if expires_at:
+            try:
+                expires_datetime = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
+            except ValueError:
+                response.status = 400
+                return {'error': 'Invalid expires_at format. Use ISO format.'}
+        
+        # Add to whitelist
+        db.filter_whitelist.insert(
+            community_id=community_id,
+            user_id=user_id,
+            user_name=user_name,
+            whitelist_type='ai_spam',
+            reason=reason,
+            added_by=added_by,
+            expires_at=expires_datetime
+        )
+        db.commit()
+        
+        return {
+            'success': True,
+            'message': f"User '{user_id}' added to AI spam whitelist"
+        }
+    
+    except Exception as e:
+        logger.error(f"Error adding to AI spam whitelist: {str(e)}")
+        response.status = 500
+        return {'error': str(e)}
+
+@action('/ai-spam/settings', method=['GET'])
+@cors.enable
+def get_ai_spam_settings():
+    """Get AI spam detection settings"""
+    try:
+        community_id = request.query.get('community_id')
+        if not community_id:
+            response.status = 400
+            return {'error': 'Missing community_id parameter'}
+        
+        return {
+            'success': True,
+            'community_id': community_id,
+            'ai_spam_detection_enabled': Config.AI_SPAM_DETECTION_ENABLED,
+            'ai_spam_threshold': Config.AI_SPAM_THRESHOLD,
+            'ai_service_url': Config.AI_SERVICE_URL,
+            'ai_request_timeout': Config.AI_REQUEST_TIMEOUT
+        }
+    
+    except Exception as e:
+        logger.error(f"Error getting AI spam settings: {str(e)}")
+        response.status = 500
+        return {'error': str(e)}
+
 @action('/stats', method=['GET'])
 @cors.enable
 def get_filter_stats():
-    """Get filtering statistics"""
+    """Get filtering statistics including AI detection stats"""
     try:
         community_id = request.query.get('community_id')
         
         stats = chat_filter_service.get_filter_stats(community_id)
+        
+        # Add AI-specific stats if available
+        if community_id and db:
+            try:
+                ai_violations = db(
+                    (db.filter_violations.community_id == community_id) &
+                    (db.filter_violations.filter_type.contains('ai_spam'))
+                ).select()
+                
+                prompt_injection_violations = db(
+                    (db.filter_violations.community_id == community_id) &
+                    (db.filter_violations.filter_type == 'prompt_injection')
+                ).select()
+                
+                stats['ai_spam_violations'] = len(ai_violations)
+                stats['prompt_injection_violations'] = len(prompt_injection_violations)
+                stats['ai_detection_enabled'] = Config.AI_SPAM_DETECTION_ENABLED
+                
+            except Exception as e:
+                logger.warning(f"Error getting AI stats: {e}")
+                stats['ai_spam_violations'] = 0
+                stats['prompt_injection_violations'] = 0
         
         return {
             'success': True,
