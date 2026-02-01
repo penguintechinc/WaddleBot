@@ -4,7 +4,7 @@
 
 import 'api_client.dart';
 import '../models/community.dart';
-import '../models/api_response.dart';
+import '../models/api_response.dart' hide ApiError;
 
 /// Community REST API Service
 ///

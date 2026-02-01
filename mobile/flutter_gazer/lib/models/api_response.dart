@@ -175,7 +175,7 @@ class ApiError extends Equatable {
       code: json['code'] as String? ?? 'UNKNOWN_ERROR',
       message: json['message'] as String? ?? 'An unknown error occurred',
       details: json['details'] as Map<String, dynamic>?,
-      timestamp: json['timestamp'] as String? != null
+      timestamp: json['timestamp'] != null
           ? DateTime.tryParse(json['timestamp'] as String)
           : null,
     );

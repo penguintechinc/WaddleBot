@@ -49,6 +49,20 @@ class ChatMessage {
       reactions: reactionsMap,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'community_id': communityId,
+        'sender_id': senderId,
+        'sender_username': senderUsername,
+        'content': content,
+        'type': type,
+        'created_at': createdAt.toIso8601String(),
+        'message_type': messageType.name,
+        if (attachmentUrl != null) 'attachment_url': attachmentUrl,
+        if (replyToId != null) 'reply_to_id': replyToId,
+        if (reactions.isNotEmpty) 'reactions': reactions,
+      };
 }
 
 /// Parse MessageType from string representation.
@@ -149,6 +163,12 @@ class MessageHistory {
       nextCursor: json['next_cursor'] as String?,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'messages': messages.map((m) => m.toJson()).toList(),
+        'has_more': hasMore,
+        if (nextCursor != null) 'next_cursor': nextCursor,
+      };
 }
 
 /// WaddleBot stream lifecycle event.

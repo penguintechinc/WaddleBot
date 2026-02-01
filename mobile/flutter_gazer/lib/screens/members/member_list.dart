@@ -34,7 +34,7 @@ class MemberListScreen extends StatefulWidget {
 
 class _MemberListScreenState extends State<MemberListScreen> {
   late final MemberService _memberService;
-  late final WaddlebotAuthService _authService;
+  late final WaddleBotAuthService _authService;
   late final TextEditingController _searchController;
 
   List<Member> _members = [];
@@ -69,7 +69,7 @@ class _MemberListScreenState extends State<MemberListScreen> {
   void initState() {
     super.initState();
     _memberService = MemberService.getInstance();
-    _authService = WaddlebotAuthService.getInstance();
+    _authService = WaddleBotAuthService();
     _searchController = TextEditingController();
     _scrollController = ScrollController();
     _searchController.addListener(_onSearchChanged);
@@ -418,11 +418,11 @@ class _MemberListScreenState extends State<MemberListScreen> {
       case MemberRole.owner:
         return ElderColors.red500;
       case MemberRole.admin:
-        return ElderColors.orange500;
+        return Colors.orange;
       case MemberRole.maintainer:
         return ElderColors.amber500;
       case MemberRole.member:
-        return ElderColors.blue500;
+        return Colors.blue;
       case MemberRole.viewer:
         return ElderColors.slate600;
     }

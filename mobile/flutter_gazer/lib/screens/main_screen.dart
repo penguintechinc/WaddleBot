@@ -21,6 +21,10 @@ import '../widgets/camera_overlay_widget.dart';
 import '../widgets/eula_dialog.dart';
 import '../widgets/chat_overlay_widget.dart';
 import '../widgets/app_sidebar.dart';
+import '../services/waddlebot_chat_service.dart';
+import 'communities/community_list.dart';
+import 'chat/channel_list.dart';
+import 'members/member_list.dart';
 import 'settings_screen.dart';
 
 /// Enum for app navigation routes
@@ -51,6 +55,7 @@ class _MainScreenState extends State<MainScreen> {
   late final StreamCompositorService _compositorService;
   late final SettingsService _settingsService;
   late final WaddleBotService _waddleBotService;
+  late final WaddleBotChatService _chatService;
 
   // Navigation state
   AppRoute _currentRoute = AppRoute.streaming;
@@ -78,6 +83,7 @@ class _MainScreenState extends State<MainScreen> {
     _compositorService = StreamCompositorService();
     _settingsService = SettingsService();
     _waddleBotService = WaddleBotService();
+    _chatService = WaddleBotChatService();
     _initializeApp();
   }
 
@@ -95,6 +101,9 @@ class _MainScreenState extends State<MainScreen> {
 
     // Initialize license
     await _licenseService.initialize();
+
+    // Connect chat service
+    _chatService.connect();
 
     // Load settings
     _streamConfig = await _settingsService.loadStreamConfig();
@@ -221,6 +230,7 @@ class _MainScreenState extends State<MainScreen> {
     _usbService.dispose();
     _compositorService.dispose();
     _waddleBotService.dispose();
+    _chatService.dispose();
     super.dispose();
   }
 
@@ -332,139 +342,22 @@ class _MainScreenState extends State<MainScreen> {
 
   /// Communities screen showing community list and management
   Widget _buildCommunitiesScreen() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Communities',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.grey[900],
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey[800]!),
-            ),
-            child: Column(
-              children: [
-                const Icon(Icons.group, size: 48, color: Color(0xFFD4AF37)),
-                const SizedBox(height: 16),
-                const Text(
-                  'Join and manage communities',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Browse available communities and connect with other streamers',
-                  style: TextStyle(color: Colors.grey[400]),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () => _showSnack('Communities feature coming soon'),
-                  child: const Text('Browse Communities'),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+    return const CommunityListScreen(isAdmin: true);
   }
 
-  /// Chat screen showing community chat
+  /// Chat screen showing community chat channels
   Widget _buildChatScreen() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Chat',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.grey[900],
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey[800]!),
-            ),
-            child: Column(
-              children: [
-                const Icon(Icons.chat_bubble, size: 48, color: Color(0xFFD4AF37)),
-                const SizedBox(height: 16),
-                const Text(
-                  'Real-time community chat',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Connect with other community members in real-time',
-                  style: TextStyle(color: Colors.grey[400]),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () => _showSnack('Chat feature coming soon'),
-                  child: const Text('Open Chat'),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+    return ChannelListScreen(
+      communityId: 'general',
+      chatService: _chatService,
     );
   }
 
   /// Members screen showing community members
   Widget _buildMembersScreen() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Members',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.grey[900],
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey[800]!),
-            ),
-            child: Column(
-              children: [
-                const Icon(Icons.people, size: 48, color: Color(0xFFD4AF37)),
-                const SizedBox(height: 16),
-                const Text(
-                  'Community members',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'View and manage members in your community',
-                  style: TextStyle(color: Colors.grey[400]),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () => _showSnack('Members feature coming soon'),
-                  child: const Text('View Members'),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+    return const MemberListScreen(
+      communityId: 'general',
+      isAdmin: true,
     );
   }
 

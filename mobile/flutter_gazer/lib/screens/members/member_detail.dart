@@ -35,7 +35,7 @@ class MemberDetailScreen extends StatefulWidget {
 
 class _MemberDetailScreenState extends State<MemberDetailScreen> {
   late final MemberService _memberService;
-  late final WaddlebotAuthService _authService;
+  late final WaddleBotAuthService _authService;
 
   MemberDetail? _memberDetail;
   bool _isLoading = true;
@@ -72,7 +72,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
   void initState() {
     super.initState();
     _memberService = MemberService.getInstance();
-    _authService = WaddlebotAuthService.getInstance();
+    _authService = WaddleBotAuthService();
     _loadMemberDetail();
   }
 
@@ -259,11 +259,11 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
       case MemberRole.owner:
         return ElderColors.red500;
       case MemberRole.admin:
-        return ElderColors.orange500;
+        return Colors.orange;
       case MemberRole.maintainer:
         return ElderColors.amber500;
       case MemberRole.member:
-        return ElderColors.blue500;
+        return Colors.blue;
       case MemberRole.viewer:
         return ElderColors.slate600;
     }
@@ -542,7 +542,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
             icon: Icons.calendar_today,
             label: 'Joined',
             value: _formatDate(_memberDetail!.joinedAt),
-            color: ElderColors.blue500,
+            color: Colors.blue,
           ),
         ),
       ],

@@ -4,7 +4,7 @@
 
 import 'api_client.dart';
 import '../models/member.dart';
-import '../models/api_response.dart';
+import '../models/api_response.dart' hide ApiError;
 
 /// Member REST API Service
 ///
