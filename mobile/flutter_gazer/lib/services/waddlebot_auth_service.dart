@@ -4,7 +4,7 @@ import '../models/auth.dart';
 import 'api_client.dart';
 import 'license_service.dart';
 
-/// WaddleBot authentication service with JWT refresh, secure storage, and license integration.
+/// Waddles authentication service with JWT refresh, secure storage, and license integration.
 ///
 /// Manages:
 /// - User login/logout with TokenResponse containing User data
@@ -32,7 +32,10 @@ class WaddleBotAuthService {
     LicenseService? licenseService,
   })  : _apiClient = apiClient ?? ApiClient.getInstance(),
         _secureStorage = secureStorage ?? const FlutterSecureStorage(),
-        _licenseService = licenseService;
+        _licenseService = licenseService {
+    // Register this auth service with the API client for token refresh capability
+    _apiClient.setAuthService(this);
+  }
 
   /// Current access token
   String? get accessToken => _accessToken;
@@ -146,7 +149,7 @@ class WaddleBotAuthService {
   /// Returns updated [TokenResponse] on success.
   /// Throws [ApiError] if refresh fails (user must log in again).
   Future<TokenResponse> refreshToken() async {
-    if (_refreshToken == null) {
+    if (_refreshToken == null || _refreshToken!.isEmpty) {
       throw ApiError(
         message: 'No refresh token available',
         statusCode: 401,
@@ -155,8 +158,9 @@ class WaddleBotAuthService {
     }
 
     try {
+      // Make POST request to /api/v2/auth/refresh with refresh token
       final response = await _apiClient.post<TokenResponse>(
-        '/auth/refresh',
+        '/api/v2/auth/refresh',
         data: {
           'refresh_token': _refreshToken,
         },
@@ -168,7 +172,7 @@ class WaddleBotAuthService {
       _refreshToken = response.refreshToken ?? _refreshToken;
       _currentUser = response.user;
 
-      // Persist updated tokens
+      // Persist updated tokens to secure storage
       await _secureStorage.write(key: _keyAccessToken, value: _accessToken!);
       if (_refreshToken != null) {
         await _secureStorage.write(
@@ -185,9 +189,25 @@ class WaddleBotAuthService {
       await _apiClient.setAuthToken(_accessToken!);
 
       return response;
+    } on ApiError catch (e) {
+      // If refresh returns 401, refresh token is expired - clear auth state
+      if (e.statusCode == 401) {
+        await logout();
+      }
+      rethrow;
     } catch (e) {
-      // Clear auth state on refresh failure
+      // For any other error, also clear auth state
       await logout();
+
+      // Convert to ApiError if not already
+      if (e is! ApiError) {
+        throw ApiError(
+          message: 'Token refresh failed: ${e.toString()}',
+          statusCode: 401,
+          errorCode: 'REFRESH_FAILED',
+          originalError: e,
+        );
+      }
       rethrow;
     }
   }

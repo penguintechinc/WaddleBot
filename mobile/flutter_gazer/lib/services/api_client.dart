@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'dart:convert';
 import 'dart:developer' as developer;
+import '../models/domain_config.dart';
+import '../models/license_info.dart';
+import '../widgets/premium_gate_dialog.dart';
 
 /// Custom exception for API errors
 class ApiError implements Exception {
@@ -28,8 +31,9 @@ class ApiClient {
   late final Dio _dio;
   late final FlutterSecureStorage _secureStorage;
   String? _authToken;
+  dynamic _authService;
 
-  static const String _baseUrl = 'https://hub-api.waddlebot.io/api/v1';
+  static String _baseUrl = WaddleBotDomain.production.apiUrl;
   static const String _authTokenKey = 'auth_token';
   static const int _connectTimeout = 30000; // 30 seconds
   static const int _receiveTimeout = 60000; // 60 seconds
@@ -41,6 +45,46 @@ class ApiClient {
 
   /// Get singleton instance
   static ApiClient getInstance() => _instance;
+
+  /// Set auth service for token refresh capability
+  void setAuthService(dynamic authService) {
+    _authService = authService;
+  }
+
+  /// Set the API domain and update Dio baseUrl
+  /// Throws ArgumentError if domain update fails
+  void setDomain(WaddleBotDomain domain) {
+    try {
+      final newApiUrl = domain.apiUrl;
+      if (newApiUrl.isEmpty) {
+        throw ArgumentError('Domain apiUrl cannot be empty');
+      }
+      _baseUrl = newApiUrl;
+      _dio.options.baseUrl = newApiUrl;
+    } catch (e) {
+      throw ArgumentError('Failed to set domain: $e');
+    }
+  }
+
+  /// Get the current API domain by matching _baseUrl to domain apiUrls
+  /// Returns production domain if no match is found
+  WaddleBotDomain getCurrentDomain() {
+    try {
+      for (final domain in WaddleBotDomain.values) {
+        if (domain.apiUrl == _baseUrl) {
+          return domain;
+        }
+      }
+      return WaddleBotDomain.production;
+    } catch (e) {
+      developer.log(
+        'Error determining current domain, defaulting to production: $e',
+        name: 'ApiClient.getCurrentDomain',
+        error: e,
+      );
+      return WaddleBotDomain.production;
+    }
+  }
 
   /// Initialize Dio with configuration and interceptors
   void _initializeDio() {
@@ -265,6 +309,7 @@ class ApiClient {
 /// Interceptor to inject JWT token from secure storage
 class AuthInterceptor extends Interceptor {
   final ApiClient apiClient;
+  bool _isRefreshing = false;
 
   AuthInterceptor(this.apiClient);
 
@@ -280,12 +325,115 @@ class AuthInterceptor extends Interceptor {
   }
 
   @override
-  void onError(DioException err, ErrorInterceptorHandler handler) {
+  Future<void> onError(DioException err, ErrorInterceptorHandler handler) async {
     // Handle 401 Unauthorized - token might be expired
     if (err.response?.statusCode == 401) {
-      print('Unauthorized - token may be expired');
-      // In a real app, implement token refresh logic here
+      final authService = apiClient._authService;
+
+      // Check if we should attempt token refresh
+      if (authService != null &&
+          !_isRefreshing &&
+          !err.requestOptions.path.contains('/auth/refresh') &&
+          err.requestOptions.extra['_retry_count'] != 1) {
+
+        // Prevent concurrent refresh attempts
+        _isRefreshing = true;
+
+        try {
+          developer.log(
+            'Attempting token refresh due to 401',
+            name: 'AuthInterceptor.onError',
+          );
+
+          // Call refreshToken on auth service
+          await authService.refreshToken();
+
+          developer.log(
+            'Token refresh successful, retrying request',
+            name: 'AuthInterceptor.onError',
+          );
+
+          // Get new token
+          final newToken = apiClient.getAuthToken();
+
+          if (newToken != null && newToken.isNotEmpty) {
+            // Mark as retry to prevent infinite loop
+            err.requestOptions.extra['_retry_count'] = 1;
+
+            // Clone request with new token
+            final opts = Options(
+              method: err.requestOptions.method,
+              headers: {
+                ...err.requestOptions.headers,
+                'Authorization': 'Bearer $newToken',
+              },
+            );
+
+            // Retry the original request
+            final response = await apiClient._dio.request(
+              err.requestOptions.path,
+              options: opts,
+              data: err.requestOptions.data,
+              queryParameters: err.requestOptions.queryParameters,
+            );
+
+            _isRefreshing = false;
+            handler.resolve(response);
+            return;
+          }
+        } catch (e) {
+          developer.log(
+            'Token refresh failed: $e',
+            name: 'AuthInterceptor.onError',
+            error: e,
+          );
+
+          _isRefreshing = false;
+
+          // If refresh endpoint returns 401, it means refresh token is expired
+          if (e is DioException && e.response?.statusCode == 401) {
+            developer.log(
+              'Refresh token expired, clearing auth state',
+              name: 'AuthInterceptor.onError',
+            );
+
+            // Clear tokens and force re-login
+            try {
+              await authService.logout();
+            } catch (logoutError) {
+              developer.log(
+                'Error during logout: $logoutError',
+                name: 'AuthInterceptor.onError',
+                error: logoutError,
+              );
+            }
+          }
+
+          // Continue with original error
+          handler.next(err);
+          return;
+        }
+
+        _isRefreshing = false;
+      } else if (err.requestOptions.path.contains('/auth/refresh')) {
+        // Refresh endpoint itself returned 401 - refresh token is expired
+        developer.log(
+          'Refresh token expired (401 on /auth/refresh)',
+          name: 'AuthInterceptor.onError',
+        );
+      } else if (_isRefreshing) {
+        developer.log(
+          'Skipping refresh - already in progress',
+          name: 'AuthInterceptor.onError',
+        );
+      } else if (err.requestOptions.extra['_retry_count'] == 1) {
+        developer.log(
+          'Skipping refresh - already retried once',
+          name: 'AuthInterceptor.onError',
+        );
+      }
     }
+
     handler.next(err);
   }
 }
@@ -449,21 +597,25 @@ class LicenseInterceptor extends Interceptor {
 
     final context = navigatorKey!.currentContext!;
 
-    // Import PremiumGateDialog - done at top of file
-    // Show dialog with extracted data
     try {
-      // Note: PremiumGateDialog import must be added at top of file
-      // PremiumGateDialog.show(
-      //   context,
-      //   featureName: licenseData['feature'],
-      //   currentTier: LicenseTier.free, // Get from app state
-      //   requiredTier: _parseTierFromString(licenseData['tier_required']),
-      //   pricingUrl: licenseData['upgrade_url'],
-      // );
+      final requiredTier = _parseTierFromString(licenseData['tier_required'] ?? 'premium');
 
-      // For now, log that we would show the dialog
+      await PremiumGateDialog.show(
+        context,
+        featureName: licenseData['feature'] ?? 'Premium Feature',
+        currentTier: LicenseTier.free,
+        requiredTier: requiredTier,
+        pricingUrl: licenseData['upgrade_url'] ?? 'https://waddlebot.io/pricing',
+        upgradeBenefits: const [
+          'Access to advanced streaming features',
+          'Higher quality and bitrate options',
+          'Priority customer support',
+          'Exclusive integrations and workflows',
+        ],
+      );
+
       developer.log(
-        'PremiumGateDialog triggered for feature: ${licenseData['feature']}',
+        'PremiumGateDialog shown for feature: ${licenseData['feature']}',
         name: 'LicenseInterceptor._showPremiumGateDialog',
       );
     } catch (e) {
@@ -472,6 +624,22 @@ class LicenseInterceptor extends Interceptor {
         name: 'LicenseInterceptor._showPremiumGateDialog',
         error: e,
       );
+    }
+  }
+
+  /// Parse tier string to LicenseTier enum
+  ///
+  /// Converts string tier identifiers ("free", "premium", "pro", "enterprise")
+  /// to corresponding LicenseTier enum values. Returns free tier for invalid inputs.
+  LicenseTier _parseTierFromString(String tierStr) {
+    try {
+      final lower = tierStr.toLowerCase().trim();
+      return LicenseTier.values.firstWhere(
+        (tier) => tier.name == lower,
+        orElse: () => LicenseTier.free,
+      );
+    } catch (_) {
+      return LicenseTier.free;
     }
   }
 

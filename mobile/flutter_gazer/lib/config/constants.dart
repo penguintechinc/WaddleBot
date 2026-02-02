@@ -1,17 +1,19 @@
+import 'package:gazer_waddlebot/models/domain_config.dart';
+
 /// Application-wide constants for Gazer Mobile Stream Studio.
 class AppConstants {
   AppConstants._();
 
-  // API URLs
-  static const String licenseServerUrl = 'https://license.penguintech.io/api/v2/validate';
-  static const String licenseServerFeaturesUrl = 'https://license.penguintech.io/api/v2/features';
-  static const String licenseServerKeepaliveUrl = 'https://license.penguintech.io/api/v2/keepalive';
+  // API URLs - mutable, initialized with production domain values
+  static String licenseServerUrl = 'https://license.penguintech.io/api/v2/validate';
+  static String licenseServerFeaturesUrl = 'https://license.penguintech.io/api/v2/features';
+  static String licenseServerKeepaliveUrl = 'https://license.penguintech.io/api/v2/keepalive';
   static const String productName = 'gazer-mobile';
   static const String appVersion = '2.1.0';
 
-  // WaddleBot API
-  static const String waddleBotApiUrl = 'https://hub-api.waddlebot.io/api/v1';
-  static const String waddleBotWsUrl = 'wss://hub-api.waddlebot.io';
+  // WaddleBot API - mutable, initialized with production domain values
+  static String waddleBotApiUrl = WaddleBotDomain.production.apiUrl;
+  static String waddleBotWsUrl = WaddleBotDomain.production.wsUrl;
 
   // License feature flags
   static const String featureUsbCapture = 'usb_capture';

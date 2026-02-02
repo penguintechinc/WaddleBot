@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'dart:developer' as developer;
 import 'package:flutter_libs/flutter_libs.dart';
 import '../../config/constants.dart';
 import '../../config/form_configs.dart';
-import '../../config/theme.dart';
 import '../../models/auth.dart';
 import '../../models/license_info.dart';
+import '../../models/domain_config.dart';
 import '../../services/license_service.dart';
 import '../../services/settings_service.dart';
 import '../../services/waddlebot_auth_service.dart';
+import '../../services/api_client.dart';
 
 /// Main settings screen for Flutter Gazer.
 /// Displays comprehensive settings organized in categories with Elder theme styling.
@@ -42,6 +44,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   late User _currentUser;
   late LicenseInfo? _licenseInfo;
+  WaddleBotDomain? _selectedDomain;
   bool _isLoading = false;
 
   @override
@@ -55,6 +58,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
           createdAt: DateTime.now(),
         );
     _licenseInfo = widget.licenseService.currentLicense;
+    _loadDomain();
+  }
+
+  Future<void> _loadDomain() async {
+    try {
+      final domain = await widget.settingsService.loadApiDomain();
+      if (!mounted) return;
+      setState(() {
+        _selectedDomain = domain;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      developer.log(
+        'Error loading API domain: $e',
+        name: 'SettingsScreen._loadDomain',
+        error: e,
+      );
+      if (!mounted) return;
+      setState(() {
+        _selectedDomain = WaddleBotDomain.production;
+      });
+    }
   }
 
   Future<void> _handleAccountSettingsEdit() async {
@@ -100,6 +125,70 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _handleDomainChange(WaddleBotDomain newDomain) async {
+    if (newDomain == _selectedDomain) {
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Change API Domain'),
+        content: const Text('Change API domain? This will log you out.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              setState(() => _isLoading = true);
+              try {
+                // Save domain preference
+                await widget.settingsService.saveApiDomain(newDomain);
+
+                // Update API client domain
+                final apiClient = ApiClient.getInstance();
+                apiClient.setDomain(newDomain);
+
+                // Update selected domain
+                if (!mounted) return;
+                setState(() {
+                  _selectedDomain = newDomain;
+                });
+
+                // Navigate to login screen (replace route)
+                if (!mounted) return;
+                Navigator.of(context).pushNamedAndRemoveUntil(
+                  '/login',
+                  (route) => false,
+                );
+              } catch (e) {
+                if (!mounted) return;
+                developer.log(
+                  'Error changing API domain: $e',
+                  name: 'SettingsScreen._handleDomainChange',
+                  error: e,
+                );
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Error changing domain: $e'),
+                    backgroundColor: ElderColors.red500,
+                  ),
+                );
+                if (!mounted) return;
+                setState(() => _isLoading = false);
+              }
+            },
+            child: const Text('Change Domain', style: TextStyle(color: Colors.orange)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _handleLogout() async {
     showDialog(
       context: context,
@@ -114,14 +203,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           TextButton(
             onPressed: () async {
               Navigator.pop(context);
+              if (!mounted) return;
               setState(() => _isLoading = true);
               try {
                 // Perform logout
                 widget.onLogout();
               } finally {
-                if (mounted) {
-                  setState(() => _isLoading = false);
-                }
+                if (!mounted) return;
+                setState(() => _isLoading = false);
               }
             },
             child: const Text('Sign Out', style: TextStyle(color: Colors.red)),
@@ -163,6 +252,138 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   bool get _isAdmin => _currentUser.isSuperAdmin;
+
+  Widget _buildDomainSelectionCard() {
+    if (_selectedDomain == null) {
+      return Card(
+        color: ElderColors.slate800,
+        elevation: 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: ElderColors.slate700, width: 1),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: ElderColors.amber500.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.cloud,
+                      color: ElderColors.amber500,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'API Domain',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                        Text(
+                          'Loading domain configuration...',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Card(
+      color: ElderColors.slate800,
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: ElderColors.slate700, width: 1),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: ElderColors.amber500.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.cloud,
+                    color: ElderColors.amber500,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'API Domain',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      Text(
+                        'Select Waddles API endpoint',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ...WaddleBotDomain.values.map(
+              (domain) => RadioListTile<WaddleBotDomain>(
+                value: domain,
+                groupValue: _selectedDomain,
+                onChanged: (WaddleBotDomain? newValue) {
+                  if (newValue != null) {
+                    _handleDomainChange(newValue);
+                  }
+                },
+                title: Text(
+                  domain.displayName,
+                  style: const TextStyle(
+                    color: ElderColors.amber500,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                subtitle: Text(
+                  domain.host,
+                  style: const TextStyle(fontSize: 12),
+                ),
+                dense: true,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -226,6 +447,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                   // License Management
                   _buildLicenseCard(),
+                  const SizedBox(height: 16),
+
+                  // API Domain Selection
+                  _buildDomainSelectionCard(),
                   const SizedBox(height: 16),
 
                   // Stream Quality

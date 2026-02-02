@@ -360,11 +360,143 @@ Elder theme is configured in `lib/config/theme_config.dart`:
 // Text colors: grey[300], grey[500]
 ```
 
+## Domain Configuration
+
+Flutter Gazer supports multiple API domains to facilitate development, testing, and production deployments.
+
+### Available Domains
+
+| Domain | Environment | Purpose | URL |
+|--------|-------------|---------|-----|
+| **Production** | Production | Official WaddleBot production environment with enterprise support | `https://api.waddlebot.io` |
+| **Staging** | Staging | Pre-production testing environment for feature validation and integration testing | `https://staging-api.waddlebot.io` |
+| **Development** | Development | Local or development server for active feature development and debugging | `http://localhost:8000` (configurable) |
+
+### Changing the Domain
+
+To change the API domain in the application:
+
+1. Open **Settings** from the main navigation menu
+2. Tap **API Domain** or **Server Configuration**
+3. Select desired domain from the list:
+   - Production (default)
+   - Staging
+   - Development
+4. Confirm the change
+5. Application will logout and restart with new domain configuration
+
+### Default Behavior
+
+- **Default Domain**: Production (`https://api.waddlebot.io`)
+- **Persistence**: Selected domain is saved to device secure storage via `SettingsService`
+- **Applied On**: Domain changes take effect immediately on app restart
+- **Logout Requirement**: User must logout and re-authenticate when changing domains due to API token incompatibility across environments
+
+### What Happens When Domain Changes
+
+When a user changes the API domain:
+
+1. **Settings Persistence**: New domain is saved to secure storage
+2. **API Client Reset**: `ApiClient` is reconfigured with new base URL
+3. **Token Invalidation**: Existing JWT tokens become invalid (from previous domain)
+4. **WebSocket Reconnection**: Socket.io connection updates to new domain's chat server
+5. **Session Logout**: User is automatically logged out to force re-authentication with new domain
+6. **Cache Clearing**: All cached data from previous domain is cleared
+7. **Restart**: App restarts with new domain configuration active
+
+### Developer Implementation Details
+
+#### WaddleBotDomain Enum
+
+Domains are defined in `lib/models/waddlebot_domain.dart`:
+
+```dart
+enum WaddleBotDomain {
+  production('Production', 'https://api.waddlebot.io'),
+  staging('Staging', 'https://staging-api.waddlebot.io'),
+  development('Development', 'http://localhost:8000');
+
+  final String label;
+  final String baseUrl;
+
+  const WaddleBotDomain(this.label, this.baseUrl);
+}
+```
+
+#### SettingsService Persistence
+
+Domain selection is persisted in `lib/services/settings_service.dart`:
+
+```dart
+class SettingsService {
+  static const String _domainKey = 'api_domain';
+
+  Future<void> setApiDomain(WaddleBotDomain domain) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_domainKey, domain.name);
+    _notifyListeners();
+  }
+
+  Future<WaddleBotDomain> getApiDomain() async {
+    final prefs = await SharedPreferences.getInstance();
+    final domainName = prefs.getString(_domainKey) ?? 'production';
+    return WaddleBotDomain.values.firstWhere(
+      (d) => d.name == domainName,
+      orElse: () => WaddleBotDomain.production,
+    );
+  }
+}
+```
+
+#### ApiClient Configuration
+
+The HTTP client is configured dynamically based on selected domain in `lib/services/api_client.dart`:
+
+```dart
+class ApiClient {
+  late Dio _dio;
+
+  ApiClient(WaddleBotDomain domain) {
+    _dio = Dio(BaseOptions(
+      baseUrl: domain.baseUrl,
+      connectTimeout: const Duration(seconds: 15),
+      receiveTimeout: const Duration(seconds: 30),
+      headers: {'Content-Type': 'application/json'},
+    ));
+    _addInterceptors();
+  }
+
+  void updateDomain(WaddleBotDomain domain) {
+    _dio.options.baseUrl = domain.baseUrl;
+  }
+}
+```
+
+#### WebSocket Updates
+
+Socket.io connection is updated when domain changes in `lib/services/chat_service.dart`:
+
+```dart
+class ChatService {
+  late IO.Socket _socket;
+
+  Future<void> updateDomain(WaddleBotDomain domain) async {
+    await _socket.disconnect();
+    _socket = IO.io(
+      domain.baseUrl,
+      OptionBuilder()
+        .setTransports(['websocket']).build(),
+    );
+    await _socket.connect();
+  }
+}
+```
+
 ## API Integration
 
-### WaddleBot Backend API
+### Waddles Backend API
 
-The app communicates with WaddleBot backend via REST API:
+The app communicates with Waddles backend via REST API:
 
 ```
 Base URL: https://api.example.com/api/v1

@@ -1,6 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/stream_config.dart';
 import '../models/overlay_settings.dart';
+import '../models/domain_config.dart';
 
 /// Persists user settings to SharedPreferences.
 class SettingsService {
@@ -13,6 +14,7 @@ class SettingsService {
   static const _keyOverlaySize = 'overlay_size';
   static const _keyOverlayPosition = 'overlay_position';
   static const _keyEulaAccepted = 'eula_accepted';
+  static const _keyApiDomain = 'api_domain';
 
   static const List<MapEntry<String, List<int>>> resolutions = [
     MapEntry('360p (640x360)', [640, 360]),
@@ -100,5 +102,24 @@ class SettingsService {
   Future<void> acceptEula() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyEulaAccepted, true);
+  }
+
+  Future<WaddleBotDomain> loadApiDomain() async {
+    final prefs = await SharedPreferences.getInstance();
+    final domainIndex = prefs.getInt(_keyApiDomain) ?? 2; // production is index 2
+    switch (domainIndex) {
+      case 0:
+        return WaddleBotDomain.penguintech;
+      case 1:
+        return WaddleBotDomain.waddles;
+      case 2:
+      default:
+        return WaddleBotDomain.production;
+    }
+  }
+
+  Future<void> saveApiDomain(WaddleBotDomain domain) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_keyApiDomain, domain.index);
   }
 }

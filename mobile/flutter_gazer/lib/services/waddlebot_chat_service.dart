@@ -1,17 +1,21 @@
 import 'dart:async';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import '../config/constants.dart';
+import '../models/domain_config.dart';
 import '../models/waddlebot_models.dart';
 import 'waddlebot_auth_service.dart';
 
-/// WaddleBot chat via Socket.io — real-time messages and typing events.
+/// Waddles chat via Socket.io — real-time messages and typing events.
 class WaddleBotChatService {
   final WaddleBotAuthService _authService;
+  WaddleBotDomain _domain;
   io.Socket? _socket;
   int _reconnectAttempts = 0;
   Timer? _reconnectTimer;
   Timer? _typingDebounceTimer;
+  Timer? _pingTimer;
   bool _isDisposed = false;
+  bool _isProcessingMessage = false;
 
   final _messageController = StreamController<ChatMessage>.broadcast();
   final _typingController = StreamController<TypingEvent>.broadcast();
@@ -34,10 +38,13 @@ class WaddleBotChatService {
   WBConnectionState get currentConnectionState => _connectionState;
   String? get currentChannelId => _currentChannelId;
 
-  WaddleBotChatService({WaddleBotAuthService? authService})
-      : _authService = authService ?? WaddleBotAuthService();
+  WaddleBotChatService({
+    WaddleBotAuthService? authService,
+    WaddleBotDomain domain = WaddleBotDomain.production,
+  })  : _authService = authService ?? WaddleBotAuthService(),
+        _domain = domain;
 
-  /// Connect to the WaddleBot chat socket with auth token in query.
+  /// Connect to the Waddles chat socket with auth token in query.
   void connect() {
     if (_authService.accessToken == null) return;
     if (_isDisposed) return;
@@ -45,7 +52,7 @@ class WaddleBotChatService {
     _updateState(WBConnectionState.connecting);
 
     _socket = io.io(
-      AppConstants.waddleBotWsUrl,
+      _domain.wsUrl,
       io.OptionBuilder()
           .setTransports(['websocket'])
           .setQuery({'token': _authService.accessToken})
@@ -74,37 +81,61 @@ class WaddleBotChatService {
         _handleReconnectWithBackoff();
       })
       ..on('chat:message', (data) {
-        if (data is Map<String, dynamic>) {
-          _messageController.add(ChatMessage.fromJson(data));
+        if (_isProcessingMessage) return;
+        _isProcessingMessage = true;
+        try {
+          if (data is Map<String, dynamic>) {
+            _messageController.add(ChatMessage.fromJson(data));
+          }
+        } finally {
+          _isProcessingMessage = false;
         }
       })
       ..on('chat:typing', (data) {
-        if (data is Map<String, dynamic>) {
-          _typingController.add(TypingEvent.fromJson(data));
+        if (_isProcessingMessage) return;
+        _isProcessingMessage = true;
+        try {
+          if (data is Map<String, dynamic>) {
+            _typingController.add(TypingEvent.fromJson(data));
+          }
+        } finally {
+          _isProcessingMessage = false;
         }
       })
       ..on('chat:history', (data) {
-        if (data is Map<String, dynamic>) {
-          final history = MessageHistory.fromJson(data);
-          final channelId = data['channel_id'] as String?;
-          if (channelId != null) {
-            _messageHistoryCache[channelId] = history;
-            _messageHistoryController.add(history);
+        if (_isProcessingMessage) return;
+        _isProcessingMessage = true;
+        try {
+          if (data is Map<String, dynamic>) {
+            final history = MessageHistory.fromJson(data);
+            final channelId = data['channel_id'] as String?;
+            if (channelId != null) {
+              _messageHistoryCache[channelId] = history;
+              _messageHistoryController.add(history);
+            }
           }
+        } finally {
+          _isProcessingMessage = false;
         }
       })
       ..on('chat:channels', (data) {
-        if (data is List<dynamic>) {
-          final channels = data
-              .cast<Map<String, dynamic>>()
-              .map((c) => ChatChannel.fromJson(c))
-              .toList();
-          _channelsController.add(channels);
+        if (_isProcessingMessage) return;
+        _isProcessingMessage = true;
+        try {
+          if (data is List<dynamic>) {
+            final channels = data
+                .cast<Map<String, dynamic>>()
+                .map((c) => ChatChannel.fromJson(c))
+                .toList();
+            _channelsController.add(channels);
+          }
+        } finally {
+          _isProcessingMessage = false;
         }
       });
 
     // Keepalive ping
-    Timer.periodic(
+    _pingTimer = Timer.periodic(
       const Duration(seconds: AppConstants.waddleBotPingIntervalSec),
       (timer) {
         if (_isDisposed) {
@@ -246,10 +277,31 @@ class WaddleBotChatService {
   void disconnect() {
     _reconnectTimer?.cancel();
     _typingDebounceTimer?.cancel();
+    _pingTimer?.cancel();
+    _pingTimer = null;
     _socket?.disconnect();
     _socket?.dispose();
     _socket = null;
     _updateState(WBConnectionState.disconnected);
+  }
+
+  /// Update the domain and reconnect if previously connected.
+  /// Disconnects if currently connected, updates the domain, then reconnects.
+  void updateDomain(WaddleBotDomain domain) {
+    final wasConnected = _socket?.connected ?? false;
+
+    // Disconnect if currently connected
+    if (wasConnected) {
+      disconnect();
+    }
+
+    // Update domain
+    _domain = domain;
+
+    // Reconnect if was previously connected
+    if (wasConnected && !_isDisposed) {
+      connect();
+    }
   }
 
   /// Handle reconnection with exponential backoff.
@@ -278,6 +330,8 @@ class WaddleBotChatService {
 
   void dispose() {
     _isDisposed = true;
+    _pingTimer?.cancel();
+    _pingTimer = null;
     disconnect();
     _messageController.close();
     _typingController.close();
