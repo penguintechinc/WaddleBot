@@ -177,8 +177,8 @@ func TestGetLicenseInfo(t *testing.T) {
 		t.Errorf("Expected type 'Premium', got %v", info["type"])
 	}
 	
-	if info["requirement"] != "Active WaddleBot Premium Subscription" {
-		t.Errorf("Expected requirement 'Active WaddleBot Premium Subscription', got %v", info["requirement"])
+	if info["requirement"] != "Active Waddles Premium Subscription" {
+		t.Errorf("Expected requirement 'Active Waddles Premium Subscription', got %v", info["requirement"])
 	}
 	
 	// Verify accepted field
@@ -214,8 +214,8 @@ func TestLicenseConstants(t *testing.T) {
 	
 	// Test that license text contains required components
 	requiredComponents := []string{
-		"WaddleBot Premium Desktop Bridge License Agreement",
-		"Copyright (c) 2024 WaddleBot",
+		"Waddles Premium Desktop Bridge License Agreement",
+		"Copyright (c) 2024 Waddles",
 		"PREMIUM SOFTWARE LICENSE",
 		"GRANT OF LICENSE",
 		"RESTRICTIONS",
@@ -248,9 +248,9 @@ func TestLicenseTextContent(t *testing.T) {
 		t.Error("LicenseText should mention 'premium subscription'")
 	}
 	
-	// Test that license text mentions WaddleBot Premium
-	if !strings.Contains(LicenseText, "WaddleBot Premium") {
-		t.Error("LicenseText should mention 'WaddleBot Premium'")
+	// Test that license text mentions Waddles Premium
+	if !strings.Contains(LicenseText, "Waddles Premium") {
+		t.Error("LicenseText should mention 'Waddles Premium'")
 	}
 	
 	// Test that license text includes version

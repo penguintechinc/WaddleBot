@@ -2,7 +2,7 @@
 
 ## Overview
 
-Flutter Gazer follows a layered architecture pattern with clear separation of concerns:
+Waddles Gazer follows a layered architecture pattern with clear separation of concerns:
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -870,3 +870,4 @@ void main() {
 
 **Last Updated**: 2026-01-30
 **Version**: 2.1.0
+**Product**: Waddles Gazer

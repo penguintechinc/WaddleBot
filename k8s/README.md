@@ -1,6 +1,6 @@
-# WaddleBot Kubernetes Deployment
+# Waddles Kubernetes Deployment
 
-Complete Kubernetes deployment packages for WaddleBot, including automated installation scripts, Helm charts, and raw manifests.
+Complete Kubernetes deployment packages for Waddles, including automated installation scripts, Helm charts, and raw manifests.
 
 ## 🚀 Quick Start
 
@@ -123,7 +123,7 @@ Use Helm for templated, configurable deployments:
 ```bash
 helm install waddlebot ./helm/waddlebot \
   -f ./helm/waddlebot/values-local.yaml \
-  --namespace waddlebot --create-namespace
+  --namespace waddles --create-namespace
 ```
 
 **Advantages:**
@@ -159,8 +159,8 @@ Options:
   --build-images      Build and push images
   --skip-build        Skip image building
   --skip-setup        Skip MicroK8s setup
-  --namespace NAME    Custom namespace (default: waddlebot)
-  --uninstall         Uninstall WaddleBot
+  --namespace NAME    Custom namespace (default: waddles)
+  --uninstall         Uninstall Waddles
   --help              Show help
 ```
 
@@ -280,7 +280,7 @@ Add to `/etc/hosts`:
 127.0.0.1 waddlebot.local
 ```
 
-Access: **http://waddlebot.local**
+Access: **http://waddles.local**
 
 ### Via NodePort (MicroK8s)
 
@@ -454,12 +454,12 @@ For production deployments:
 - **API Reference**: `/docs/api-reference.md`
 - **Database Schema**: `/docs/database-schema.md`
 - **Development Guide**: `/docs/development-rules.md`
-- **GitHub**: https://github.com/waddlebot/waddlebot
+- **GitHub**: https://github.com/waddlebot/waddles
 
 ## 🤝 Support
 
 For issues or questions:
-- **GitHub Issues**: https://github.com/waddlebot/waddlebot/issues
+- **GitHub Issues**: https://github.com/waddlebot/waddles/issues
 - **Documentation**: See `/docs/` directory
 - **Community**: (Discord/Slack links)
 

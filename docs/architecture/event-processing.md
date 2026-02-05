@@ -1,8 +1,8 @@
-# WaddleBot Event Processing
+# Waddles Event Processing
 
 ## Introduction
 
-WaddleBot uses an event-driven architecture where trigger modules (receivers, pollers, cron) send events to the processing layer (router), which then routes to appropriate action modules (interactive, pushing, security) based on commands, patterns, and event types. This document describes the event processing flow, command architecture, and message type handling.
+Waddles uses an event-driven architecture where trigger modules (receivers, pollers, cron) send events to the processing layer (router), which then routes to appropriate action modules (interactive, pushing, security) based on commands, patterns, and event types. This document describes the event processing flow, command architecture, and message type handling.
 
 For information on router architecture, communication protocols, and integration patterns, see [Shared Patterns](./shared-patterns.md).
 
@@ -52,7 +52,7 @@ The complete event processing flow from message reception to response delivery:
 
 ## Command Architecture
 
-WaddleBot supports multiple command input methods across platforms:
+Waddles supports multiple command input methods across platforms:
 
 ### Command Support Matrix
 
@@ -260,7 +260,7 @@ Router supports four execution engine types for routing commands to different ex
 
 ## Summary
 
-WaddleBot's event processing system provides a comprehensive, scalable architecture for handling events from multiple platforms, routing them through a high-performance processing layer, and executing appropriate actions through interaction modules. The system supports horizontal scaling, multiple execution environments, content moderation, and rich response types including browser source integration for OBS.
+Waddles's event processing system provides a comprehensive, scalable architecture for handling events from multiple platforms, routing them through a high-performance processing layer, and executing appropriate actions through interaction modules. The system supports horizontal scaling, multiple execution environments, content moderation, and rich response types including browser source integration for OBS.
 
 Key features:
 - Event-driven architecture with 16-step processing flow

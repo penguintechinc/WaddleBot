@@ -1,6 +1,6 @@
-# HPA Integration with WaddleBot
+# HPA Integration with Waddles
 
-This document describes how HPA configurations integrate with WaddleBot's Kubernetes deployment.
+This document describes how HPA configurations integrate with Waddles's Kubernetes deployment.
 
 ## Directory Structure
 
@@ -52,7 +52,7 @@ HPA names follow the pattern: `{deployment-name}-hpa`
 HPA works with existing WaddleBot deployments without modification:
 
 ### Compatible Deployments
-All deployments in `/home/penguin/code/WaddleBot/k8s/manifests/` are compatible:
+All deployments in `/home/penguin/code/waddlebot/k8s/manifests/` are compatible:
 
 ✓ **Receiver Modules** (`collectors/`)
   - `twitch.yaml` - Twitch EventSub collector
@@ -109,7 +109,7 @@ All WaddleBot deployments already have these features.
 
 ### Method 1: Include HPAs in Main Kustomization
 
-Edit `/home/penguin/code/WaddleBot/k8s/manifests/kustomization.yaml`:
+Edit `/home/penguin/code/waddlebot/k8s/manifests/kustomization.yaml`:
 
 ```yaml
 resources:
@@ -144,7 +144,7 @@ kubectl apply -f k8s/hpa/
 
 ### Method 3: Use HPA Kustomization
 
-The `/home/penguin/code/WaddleBot/k8s/hpa/kustomization.yaml` can be applied independently:
+The `/home/penguin/code/waddlebot/k8s/hpa/kustomization.yaml` can be applied independently:
 
 ```bash
 kubectl apply -k k8s/hpa/
@@ -386,5 +386,5 @@ kubectl apply -f k8s/hpa/ -n waddlebot-staging
 ---
 
 **Last Updated:** 2025-12-09
-**WaddleBot Version:** 1.0.0+
+**Waddles Version:** 1.0.0+
 **Kubernetes Version:** 1.18+

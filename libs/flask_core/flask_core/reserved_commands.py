@@ -1,5 +1,5 @@
 """
-Platform-reserved commands for WaddleBot.
+Platform-reserved commands for Waddles.
 
 This module defines reserved commands for various streaming platforms
 (Twitch, Discord, Slack, YouTube, and Kick) and provides utilities

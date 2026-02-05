@@ -410,11 +410,12 @@ async def startup():
     logger.info(f"Starting {Config.MODULE_NAME} v{Config.MODULE_VERSION}")
 
     # Validate configuration
-    try:
-        Config.validate()
-    except ValueError as e:
-        logger.error(f"Configuration error: {e}")
+    errors = Config.validate()
+    if errors:
+        logger.error(f"Configuration errors: {', '.join(errors)}")
         sys.exit(1)
+
+    logger.info("Configuration validated successfully")
 
     # Start gRPC server
     await grpc_server.start()

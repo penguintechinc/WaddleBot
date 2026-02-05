@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-A comprehensive security audit identified and removed all hardcoded credentials from the WaddleBot codebase. This was a critical security vulnerability that exposed sensitive information including:
+A comprehensive security audit identified and removed all hardcoded credentials from the Waddles codebase. This was a critical security vulnerability that exposed sensitive information including:
 - Database passwords
 - API keys and secrets
 - OAuth tokens
@@ -37,7 +37,7 @@ All hardcoded defaults have been removed, and credentials now MUST be provided v
 
 **Services Updated**: 30+ services across all module categories
 
-**Location**: `/home/penguin/code/WaddleBot/docker-compose.yml`
+**Location**: `/home/penguin/code/waddlebot/docker-compose.yml`
 
 ---
 
@@ -53,7 +53,7 @@ All hardcoded defaults have been removed, and credentials now MUST be provided v
 
 **Services Updated**: 3 services (minio, postgres, portal)
 
-**Location**: `/home/penguin/code/WaddleBot/docker-compose.minio.yml`
+**Location**: `/home/penguin/code/waddlebot/docker-compose.minio.yml`
 
 ---
 
@@ -73,7 +73,7 @@ All hardcoded defaults have been removed, and credentials now MUST be provided v
 - AWS Secrets Manager
 - Or similar secret management tools
 
-**Location**: `/home/penguin/code/WaddleBot/k8s/manifests/secrets.yaml`
+**Location**: `/home/penguin/code/waddlebot/k8s/manifests/secrets.yaml`
 
 ---
 
@@ -85,7 +85,7 @@ All hardcoded defaults have been removed, and credentials now MUST be provided v
 
 **Updated**: OpenWhisk auth key now requires explicit values.yaml configuration
 
-**Location**: `/home/penguin/code/WaddleBot/k8s/helm/waddlebot/templates/secrets.yaml`
+**Location**: `/home/penguin/code/waddlebot/k8s/helm/waddlebot/templates/secrets.yaml`
 
 ---
 
@@ -97,7 +97,7 @@ All hardcoded defaults have been removed, and credentials now MUST be provided v
 
 **Updated**: DATABASE_URL now uses `${POSTGRES_PASSWORD}` placeholder (requires K8s environment variable injection)
 
-**Location**: `/home/penguin/code/WaddleBot/k8s/manifests/configmap.yaml`
+**Location**: `/home/penguin/code/waddlebot/k8s/manifests/configmap.yaml`
 
 ---
 
@@ -114,7 +114,7 @@ All hardcoded defaults have been removed, and credentials now MUST be provided v
 - Secret JWT_SECRET: `waddlebot_jwt_secret_for_testing` → empty (must be provided)
 - Redis readiness probe: `waddlebot_redis` → `$(REDIS_PASSWORD)` (dynamic)
 
-**Location**: `/home/penguin/code/WaddleBot/k8s/infrastructure.yaml`
+**Location**: `/home/penguin/code/waddlebot/k8s/infrastructure.yaml`
 
 ---
 
@@ -125,7 +125,7 @@ All hardcoded defaults have been removed, and credentials now MUST be provided v
 - Example: `REDIS_PASSWORD=waddlebot_redis_local` (clearly marked as development)
 - Safe for local development; never reaches production
 
-**Location**: `/home/penguin/code/WaddleBot/.env`
+**Location**: `/home/penguin/code/waddlebot/.env`
 
 ---
 
@@ -329,9 +329,9 @@ The `.env` file containing local development credentials is NOT in the git repos
 ## Related Documentation
 
 - **Credentials Rotation**: `/home/penguin/code/WaddleBot/docs/CREDENTIALS-ROTATION-CHECKLIST.md`
-- **Environment Variables**: `/home/penguin/code/WaddleBot/docs/environment-variables.md`
-- **Development Rules**: `/home/penguin/code/WaddleBot/docs/development-rules.md`
-- **Project Overview**: `/home/penguin/code/WaddleBot/CLAUDE.md`
+- **Environment Variables**: `/home/penguin/code/waddlebot/docs/environment-variables.md`
+- **Development Rules**: `/home/penguin/code/waddlebot/docs/development-rules.md`
+- **Project Overview**: `/home/penguin/code/waddlebot/CLAUDE.md`
 
 ---
 
@@ -385,4 +385,4 @@ kubectl apply --dry-run=client -f k8s/infrastructure.yaml && echo "OK: K8s manif
 
 **CRITICAL**: Do not deploy to production until secret management solution is in place.
 
-For questions, refer to `/home/penguin/code/WaddleBot/docs/CREDENTIALS-ROTATION-CHECKLIST.md`
+For questions, refer to `/home/penguin/code/waddlebot/docs/CREDENTIALS-ROTATION-CHECKLIST.md`

@@ -1,6 +1,6 @@
-# WaddleBot Kubernetes Manifests
+# Waddles Kubernetes Manifests
 
-Raw Kubernetes manifests for deploying WaddleBot to a local Kubernetes cluster (microk8s, minikube, kind, etc.).
+Raw Kubernetes manifests for deploying Waddles to a local Kubernetes cluster (microk8s, minikube, kind, etc.).
 
 ## Prerequisites
 
@@ -37,7 +37,7 @@ minikube addons enable ingress
 
 ```bash
 # Apply all manifests
-kubectl apply -k /home/penguin/code/WaddleBot/k8s/manifests/
+kubectl apply -k /home/penguin/code/waddlebot/k8s/manifests/
 
 # Watch deployment progress
 kubectl get pods -n waddlebot -w
@@ -50,11 +50,11 @@ kubectl get svc -n waddlebot
 
 Add to `/etc/hosts`:
 ```
-127.0.0.1 waddlebot.local
+127.0.0.1 waddles.local
 ```
 
 Access Hub UI:
-- **URL**: http://waddlebot.local (via ingress)
+- **URL**: http://waddles.local (via ingress)
 - **Direct**: http://localhost:30080 (NodePort)
 
 ## Manual Deployment
@@ -229,7 +229,7 @@ kubectl edit deployment router -n waddlebot
 
 ```bash
 # Using kustomize
-kubectl delete -k /home/penguin/code/WaddleBot/k8s/manifests/
+kubectl delete -k /home/penguin/code/waddlebot/k8s/manifests/
 
 # Or delete namespace (removes all resources)
 kubectl delete namespace waddlebot
@@ -335,5 +335,5 @@ For production deployment:
 ## Support
 
 For issues or questions:
-- GitHub: https://github.com/waddlebot/waddlebot
-- Documentation: See `/home/penguin/code/WaddleBot/docs/`
+- GitHub: https://github.com/waddlebot/waddles
+- Documentation: See `/home/penguin/code/waddlebot/docs/`

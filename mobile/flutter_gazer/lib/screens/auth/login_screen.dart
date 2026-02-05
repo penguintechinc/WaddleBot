@@ -9,7 +9,7 @@ import '../../config/theme.dart';
 ///
 /// Features:
 /// - LoginPageBuilder from penguin-libs with Elder theme
-/// - Integration with WaddleBotAuthService
+/// - Integration with Waddles authentication service
 /// - JWT token persistence via flutter_secure_storage
 /// - MFA/2FA support enabled
 /// - Professional streaming app branding

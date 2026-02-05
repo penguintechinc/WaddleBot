@@ -130,10 +130,10 @@ export async function sendVerificationEmail(email, username, token) {
     const mailOptions = {
       from,
       to: email,
-      subject: 'Verify your WaddleBot account',
+      subject: 'Verify your Waddles account',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h1 style="color: #333;">Welcome to WaddleBot, ${username || 'User'}!</h1>
+          <h1 style="color: #333;">Welcome to Waddles, ${username || 'User'}!</h1>
           <p>Thanks for signing up. Please verify your email address by clicking the button below:</p>
           <div style="text-align: center; margin: 30px 0;">
             <a href="${verificationUrl}"
@@ -152,7 +152,7 @@ export async function sendVerificationEmail(email, username, token) {
         </div>
       `,
       text: `
-Welcome to WaddleBot, ${username || 'User'}!
+Welcome to Waddles, ${username || 'User'}!
 
 Thanks for signing up. Please verify your email address by visiting:
 ${verificationUrl}
@@ -185,7 +185,7 @@ export async function sendPasswordResetEmail(email, username, token) {
     const mailOptions = {
       from,
       to: email,
-      subject: 'Reset your WaddleBot password',
+      subject: 'Reset your Waddles password',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h1 style="color: #333;">Password Reset Request</h1>

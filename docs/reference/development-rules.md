@@ -1,6 +1,6 @@
-# WaddleBot Development Rules & Standards
+# Waddles Development Rules & Standards
 
-This document defines mandatory rules and standards for all WaddleBot development. These rules ensure safety, stability, security, and maintainability across the entire codebase. **All contributors must follow these rules without exception.**
+This document defines mandatory rules and standards for all Waddles development. These rules ensure safety, stability, security, and maintainability across the entire codebase. **All contributors must follow these rules without exception.**
 
 ## Table of Contents
 
@@ -39,7 +39,7 @@ This document defines mandatory rules and standards for all WaddleBot developmen
 
 ## Red Flags (Never Do These)
 
-The following practices are **strictly prohibited** in WaddleBot development:
+The following practices are **strictly prohibited** in Waddles development:
 
 - Skipping input validation "just this once"
 - Hardcoding credentials or configuration
@@ -673,9 +673,9 @@ Referrer-Policy: strict-origin-when-cross-origin
 
 ## Conclusion
 
-These development rules and standards are mandatory for all WaddleBot development. They ensure that we maintain a secure, stable, and high-quality codebase that can scale to support thousands of communities and millions of users.
+These development rules and standards are mandatory for all Waddles development. They ensure that we maintain a secure, stable, and high-quality codebase that can scale to support thousands of communities and millions of users.
 
-**Remember**: Safe, stable, and feature-complete development is not optional - it's the foundation of WaddleBot's success.
+**Remember**: Safe, stable, and feature-complete development is not optional - it's the foundation of Waddles's success.
 
 For questions or clarifications on these rules, consult the project maintainers or refer to the comprehensive documentation in the `docs/` folder.
 
@@ -683,6 +683,6 @@ For questions or clarifications on these rules, consult the project maintainers 
 
 **Document Version**: 1.0.0
 **Last Updated**: 2025-12-02
-**Maintainer**: WaddleBot Development Team
+**Maintainer**: Waddles Development Team
 **Company**: PenguinTech - www.penguintech.io
 **License**: Limited AGPL3

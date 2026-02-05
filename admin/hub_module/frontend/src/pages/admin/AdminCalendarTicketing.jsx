@@ -19,7 +19,7 @@ import {
   CheckCircleIcon,
 } from '@heroicons/react/24/outline';
 
-// WaddleBot theme colors matching the existing UI
+// Waddles theme colors matching the existing UI
 const waddlebotColors = {
   modalBackground: 'bg-navy-800',
   headerBackground: 'bg-navy-800',

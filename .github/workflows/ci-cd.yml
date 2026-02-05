@@ -1,4 +1,4 @@
-name: WaddleBot CI/CD Pipeline
+name: Waddles CI/CD Pipeline
 
 on:
   push:

@@ -2,7 +2,7 @@
 
 ## Build Test Summary
 
-Tested key WaddleBot modules for Docker build compatibility. As of 2024-12-24:
+Tested key Waddles modules for Docker build compatibility. As of 2024-12-24:
 
 ### ✅ Successfully Building Modules
 

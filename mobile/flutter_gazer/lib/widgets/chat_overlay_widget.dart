@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/waddlebot_models.dart';
 import '../services/waddlebot_chat_service.dart';
 
-/// Transparent overlay showing the last few WaddleBot chat messages.
+/// Transparent overlay showing the last few Waddles chat messages.
 class ChatOverlayWidget extends StatefulWidget {
   final int maxMessages;
 

@@ -1,6 +1,6 @@
 -- Migration 028: Add Community Engagement Tables (Polls and Forms)
 -- Description: Adds tables for community polls and forms with visibility controls
--- Author: WaddleBot Engineering
+-- Author: Waddles Engineering
 -- Date: 2026-01-21
 
 BEGIN;

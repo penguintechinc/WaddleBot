@@ -155,4 +155,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-For more information about WaddleBot, please refer to the project documentation and contribution guidelines.
+For more information about Waddles, please refer to the project documentation and contribution guidelines.

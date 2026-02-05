@@ -171,7 +171,7 @@ class IdentityServiceServicer:
         Args:
             request: GetLinkedPlatformsRequest containing:
                 - token: Authentication token
-                - hub_user_id: WaddleBot hub user ID
+                - hub_user_id: Waddles hub user ID
 
         Returns:
             GetLinkedPlatformsResponse with list of linked platforms or error

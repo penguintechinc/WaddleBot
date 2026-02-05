@@ -208,7 +208,7 @@ def setup_entities():
         raise
 
 if __name__ == "__main__":
-    print("Setting up WaddleBot commands and entities...")
+    print("Setting up Waddles commands and entities...")
     
     # Setup commands
     setup_commands()

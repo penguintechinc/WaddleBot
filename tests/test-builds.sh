@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "Testing key Docker builds for WaddleBot modules..."
+echo "Testing key Docker builds for Waddles modules..."
 
 # Test AI Interaction (already working)
 echo -n "Testing ai_interaction_module... "

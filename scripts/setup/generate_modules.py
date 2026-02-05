@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Generate Flask modules from template
-Systematically creates all remaining WaddleBot modules
+Systematically creates all remaining Waddles modules
 """
 
 import os
@@ -148,7 +148,7 @@ def create_module(module_name, port, desc):
     print(f"✓ Created {module_name}")
 
 if __name__ == '__main__':
-    print("Generating all WaddleBot Flask modules...")
+    print("Generating all Waddles Flask modules...")
     for module_name, config in MODULES.items():
         create_module(module_name, config['port'], config['desc'])
     print(f"\\n✓ Successfully generated {len(MODULES)} modules!")

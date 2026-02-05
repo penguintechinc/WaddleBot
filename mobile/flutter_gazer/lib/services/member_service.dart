@@ -11,7 +11,7 @@ import '../models/api_response.dart' hide ApiError;
 /// Manages all member operations including retrieval, role management,
 /// member search, and membership changes within communities.
 ///
-/// Uses the WaddleBot API at: /api/v1/communities/{communityId}/members
+/// Uses the Waddles API at: /api/v1/communities/{communityId}/members
 class MemberService {
   static final MemberService _instance = MemberService._internal();
   late final ApiClient _apiClient;

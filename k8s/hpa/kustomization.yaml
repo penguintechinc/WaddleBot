@@ -19,7 +19,7 @@ commonLabels:
 
 # Common metadata
 commonAnnotations:
-  description: "WaddleBot Horizontal Pod Autoscaler Configurations"
+  description: "Waddles Horizontal Pod Autoscaler Configurations"
   documentation: "k8s/hpa/README.md"
 
 # ConfigMap with HPA documentation

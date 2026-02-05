@@ -2,7 +2,7 @@
 Pagination models for API endpoints.
 
 Provides standardized pagination parameters and response wrappers
-for consistent pagination across all WaddleBot modules.
+for consistent pagination across all Waddles modules.
 """
 
 from __future__ import annotations

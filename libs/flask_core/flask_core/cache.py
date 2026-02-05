@@ -1,5 +1,5 @@
 """
-Redis-backed caching utilities for WaddleBot modules
+Redis-backed caching utilities for Waddles modules
 
 Provides a centralized caching layer with:
 - Redis backend for distributed caching

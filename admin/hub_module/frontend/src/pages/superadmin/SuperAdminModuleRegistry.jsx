@@ -3,7 +3,7 @@ import { superAdminApi } from '../../services/api';
 import { Search, Plus, Edit2, Trash2, Eye, EyeOff, Star, Download, Package } from 'lucide-react';
 import { FormModalBuilder } from '@penguin/react_libs';
 
-// WaddleBot theme colors matching the existing UI
+// Waddles theme colors matching the existing UI
 const waddlebotColors = {
   modalBackground: 'bg-navy-800',
   headerBackground: 'bg-navy-800',
@@ -52,7 +52,7 @@ export default function SuperAdminModuleRegistry() {
     displayName: '',
     description: '',
     version: '1.0.0',
-    author: 'WaddleBot',
+    author: 'Waddles',
     category: 'general',
     iconUrl: '',
     isCore: false,
@@ -197,8 +197,8 @@ export default function SuperAdminModuleRegistry() {
       type: 'text',
       label: 'Author',
       required: true,
-      defaultValue: 'WaddleBot',
-      placeholder: 'e.g., WaddleBot',
+      defaultValue: 'Waddles',
+      placeholder: 'e.g., Waddles',
     },
     {
       name: 'category',

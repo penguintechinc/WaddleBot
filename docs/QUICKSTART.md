@@ -1,6 +1,6 @@
-# WaddleBot Quick Start Guide
+# Waddles Quick Start Guide
 
-Get WaddleBot running in minutes with this comprehensive quick start guide.
+Get Waddles running in minutes with this comprehensive quick start guide.
 
 ## Prerequisites
 
@@ -21,7 +21,7 @@ Before you begin, ensure you have the following installed:
 
 ### Platform API Credentials (Optional for First Run)
 
-To connect WaddleBot to your platforms, you'll need:
+To connect Waddles to your platforms, you'll need:
 
 - **Twitch**: App ID, App Secret, Webhook Secret ([Create Twitch App](https://dev.twitch.tv/console/apps))
 - **Discord**: Bot Token, Application ID, Public Key ([Create Discord App](https://discord.com/developers/applications))

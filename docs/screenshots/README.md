@@ -1,12 +1,12 @@
-# WaddleBot Screenshots
+# Waddles Screenshots
 
-This directory contains screenshots of the WaddleBot admin interface and features.
+This directory contains screenshots of the Waddles admin interface and features.
 
 ## Capturing Screenshots
 
 ### Option 1: Manual Screenshots
 
-1. Start WaddleBot with docker-compose:
+1. Start Waddles with docker-compose:
    ```bash
    docker-compose up -d
    ```

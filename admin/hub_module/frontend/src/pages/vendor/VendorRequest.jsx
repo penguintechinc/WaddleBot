@@ -147,7 +147,7 @@ function VendorRequest() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-white mb-2">Request Vendor Status</h1>
         <p className="text-navy-300">
-          Become a vendor and submit your modules to the WaddleBot marketplace. Our team will review your request within 48 hours.
+          Become a vendor and submit your modules to the Waddles marketplace. Our team will review your request within 48 hours.
         </p>
       </div>
 
@@ -209,7 +209,7 @@ function VendorRequest() {
                 required
                 rows="4"
                 className="w-full bg-navy-900 border border-navy-600 rounded px-4 py-2 text-white focus:outline-none focus:border-gold-400"
-                placeholder="Tell us about your business and why you want to submit modules to WaddleBot"
+                placeholder="Tell us about your business and why you want to submit modules to Waddles"
               />
             </div>
 

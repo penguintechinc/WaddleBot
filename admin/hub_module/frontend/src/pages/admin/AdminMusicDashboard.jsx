@@ -54,7 +54,7 @@ function AdminMusicDashboard() {
         setData({
           currentTrack: {
             title: 'No Track Playing',
-            artist: 'WaddleBot Music',
+            artist: 'Waddles Music',
             duration: 0,
             progress: 0,
             thumbnail: null,
@@ -76,7 +76,7 @@ function AdminMusicDashboard() {
       setData({
         currentTrack: {
           title: 'No Track Playing',
-          artist: 'WaddleBot Music',
+          artist: 'Waddles Music',
           duration: 0,
           progress: 0,
           thumbnail: null,

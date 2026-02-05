@@ -1,6 +1,6 @@
-# WaddleBot Test Suite
+# Waddles Test Suite
 
-Comprehensive testing framework for WaddleBot covering smoke tests, API integration, multi-service integration, and end-to-end workflows.
+Comprehensive testing framework for Waddles covering smoke tests, API integration, multi-service integration, and end-to-end workflows.
 
 ## Test Directory Structure
 

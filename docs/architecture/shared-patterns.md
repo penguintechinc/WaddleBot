@@ -1,8 +1,8 @@
-# WaddleBot Shared Patterns
+# Waddles Shared Patterns
 
 ## Introduction
 
-This document describes the shared patterns, architectures, and integration protocols used across all WaddleBot modules. These patterns ensure consistency, performance, and maintainability across the entire system.
+This document describes the shared patterns, architectures, and integration protocols used across all Waddles modules. These patterns ensure consistency, performance, and maintainability across the entire system.
 
 For information on event processing flow and message type handling, see [Event Processing](./event-processing.md).
 
@@ -55,7 +55,7 @@ The router module is the core processing component with high-performance feature
 
 Router sends comprehensive context to all interaction modules:
 
-- **userID**: User's identity in WaddleBot system
+- **userID**: User's identity in Waddles system
 - **community context**: Community ID, platform, server, channel
 - **user level**: User's permission level in community (owner, admin, moderator, user)
 - **entity information**: Complete entity details for routing
@@ -119,7 +119,7 @@ Community owners can grant portal access:
 ### Authentication
 
 - **Flask-Security-Too**: Built on Flask's authentication system
-- **Custom Fields**: Extended WaddleBot user fields in user table
+- **Custom Fields**: Extended Waddles user fields in user table
 - **Session Management**: Secure session handling with expiration
 - **Role-Based Access**: Permissions based on community roles
 
@@ -140,7 +140,7 @@ SMTP_PORT=587
 ### Database Integration
 
 - **Flask-Security user table**: Core user authentication
-- **Custom WaddleBot fields**: Additional fields for bot integration
+- **Custom Waddles fields**: Additional fields for bot integration
 - **Cross-platform linking**: Identity linking across platforms
 - **Reputation tracking**: User reputation scores
 
@@ -455,7 +455,7 @@ All collector modules follow the same integration pattern with core APIs.
 
 ## Summary
 
-WaddleBot's shared patterns provide a consistent, high-performance architecture across all modules. These patterns enable horizontal scaling, content moderation, rich response types, and comprehensive integration with external systems.
+Waddles's shared patterns provide a consistent, high-performance architecture across all modules. These patterns enable horizontal scaling, content moderation, rich response types, and comprehensive integration with external systems.
 
 Key features:
 - High-performance router with multi-threading and caching

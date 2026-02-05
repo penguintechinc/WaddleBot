@@ -73,7 +73,7 @@ class StreamControls extends StatelessWidget {
               ],
             ),
           ),
-          // Chat toggle (WaddleBot)
+          // Chat toggle (Waddles)
           if (onToggleChat != null)
             IconButton(
               icon: const Icon(Icons.chat_bubble_outline),

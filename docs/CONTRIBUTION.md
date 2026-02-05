@@ -1,6 +1,6 @@
-# WaddleBot Contribution Guide
+# Waddles Contribution Guide
 
-Welcome to the WaddleBot project! We're excited that you're interested in contributing. This guide will help you understand our contribution process, code standards, and best practices.
+Welcome to the Waddles project! We're excited that you're interested in contributing. This guide will help you understand our contribution process, code standards, and best practices.
 
 ## Table of Contents
 
@@ -19,7 +19,7 @@ Welcome to the WaddleBot project! We're excited that you're interested in contri
 
 ### Who Can Contribute?
 
-WaddleBot is an open-source project under GPL-3.0 license. We welcome contributions from:
+Waddles is an open-source project under GPL-3.0 license. We welcome contributions from:
 
 - Individual developers
 - Community members
@@ -817,7 +817,7 @@ Before submitting PR:
 
 ### License Agreement
 
-By contributing to WaddleBot, you agree that:
+By contributing to Waddles, you agree that:
 
 1. Your contributions will be licensed under GPL-3.0
 2. You have the right to submit the contribution
@@ -879,7 +879,7 @@ If applicable
 **Environment**
 - OS: [e.g., Ubuntu 22.04]
 - Docker version: [e.g., 20.10.21]
-- WaddleBot version: [e.g., 0.2.0]
+- Waddles version: [e.g., 0.2.0]
 
 **Additional context**
 Any other relevant information
@@ -887,4 +887,4 @@ Any other relevant information
 
 ---
 
-**Thank you for contributing to WaddleBot!** Your contributions help make WaddleBot better for everyone in the community.
+**Thank you for contributing to Waddles!** Your contributions help make Waddles better for everyone in the community.

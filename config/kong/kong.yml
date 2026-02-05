@@ -1,4 +1,4 @@
-# Kong Declarative Configuration for WaddleBot API Gateway
+# Kong Declarative Configuration for Waddles API Gateway
 # All APIs exposed via api.waddlebot.io - No direct external access to services
 # Excludes: Frontend, webhook receivers, OBS overlays (separate systems)
 

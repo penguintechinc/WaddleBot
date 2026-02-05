@@ -1,4 +1,4 @@
-// Package obs provides OBS WebSocket integration for the WaddleBot Desktop Bridge.
+// Package obs provides OBS WebSocket integration for the Waddles Desktop Bridge.
 // It implements the obs-websocket v5 protocol for full OBS Studio control.
 package obs
 

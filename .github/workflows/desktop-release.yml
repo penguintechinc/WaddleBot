@@ -58,7 +58,7 @@ jobs:
       - name: Create release notes
         run: |
           cat > release-notes.md << 'EOF'
-          # WaddleBot Premium Desktop Bridge Release
+          # Waddles Premium Desktop Bridge Release
 
           ## Features
           - **OBS Integration**: Full OBS Studio control via WebSocket

@@ -1,6 +1,6 @@
-# WaddleBot Application Standards
+# Waddles Application Standards
 
-This document defines local application standards that apply to WaddleBot development.
+This document defines local application standards that apply to Waddles development.
 
 ## Container Naming Convention
 

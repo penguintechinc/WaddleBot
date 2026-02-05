@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# WaddleBot Comprehensive API Test Script
+# Waddles Comprehensive API Test Script
 # Tests health endpoints for all modules
 #
 
@@ -100,7 +100,7 @@ test_docker_health() {
 }
 
 echo ""
-echo -e "${BLUE}WaddleBot Comprehensive API Test Suite${NC}"
+echo -e "${BLUE}Waddles Comprehensive API Test Suite${NC}"
 echo -e "${BLUE}=======================================${NC}"
 echo ""
 

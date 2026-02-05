@@ -1,7 +1,7 @@
 {
   "name": "waddlebot-api-tests",
   "version": "1.0.0",
-  "description": "API integration tests for WaddleBot Hub Backend",
+  "description": "API integration tests for Waddles Hub Backend",
   "scripts": {
     "test": "jest --runInBand --verbose",
     "test:watch": "jest --watch",

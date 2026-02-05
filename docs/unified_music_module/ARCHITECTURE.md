@@ -874,4 +874,4 @@ CREATE TABLE music_radio_state (
 
 **Last Updated**: 2025-12-16
 **Architecture Version**: 1.0.0
-**Maintainer**: WaddleBot Development Team
+**Maintainer**: Waddles Development Team

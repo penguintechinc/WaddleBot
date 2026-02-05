@@ -201,7 +201,7 @@ export default function VendorSubmissionForm() {
         <div className="success-message">
           <div className="success-icon">✓</div>
           <h2>Module Submission Received!</h2>
-          <p>Thank you for submitting your module to WaddleBot Marketplace.</p>
+          <p>Thank you for submitting your module to Waddles Marketplace.</p>
           <p className="submission-id">Submission ID: {submissionId}</p>
           <p>We've received your submission and will review it within 5-7 business days.</p>
           <p>You'll receive updates at: <strong>{formData.vendorEmail}</strong></p>
@@ -219,9 +219,9 @@ export default function VendorSubmissionForm() {
   return (
     <div className="vendor-submission-form">
       <div className="form-container">
-        <h1>Submit Your Module to WaddleBot Marketplace</h1>
+        <h1>Submit Your Module to Waddles Marketplace</h1>
         <p className="form-subtitle">
-          Share your module with the WaddleBot community. Our admin team will review your submission
+          Share your module with the Waddles community. Our admin team will review your submission
           and contact you within 5-7 business days.
         </p>
 
@@ -383,7 +383,7 @@ export default function VendorSubmissionForm() {
           <section className="form-section">
             <h2>3. Webhook Configuration</h2>
             <p className="section-help">
-              WaddleBot will send events to your webhook when users interact with your module.
+              Waddles will send events to your webhook when users interact with your module.
             </p>
 
             <div className="form-group">
@@ -655,7 +655,7 @@ export default function VendorSubmissionForm() {
               <strong>⚠ Important Note about Processing Fees:</strong>
               <p>
                 Payment processors (PayPal, Stripe, etc.) charge standard transaction fees (typically 2.2-3% + $0.30).
-                These fees are <strong>deducted from your payment by the processor</strong>, not by WaddleBot.
+                These fees are <strong>deducted from your payment by the processor</strong>, not by Waddles.
                 You'll see the net amount after fees in your payment summary.
               </p>
             </div>

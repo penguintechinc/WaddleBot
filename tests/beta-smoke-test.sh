@@ -1,5 +1,5 @@
 #!/bin/bash
-# WaddleBot Beta Smoke Test
+# Waddles Beta Smoke Test
 # Validates API endpoints and frontend accessibility after deployment
 #
 # IMPORTANT: This test MUST pass after deployment to beta cluster.
@@ -49,7 +49,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 echo "========================================"
-echo "WaddleBot Beta Smoke Test"
+echo "Waddles Beta Smoke Test"
 echo "========================================"
 echo ""
 echo "Target: $BASE_URL"

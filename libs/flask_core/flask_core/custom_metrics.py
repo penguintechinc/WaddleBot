@@ -2,7 +2,7 @@
 Custom Prometheus Metrics
 ==========================
 
-Business metrics and custom instrumentation for WaddleBot microservices.
+Business metrics and custom instrumentation for Waddles microservices.
 
 Provides:
 - Counter metrics (total commands, errors, etc.)
@@ -109,7 +109,7 @@ class MetricsManager:
         logger.info(f"Metrics manager initialized for {service_name}:{service_version}")
 
     def _init_default_metrics(self):
-        """Initialize default WaddleBot business metrics."""
+        """Initialize default Waddles business metrics."""
 
         # Service info
         self.service_info = Info(

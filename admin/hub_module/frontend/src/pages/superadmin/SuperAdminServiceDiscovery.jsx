@@ -526,7 +526,7 @@ export default function SuperAdminServiceDiscovery() {
             <span>Service Discovery</span>
           </h1>
           <p className="text-navy-400 mt-1">
-            Monitor and manage WaddleBot microservices
+            Monitor and manage Waddles microservices
           </p>
         </div>
 

@@ -13,7 +13,7 @@ test.describe('Authentication Workflow', () => {
   test('Complete user registration and login flow', async ({ page }) => {
     // Navigate to registration page
     await page.goto('/register');
-    await expect(page).toHaveTitle(/WaddleBot|Register|Sign Up/i);
+    await expect(page).toHaveTitle(/Waddles|Register|Sign Up/i);
 
     // Fill registration form
     await page.fill('input[name="email"], input[type="email"]', uniqueEmail);

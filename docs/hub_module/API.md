@@ -2,7 +2,7 @@
 
 ## Overview
 
-The WaddleBot Hub Module provides a comprehensive RESTful API for managing communities, users, authentication, and platform integrations. The API follows REST conventions and returns JSON responses.
+The Waddles Hub Module provides a comprehensive RESTful API for managing communities, users, authentication, and platform integrations. The API follows REST conventions and returns JSON responses.
 
 **Base URL:** `http://localhost:8060/api/v1`
 **Version:** 1.0.1
@@ -192,7 +192,7 @@ List all public communities with pagination.
       "id": 1,
       "name": "waddle-community",
       "displayName": "Waddle Community",
-      "description": "The official WaddleBot community",
+      "description": "The official Waddles community",
       "logoUrl": "https://example.com/logo.png",
       "memberCount": 523,
       "isPublic": true,
@@ -221,7 +221,7 @@ Get detailed information about a specific public community.
     "id": 1,
     "name": "waddle-community",
     "displayName": "Waddle Community",
-    "description": "The official WaddleBot community",
+    "description": "The official Waddles community",
     "logoUrl": "https://example.com/logo.png",
     "bannerUrl": "https://example.com/banner.png",
     "memberCount": 523,
@@ -1046,7 +1046,7 @@ Browse available modules.
       "displayName": "Loyalty System",
       "description": "Points and rewards system",
       "version": "1.0.0",
-      "author": "WaddleBot",
+      "author": "Waddles",
       "isInstalled": false,
       "rating": 4.8,
       "downloads": 523

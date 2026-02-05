@@ -6,7 +6,7 @@ export default function Privacy() {
       {/* Navigation */}
       <nav className="flex justify-between items-center p-6 bg-black/20 backdrop-blur-sm sticky top-0 z-50">
         <Link href="/" className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-          WaddleBot
+          Waddles
         </Link>
         <div className="hidden md:flex gap-8">
           <Link href="/features" className="hover:text-blue-300 transition-colors">Features</Link>
@@ -48,7 +48,7 @@ export default function Privacy() {
             <div>
               <h2 className="text-3xl font-bold mb-4 text-blue-300">Introduction</h2>
               <p className="text-gray-300 leading-relaxed">
-                WaddleBot (&ldquo;we,&rdquo; &ldquo;our,&rdquo; or &ldquo;us&rdquo;) respects your privacy and is committed to protecting your personal data. This privacy policy explains how we collect, use, and safeguard your information when you use our open source community management platform.
+                Waddles (&ldquo;we,&rdquo; &ldquo;our,&rdquo; or &ldquo;us&rdquo;) respects your privacy and is committed to protecting your personal data. This privacy policy explains how we collect, use, and safeguard your information when you use our open source community management platform.
               </p>
             </div>
 
@@ -59,7 +59,7 @@ export default function Privacy() {
                 <div>
                   <h3 className="text-xl font-semibold mb-2 text-purple-300">Open Source Usage</h3>
                   <p className="text-gray-300 leading-relaxed">
-                    When you use the open source version of WaddleBot self-hosted on your infrastructure, we do not collect any personal data. All data remains on your systems under your control.
+                    When you use the open source version of Waddles self-hosted on your infrastructure, we do not collect any personal data. All data remains on your systems under your control.
                   </p>
                 </div>
                 
@@ -213,7 +213,7 @@ export default function Privacy() {
           <div className="grid md:grid-cols-4 gap-8">
             <div>
               <Link href="/" className="text-2xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent block">
-                WaddleBot
+                Waddles
               </Link>
               <p className="text-gray-400 mb-4">
                 The future of multi-platform community management
@@ -250,7 +250,7 @@ export default function Privacy() {
             </div>
           </div>
           <div className="border-t border-white/10 mt-12 pt-8 text-center text-gray-400">
-            <p>© 2024 WaddleBot. All rights reserved. Built for the future of community management.</p>
+            <p>© 2024 Waddles. All rights reserved. Built for the future of community management.</p>
           </div>
         </div>
       </footer>

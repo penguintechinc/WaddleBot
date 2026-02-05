@@ -2,7 +2,7 @@
 Python 3.13 Optimized Dataclasses
 ==================================
 
-Shared dataclasses used across all WaddleBot modules.
+Shared dataclasses used across all Waddles modules.
 Optimized with slots=True for memory efficiency and performance.
 """
 

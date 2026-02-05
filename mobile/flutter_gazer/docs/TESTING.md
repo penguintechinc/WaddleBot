@@ -1,6 +1,6 @@
 # Flutter Gazer Testing Guide
 
-Comprehensive testing documentation for the Flutter Gazer mobile streaming application. This guide covers unit tests, widget tests, integration tests, and end-to-end test strategies for ensuring code quality and stability.
+Comprehensive testing documentation for the Waddles Gazer mobile streaming application. This guide covers unit tests, widget tests, integration tests, and end-to-end test strategies for ensuring code quality and stability.
 
 ---
 
@@ -199,7 +199,7 @@ void main() {
 
 Services often depend on external APIs or other services. Use mockito to mock dependencies.
 
-**Example: WaddleBotService Tests**
+**Example: WaddlesService Tests**
 
 ```dart
 import 'package:flutter_test/flutter_test.dart';
@@ -337,7 +337,7 @@ void main() {
 }
 ```
 
-**Example: Authentication Service Tests**
+**Example: Waddles Authentication Service Tests**
 
 ```dart
 import 'package:flutter_test/flutter_test.dart';

@@ -1,8 +1,8 @@
-# WaddleBot Workflow Compliance and CI/CD Documentation
+# Waddles Workflow Compliance and CI/CD Documentation
 
 ## Overview
 
-WaddleBot uses automated CI/CD workflows with `.version` file monitoring, multi-language security scanning, and containerized builds for 24+ microservices modules. This document provides complete workflow configuration and compliance standards.
+Waddles uses automated CI/CD workflows with `.version` file monitoring, multi-language security scanning, and containerized builds for 24+ microservices modules. This document provides complete workflow configuration and compliance standards.
 
 **Current Version**: 0.2.0 (stored in `.version` file at repository root)
 
@@ -15,7 +15,7 @@ WaddleBot uses automated CI/CD workflows with `.version` file monitoring, multi-
 The `.version` file serves as the single source of truth for semantic versioning:
 
 ```
-Location: /home/penguin/code/WaddleBot/.version
+Location: /home/penguin/code/Waddles/.version
 Format: vMajor.Minor.Patch (e.g., 0.2.0)
 Current: 0.2.0
 ```
@@ -417,7 +417,7 @@ vMajor.Minor.Patch.Epoch64
 **Manual Update**:
 ```bash
 # Navigate to repository root
-cd /home/penguin/code/WaddleBot
+cd /home/penguin/code/Waddles
 
 # Update version file
 ./scripts/version/update-version.sh patch
@@ -487,8 +487,8 @@ All container builds target:
 
 ```bash
 # Clone and setup
-git clone https://github.com/penguintechinc/WaddleBot.git
-cd WaddleBot
+git clone https://github.com/penguintechinc/Waddles.git
+cd Waddles
 
 # Install dependencies
 pip install -r requirements.txt
@@ -557,7 +557,7 @@ git push origin main
 ### Build Status Monitoring
 
 **GitHub Actions Dashboard**:
-1. Navigate to: https://github.com/{owner}/WaddleBot/actions
+1. Navigate to: https://github.com/{owner}/Waddles/actions
 2. View workflow runs by name
 3. Click workflow to see job logs
 4. Check step output for build details
@@ -656,7 +656,7 @@ git checkout .version
 ---
 
 **Last Updated**: 2025-12-11
-**WaddleBot Version**: 0.2.0
+**Waddles Version**: 0.2.0
 **Total Modules**: 24+
 **Workflow Files**: 35+
 **Container Platforms**: 2 (amd64, arm64)

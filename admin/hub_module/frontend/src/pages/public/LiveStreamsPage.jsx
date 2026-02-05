@@ -34,7 +34,7 @@ function LiveStreamsPage() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold gradient-text">Live Streams</h1>
-          <p className="text-navy-400">Currently live from WaddleBot communities</p>
+          <p className="text-navy-400">Currently live from Waddles communities</p>
         </div>
         <div className="flex items-center space-x-2 text-red-400">
           <span className="relative flex h-3 w-3">

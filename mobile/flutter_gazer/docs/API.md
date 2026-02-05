@@ -1,6 +1,6 @@
 # Flutter Gazer API Reference
 
-Complete API documentation for Flutter Gazer services, models, widgets, and platform channels.
+Complete API documentation for Waddles Gazer services, models, widgets, and platform channels.
 
 ## Table of Contents
 
@@ -1267,7 +1267,7 @@ enum USBErrorCode {
 
 ```dart
 class StreamingExample {
-  late WaddleBotService apiService;
+  late WaddlesService apiService;
   late RTMPService rtmpService;
   late USBCaptureService captureService;
   late StreamingController streamingController;
@@ -1415,3 +1415,4 @@ class SettingsPage extends StatelessWidget {
 
 **API Version**: 2.1.0
 **Last Updated**: 2026-01-30
+**Product**: Waddles Gazer

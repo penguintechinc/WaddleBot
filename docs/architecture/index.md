@@ -1,6 +1,6 @@
 # System Architecture
 
-WaddleBot is built with a modern microservices architecture designed for scalability, maintainability, and extensibility. This section provides an overview of the system's design principles and core components.
+Waddles is built with a modern microservices architecture designed for scalability, maintainability, and extensibility. This section provides an overview of the system's design principles and core components.
 
 ## Design Principles
 

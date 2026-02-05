@@ -1,6 +1,6 @@
-# WaddleBot Documentation Site
+# Waddles Documentation Site
 
-This directory contains the MkDocs-powered documentation site for WaddleBot, deployed to https://docs.waddlebot.io.
+This directory contains the MkDocs-powered documentation site for Waddles, deployed to https://docs.waddlebot.io.
 
 ## Development
 
@@ -85,7 +85,7 @@ Use proper syntax highlighting:
 ```python
 # Example Python code
 def hello_world():
-    return "Hello, WaddleBot!"
+    return "Hello, Waddles!"
 ```
 
 ### Admonitions

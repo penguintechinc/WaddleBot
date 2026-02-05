@@ -1,8 +1,8 @@
 """
-Base module classes and data structures for WaddleBot Module SDK.
+Base module classes and data structures for Waddles Module SDK.
 
 This module provides the foundational abstract classes and data structures
-for creating WaddleBot modules.
+for creating Waddles modules.
 """
 
 from abc import ABC, abstractmethod
@@ -59,7 +59,7 @@ class ExecuteResponse:
 
 class BaseModule(ABC):
     """
-    Abstract base class for WaddleBot modules.
+    Abstract base class for Waddles modules.
 
     All modules must inherit from this class and implement the execute method.
     Modules should define their name, version, and required scopes as class attributes.

@@ -32,8 +32,8 @@ var (
 
 var rootCmd = &cobra.Command{
 	Use:     "waddlebot-bridge",
-	Short:   "WaddleBot Premium Desktop Bridge",
-	Long:    `WaddleBot Premium Desktop Bridge - Connect your local system to WaddleBot communities`,
+	Short:   "Waddles Premium Desktop Bridge",
+	Long:    `Waddles Premium Desktop Bridge - Connect your local system to Waddles communities`,
 	Version: version,
 	Run:     runBridge,
 }
@@ -41,7 +41,7 @@ var rootCmd = &cobra.Command{
 func init() {
 	cobra.OnInitialize(initConfig)
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.waddlebot-bridge.yaml)")
-	rootCmd.PersistentFlags().String("api-url", "https://api.waddlebot.io", "WaddleBot API URL")
+	rootCmd.PersistentFlags().String("api-url", "https://api.waddlebot.io", "Waddles API URL")
 	rootCmd.PersistentFlags().String("community-id", "", "Community ID to connect to")
 	rootCmd.PersistentFlags().String("user-id", "", "User ID for authentication")
 	rootCmd.PersistentFlags().Int("poll-interval", 30, "Polling interval in seconds (minimum 5)")
@@ -83,7 +83,7 @@ func runBridge(cmd *cobra.Command, args []string) {
 
 	// Check premium license
 	if !license.ValidateLicense() {
-		log.Fatal("Invalid or missing premium license. Please ensure you have a valid WaddleBot Premium subscription.")
+		log.Fatal("Invalid or missing premium license. Please ensure you have a valid Waddles Premium subscription.")
 	}
 
 	// Load configuration
@@ -181,7 +181,7 @@ func runBridge(cmd *cobra.Command, args []string) {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	// Start components
-	log.Info("Starting WaddleBot Premium Desktop Bridge...")
+	log.Info("Starting Waddles Premium Desktop Bridge...")
 
 	// Start OBS client if enabled
 	if obsClient != nil {
@@ -250,7 +250,7 @@ func runBridge(cmd *cobra.Command, args []string) {
 
 	// Wait for shutdown signal
 	<-sigChan
-	log.Info("Shutting down WaddleBot Bridge...")
+	log.Info("Shutting down Waddles Bridge...")
 
 	// Cancel context to stop all components
 	cancel()
@@ -275,7 +275,7 @@ func runBridge(cmd *cobra.Command, args []string) {
 
 	// Give components time to shutdown gracefully
 	time.Sleep(2 * time.Second)
-	log.Info("WaddleBot Bridge stopped")
+	log.Info("Waddles Bridge stopped")
 }
 
 func displayBanner() {

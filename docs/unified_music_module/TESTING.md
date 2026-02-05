@@ -70,7 +70,7 @@ The unified_music_module includes comprehensive testing at multiple levels:
 $ ./test-api.sh --verbose
 
 [INFO] ======================================================================
-[INFO] WaddleBot Unified Music Module API Test Suite
+[INFO] Waddles Unified Music Module API Test Suite
 [INFO] ======================================================================
 [INFO] Music Module URL:  http://localhost:8051
 [INFO] Community ID:      1
@@ -638,4 +638,4 @@ open htmlcov/index.html
 
 **Last Updated**: 2025-12-16
 **Version**: 1.0.0
-**Maintainer**: WaddleBot Development Team
+**Maintainer**: Waddles Development Team

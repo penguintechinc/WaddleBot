@@ -53,7 +53,7 @@ INSERT INTO communities (
     created_at
 ) VALUES (
     'waddlebot-global',
-    'WaddleBot Global',
+    'Waddles Global',
     'Global community for cross-community reputation tracking. All users are automatically members.',
     true,
     true,

@@ -1,6 +1,6 @@
 -- Migration 007: Add Translation and Closed Captioning Support
 -- Description: Adds database infrastructure for translation caching and closed captions
--- Author: WaddleBot Team
+-- Author: Waddles Team
 -- Date: 2025-12-12
 
 -- Add GIN index for translation config queries on communities table

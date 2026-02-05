@@ -32,7 +32,7 @@ metadata:
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 data:
   init.sql: |
-    -- WaddleBot PostgreSQL initialization script
+    -- Waddles PostgreSQL initialization script
     -- This script is executed when the database is first created
 
     -- Enable required extensions

@@ -16,7 +16,7 @@ import (
 	"waddlebot-bridge/internal/modules"
 )
 
-// Poller handles polling the WaddleBot API for actions to execute
+// Poller handles polling the Waddles API for actions to execute
 type Poller struct {
 	config        *config.Config
 	bridgeClient  *bridge.Client

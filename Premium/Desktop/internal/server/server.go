@@ -88,7 +88,7 @@ func (s *WebServer) handleIndex(w http.ResponseWriter, r *http.Request) {
 <!DOCTYPE html>
 <html>
 <head>
-    <title>WaddleBot Premium Desktop Bridge</title>
+    <title>Waddles Premium Desktop Bridge</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }
         .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
@@ -113,7 +113,7 @@ func (s *WebServer) handleIndex(w http.ResponseWriter, r *http.Request) {
 <body>
     <div class="container">
         <div class="header">
-            <div class="logo">🤖 WaddleBot Premium Desktop Bridge</div>
+            <div class="logo">🤖 Waddles Premium Desktop Bridge</div>
             <p>Local System Integration Platform</p>
         </div>
 
@@ -124,11 +124,11 @@ func (s *WebServer) handleIndex(w http.ResponseWriter, r *http.Request) {
         <div class="actions">
             <div id="auth-section">
                 <h3>Authentication Required</h3>
-                <p>Please authenticate using WebAuthn to connect your bridge to WaddleBot.</p>
-                
+                <p>Please authenticate using WebAuthn to connect your bridge to Waddles.</p>
+
                 <div class="form-group">
                     <label for="user-id">User ID:</label>
-                    <input type="text" id="user-id" placeholder="Enter your WaddleBot user ID">
+                    <input type="text" id="user-id" placeholder="Enter your Waddles user ID">
                 </div>
                 
                 <div class="form-group">
@@ -142,7 +142,7 @@ func (s *WebServer) handleIndex(w http.ResponseWriter, r *http.Request) {
             
             <div id="authenticated-section" style="display: none;">
                 <h3>Bridge Connected</h3>
-                <p>Your bridge is successfully connected to WaddleBot.</p>
+                <p>Your bridge is successfully connected to Waddles.</p>
                 <button class="btn btn-warning" onclick="logout()">Logout</button>
             </div>
         </div>
@@ -158,8 +158,8 @@ func (s *WebServer) handleIndex(w http.ResponseWriter, r *http.Request) {
         </div>
 
         <div class="footer">
-            <p>WaddleBot Premium Desktop Bridge v1.0.0</p>
-            <p>© 2024 WaddleBot. All rights reserved.</p>
+            <p>Waddles Premium Desktop Bridge v1.0.0</p>
+            <p>© 2024 Waddles. All rights reserved.</p>
         </div>
     </div>
 

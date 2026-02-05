@@ -1,6 +1,6 @@
 #!/bin/bash
 ################################################################################
-# Android Build Smoke Test for Gazer WaddleBot
+# Android Build Smoke Test for Gazer Waddles
 #
 # This smoke test verifies that:
 # 1. Flutter environment is properly configured

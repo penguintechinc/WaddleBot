@@ -1,4 +1,4 @@
-# WaddleBot Helm Chart - Local/MicroK8s Overrides
+# Waddles Helm Chart - Local/MicroK8s Overrides
 # This file contains overrides for local development and MicroK8s deployments
 
 # Global settings for local development

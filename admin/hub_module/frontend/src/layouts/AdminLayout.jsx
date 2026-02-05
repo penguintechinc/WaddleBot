@@ -97,8 +97,8 @@ function AdminLayout() {
         <div className="flex justify-between items-center h-16 px-4 sm:px-6 lg:px-8">
           <div className="flex items-center space-x-4">
             <Link to="/" className="flex items-center space-x-2">
-              <img src="/waddlebot-logo.png" alt="WaddleBot" className="w-8 h-8" />
-              <span className="text-xl font-bold text-gold-400">WaddleBot</span>
+              <img src="/waddlebot-logo.png" alt="Waddles" className="w-8 h-8" />
+              <span className="text-xl font-bold text-gold-400">Waddles</span>
             </Link>
             <span className="text-navy-600">|</span>
             <div className="flex items-center space-x-2">

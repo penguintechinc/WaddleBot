@@ -1,5 +1,5 @@
 #!/bin/bash
-# WaddleBot Container Build Test Script
+# Waddles Container Build Test Script
 # Replicates GitHub Actions workflow build process
 # Usage: ./scripts/docker/test_build_all.sh
 
@@ -7,7 +7,7 @@ set -e
 
 echo "╔══════════════════════════════════════════════════════════════════════════════╗"
 echo "║                                                                              ║"
-echo "║              WaddleBot Module - Container Build Test                         ║"
+echo "║              Waddles Module - Container Build Test                         ║"
 echo "║                                                                              ║"
 echo "╚══════════════════════════════════════════════════════════════════════════════╝"
 echo ""

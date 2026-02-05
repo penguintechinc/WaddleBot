@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# WaddleBot Admin Seeding Script
+# Waddles Admin Seeding Script
 # Creates the default admin user in the PostgreSQL database
 # =============================================================================
 
@@ -25,7 +25,7 @@ SEED_FILE="${SCRIPT_DIR}/../config/postgres/seed_admin.sql"
 
 show_help() {
     cat << EOF
-WaddleBot Admin Seeding Script
+Waddles Admin Seeding Script
 
 Usage: $0 [OPTIONS]
 
@@ -109,7 +109,7 @@ if [ ! -f "$SEED_FILE" ]; then
 fi
 
 echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}WaddleBot Admin Seeding Script${NC}"
+echo -e "${BLUE}Waddles Admin Seeding Script${NC}"
 echo -e "${BLUE}========================================${NC}"
 
 if [ "$USE_DOCKER" = true ]; then

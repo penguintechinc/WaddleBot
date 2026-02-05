@@ -6,7 +6,7 @@ export default function Solutions() {
       {/* Navigation */}
       <nav className="flex justify-between items-center p-6 bg-black/20 backdrop-blur-sm sticky top-0 z-50">
         <Link href="/" className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-          WaddleBot
+          Waddles
         </Link>
         <div className="hidden md:flex gap-8">
           <Link href="/features" className="hover:text-blue-300 transition-colors">Features</Link>
@@ -29,7 +29,7 @@ export default function Solutions() {
             Solutions for Every Community
           </h1>
           <p className="text-xl md:text-2xl mb-8 text-gray-200">
-            From gaming communities to enterprise teams, WaddleBot scales with your needs
+            From gaming communities to enterprise teams, Waddles scales with your needs
           </p>
         </div>
       </section>
@@ -356,7 +356,7 @@ export default function Solutions() {
               Success Stories
             </h2>
             <p className="text-xl text-gray-300 mb-12">
-              See how different types of communities are thriving with WaddleBot
+              See how different types of communities are thriving with Waddles
             </p>
             
             <div className="grid md:grid-cols-2 gap-8">
@@ -436,7 +436,7 @@ export default function Solutions() {
           <div className="grid md:grid-cols-4 gap-8">
             <div>
               <Link href="/" className="text-2xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent block">
-                WaddleBot
+                Waddles
               </Link>
               <p className="text-gray-400 mb-4">
                 The future of multi-platform community management
@@ -475,7 +475,7 @@ export default function Solutions() {
             </div>
           </div>
           <div className="border-t border-white/10 mt-12 pt-8 text-center text-gray-400">
-            <p>© 2024 WaddleBot. All rights reserved. Built for the future of community management.</p>
+            <p>© 2024 Waddles. All rights reserved. Built for the future of community management.</p>
           </div>
         </div>
       </footer>

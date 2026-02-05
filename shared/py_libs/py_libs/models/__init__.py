@@ -1,8 +1,8 @@
 """
-Models module - Pydantic v2 base models for WaddleBot.
+Models module - Pydantic v2 base models for Waddles.
 
 Provides reusable, validated data models for API requests and responses
-with consistent configuration across all WaddleBot modules.
+with consistent configuration across all Waddles modules.
 
 Core Features:
 - WaddleBaseModel: Standard base with strict validation

@@ -1,6 +1,6 @@
 -- Migration 014: Add Quartermaster (Inventory) System
 -- Description: Implements inventory management system with item tracking, checkouts, and audit logging
--- Author: WaddleBot Team
+-- Author: Waddles Team
 -- Date: 2025-12-15
 
 -- =============================================================================

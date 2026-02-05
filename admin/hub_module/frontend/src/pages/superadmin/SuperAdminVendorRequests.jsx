@@ -11,7 +11,7 @@ import {
 import api from '../../services/api';
 import { FormModalBuilder } from '@penguin/react_libs';
 
-// WaddleBot theme colors for FormModalBuilder
+// Waddles theme colors for FormModalBuilder
 const waddlebotColors = {
   modalBackground: 'bg-navy-900',
   headerBackground: 'bg-navy-900',

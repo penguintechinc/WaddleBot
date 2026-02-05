@@ -2,7 +2,7 @@
 Scoped Token Service for OAuth-like Permission Management
 ==========================================================
 
-Provides secure token-based permission management for WaddleBot modules.
+Provides secure token-based permission management for Waddles modules.
 
 Features:
 - JWT-based scoped tokens with expiration
@@ -103,7 +103,7 @@ class ScopedTokenService:
     Service for managing scoped tokens with OAuth-like permission management.
 
     This service provides secure token generation, validation, and scope management
-    for WaddleBot modules. It supports:
+    for Waddles modules. It supports:
     - Community-module isolation
     - Scope-based permissions
     - Token revocation

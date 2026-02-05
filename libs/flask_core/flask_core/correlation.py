@@ -2,7 +2,7 @@
 Correlation ID Middleware
 ==========================
 
-Request correlation tracking for distributed tracing across WaddleBot microservices.
+Request correlation tracking for distributed tracing across Waddles microservices.
 
 Provides:
 - Automatic correlation ID generation

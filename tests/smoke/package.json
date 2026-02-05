@@ -1,7 +1,7 @@
 {
   "name": "waddlebot-smoke-tests",
   "version": "1.0.0",
-  "description": "Smoke tests for WaddleBot pages and APIs",
+  "description": "Smoke tests for Waddles pages and APIs",
   "scripts": {
     "test:pages": "node smoke-pages.js",
     "test:pages:beta": "BASE_URL=https://waddlebot.penguintech.io node smoke-pages.js",

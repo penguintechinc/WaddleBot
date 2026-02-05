@@ -1,4 +1,4 @@
-# WaddleBot v0.2.0
+# Waddles v0.2.0
 
 > **Next-Generation Multi-Platform Bot Framework**
 >
@@ -11,7 +11,7 @@
 
 ---
 
-## Why WaddleBot?
+## Why Waddles?
 
 **For Streamers & Communities:**
 - Engage your audience with AI-powered chat, loyalty points, and interactive minigames
@@ -140,7 +140,7 @@ Infrastructure (PostgreSQL, Redis, MinIO, Qdrant)
 
 ## Licensing & Tiers
 
-WaddleBot is open source (GPL-3.0) and free to use with basic features:
+Waddles is open source (GPL-3.0) and free to use with basic features:
 
 **Free Tier (Open Source)**
 - All core features included
@@ -183,7 +183,7 @@ WaddleBot is open source (GPL-3.0) and free to use with basic features:
 
 **Commercial License** required for:
 - SaaS/hosting services
-- Commercial products embedding WaddleBot
+- Commercial products embedding Waddles
 - Managed services for clients
 
 **Contributor Employer Exception:** Companies employing contributors get perpetual GPL-2.0 access to versions their employee contributed to.
@@ -203,6 +203,6 @@ We welcome contributions! See [docs/development-rules.md](docs/development-rules
 
 ---
 
-**Made with ❤️ by the WaddleBot team**
+**Made with ❤️ by the Waddles team**
 
-*Want to see WaddleBot in action? [Schedule a demo](mailto:demo@waddlebot.com)*
+*Want to see Waddles in action? [Schedule a demo](mailto:demo@waddlebot.com)*

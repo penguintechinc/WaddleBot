@@ -1,7 +1,7 @@
 """
-WaddleBot Module SDK - Base Classes
+Waddles Module SDK - Base Classes
 
-This package provides the foundational classes for building WaddleBot modules.
+This package provides the foundational classes for building Waddles modules.
 """
 
 from .module import (

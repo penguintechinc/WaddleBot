@@ -1,10 +1,10 @@
-# WaddleBot Documentation
+# Waddles Documentation
 
-Welcome to the WaddleBot documentation! WaddleBot is a multi-platform chat bot system with a modular, microservices architecture designed for Discord, Twitch, and Slack communities.
+Welcome to the Waddles documentation! Waddles is a multi-platform chat bot system with a modular, microservices architecture designed for Discord, Twitch, and Slack communities.
 
-## What is WaddleBot?
+## What is Waddles?
 
-WaddleBot is a comprehensive chat bot framework built for scalability and extensibility. The system consists of:
+Waddles is a comprehensive chat bot framework built for scalability and extensibility. The system consists of:
 
 - **Core Components**: Central API layer with routing, marketplace, and identity management
 - **Collector Modules**: Platform-specific modules that receive webhooks/chat from platforms
@@ -100,7 +100,7 @@ graph TB
 | **Portal Module** | Community management web interface | py4web, HTML/CSS |
 | **Browser Sources** | OBS integration with WebSocket updates | WebSocket, HTML/JS |
 
-## Why Choose WaddleBot?
+## Why Choose Waddles?
 
 ### ✅ **For Community Managers**
 - Unified management across Discord, Twitch, and Slack
@@ -138,4 +138,4 @@ graph TB
 ---
 
 !!! tip "Getting Help"
-    New to WaddleBot? Start with our [Quick Start Guide](getting-started/quick-start.md) for step-by-step setup instructions.
+    New to Waddles? Start with our [Quick Start Guide](getting-started/quick-start.md) for step-by-step setup instructions.

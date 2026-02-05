@@ -183,7 +183,7 @@ class _MainScreenState extends State<MainScreen> {
     _compositorService.startCompositing();
     await _rtmpService.startStreaming(_streamConfig);
 
-    // Report to WaddleBot if licensed
+    // Report to Waddles if licensed
     if (_licenseService.isFeatureAvailable(AppConstants.featureWaddleBotAi)) {
       _waddleBotService.reportStreamStarted(_streamConfig);
     }

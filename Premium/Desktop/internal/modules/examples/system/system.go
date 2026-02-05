@@ -39,7 +39,7 @@ func (m *SystemModule) GetInfo() *modules.ModuleInfo {
 		Name:        "system",
 		Version:     "1.0.0",
 		Description: "System information and control module",
-		Author:      "WaddleBot",
+		Author:      "Waddles",
 		Actions: []modules.ActionInfo{
 			{
 				Name:        "get_info",

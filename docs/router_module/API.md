@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Router Module is WaddleBot's central command routing system, responsible for receiving events from action modules (Discord, Slack, Twitch, YouTube), routing commands to appropriate interaction modules, and managing responses.
+The Router Module is Waddles's central command routing system, responsible for receiving events from action modules (Discord, Slack, Twitch, YouTube), routing commands to appropriate interaction modules, and managing responses.
 
 **Base URL:** `http://router-module:8000`
 **Version:** 2.0.0
@@ -451,7 +451,7 @@ Used by `POST /api/v1/router/responses`
 
 ### Error Response Format
 
-All errors follow the standard WaddleBot error format:
+All errors follow the standard Waddles error format:
 
 ```json
 {

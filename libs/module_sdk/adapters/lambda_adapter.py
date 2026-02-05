@@ -2,7 +2,7 @@
 AWS Lambda adapter for external serverless module invocation.
 
 This module provides a LambdaAdapter class that bridges AWS Lambda functions
-with WaddleBot's internal module system. It handles Lambda invocation,
+with Waddles's internal module system. It handles Lambda invocation,
 response parsing, error handling, and health tracking.
 """
 

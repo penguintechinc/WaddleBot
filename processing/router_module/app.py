@@ -1,4 +1,4 @@
-"""WaddleBot Router Module (Quart) - Central command routing system"""
+"""Waddles Router Module (Quart) - Central command routing system"""
 import os
 import sys
 import asyncio

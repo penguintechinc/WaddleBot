@@ -1,10 +1,10 @@
 # Flutter Gazer Migration Guide
 
-Guide for migrating from native Android/iOS implementations to Flutter Gazer, with feature comparison and data migration strategies.
+Guide for migrating from native Android/iOS implementations to Waddles Gazer, with feature comparison and data migration strategies.
 
 ## Overview
 
-Flutter Gazer is a cross-platform mobile streaming application built with Flutter that consolidates functionality from both Android and iOS native implementations into a single, maintainable codebase.
+Waddles Gazer is a cross-platform mobile streaming application built with Flutter that consolidates functionality from both Android and iOS native implementations into a single, maintainable codebase.
 
 **Benefits of Migration:**
 - Single codebase for both platforms
@@ -844,4 +844,4 @@ For migration issues or questions:
 
 **Migration Guide Version**: 1.0
 **Last Updated**: 2026-01-30
-**Applies To**: Flutter Gazer v2.1.0+
+**Applies To**: Waddles Gazer v2.1.0+

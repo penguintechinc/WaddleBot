@@ -2,7 +2,7 @@
 Platform enumeration and validation models.
 
 Provides a centralized, consistent definition of supported platforms
-across all WaddleBot modules.
+across all Waddles modules.
 """
 
 from __future__ import annotations

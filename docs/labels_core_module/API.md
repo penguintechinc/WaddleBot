@@ -2,7 +2,7 @@
 
 ## Overview
 
-Universal label management system for WaddleBot supporting any entity type including users, modules, communities, items, events, memories, playlists, and custom entities.
+Universal label management system for Waddles supporting any entity type including users, modules, communities, items, events, memories, playlists, and custom entities.
 
 **Base URL**: `http://localhost:8023/api/v1`
 
@@ -12,7 +12,7 @@ Universal label management system for WaddleBot supporting any entity type inclu
 
 ## Authentication
 
-All endpoints use standard WaddleBot authentication headers.
+All endpoints use standard Waddles authentication headers.
 
 ---
 

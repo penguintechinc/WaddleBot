@@ -1,6 +1,6 @@
-# WaddleBot Kubernetes Quick Start
+# Waddles Kubernetes Quick Start
 
-One-page guide to get WaddleBot running on Kubernetes in minutes.
+One-page guide to get Waddles running on Kubernetes in minutes.
 
 ## Choose Your Platform
 
@@ -8,7 +8,7 @@ One-page guide to get WaddleBot running on Kubernetes in minutes.
 
 ```bash
 # Install and deploy in one command
-cd /home/penguin/code/WaddleBot/k8s
+cd /home/penguin/code/waddlebot/k8s
 ./install-microk8s.sh --build-images
 ```
 
@@ -17,7 +17,7 @@ cd /home/penguin/code/WaddleBot/k8s
 2. Enables required addons (dns, storage, registry, ingress)
 3. Builds all Docker images
 4. Pushes images to cluster registry
-5. Deploys WaddleBot with Helm
+5. Deploys Waddles with Helm
 6. Configures access
 
 **Access:** http://waddlebot.local or http://localhost:30080
@@ -28,7 +28,7 @@ cd /home/penguin/code/WaddleBot/k8s
 
 ```bash
 # Install and deploy to kind cluster
-cd /home/penguin/code/WaddleBot/k8s
+cd /home/penguin/code/waddlebot/k8s
 ./install-k8s.sh --kind --build-images
 ```
 
@@ -37,7 +37,7 @@ cd /home/penguin/code/WaddleBot/k8s
 2. Sets up local registry
 3. Builds all Docker images
 4. Pushes images to local registry
-5. Deploys WaddleBot with Helm
+5. Deploys Waddles with Helm
 6. Configures ingress
 
 **Access:** http://waddlebot.local
@@ -57,7 +57,7 @@ cd /home/penguin/code/WaddleBot/k8s
 2. Enables addons (ingress, registry, storage)
 3. Builds all Docker images
 4. Pushes images to minikube registry
-5. Deploys WaddleBot with Helm
+5. Deploys Waddles with Helm
 6. Configures ingress
 
 **Access:** http://waddlebot.local or `minikube service hub -n waddlebot`
@@ -70,7 +70,7 @@ Check that everything is running:
 
 ```bash
 # View all pods
-kubectl get pods -n waddlebot
+kubectl get pods -n waddles
 
 # All pods should show STATUS: Running or Completed
 # Example output:
@@ -101,17 +101,17 @@ kubectl get pods -n waddlebot
 
 ```bash
 # View logs
-kubectl logs -n waddlebot deployment/hub -f
-kubectl logs -n waddlebot deployment/router -f
+kubectl logs -n waddles deployment/hub -f
+kubectl logs -n waddles deployment/router -f
 
 # Restart a service
-kubectl rollout restart deployment/hub -n waddlebot
+kubectl rollout restart deployment/hub -n waddles
 
 # Check service status
-kubectl get svc -n waddlebot
+kubectl get svc -n waddles
 
 # Port forward for direct access
-kubectl port-forward -n waddlebot svc/hub 8060:8060
+kubectl port-forward -n waddles svc/hub 8060:8060
 # Then access: http://localhost:8060
 ```
 
@@ -121,10 +121,10 @@ kubectl port-forward -n waddlebot svc/hub 8060:8060
 
 ```bash
 # Check pod details
-kubectl describe pod -n waddlebot <pod-name>
+kubectl describe pod -n waddles <pod-name>
 
 # View pod logs
-kubectl logs -n waddlebot <pod-name>
+kubectl logs -n waddles <pod-name>
 ```
 
 ### Can't access waddlebot.local?
@@ -230,6 +230,6 @@ echo "127.0.0.1 waddlebot.local" | sudo tee -a /etc/hosts
 ## Support
 
 Questions? Issues?
-- 📧 GitHub Issues: https://github.com/waddlebot/waddlebot/issues
+- 📧 GitHub Issues: https://github.com/waddlebot/waddles/issues
 - 📚 Documentation: `/docs/` directory
 - 💬 Community: (link to Discord/Slack)

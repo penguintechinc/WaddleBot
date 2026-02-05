@@ -1,7 +1,7 @@
 {
   "name": "waddlebot-integration-tests",
   "version": "1.0.0",
-  "description": "Integration tests for WaddleBot multi-service workflows",
+  "description": "Integration tests for Waddles multi-service workflows",
   "scripts": {
     "test": "jest --runInBand --verbose --testTimeout=30000",
     "test:watch": "jest --watch",

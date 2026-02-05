@@ -1,6 +1,6 @@
-# WaddleBot Kubernetes Installation Guide
+# Waddles Kubernetes Installation Guide
 
-This directory contains automated installation scripts for deploying WaddleBot to Kubernetes clusters.
+This directory contains automated installation scripts for deploying Waddles to Kubernetes clusters.
 
 ## Installation Scripts
 
@@ -12,7 +12,7 @@ This directory contains automated installation scripts for deploying WaddleBot t
 ### MicroK8s Installation
 
 ```bash
-# Install WaddleBot with Helm (recommended)
+# Install Waddles with Helm (recommended)
 ./install-microk8s.sh --build-images
 
 # Or use raw manifests
@@ -27,7 +27,7 @@ This directory contains automated installation scripts for deploying WaddleBot t
 #### Using kind (local development)
 
 ```bash
-# Create kind cluster and deploy WaddleBot
+# Create kind cluster and deploy Waddles
 ./install-k8s.sh --kind --build-images
 
 # Uninstall
@@ -37,7 +37,7 @@ This directory contains automated installation scripts for deploying WaddleBot t
 #### Using minikube
 
 ```bash
-# Start minikube and deploy WaddleBot
+# Start minikube and deploy Waddles
 ./install-k8s.sh --minikube --build-images
 
 # Uninstall
@@ -398,7 +398,7 @@ kubectl apply -k ./k8s/manifests/
 
 ## Uninstallation
 
-### Remove WaddleBot Only
+### Remove Waddles Only
 
 ```bash
 # MicroK8s
@@ -411,7 +411,7 @@ kubectl apply -k ./k8s/manifests/
 ### Remove Cluster (kind)
 
 ```bash
-# Remove WaddleBot and cluster
+# Remove Waddles and cluster
 ./install-k8s.sh --kind --uninstall
 # When prompted, choose 'y' to delete cluster
 ```
@@ -483,7 +483,7 @@ For production deployments, consider:
 ## Support
 
 For issues or questions:
-- **GitHub**: https://github.com/waddlebot/waddlebot
+- **GitHub**: https://github.com/waddlebot/waddles
 - **Documentation**: See `/docs/` directory
 - **Helm Chart**: See `k8s/helm/waddlebot/README.md`
 - **Manifests**: See `k8s/manifests/README.md`
@@ -494,7 +494,7 @@ For issues or questions:
 |------|-------------|
 | `install-microk8s.sh` | MicroK8s installation script |
 | `install-k8s.sh` | CNCF Kubernetes installation script |
-| `helm/waddlebot/` | Helm chart for WaddleBot |
+| `helm/waddlebot/` | Helm chart for Waddles |
 | `manifests/` | Raw Kubernetes manifests |
 | `INSTALL.md` | This installation guide |
 

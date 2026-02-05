@@ -1,4 +1,4 @@
-# WaddleBot Infrastructure - PostgreSQL and Redis
+# Waddles Infrastructure - PostgreSQL and Redis
 ---
 apiVersion: v1
 kind: ConfigMap

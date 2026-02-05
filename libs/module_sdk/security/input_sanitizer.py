@@ -1,5 +1,5 @@
 """
-InputSanitizer Module for WaddleBot Module SDK
+InputSanitizer Module for Waddles Module SDK
 
 Provides Pydantic-based input validation and sanitization for module commands.
 Includes the CommandInput model for validating command parameters and the InputSanitizer

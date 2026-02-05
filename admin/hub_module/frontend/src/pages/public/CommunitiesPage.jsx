@@ -63,7 +63,7 @@ function CommunitiesPage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold mb-4 gradient-text">Discover Communities</h1>
-        <p className="text-navy-400">Browse public communities using WaddleBot</p>
+        <p className="text-navy-400">Browse public communities using Waddles</p>
       </div>
 
       {/* Search and Filter */}

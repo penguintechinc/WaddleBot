@@ -1,10 +1,10 @@
-# WaddleBot Premium Mobile App
+# Waddles Premium Mobile App
 
-A React Native mobile application for premium WaddleBot community managers.
+A React Native mobile application for premium Waddles community managers.
 
 ## Overview
 
-The WaddleBot Premium Mobile App provides community managers with full access to their community management tools on mobile devices. This app is exclusively available to WaddleBot Premium subscribers.
+The Waddles Premium Mobile App provides community managers with full access to their community management tools on mobile devices. This app is exclusively available to Waddles Premium subscribers.
 
 ## Features
 
@@ -56,7 +56,7 @@ The WaddleBot Premium Mobile App provides community managers with full access to
 - React Native development environment
 - Android Studio (for Android)
 - Xcode (for iOS)
-- WaddleBot Premium subscription
+- Waddles Premium subscription
 
 ## Installation
 
@@ -123,7 +123,7 @@ npm run build:ios
 
 ## API Configuration
 
-The app connects to WaddleBot APIs at:
+The app connects to Waddles APIs at:
 - **Base URL**: `https://api.waddlebot.io`
 - **Community API**: `https://api.waddlebot.io/community`
 - **Router API**: `https://api.waddlebot.io/router`
@@ -150,7 +150,7 @@ The app uses JWT token-based authentication with automatic token refresh. Users 
 
 ## License
 
-This software is exclusively available to WaddleBot Premium subscribers. See LICENSE file for full terms.
+This software is exclusively available to Waddles Premium subscribers. See LICENSE file for full terms.
 
 ## Support
 
@@ -162,4 +162,4 @@ This is proprietary software for premium subscribers only. Contributing guidelin
 
 ---
 
-© 2024 WaddleBot - Premium Mobile App
+© 2024 Waddles - Premium Mobile App

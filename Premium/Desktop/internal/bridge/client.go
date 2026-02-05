@@ -16,7 +16,7 @@ import (
 	"waddlebot-bridge/internal/modules"
 )
 
-// Client handles communication with the WaddleBot API
+// Client handles communication with the Waddles API
 type Client struct {
 	config        *config.Config
 	authenticator *auth.WebAuthnManager
@@ -76,9 +76,9 @@ func (c *Client) GetAuthToken() (string, error) {
 	return c.authenticator.GenerateJWT(session)
 }
 
-// RegisterBridge registers the bridge with the WaddleBot API
+// RegisterBridge registers the bridge with the Waddles API
 func (c *Client) RegisterBridge(ctx context.Context) error {
-	c.logger.Info("Registering bridge with WaddleBot API")
+	c.logger.Info("Registering bridge with Waddles API")
 
 	// Get authentication token
 	token, err := c.GetAuthToken()
@@ -284,9 +284,9 @@ func (c *Client) GetBridgeInfo(ctx context.Context) (*Info, error) {
 	return &bridgeInfo, nil
 }
 
-// UnregisterBridge unregisters the bridge from the WaddleBot API
+// UnregisterBridge unregisters the bridge from the Waddles API
 func (c *Client) UnregisterBridge(ctx context.Context) error {
-	c.logger.Info("Unregistering bridge from WaddleBot API")
+	c.logger.Info("Unregistering bridge from Waddles API")
 
 	// Get authentication token
 	token, err := c.GetAuthToken()

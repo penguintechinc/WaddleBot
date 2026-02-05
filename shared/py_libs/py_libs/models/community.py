@@ -2,7 +2,7 @@
 Community-related models.
 
 Provides models for community identification and context that are
-used across all WaddleBot modules for multi-tenant operations.
+used across all Waddles modules for multi-tenant operations.
 """
 
 from __future__ import annotations

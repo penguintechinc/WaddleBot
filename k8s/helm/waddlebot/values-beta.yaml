@@ -1,4 +1,4 @@
-# WaddleBot Helm Chart - Beta Cluster Values
+# Waddles Helm Chart - Beta Cluster Values
 # This file overrides default values for beta cluster deployment
 # Usage: helm upgrade --install waddlebot . -f values.yaml -f values-beta.yaml
 

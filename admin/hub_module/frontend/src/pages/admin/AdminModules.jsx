@@ -263,7 +263,7 @@ function AdminModules() {
             <h3 className="text-lg font-bold text-sky-100 mb-4">Disable Core Module?</h3>
             <p className="text-navy-300 mb-4">
               You are about to disable <span className="text-gold-400">{pendingDisable?.module.displayName || pendingDisable?.module.name}</span>,
-              a core WaddleBot module. This may affect community functionality.
+              a core Waddles module. This may affect community functionality.
             </p>
             <p className="text-navy-400 text-sm mb-6">
               You can use an external service instead, but some features may not work as expected.

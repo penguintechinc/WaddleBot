@@ -1,10 +1,14 @@
+import logging
 import os
+import threading
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 
 class Config:
     """Engagement Module Configuration"""
-    
+
     # Database Configuration - builds URL from DB_* vars if DATABASE_URL not set
     DATABASE_URL: str = (
         os.getenv("DATABASE_URL") or
@@ -13,13 +17,20 @@ class Config:
         f"{os.getenv('DB_NAME', 'waddlebot')}"
     ).replace('postgresql://', 'postgres://')
     DB_POOL_SIZE: int = int(os.getenv("DB_POOL_SIZE", "10"))
-    
+
     # Module Configuration
     MODULE_NAME: str = "engagement_module"
     MODULE_PORT: int = int(os.getenv("MODULE_PORT", "8091"))
     MODULE_HOST: str = os.getenv("MODULE_HOST", "0.0.0.0")
     MODULE_VERSION: str = os.getenv("MODULE_VERSION", "1.0.0")
     MODULE_SECRET_KEY: str = os.getenv("MODULE_SECRET_KEY", "change-me-in-production")
+
+    # Redis Configuration (for credential refresh notifications)
+    REDIS_URL: str = os.getenv("REDIS_URL", "")
+
+    # Credential state management
+    _credentials_loaded: bool = False
+    _credential_lock: threading.Lock = threading.Lock()
     
     # gRPC Configuration
     GRPC_PORT: int = int(os.getenv("GRPC_PORT", "50061"))
@@ -41,7 +52,80 @@ class Config:
     # License Configuration (if applicable)
     LICENSE_KEY: Optional[str] = os.getenv("LICENSE_KEY")
     LICENSE_SERVER: str = os.getenv("LICENSE_SERVER", "https://license.penguintech.io")
-    
+
+    @classmethod
+    def load_credentials_from_db(cls, db_connection) -> bool:
+        """Load credentials from platform_integrations table.
+
+        Falls back to environment variables if DB lookup fails.
+
+        Args:
+            db_connection: A database connection with executesql support.
+
+        Returns:
+            True if credentials were loaded from DB.
+        """
+        try:
+            rows = db_connection.executesql(
+                "SELECT access_token, config_data "
+                "FROM platform_integrations "
+                "WHERE platform = 'engagement' "
+                "AND integration_type = 'bot' "
+                "AND is_active = TRUE "
+                "LIMIT 1"
+            )
+            if rows and rows[0]:
+                with cls._credential_lock:
+                    cls._credentials_loaded = True
+                logger.info(
+                    "Credentials loaded from platform_integrations for engagement"
+                )
+                return True
+        except Exception as e:
+            logger.warning(
+                "Failed to load credentials from DB, using env vars: %s", e
+            )
+        return False
+
+    @classmethod
+    def start_credential_listener(cls, redis_client) -> Optional[threading.Thread]:
+        """Start a background thread that listens for credential refresh events.
+
+        Args:
+            redis_client: A Redis client instance.
+
+        Returns:
+            The listener thread, or None if Redis is not configured.
+        """
+        if not cls.REDIS_URL:
+            return None
+
+        channel = "credentials:engagement:bot:refreshed"
+
+        def _listen():
+            try:
+                pubsub = redis_client.pubsub()
+                pubsub.subscribe(channel)
+                logger.info(
+                    "Listening for credential refresh on: %s",
+                    channel,
+                )
+                for message in pubsub.listen():
+                    if message["type"] == "message":
+                        logger.info(
+                            "Credential refresh notification received"
+                        )
+                        with cls._credential_lock:
+                            cls._credentials_loaded = False
+            except Exception as e:
+                logger.error("Credential listener error: %s", e)
+
+        thread = threading.Thread(
+            target=_listen, daemon=True, name="credential-listener"
+        )
+        thread.start()
+        return thread
+
     @classmethod
     def validate(cls) -> bool:
         """Validate configuration settings"""

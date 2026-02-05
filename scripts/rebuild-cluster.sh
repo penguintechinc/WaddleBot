@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# WaddleBot Local Cluster Rebuild Script
+# Waddles Local Cluster Rebuild Script
 # Rebuilds the entire local development cluster from scratch
 # =============================================================================
 
@@ -37,7 +37,7 @@ export MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD:-minioadmin}"
 
 show_help() {
     cat << EOF
-WaddleBot Local Cluster Rebuild Script
+Waddles Local Cluster Rebuild Script
 
 Usage: $0 [OPTIONS]
 
@@ -337,7 +337,7 @@ show_summary() {
 }
 
 main() {
-    log_header "WaddleBot Cluster Rebuild"
+    log_header "Waddles Cluster Rebuild"
 
     if [ "$FULL_REBUILD" = true ]; then
         echo ""

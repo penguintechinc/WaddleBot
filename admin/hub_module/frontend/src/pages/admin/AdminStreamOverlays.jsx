@@ -249,7 +249,7 @@ function AdminStreamOverlays() {
                   </li>
                   <li className="flex items-start space-x-3">
                     <span className="flex-shrink-0 w-6 h-6 rounded-full bg-gold-500/20 text-gold-400 flex items-center justify-center text-sm font-medium">2</span>
-                    <span>Create a new source and name it "WaddleBot Overlay"</span>
+                    <span>Create a new source and name it "Waddles Overlay"</span>
                   </li>
                   <li className="flex items-start space-x-3">
                     <span className="flex-shrink-0 w-6 h-6 rounded-full bg-gold-500/20 text-gold-400 flex items-center justify-center text-sm font-medium">3</span>

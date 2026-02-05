@@ -1,8 +1,8 @@
-# WaddleBot API Reference
+# Waddles API Reference
 
 ## Overview
 
-All WaddleBot APIs are routed through the **Hub Module**, which provides centralized routing, authentication, and rate limiting. Kong API Gateway has been removed in favor of direct service routing through the Hub Module.
+All Waddles APIs are routed through the **Hub Module**, which provides centralized routing, authentication, and rate limiting. Kong API Gateway has been removed in favor of direct service routing through the Hub Module.
 
 The Hub Module acts as the single entry point for all API requests, handling:
 - API key authentication via `X-API-Key` header
@@ -63,7 +63,7 @@ X-API-Key: your_api_key_here
 
 ### Role-Based Access Control (RBAC)
 
-WaddleBot uses Flask-Security-Too for RBAC with the following user roles:
+Waddles uses Flask-Security-Too for RBAC with the following user roles:
 
 | Role | Description | Access Level |
 |------|-------------|--------------|
@@ -766,7 +766,7 @@ Get all linked platform identities for a user.
 ```
 
 #### `GET /identity/platform/<platform>/<platform_id>`
-Get WaddleBot user for a platform-specific user.
+Get Waddles user for a platform-specific user.
 
 **Response:**
 ```json
@@ -826,7 +826,7 @@ Regenerate user API key (invalidates old key).
 ### User Authentication
 
 #### `POST /auth/register`
-Register new WaddleBot user account.
+Register new Waddles user account.
 
 **Request Body:**
 ```json
@@ -838,7 +838,7 @@ Register new WaddleBot user account.
 ```
 
 #### `POST /auth/login`
-Login to WaddleBot user session.
+Login to Waddles user session.
 
 **Request Body:**
 ```json
@@ -849,7 +849,7 @@ Login to WaddleBot user session.
 ```
 
 #### `POST /auth/logout`
-Logout from WaddleBot user session.
+Logout from Waddles user session.
 
 #### `GET /auth/profile`
 Get authenticated user profile information.
@@ -1636,7 +1636,7 @@ Webhook payloads are signed with HMAC-SHA256 using the webhook secret in the `X-
 
 ## API Versioning
 
-The WaddleBot API follows semantic versioning. The version is included in the URL path for breaking changes:
+The Waddles API follows semantic versioning. The version is included in the URL path for breaking changes:
 
 - `/api/v1/*` - Version 1 (current)
 - `/api/v2/*` - Version 2 (future)

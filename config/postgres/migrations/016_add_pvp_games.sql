@@ -2,7 +2,7 @@
 -- Description: Implements advanced PvP games (medieval_duel, ground_combat, tank_battles, racing)
 --              with equipment/vehicle systems, player inventories, loadouts, match history,
 --              and the exclusive Golden Ticket lottery system
--- Author: WaddleBot Team
+-- Author: Waddles Team
 -- Date: 2025-12-15
 
 -- =============================================================================

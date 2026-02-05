@@ -1,6 +1,6 @@
 -- Migration 012: Add Music Provider Configuration System
 -- Description: Implements multi-provider music system with support for Spotify, YouTube, SoundCloud, Pretzel, Epidemic, StreamBeats, Monstercat, and Icecast
--- Author: WaddleBot Team
+-- Author: Waddles Team
 -- Date: 2025-12-15
 
 -- =============================================================================

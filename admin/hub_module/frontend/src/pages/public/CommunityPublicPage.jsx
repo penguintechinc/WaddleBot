@@ -8,7 +8,7 @@ import {
   LockClosedIcon,
 } from '@heroicons/react/24/outline';
 
-// WaddleBot theme colors for FormModalBuilder
+// Waddles theme colors for FormModalBuilder
 const waddlebotColors = {
   modalBackground: 'bg-navy-800',
   headerBackground: 'bg-navy-800',

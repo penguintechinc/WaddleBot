@@ -1,6 +1,6 @@
 -- Migration 027: Add Streamer Role to Community Members
 -- Description: Adds 'streamer' as a valid role option for community members
--- Author: WaddleBot Engineering
+-- Author: Waddles Engineering
 -- Date: 2026-01-21
 
 BEGIN;

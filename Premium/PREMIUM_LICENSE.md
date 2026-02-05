@@ -1,25 +1,25 @@
-# WADDLEBOT PREMIUM LICENSE AGREEMENT
+# WADDLES PREMIUM LICENSE AGREEMENT
 
-**Version 1.0**  
+**Version 1.0**
 **Effective Date: January 1, 2024**
 
 ## IMPORTANT NOTICE
 
-**THIS APPLICATION IS EXCLUSIVELY FOR WADDLEBOT PREMIUM SUBSCRIBERS**
+**THIS APPLICATION IS EXCLUSIVELY FOR WADDLES PREMIUM SUBSCRIBERS**
 
-This WaddleBot Premium mobile application is proprietary software that requires an active WaddleBot Premium subscription to access and use. By installing, accessing, or using this application, you acknowledge that you have read, understood, and agree to be bound by the terms and conditions set forth in this Premium License Agreement.
+This Waddles Premium mobile application is proprietary software that requires an active Waddles Premium subscription to access and use. By installing, accessing, or using this application, you acknowledge that you have read, understood, and agree to be bound by the terms and conditions set forth in this Premium License Agreement.
 
 ## 1. PREMIUM SUBSCRIPTION REQUIRED
 
-This application is exclusively available to WaddleBot Premium subscribers. Access to this application serves as verification of your premium subscription status. By using this application or any of it's code, you represent and warrant that:
+This application is exclusively available to Waddles Premium subscribers. Access to this application serves as verification of your premium subscription status. By using this application or any of it's code, you represent and warrant that:
 
-- You have an active and valid WaddleBot Premium subscription
+- You have an active and valid Waddles Premium subscription
 - You are authorized to access premium features and services
 - You agree to comply with all premium service terms and conditions
 
 ## 2. LICENSE GRANT
 
-Subject to your compliance with these terms and your active premium subscription, WaddleBot grants you a limited, non-exclusive, non-transferable, revocable license to:
+Subject to your compliance with these terms and your active premium subscription, Waddles grants you a limited, non-exclusive, non-transferable, revocable license to:
 
 - Install and use this application on your personal devices
 - Access premium community management features
@@ -84,7 +84,7 @@ Your premium subscription includes access to the following exclusive features:
 
 The application collects, processes, and stores community data in accordance with:
 
-- WaddleBot's Privacy Policy
+- Waddles' Privacy Policy
 - Premium subscriber data protection standards
 - Industry-standard security practices
 - Applicable data protection regulations
@@ -105,7 +105,7 @@ All intellectual property rights in the application, including but not limited t
 - Branding and trademark elements
 - Premium feature implementations
 
-Are owned by WaddleBot and are protected by copyright, trademark, and other intellectual property laws.
+Are owned by Waddles and are protected by copyright, trademark, and other intellectual property laws.
 
 ## 8. TERMINATION
 
@@ -113,7 +113,7 @@ This license terminates automatically upon:
 
 - Cancellation or expiration of your premium subscription
 - Violation of these terms and conditions
-- Termination of your WaddleBot account
+- Termination of your Waddles account
 - Breach of premium service agreement
 
 Upon termination:
@@ -134,7 +134,7 @@ THE APPLICATION IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY
 
 ## 10. LIMITATION OF LIABILITY
 
-IN NO EVENT SHALL WADDLEBOT BE LIABLE FOR ANY:
+IN NO EVENT SHALL WADDLES BE LIABLE FOR ANY:
 
 - INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES
 - LOST PROFITS, REVENUE, OR BUSINESS OPPORTUNITIES
@@ -146,7 +146,7 @@ REGARDLESS OF THE THEORY OF LIABILITY, WHETHER IN CONTRACT, TORT, OR OTHERWISE, 
 
 ## 11. INDEMNIFICATION
 
-You agree to indemnify, defend, and hold harmless WaddleBot and its affiliates from and against any claims, damages, losses, costs, and expenses (including reasonable attorneys' fees) arising from:
+You agree to indemnify, defend, and hold harmless Waddles and its affiliates from and against any claims, damages, losses, costs, and expenses (including reasonable attorneys' fees) arising from:
 
 - Your use of the application
 - Violation of these terms
@@ -155,7 +155,7 @@ You agree to indemnify, defend, and hold harmless WaddleBot and its affiliates f
 
 ## 12. UPDATES AND MODIFICATIONS
 
-WaddleBot reserves the right to:
+Waddles reserves the right to:
 
 - Update or modify the application at any time
 - Add, remove, or modify premium features
@@ -174,11 +174,11 @@ Premium subscribers receive:
 
 ## 14. GOVERNING LAW
 
-This agreement shall be governed by and construed in accordance with the laws of the jurisdiction where WaddleBot is incorporated, without regard to conflict of law principles.
+This agreement shall be governed by and construed in accordance with the laws of the jurisdiction where Waddles is incorporated, without regard to conflict of law principles.
 
 ## 15. ENTIRE AGREEMENT
 
-This Premium License Agreement constitutes the entire agreement between you and WaddleBot regarding the use of this application and supersedes all prior agreements, understandings, and communications.
+This Premium License Agreement constitutes the entire agreement between you and Waddles regarding the use of this application and supersedes all prior agreements, understandings, and communications.
 
 ## 16. SEVERABILITY
 
@@ -188,9 +188,9 @@ If any provision of this agreement is found to be unenforceable or invalid, the 
 
 For questions regarding this license agreement or your premium subscription:
 
-**WaddleBot Premium Support**  
-Email: premium@waddlebot.com  
-Website: https://waddlebot.com/premium  
+**Waddles Premium Support**
+Email: premium@waddlebot.com
+Website: https://waddlebot.com/premium
 Support Portal: https://support.waddlebot.com
 
 ---

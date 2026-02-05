@@ -1,5 +1,5 @@
 """
-WaddleBot Input Validation Library
+Waddles Input Validation Library
 
 Provides Pydantic-based validation for Flask/Quart endpoints with decorators
 for JSON body, query parameters, and form data validation.

@@ -349,4 +349,4 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines on contributing to the 
 
 ## License
 
-This module is part of the WaddleBot project and is licensed under the same terms as the main project.
+This module is part of the Waddles project and is licensed under the same terms as the main project.

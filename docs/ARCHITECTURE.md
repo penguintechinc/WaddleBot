@@ -1,4 +1,4 @@
-# WaddleBot System Architecture
+# Waddles System Architecture
 
 **Version:** 1.0
 **Last Updated:** 2025-12-16
@@ -21,7 +21,7 @@
 
 ## System Overview
 
-WaddleBot is a microservices-based chatbot platform that enables communities to interact with their members across Discord, Twitch, and Slack. The system uses event-driven architecture with a central router processing commands and coordinating between platform-specific collectors and feature-specific interaction modules.
+Waddles is a microservices-based chatbot platform that enables communities to interact with their members across Discord, Twitch, and Slack. The system uses event-driven architecture with a central router processing commands and coordinating between platform-specific collectors and feature-specific interaction modules.
 
 ### Architecture Diagram
 
@@ -326,12 +326,12 @@ servers (
 ```
 
 #### Entities Table
-Maps platform identifiers to WaddleBot entities:
+Maps platform identifiers to Waddles entities:
 
 ```sql
 entities (
     id,
-    entity_id,          -- Unique WaddleBot entity identifier
+    entity_id,          -- Unique Waddles entity identifier
     platform,           -- 'twitch', 'discord', 'slack'
     server_id,          -- Platform server/guild ID
     channel_id,         -- Platform channel ID
@@ -449,7 +449,7 @@ Each interaction module has dedicated tables for data isolation:
 
 ### Database Separation Strategy
 
-WaddleBot uses Redis with namespace separation and database allocation:
+Waddles uses Redis with namespace separation and database allocation:
 
 ```
 DB 0: Caching & Sessions
@@ -1049,7 +1049,7 @@ https://browser.waddlebot.com/{token}/general
 
 ## Summary
 
-WaddleBot's architecture is designed for:
+Waddles's architecture is designed for:
 
 - **Scalability**: Horizontal scaling with coordination system and Kubernetes
 - **Performance**: Multi-threading, read replicas, caching, batch processing

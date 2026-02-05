@@ -2,7 +2,7 @@
 OpenTelemetry Tracing Integration
 ==================================
 
-Distributed tracing for WaddleBot microservices using OpenTelemetry.
+Distributed tracing for Waddles microservices using OpenTelemetry.
 
 Provides:
 - Automatic span creation for HTTP requests

@@ -9,7 +9,7 @@ import 'waddlebot_models.dart';
 
 /// Generic API response wrapper supporting both success and error states.
 ///
-/// This wrapper handles the standard response format from WaddleBot API endpoints.
+/// This wrapper handles the standard response format from Waddles API endpoints.
 /// It supports generic type parameter [T] for type-safe response data handling.
 ///
 /// Example usage:

@@ -1,10 +1,10 @@
-# WaddleBot Helm Chart - Default Values
+# Waddles Helm Chart - Default Values
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
 # Global settings
 global:
-  # Container registry for WaddleBot images
+  # Container registry for Waddles images
   # For GitHub Container Registry: ghcr.io/owner/repo
   # For Docker Hub: docker.io/waddlebot
   # For local registry: localhost:32000/waddlebot
@@ -144,7 +144,7 @@ infrastructure:
     image: minio/minio:latest
     apiPort: 9000
     consolePort: 9001
-    bucketName: "waddlebot"
+    bucketName: "waddlebot-assets"
     # Default credentials (matches docker-compose.yml)
     rootUser: "minioadmin"
     rootPassword: "minioadmin"

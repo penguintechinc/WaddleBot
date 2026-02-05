@@ -1,15 +1,15 @@
-# WaddleBot Mobile Applications
+# Waddles Mobile Applications
 
-This documentation covers the WaddleBot mobile applications for Android and iOS platforms. The mobile apps provide community management, real-time chat, and member administration capabilities.
+This documentation covers the Waddles mobile applications for Android and iOS platforms. The mobile apps provide community management, real-time chat, and member administration capabilities.
 
 ## Overview
 
-WaddleBot mobile apps are native applications built with modern frameworks:
+Waddles mobile apps are native applications built with modern frameworks:
 
 - **Android**: Kotlin with Jetpack Compose
 - **iOS**: Swift with SwiftUI
 
-Both platforms share the same feature set and connect to the WaddleBot Hub API for backend services.
+Both platforms share the same feature set and connect to the Waddles Hub API for backend services.
 
 ## Features
 
@@ -77,7 +77,7 @@ mobile/
 |           +-- ui/
 |               +-- theme/           # App theming
 +-- ios/
-    +-- WaddleBotHub/
+    +-- WaddlesHub/
         +-- Services/                # WebSocket and API services
         +-- Views/
             +-- Chat/                # Chat views

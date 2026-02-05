@@ -1,6 +1,6 @@
-# WaddleBot MinIO S3-Compatible Storage Setup
+# Waddles MinIO S3-Compatible Storage Setup
 
-This document describes how to set up and use MinIO S3-compatible object storage for WaddleBot image management and CDN functionality.
+This document describes how to set up and use MinIO S3-compatible object storage for Waddles image management and CDN functionality.
 
 ## Quick Start (Development)
 
@@ -16,7 +16,7 @@ docker-compose ps
 
 ### 2. Access Services
 
-- **WaddleBot Hub**: http://localhost:8060
+- **Waddles Hub**: http://localhost:8060
 - **Kong API Gateway**: http://localhost:8000
 - **MinIO Console**: http://localhost:9001
 - **MinIO API**: http://localhost:9000
@@ -36,7 +36,7 @@ docker-compose ps
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   WaddleBot     │    │      Kong       │    │     MinIO       │
+│   Waddles     │    │      Kong       │    │     MinIO       │
 │    Hub Module   │◄──►│   API Gateway   │◄──►│   S3 Storage    │
 │                 │    │                 │    │                 │
 │ - Image Upload  │    │ - API Routing   │    │ - Object Store  │
@@ -169,7 +169,7 @@ S3_CDN_BASE_URL=https://cdn.waddlebot.com
 ```bash
 # Clone repository
 git clone <repo-url>
-cd WaddleBot
+cd Waddles
 
 # Start services
 docker-compose up -d
@@ -385,4 +385,4 @@ mc ls -r local/waddlebot-assets/
    - Database backup for metadata
    - Test recovery procedures
 
-This setup provides a robust, scalable image storage and CDN solution for WaddleBot that works seamlessly in both development and production environments.
+This setup provides a robust, scalable image storage and CDN solution for Waddles that works seamlessly in both development and production environments.

@@ -1,6 +1,6 @@
 # Administration
 
-This section covers administration and operational topics for WaddleBot.
+This section covers administration and operational topics for Waddles.
 
 ## Topics
 

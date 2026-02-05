@@ -2,7 +2,7 @@
 Comprehensive AAA Logging Configuration
 ========================================
 
-Authentication, Authorization, and Audit (AAA) logging for all WaddleBot modules.
+Authentication, Authorization, and Audit (AAA) logging for all Waddles modules.
 
 Provides:
 - Console logging for container orchestration
@@ -80,7 +80,7 @@ class StructuredFormatter(logging.Formatter):
 
 class AAALogger:
     """
-    Comprehensive AAA logger for WaddleBot modules.
+    Comprehensive AAA logger for Waddles modules.
     """
 
     def __init__(

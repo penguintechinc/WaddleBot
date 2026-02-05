@@ -3,7 +3,7 @@
 ScopedTokenService Example Usage
 
 This script demonstrates basic usage of the ScopedTokenService
-for OAuth-like permission management in WaddleBot modules.
+for OAuth-like permission management in Waddles modules.
 
 Run: python example_usage.py
 """

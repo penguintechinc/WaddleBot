@@ -1,5 +1,5 @@
 """
-WaddleBot Module SDK Security Module
+Waddles Module SDK Security Module
 
 Provides security utilities for module validation, input sanitization, and token management.
 

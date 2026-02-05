@@ -9,7 +9,7 @@
 
 ### Initial Release
 
-The first production release of the Unified Music Module provides a complete music playback orchestration system for WaddleBot.
+The first production release of the Unified Music Module provides a complete music playback orchestration system for Waddles.
 
 #### Features
 
@@ -360,17 +360,17 @@ Initial proof-of-concept implementation.
 
 ## Contributors
 
-- WaddleBot Development Team
+- Waddles Development Team
 - Community Contributors
 
 ---
 
 ## License
 
-Part of the WaddleBot project. See main repository for license information.
+Part of the Waddles project. See main repository for license information.
 
 ---
 
 **Last Updated**: 2025-12-16
 **Version**: 1.0.0
-**Maintainer**: WaddleBot Development Team
+**Maintainer**: Waddles Development Team

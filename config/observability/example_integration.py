@@ -1,5 +1,5 @@
 """
-Example WaddleBot Service with Full Observability
+Example Waddles Service with Full Observability
 ==================================================
 
 This example demonstrates how to integrate all three observability components:
@@ -8,7 +8,7 @@ This example demonstrates how to integrate all three observability components:
 3. Custom Metrics
 
 This is a complete, production-ready example that can be used as a template
-for any WaddleBot module.
+for any Waddles module.
 """
 
 import os
@@ -144,7 +144,7 @@ async def simple_endpoint():
     )
 
     return success_response({
-        "message": "Hello from WaddleBot!",
+        "message": "Hello from Waddles!",
         "correlation_id": get_correlation_id(),
         "request_id": get_request_id()
     })

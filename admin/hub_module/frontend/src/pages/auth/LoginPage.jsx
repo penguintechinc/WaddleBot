@@ -116,9 +116,9 @@ function LoginPage() {
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
-            <img src="/waddlebot-logo.png" alt="WaddleBot" className="w-24 h-24" />
+            <img src="/waddlebot-logo.png" alt="Waddles" className="w-24 h-24" />
           </div>
-          <h1 className="text-3xl font-bold mt-4 gradient-text">Welcome to WaddleBot</h1>
+          <h1 className="text-3xl font-bold mt-4 gradient-text">Welcome to Waddles</h1>
           <p className="text-navy-300 mt-2">
             {mode === 'register' ? 'Create your account' : 'Sign in to access your communities'}
           </p>

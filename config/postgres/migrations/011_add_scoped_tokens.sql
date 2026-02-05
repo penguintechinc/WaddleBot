@@ -1,6 +1,6 @@
 -- Migration 011: Add Scoped Tokens and Permission System
 -- Description: Implements OAuth-like scoped token system for module access control
--- Author: WaddleBot Team
+-- Author: Waddles Team
 -- Date: 2025-12-15
 
 -- Permission scopes catalog

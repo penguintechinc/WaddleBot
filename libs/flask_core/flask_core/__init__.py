@@ -1,8 +1,8 @@
 """
-WaddleBot Flask Core Library
+Waddles Flask Core Library
 ============================
 
-Shared utilities for all WaddleBot Flask/Quart modules.
+Shared utilities for all Waddles Flask/Quart modules.
 
 Provides:
 - AsyncDAL: Async wrapper for PyDAL database operations
@@ -13,7 +13,7 @@ Provides:
 """
 
 __version__ = "2.0.0"
-__author__ = "WaddleBot Team"
+__author__ = "Waddles Team"
 
 from .database import AsyncDAL, init_database
 from .auth import setup_auth, OAuthProvider, create_jwt_token, verify_jwt_token, verify_service_key

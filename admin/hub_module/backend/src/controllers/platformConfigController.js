@@ -1,634 +1,517 @@
 /**
  * Platform Configuration Controller
- * Manages platform credentials (Discord, Twitch, Slack, YouTube) and storage settings
+ * Manages bot credentials and OAuth integrations via platform_integrations table
  */
-import { query } from '../config/database.js';
-import crypto from 'crypto';
-import { testS3Connection, invalidateStorageConfigCache } from '../services/storageService.js';
 
-// Encryption key from environment (use a 32-byte key for AES-256)
-const ENCRYPTION_KEY = process.env.PLATFORM_ENCRYPTION_KEY ||
-  crypto.scryptSync(process.env.JWT_SECRET || 'default-key', 'salt', 32);
-const IV_LENGTH = 16;
+const db = require('../models/database');
+const { encryptCredential, decryptCredential } = require('../utils/encryption');
+const logger = require('../utils/logger');
 
-/**
- * Encrypt a value
- */
-function encrypt(text) {
-  if (!text) return null;
-  const iv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
-  let encrypted = cipher.update(text, 'utf8', 'hex');
-  encrypted += cipher.final('hex');
-  return iv.toString('hex') + ':' + encrypted;
-}
+class PlatformConfigController {
+  /**
+   * Get all platform configurations by type
+   */
+  static async getPlatformConfigs(req, res) {
+    try {
+      const { integrationType, platform } = req.query;
 
-/**
- * Decrypt a value
- */
-function decrypt(text) {
-  if (!text) return null;
-  try {
-    const parts = text.split(':');
-    const iv = Buffer.from(parts[0], 'hex');
-    const encrypted = parts[1];
-    const decipher = crypto.createDecipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
-    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-    return decrypted;
-  } catch (e) {
-    return null;
-  }
-}
+      let query = 'SELECT * FROM platform_integrations WHERE is_active = TRUE';
+      const params = [];
 
-/**
- * Mask a secret value for display
- */
-function maskSecret(value) {
-  if (!value) return null;
-  if (value.length <= 8) return '********';
-  return value.substring(0, 4) + '****' + value.substring(value.length - 4);
-}
-
-/**
- * Platform configuration schema
- */
-const PLATFORM_CONFIGS = {
-  discord: {
-    fields: ['bot_token', 'client_id', 'client_secret', 'webhook_secret'],
-    secrets: ['bot_token', 'client_secret', 'webhook_secret'],
-    testEndpoint: 'https://discord.com/api/v10/users/@me'
-  },
-  twitch: {
-    fields: ['client_id', 'client_secret', 'webhook_secret'],
-    secrets: ['client_secret', 'webhook_secret'],
-    testEndpoint: 'https://id.twitch.tv/oauth2/validate'
-  },
-  slack: {
-    fields: ['bot_token', 'client_id', 'client_secret', 'signing_secret'],
-    secrets: ['bot_token', 'client_secret', 'signing_secret'],
-    testEndpoint: 'https://slack.com/api/auth.test'
-  },
-  youtube: {
-    fields: ['api_key', 'client_id', 'client_secret'],
-    secrets: ['api_key', 'client_secret'],
-    testEndpoint: 'https://www.googleapis.com/youtube/v3/channels?part=id&mine=true'
-  },
-  kick: {
-    fields: ['client_id', 'client_secret', 'webhook_secret'],
-    secrets: ['client_secret', 'webhook_secret'],
-    testEndpoint: 'https://kick.com/api/v2/channels'
-  },
-  email: {
-    fields: ['smtp_host', 'smtp_port', 'smtp_user', 'smtp_password', 'smtp_from', 'smtp_from_name', 'smtp_secure'],
-    secrets: ['smtp_password'],
-    testEndpoint: null
-  },
-  storage: {
-    fields: ['storage_type', 's3_endpoint', 's3_bucket', 's3_access_key', 's3_secret_key', 's3_region', 's3_public_url'],
-    secrets: ['s3_access_key', 's3_secret_key'],
-    testEndpoint: null
-  }
-};
-
-/**
- * Get all platform configurations (with masked secrets)
- */
-export async function getPlatformConfigs(req, res) {
-  try {
-    // Get configs from database
-    const result = await query(
-      `SELECT platform, config_key, config_value, is_encrypted, updated_at
-       FROM platform_configs
-       ORDER BY platform, config_key`
-    );
-
-    // Group by platform
-    const configs = {};
-    for (const platform of Object.keys(PLATFORM_CONFIGS)) {
-      configs[platform] = {
-        configured: false,
-        fields: {}
-      };
-
-      // Add field definitions
-      for (const field of PLATFORM_CONFIGS[platform].fields) {
-        configs[platform].fields[field] = {
-          value: null,
-          masked: null,
-          isSecret: PLATFORM_CONFIGS[platform].secrets.includes(field)
-        };
-      }
-    }
-
-    // Fill in values from database
-    for (const row of result.rows) {
-      if (configs[row.platform]) {
-        let value = row.config_value;
-
-        // Decrypt if encrypted
-        if (row.is_encrypted) {
-          value = decrypt(value);
-        }
-
-        const isSecret = PLATFORM_CONFIGS[row.platform].secrets.includes(row.config_key);
-
-        configs[row.platform].fields[row.config_key] = {
-          value: isSecret ? null : value, // Don't send secrets
-          masked: isSecret ? maskSecret(value) : null,
-          isSecret,
-          hasValue: !!value,
-          updatedAt: row.updated_at
-        };
-
-        configs[row.platform].configured = true;
-      }
-    }
-
-    // Check environment variable overrides
-    for (const platform of Object.keys(configs)) {
-      const envPrefix = platform.toUpperCase();
-      for (const field of Object.keys(configs[platform].fields)) {
-        const envVar = `${envPrefix}_${field.toUpperCase()}`;
-        const envValue = process.env[envVar];
-
-        if (envValue) {
-          const isSecret = configs[platform].fields[field].isSecret;
-          configs[platform].fields[field] = {
-            value: isSecret ? null : envValue,
-            masked: isSecret ? maskSecret(envValue) : null,
-            isSecret,
-            hasValue: true,
-            source: 'environment'
-          };
-          configs[platform].configured = true;
-        }
-      }
-    }
-
-    res.json({
-      success: true,
-      configs
-    });
-  } catch (error) {
-    console.error('Error getting platform configs:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to get platform configurations'
-    });
-  }
-}
-
-/**
- * Update platform configuration
- */
-export async function updatePlatformConfig(req, res) {
-  const { platform } = req.params;
-  const config = req.body;
-
-  if (!PLATFORM_CONFIGS[platform]) {
-    return res.status(400).json({
-      success: false,
-      message: `Invalid platform: ${platform}`
-    });
-  }
-
-  try {
-    const platformConfig = PLATFORM_CONFIGS[platform];
-
-    for (const [key, value] of Object.entries(config)) {
-      if (!platformConfig.fields.includes(key)) {
-        continue; // Skip unknown fields
+      if (integrationType) {
+        query += ' AND integration_type = $' + (params.length + 1);
+        params.push(integrationType);
       }
 
-      // Skip null/undefined values (don't overwrite with empty)
-      if (value === null || value === undefined) {
-        continue;
+      if (platform) {
+        query += ' AND platform = $' + (params.length + 1);
+        params.push(platform);
       }
 
-      const isSecret = platformConfig.secrets.includes(key);
-      const storedValue = isSecret ? encrypt(value) : value;
+      query += ' ORDER BY platform, integration_type, created_at DESC';
 
-      // Upsert the config value
-      await query(
-        `INSERT INTO platform_configs (platform, config_key, config_value, is_encrypted, updated_at, updated_by)
-         VALUES ($1, $2, $3, $4, NOW(), $5)
-         ON CONFLICT (platform, config_key)
-         DO UPDATE SET config_value = $3, is_encrypted = $4, updated_at = NOW(), updated_by = $5`,
-        [platform, key, storedValue, isSecret, req.user?.id || null]
-      );
-    }
+      const result = await db.query(query, params);
 
-    // Log the update
-    console.log(`Platform config updated: ${platform} by user ${req.user?.username}`);
-
-    res.json({
-      success: true,
-      message: `${platform} configuration updated`
-    });
-  } catch (error) {
-    console.error('Error updating platform config:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update platform configuration'
-    });
-  }
-}
-
-/**
- * Test platform connection
- */
-export async function testPlatformConnection(req, res) {
-  const { platform } = req.params;
-
-  if (!PLATFORM_CONFIGS[platform]) {
-    return res.status(400).json({
-      success: false,
-      message: `Invalid platform: ${platform}`
-    });
-  }
-
-  try {
-    // Get credentials (from DB or env)
-    const credentials = await getCredentials(platform);
-
-    if (!credentials) {
-      return res.status(400).json({
+      return res.json({
+        success: true,
+        data: result.rows.map(row => formatCredential(row)),
+        count: result.rows.length,
+      });
+    } catch (error) {
+      logger.error('Error fetching platform configs:', error);
+      return res.status(500).json({
         success: false,
-        message: `No credentials configured for ${platform}`
+        error: 'Failed to fetch platform configurations',
       });
     }
+  }
 
-    // Test based on platform
-    let testResult;
+  /**
+   * Get bot credentials for a specific platform
+   */
+  static async getBotCredentials(req, res) {
+    try {
+      const { platform } = req.params;
+
+      const result = await db.query(
+        `SELECT * FROM platform_integrations
+         WHERE platform = $1
+         AND integration_type = 'bot'
+         AND is_active = TRUE
+         LIMIT 1`,
+        [platform]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: `No bot credentials found for platform: ${platform}`,
+        });
+      }
+
+      const credential = formatCredential(result.rows[0]);
+      return res.json({
+        success: true,
+        data: credential,
+      });
+    } catch (error) {
+      logger.error('Error fetching bot credentials:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to fetch bot credentials',
+      });
+    }
+  }
+
+  /**
+   * Get community OAuth tokens
+   */
+  static async getCommunityCredentials(req, res) {
+    try {
+      const { communityId } = req.params;
+
+      const result = await db.query(
+        `SELECT * FROM platform_integrations
+         WHERE community_id = $1
+         AND integration_type = 'community_oauth'
+         AND is_active = TRUE
+         ORDER BY platform`,
+        [communityId]
+      );
+
+      return res.json({
+        success: true,
+        data: result.rows.map(row => formatCredential(row)),
+        count: result.rows.length,
+      });
+    } catch (error) {
+      logger.error('Error fetching community credentials:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to fetch community credentials',
+      });
+    }
+  }
+
+  /**
+   * Get user OAuth tokens
+   */
+  static async getUserCredentials(req, res) {
+    try {
+      const { userId } = req.params;
+
+      const result = await db.query(
+        `SELECT * FROM platform_integrations
+         WHERE user_id = $1
+         AND integration_type = 'user_oauth'
+         AND is_active = TRUE
+         ORDER BY platform`,
+        [userId]
+      );
+
+      return res.json({
+        success: true,
+        data: result.rows.map(row => formatCredential(row)),
+        count: result.rows.length,
+      });
+    } catch (error) {
+      logger.error('Error fetching user credentials:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to fetch user credentials',
+      });
+    }
+  }
+
+  /**
+   * Create new platform credential
+   */
+  static async createPlatformConfig(req, res) {
+    try {
+      const {
+        platform,
+        integrationType,
+        communityId,
+        userId,
+        accessToken,
+        refreshToken,
+        clientId,
+        clientSecret,
+        expiresAt,
+        scopes,
+        configData,
+      } = req.body;
+
+      // Validate required fields
+      if (!platform || !integrationType) {
+        return res.status(400).json({
+          success: false,
+          error: 'platform and integrationType are required',
+        });
+      }
+
+      // Validate scope constraints
+      const scopeError = validateScopeConstraints(integrationType, communityId, userId);
+      if (scopeError) {
+        return res.status(400).json({
+          success: false,
+          error: scopeError,
+        });
+      }
+
+      const result = await db.query(
+        `INSERT INTO platform_integrations (
+          platform, integration_type, community_id, user_id,
+          access_token, refresh_token, client_id, client_secret,
+          token_type, expires_at, scopes, config_data,
+          is_active, is_encrypted, created_at, updated_at,
+          created_by_user_id, updated_by_user_id
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW(), NOW(), $15, $16)
+        RETURNING *`,
+        [
+          platform,
+          integrationType,
+          communityId || null,
+          userId || null,
+          accessToken || null,
+          refreshToken || null,
+          clientId || null,
+          clientSecret || null,
+          'Bearer',
+          expiresAt || null,
+          scopes || [],
+          JSON.stringify(configData || {}),
+          true,
+          true,
+          req.user?.id || null,
+          req.user?.id || null,
+        ]
+      );
+
+      logger.info(`Created platform credential: ${platform}/${integrationType}`);
+
+      return res.status(201).json({
+        success: true,
+        data: formatCredential(result.rows[0]),
+      });
+    } catch (error) {
+      logger.error('Error creating platform config:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to create platform configuration',
+      });
+    }
+  }
+
+  /**
+   * Update existing platform credential
+   */
+  static async updatePlatformConfig(req, res) {
+    try {
+      const { id } = req.params;
+      const {
+        accessToken,
+        refreshToken,
+        clientId,
+        clientSecret,
+        expiresAt,
+        scopes,
+        configData,
+        isActive,
+      } = req.body;
+
+      const result = await db.query(
+        `UPDATE platform_integrations
+         SET access_token = COALESCE($2, access_token),
+             refresh_token = COALESCE($3, refresh_token),
+             client_id = COALESCE($4, client_id),
+             client_secret = COALESCE($5, client_secret),
+             expires_at = COALESCE($6, expires_at),
+             scopes = COALESCE($7, scopes),
+             config_data = COALESCE($8, config_data),
+             is_active = COALESCE($9, is_active),
+             updated_at = NOW(),
+             updated_by_user_id = $10
+         WHERE id = $1
+         RETURNING *`,
+        [
+          id,
+          accessToken || null,
+          refreshToken || null,
+          clientId || null,
+          clientSecret || null,
+          expiresAt || null,
+          scopes || null,
+          configData ? JSON.stringify(configData) : null,
+          isActive !== undefined ? isActive : null,
+          req.user?.id || null,
+        ]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'Credential not found',
+        });
+      }
+
+      logger.info(`Updated platform credential: ${id}`);
+
+      return res.json({
+        success: true,
+        data: formatCredential(result.rows[0]),
+      });
+    } catch (error) {
+      logger.error('Error updating platform config:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to update platform configuration',
+      });
+    }
+  }
+
+  /**
+   * Delete (deactivate) platform credential
+   */
+  static async deletePlatformConfig(req, res) {
+    try {
+      const { id } = req.params;
+
+      const result = await db.query(
+        `UPDATE platform_integrations
+         SET is_active = FALSE, updated_at = NOW(), updated_by_user_id = $2
+         WHERE id = $1
+         RETURNING *`,
+        [id, req.user?.id || null]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'Credential not found',
+        });
+      }
+
+      logger.info(`Deactivated platform credential: ${id}`);
+
+      return res.json({
+        success: true,
+        message: 'Credential deactivated successfully',
+      });
+    } catch (error) {
+      logger.error('Error deleting platform config:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to delete platform configuration',
+      });
+    }
+  }
+
+  /**
+   * Test credential with platform API
+   */
+  static async testCredential(req, res) {
+    try {
+      const { id } = req.params;
+
+      const result = await db.query(
+        'SELECT * FROM platform_integrations WHERE id = $1',
+        [id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'Credential not found',
+        });
+      }
+
+      const credential = result.rows[0];
+
+      // Test based on platform
+      const testResult = await testPlatformCredential(credential);
+
+      if (!testResult.valid) {
+        return res.status(400).json({
+          success: false,
+          error: `Credential validation failed: ${testResult.error}`,
+        });
+      }
+
+      logger.info(`Tested credential: ${id} (${credential.platform})`);
+
+      return res.json({
+        success: true,
+        message: 'Credential is valid',
+        data: {
+          platform: credential.platform,
+          valid: true,
+          testedAt: new Date().toISOString(),
+        },
+      });
+    } catch (error) {
+      logger.error('Error testing credential:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to test credential',
+      });
+    }
+  }
+}
+
+/**
+ * Helper: Format credential for API response (mask sensitive fields)
+ */
+function formatCredential(row) {
+  return {
+    id: row.id,
+    platform: row.platform,
+    integrationType: row.integration_type,
+    communityId: row.community_id,
+    userId: row.user_id,
+    accessToken: row.access_token ? '***' : null,
+    refreshToken: row.refresh_token ? '***' : null,
+    clientId: row.client_id,
+    clientSecret: row.client_secret ? '***' : null,
+    tokenType: row.token_type,
+    expiresAt: row.expires_at,
+    scopes: row.scopes,
+    configData: row.config_data,
+    isActive: row.is_active,
+    isEncrypted: row.is_encrypted,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    createdByUserId: row.created_by_user_id,
+    updatedByUserId: row.updated_by_user_id,
+  };
+}
+
+/**
+ * Helper: Validate scope constraints
+ */
+function validateScopeConstraints(integrationType, communityId, userId) {
+  if (integrationType === 'bot') {
+    if (communityId !== undefined || userId !== undefined) {
+      return 'Bot credentials cannot have community_id or user_id';
+    }
+  } else if (integrationType === 'community_oauth') {
+    if (!communityId) {
+      return 'Community OAuth requires community_id';
+    }
+    if (userId !== undefined) {
+      return 'Community OAuth cannot have user_id';
+    }
+  } else if (integrationType === 'user_oauth') {
+    if (!userId) {
+      return 'User OAuth requires user_id';
+    }
+    if (communityId !== undefined) {
+      return 'User OAuth cannot have community_id';
+    }
+  }
+  return null;
+}
+
+/**
+ * Helper: Test credential with platform API
+ */
+async function testPlatformCredential(credential) {
+  const { platform, access_token } = credential;
+
+  try {
     switch (platform) {
-      case 'discord':
-        testResult = await testDiscordConnection(credentials);
-        break;
       case 'twitch':
-        testResult = await testTwitchConnection(credentials);
-        break;
+        return await testTwitchToken(access_token);
+      case 'discord':
+        return await testDiscordToken(access_token);
       case 'slack':
-        testResult = await testSlackConnection(credentials);
-        break;
+        return await testSlackToken(access_token);
       case 'youtube':
-        testResult = await testYouTubeConnection(credentials);
-        break;
-      case 'kick':
-        testResult = await testKickConnection(credentials);
-        break;
-      case 'email':
-        testResult = await testEmailConnection(credentials);
-        break;
-      case 'storage':
-        testResult = await testStorageConnection(credentials);
-        break;
+        return await testYouTubeToken(access_token);
       default:
-        testResult = { success: false, message: 'Test not implemented' };
+        return { valid: true };
     }
-
-    res.json(testResult);
   } catch (error) {
-    console.error(`Error testing ${platform} connection:`, error);
-    res.status(500).json({
-      success: false,
-      message: `Connection test failed: ${error.message}`
-    });
+    return { valid: false, error: error.message };
   }
 }
 
 /**
- * Get credentials for a platform (from DB or environment)
+ * Helper: Test Twitch token
  */
-async function getCredentials(platform) {
-  const result = await query(
-    `SELECT config_key, config_value, is_encrypted
-     FROM platform_configs
-     WHERE platform = $1`,
-    [platform]
-  );
-
-  const credentials = {};
-
-  // First, get from database
-  for (const row of result.rows) {
-    let value = row.config_value;
-    if (row.is_encrypted) {
-      value = decrypt(value);
-    }
-    credentials[row.config_key] = value;
-  }
-
-  // Then, override with environment variables
-  const envPrefix = platform.toUpperCase();
-  for (const field of PLATFORM_CONFIGS[platform].fields) {
-    const envVar = `${envPrefix}_${field.toUpperCase()}`;
-    if (process.env[envVar]) {
-      credentials[field] = process.env[envVar];
-    }
-  }
-
-  // Check if we have minimum required credentials
-  const hasCredentials = Object.values(credentials).some(v => v);
-  return hasCredentials ? credentials : null;
-}
-
-/**
- * Test Discord connection
- */
-async function testDiscordConnection(credentials) {
-  if (!credentials.bot_token) {
-    return { success: false, message: 'Bot token not configured' };
-  }
-
+async function testTwitchToken(token) {
   try {
-    const response = await fetch('https://discord.com/api/v10/users/@me', {
-      headers: { 'Authorization': `Bot ${credentials.bot_token}` }
+    const response = await fetch('https://id.twitch.tv/oauth2/validate', {
+      headers: { 'Authorization': `OAuth ${token}` },
     });
-
-    if (response.ok) {
-      const data = await response.json();
-      return {
-        success: true,
-        message: `Connected as ${data.username}#${data.discriminator}`,
-        data: { username: data.username, id: data.id }
-      };
-    } else {
-      return { success: false, message: `Discord API error: ${response.status}` };
-    }
+    return { valid: response.ok };
   } catch (error) {
-    return { success: false, message: `Connection failed: ${error.message}` };
+    return { valid: false, error: error.message };
   }
 }
 
 /**
- * Test Twitch connection
+ * Helper: Test Discord token
  */
-async function testTwitchConnection(credentials) {
-  if (!credentials.client_id || !credentials.client_secret) {
-    return { success: false, message: 'Client ID and secret not configured' };
-  }
-
+async function testDiscordToken(token) {
   try {
-    // Get app access token
-    const tokenResponse = await fetch('https://id.twitch.tv/oauth2/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: credentials.client_id,
-        client_secret: credentials.client_secret,
-        grant_type: 'client_credentials'
-      })
+    const response = await fetch('https://discord.com/api/users/@me', {
+      headers: { 'Authorization': `Bearer ${token}` },
     });
-
-    if (tokenResponse.ok) {
-      const data = await tokenResponse.json();
-      return {
-        success: true,
-        message: 'Twitch credentials validated',
-        data: { expiresIn: data.expires_in }
-      };
-    } else {
-      const error = await tokenResponse.json();
-      return { success: false, message: `Twitch API error: ${error.message}` };
-    }
+    return { valid: response.ok };
   } catch (error) {
-    return { success: false, message: `Connection failed: ${error.message}` };
+    return { valid: false, error: error.message };
   }
 }
 
 /**
- * Test Slack connection
+ * Helper: Test Slack token
  */
-async function testSlackConnection(credentials) {
-  if (!credentials.bot_token) {
-    return { success: false, message: 'Bot token not configured' };
-  }
-
+async function testSlackToken(token) {
   try {
     const response = await fetch('https://slack.com/api/auth.test', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${credentials.bot_token}`,
-        'Content-Type': 'application/json'
-      }
+      headers: { 'Authorization': `Bearer ${token}` },
     });
-
     const data = await response.json();
-    if (data.ok) {
-      return {
-        success: true,
-        message: `Connected to ${data.team} as ${data.user}`,
-        data: { team: data.team, user: data.user, teamId: data.team_id }
-      };
-    } else {
-      return { success: false, message: `Slack API error: ${data.error}` };
-    }
+    return { valid: data.ok };
   } catch (error) {
-    return { success: false, message: `Connection failed: ${error.message}` };
+    return { valid: false, error: error.message };
   }
 }
 
 /**
- * Test YouTube connection
+ * Helper: Test YouTube token
  */
-async function testYouTubeConnection(credentials) {
-  if (!credentials.api_key) {
-    return { success: false, message: 'API key not configured' };
-  }
-
+async function testYouTubeToken(token) {
   try {
-    const response = await fetch(
-      `https://www.googleapis.com/youtube/v3/videos?part=id&chart=mostPopular&maxResults=1&key=${credentials.api_key}`
-    );
-
-    if (response.ok) {
-      return {
-        success: true,
-        message: 'YouTube API key validated'
-      };
-    } else {
-      const error = await response.json();
-      return {
-        success: false,
-        message: `YouTube API error: ${error.error?.message || response.status}`
-      };
-    }
-  } catch (error) {
-    return { success: false, message: `Connection failed: ${error.message}` };
-  }
-}
-
-/**
- * Test KICK connection
- */
-async function testKickConnection(credentials) {
-  if (!credentials.client_id || !credentials.client_secret) {
-    return { success: false, message: 'Client ID and secret not configured' };
-  }
-
-  try {
-    // Get app access token from KICK
-    const tokenResponse = await fetch('https://id.kick.com/oauth/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: credentials.client_id,
-        client_secret: credentials.client_secret,
-        grant_type: 'client_credentials'
-      })
+    const response = await fetch('https://www.googleapis.com/youtube/v3/channels?part=id&mine=true', {
+      headers: { 'Authorization': `Bearer ${token}` },
     });
-
-    if (tokenResponse.ok) {
-      const data = await tokenResponse.json();
-      return {
-        success: true,
-        message: 'KICK credentials validated',
-        data: { expiresIn: data.expires_in }
-      };
-    } else {
-      const error = await tokenResponse.json().catch(() => ({}));
-      return { success: false, message: `KICK API error: ${error.message || tokenResponse.status}` };
-    }
+    return { valid: response.ok };
   } catch (error) {
-    return { success: false, message: `Connection failed: ${error.message}` };
+    return { valid: false, error: error.message };
   }
 }
 
-/**
- * Test email (SMTP) connection
- */
-async function testEmailConnection(credentials) {
-  if (!credentials.smtp_host || !credentials.smtp_port) {
-    return { success: false, message: 'SMTP host and port not configured' };
-  }
-
-  try {
-    // Dynamic import nodemailer
-    const nodemailer = await import('nodemailer');
-
-    const transportConfig = {
-      host: credentials.smtp_host,
-      port: parseInt(credentials.smtp_port, 10),
-      secure: credentials.smtp_secure === 'true',
-    };
-
-    if (credentials.smtp_user && credentials.smtp_password) {
-      transportConfig.auth = {
-        user: credentials.smtp_user,
-        pass: credentials.smtp_password
-      };
-    }
-
-    const transporter = nodemailer.default.createTransport(transportConfig);
-
-    // Verify connection
-    await transporter.verify();
-
-    // Update email_configured setting
-    await query(
-      `INSERT INTO hub_settings (setting_key, setting_value, updated_at)
-       VALUES ('email_configured', 'true', NOW())
-       ON CONFLICT (setting_key)
-       DO UPDATE SET setting_value = 'true', updated_at = NOW()`
-    );
-
-    return {
-      success: true,
-      message: `SMTP connection verified: ${credentials.smtp_host}:${credentials.smtp_port}`
-    };
-  } catch (error) {
-    return { success: false, message: `SMTP connection failed: ${error.message}` };
-  }
-}
-
-/**
- * Get hub settings
- */
-export async function getHubSettings(req, res) {
-  try {
-    const result = await query(
-      `SELECT setting_key, setting_value, updated_at FROM hub_settings`
-    );
-
-    const settings = {};
-    for (const row of result.rows) {
-      settings[row.setting_key] = {
-        value: row.setting_value,
-        updatedAt: row.updated_at
-      };
-    }
-
-    res.json({ success: true, settings });
-  } catch (error) {
-    console.error('Error getting hub settings:', error);
-    res.status(500).json({ success: false, message: 'Failed to get hub settings' });
-  }
-}
-
-/**
- * Update hub settings
- */
-export async function updateHubSettings(req, res) {
-  const { settings } = req.body;
-
-  if (!settings || typeof settings !== 'object') {
-    return res.status(400).json({ success: false, message: 'Invalid settings object' });
-  }
-
-  try {
-    for (const [key, value] of Object.entries(settings)) {
-      await query(
-        `INSERT INTO hub_settings (setting_key, setting_value, updated_at, updated_by)
-         VALUES ($1, $2, NOW(), $3)
-         ON CONFLICT (setting_key)
-         DO UPDATE SET setting_value = $2, updated_at = NOW(), updated_by = $3`,
-        [key, String(value), req.user?.id || null]
-      );
-    }
-
-    // Invalidate storage config cache if storage settings changed
-    const storageKeys = ['storage_type', 's3_endpoint', 's3_bucket', 's3_access_key', 's3_secret_key', 's3_region', 's3_public_url'];
-    if (Object.keys(settings).some(key => storageKeys.includes(key))) {
-      invalidateStorageConfigCache();
-    }
-
-    console.log(`Hub settings updated by user ${req.user?.username}`);
-
-    res.json({ success: true, message: 'Settings updated' });
-  } catch (error) {
-    console.error('Error updating hub settings:', error);
-    res.status(500).json({ success: false, message: 'Failed to update hub settings' });
-  }
-}
-
-/**
- * Test storage (S3/MinIO) connection
- */
-async function testStorageConnection(credentials) {
-  if (credentials.storage_type !== 's3') {
-    return { success: true, message: 'Local storage enabled (no connection test needed)' };
-  }
-
-  if (!credentials.s3_endpoint || !credentials.s3_bucket) {
-    return { success: false, message: 'S3 endpoint and bucket not configured' };
-  }
-
-  if (!credentials.s3_access_key || !credentials.s3_secret_key) {
-    return { success: false, message: 'S3 access credentials not configured' };
-  }
-
-  try {
-    const result = await testS3Connection({
-      s3Endpoint: credentials.s3_endpoint,
-      s3Bucket: credentials.s3_bucket,
-      s3AccessKey: credentials.s3_access_key,
-      s3SecretKey: credentials.s3_secret_key,
-      s3Region: credentials.s3_region || 'us-east-1',
-    });
-
-    return result;
-  } catch (error) {
-    return { success: false, message: `Storage connection failed: ${error.message}` };
-  }
-}
+module.exports = PlatformConfigController;

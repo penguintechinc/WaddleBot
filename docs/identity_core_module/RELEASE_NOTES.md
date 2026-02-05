@@ -9,7 +9,7 @@
 
 ## Overview
 
-Identity Core Module v2.0.0 represents a major architectural upgrade to WaddleBot's identity management system, introducing dual-protocol support (REST + gRPC), enhanced cross-platform linking, and improved security features.
+Identity Core Module v2.0.0 represents a major architectural upgrade to Waddles's identity management system, introducing dual-protocol support (REST + gRPC), enhanced cross-platform linking, and improved security features.
 
 ---
 
@@ -159,7 +159,7 @@ Identity Core Module v2.0.0 represents a major architectural upgrade to WaddleBo
 - `pytest-cov>=4.1.0` - Code coverage
 
 ### Shared Libraries
-- `flask_core` - WaddleBot shared Flask/Quart utilities
+- `flask_core` - Waddles shared Flask/Quart utilities
 - Database access layer (DAL)
 - AAA logging utilities
 
@@ -216,7 +216,7 @@ psql -U waddlebot -d waddlebot -f config/postgres/migrations/001_add_performance
 
 #### 5. Update Docker Image
 ```bash
-cd /home/penguin/code/WaddleBot
+cd /home/penguin/code/Waddles
 docker build -f core/identity_core_module/Dockerfile -t waddlebot/identity-core:2.0.0 .
 docker tag waddlebot/identity-core:2.0.0 waddlebot/identity-core:latest
 ```
@@ -393,9 +393,9 @@ Special thanks to all contributors to this release:
 ## Support
 
 ### Getting Help
-- Documentation: `/home/penguin/code/WaddleBot/docs/identity_core_module/`
+- Documentation: `/home/penguin/code/Waddles/docs/identity_core_module/`
 - Issues: GitHub issue tracker
-- Community: WaddleBot Discord server
+- Community: Waddles Discord server
 
 ### Reporting Bugs
 Please include:
@@ -414,7 +414,7 @@ Submit feature requests via:
 
 ## License
 
-Identity Core Module is part of WaddleBot and is licensed under the same license as the main project.
+Identity Core Module is part of Waddles and is licensed under the same license as the main project.
 
 ---
 

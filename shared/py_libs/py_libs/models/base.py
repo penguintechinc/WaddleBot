@@ -1,7 +1,7 @@
 """
 Base Pydantic v2 model configuration.
 
-Provides a standardized BaseModel with common configuration for all WaddleBot
+Provides a standardized BaseModel with common configuration for all Waddles
 modules, ensuring consistent validation behavior across the platform.
 """
 
@@ -13,7 +13,7 @@ from typing import Any, Dict
 
 class WaddleBaseModel(BaseModel):
     """
-    Base model with standard configuration for all WaddleBot models.
+    Base model with standard configuration for all Waddles models.
 
     Features:
     - extra='forbid': Rejects unknown fields (prevents silent data loss)

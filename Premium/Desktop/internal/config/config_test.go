@@ -132,7 +132,7 @@ func TestSetDefaults(t *testing.T) {
 		"web-port":              8080,
 		"web-host":              "127.0.0.1",
 		"log-level":             "info",
-		"webauthn-display-name": "WaddleBot Bridge",
+		"webauthn-display-name": "Waddles Bridge",
 		"webauthn-origin":       "http://127.0.0.1:8080",
 		"webauthn-timeout":      60,
 		"module-timeout":        30,
@@ -156,17 +156,17 @@ func TestSetPlatformDefaults(t *testing.T) {
 		{
 			name:            "macOS",
 			goos:            "darwin",
-			expectedDisplay: "WaddleBot Bridge for macOS",
+			expectedDisplay: "Waddles Bridge for macOS",
 		},
 		{
 			name:            "Windows",
 			goos:            "windows",
-			expectedDisplay: "WaddleBot Bridge for Windows",
+			expectedDisplay: "Waddles Bridge for Windows",
 		},
 		{
 			name:            "Linux",
 			goos:            "linux",
-			expectedDisplay: "WaddleBot Bridge for Linux",
+			expectedDisplay: "Waddles Bridge for Linux",
 		},
 	}
 
@@ -179,11 +179,11 @@ func TestSetPlatformDefaults(t *testing.T) {
 			// We can't actually change runtime.GOOS, so we'll test the logic manually
 			switch tt.goos {
 			case "darwin":
-				cfg.WebAuthnDisplayName = "WaddleBot Bridge for macOS"
+				cfg.WebAuthnDisplayName = "Waddles Bridge for macOS"
 			case "windows":
-				cfg.WebAuthnDisplayName = "WaddleBot Bridge for Windows"
+				cfg.WebAuthnDisplayName = "Waddles Bridge for Windows"
 			case "linux":
-				cfg.WebAuthnDisplayName = "WaddleBot Bridge for Linux"
+				cfg.WebAuthnDisplayName = "Waddles Bridge for Linux"
 			}
 
 			if cfg.WebAuthnDisplayName != tt.expectedDisplay {

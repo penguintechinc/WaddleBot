@@ -1,7 +1,7 @@
-# WaddleBot Observability Stack
+# Waddles Observability Stack
 # ==============================
 #
-# Complete observability infrastructure for WaddleBot:
+# Complete observability infrastructure for Waddles:
 # - Prometheus: Metrics collection and storage
 # - Jaeger: Distributed tracing
 # - Grafana: Visualization and dashboards

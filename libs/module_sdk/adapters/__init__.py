@@ -1,8 +1,8 @@
 """
-WaddleBot Module SDK - Adapters
+Waddles Module SDK - Adapters
 
 This package provides adapter classes for integrating external modules
-with WaddleBot's module system.
+with Waddles's module system.
 """
 
 from .base_adapter import BaseAdapter

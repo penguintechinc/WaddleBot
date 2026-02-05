@@ -1,5 +1,5 @@
 #!/bin/bash
-# WaddleBot Master Smoke Test Runner
+# Waddles Master Smoke Test Runner
 # Runs all smoke tests in sequence
 #
 # Usage: ./tests/smoke/run-all.sh [environment]
@@ -22,7 +22,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 echo "========================================"
-echo "WaddleBot Master Smoke Test Suite"
+echo "Waddles Master Smoke Test Suite"
 echo "========================================"
 echo ""
 echo "Environment: $ENV"
@@ -56,6 +56,39 @@ run_test() {
     fi
 }
 
+# === Phase 1: File-based validation tests (no services required) ===
+
+# Branding consistency (always runs first - catches fundamental issues)
+run_test "Branding Smoke Test" \
+    "cd '$SCRIPT_DIR' && bash smoke-branding.sh"
+
+# Flutter configuration integrity
+run_test "Flutter Config Integrity" \
+    "cd '$SCRIPT_DIR' && bash smoke-flutter-config.sh"
+
+# === Phase 2: Build tests (toolchain required) ===
+
+# Android build smoke test (if Flutter is available)
+if command -v flutter &> /dev/null; then
+    run_test "Android Build Smoke Test" \
+        "cd '$SCRIPT_DIR' && bash android-smoke.sh"
+
+    run_test "iOS Build Smoke Test" \
+        "cd '$SCRIPT_DIR' && bash ios-smoke.sh"
+else
+    echo -e "${YELLOW}⊘ Skipping Android/iOS smoke tests (Flutter not installed)${NC}"
+fi
+
+# Desktop Go build smoke test (if Go is available)
+if command -v go &> /dev/null; then
+    run_test "Desktop Go Build Smoke Test" \
+        "cd '$SCRIPT_DIR' && bash desktop-smoke.sh"
+else
+    echo -e "${YELLOW}⊘ Skipping Desktop smoke test (Go not installed)${NC}"
+fi
+
+# === Phase 3: Service-dependent tests ===
+
 # Run tests based on environment
 if [ "$ENV" = "local" ]; then
     # Local environment tests
@@ -74,14 +107,6 @@ if [ "$ENV" = "local" ]; then
     run_test "Page Load Smoke Test" \
         "cd '$SCRIPT_DIR' && BASE_URL=http://localhost:3000 node smoke-pages.js"
 
-    # Android build smoke test (if Flutter is available)
-    if command -v flutter &> /dev/null; then
-        run_test "Android Build Smoke Test" \
-            "cd '$SCRIPT_DIR' && bash android-smoke.sh"
-    else
-        echo -e "${YELLOW}⊘ Skipping Android smoke test (Flutter not installed)${NC}"
-    fi
-
 elif [ "$ENV" = "beta" ]; then
     # Beta environment tests
     run_test "Beta API Smoke Test (Basic)" \
@@ -98,14 +123,6 @@ elif [ "$ENV" = "beta" ]; then
 
     run_test "Beta Page Load Smoke Test" \
         "cd '$SCRIPT_DIR' && BASE_URL=https://waddlebot.penguintech.io node smoke-pages.js"
-
-    # Android build smoke test (if Flutter is available)
-    if command -v flutter &> /dev/null; then
-        run_test "Android Build Smoke Test" \
-            "cd '$SCRIPT_DIR' && bash android-smoke.sh"
-    else
-        echo -e "${YELLOW}⊘ Skipping Android smoke test (Flutter not installed)${NC}"
-    fi
 
 else
     echo -e "${RED}Unknown environment: $ENV${NC}"

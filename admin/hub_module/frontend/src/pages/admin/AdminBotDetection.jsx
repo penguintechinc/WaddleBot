@@ -6,7 +6,7 @@ import BotScoreBadge from '../../components/BotScoreBadge';
 import { ShieldCheckIcon, ExclamationTriangleIcon, UserGroupIcon, ClockIcon } from '@heroicons/react/24/outline';
 import { FormModalBuilder } from '@penguin/react_libs';
 
-// WaddleBot theme colors matching the existing UI
+// Waddles theme colors matching the existing UI
 const waddlebotColors = {
   modalBackground: 'bg-navy-800',
   headerBackground: 'bg-navy-800',

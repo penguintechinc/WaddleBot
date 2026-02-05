@@ -1,10 +1,10 @@
-# WaddleBot Premium Desktop Bridge
+# Waddles Premium Desktop Bridge
 
-A powerful desktop bridge client that connects your local system to WaddleBot communities, enabling chat commands to trigger local actions and system integrations.
+A powerful desktop bridge client that connects your local system to Waddles communities, enabling chat commands to trigger local actions and system integrations.
 
 ## Features
 
-- **Premium Application**: Requires active WaddleBot Premium subscription
+- **Premium Application**: Requires active Waddles Premium subscription
 - **WebAuthn Authentication**: Secure authentication using WebAuthn for device registration
 - **Community Restricted**: Each bridge instance is restricted to a single community and user
 - **Configurable Polling**: Polls server for actions every 30 seconds (configurable, minimum 5 seconds)
@@ -43,7 +43,7 @@ A powerful desktop bridge client that connects your local system to WaddleBot co
 Edit the `config.yaml` file to configure your bridge:
 
 ```yaml
-# WaddleBot Bridge Configuration
+# Waddles Bridge Configuration
 api-url: "https://api.waddlebot.io"
 community-id: "your-community-id"
 user-id: "your-user-id"
@@ -55,7 +55,7 @@ log-level: "info"
 
 ### Configuration Options
 
-- `api-url`: WaddleBot API endpoint
+- `api-url`: Waddles API endpoint
 - `community-id`: Your community identifier
 - `user-id`: Your user identifier
 - `poll-interval`: Polling interval in seconds (minimum 5)
@@ -232,7 +232,7 @@ For support and questions:
 
 ## License
 
-This software is licensed exclusively to users with active WaddleBot Premium subscriptions. See LICENSE file for details.
+This software is licensed exclusively to users with active Waddles Premium subscriptions. See LICENSE file for details.
 
 ## Contributing
 
@@ -240,5 +240,5 @@ This is proprietary software. Contributions are not accepted from external parti
 
 ---
 
-**WaddleBot Premium Desktop Bridge v1.0.0**
-© 2024 WaddleBot. All rights reserved.
+**Waddles Premium Desktop Bridge v1.0.0**
+© 2024 Waddles. All rights reserved.

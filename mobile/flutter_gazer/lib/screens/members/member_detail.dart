@@ -129,7 +129,6 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
     if (!widget.isAdmin || _memberDetail == null) return;
 
     if (!mounted) return;
-
     setState(() {
       _isLoading = true;
     });
@@ -146,32 +145,32 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
       if (response.success) {
         // Reload member detail
         await _loadMemberDetail();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Member role updated successfully'),
-              backgroundColor: ElderColors.green500,
-            ),
-          );
-        }
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Member role updated successfully'),
+            backgroundColor: ElderColors.green500,
+          ),
+        );
       } else {
+        if (!mounted) return;
         setState(() {
           _isLoading = false;
         });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(response.message ?? 'Failed to update role'),
-              backgroundColor: ElderColors.red500,
-            ),
-          );
-        }
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(response.message ?? 'Failed to update role'),
+            backgroundColor: ElderColors.red500,
+          ),
+        );
       }
     } on ApiError catch (e) {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(e.message ?? 'Failed to update role'),
@@ -183,6 +182,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
       setState(() {
         _isLoading = false;
       });
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('An unexpected error occurred'),

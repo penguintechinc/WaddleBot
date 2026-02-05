@@ -501,6 +501,7 @@ class _MessageInputFieldState extends State<_MessageInputField> {
   }
 
   void _updateHasText() {
+    if (!mounted) return;
     setState(() {
       _hasText = widget.messageController.text.isNotEmpty;
     });

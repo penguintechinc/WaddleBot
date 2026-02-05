@@ -1,4 +1,4 @@
-"""SQLAlchemy models package for WaddleBot.
+"""SQLAlchemy models package for Waddles.
 
 Imports and exports all model classes for Alembic migrations.
 """

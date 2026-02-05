@@ -15,7 +15,7 @@ Module starts on ports:
 
 ### Step 1: Get Overlay Key
 
-Overlay keys are managed by administrators. Contact your WaddleBot admin or retrieve from:
+Overlay keys are managed by administrators. Contact your Waddles admin or retrieve from:
 ```sql
 SELECT overlay_key FROM community_overlay_tokens WHERE community_id = 123;
 ```
@@ -23,7 +23,7 @@ SELECT overlay_key FROM community_overlay_tokens WHERE community_id = 123;
 ### Step 2: Add Browser Source in OBS
 
 1. **Sources** → **+** → **Browser**
-2. **Create New**: Name it "WaddleBot Overlay"
+2. **Create New**: Name it "Waddles Overlay"
 3. **Properties**:
    - URL: `http://localhost:8027/overlay/YOUR_64_CHAR_KEY`
    - Width: 1920

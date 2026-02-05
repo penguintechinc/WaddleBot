@@ -435,7 +435,7 @@ jobs:
           sha256sum waddlebot-bridge-* > checksums.txt
           
           # Create release notes
-          echo "## WaddleBot Premium Desktop Bridge" > release-notes.md
+          echo "## Waddles Premium Desktop Bridge" > release-notes.md
           echo "### Build Information" >> release-notes.md
           echo "- Commit: ${{ github.sha }}" >> release-notes.md
           echo "- Date: $(date -u +%Y-%m-%dT%H:%M:%S)Z" >> release-notes.md

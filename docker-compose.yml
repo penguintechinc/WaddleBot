@@ -1,4 +1,4 @@
-# WaddleBot Docker Compose - Unified Configuration
+# Waddles Docker Compose - Unified Configuration
 # Secure network isolation: internal services not exposed to host
 
 networks:
@@ -153,6 +153,39 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+
+  credential-manager:
+    build:
+      context: ./core/credential_manager_module
+      dockerfile: Dockerfile
+    container_name: credential-manager
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+    environment:
+      DATABASE_URL: postgresql://credential_manager:mod_credential_manager_dev_changeme@infra-postgres:5432/waddlebot
+      REDIS_URL: redis://redis:6379/0
+      TOKEN_REFRESH_BUFFER: "300"
+      POLLING_INTERVAL: "60"
+      MAX_CONCURRENT_REFRESHES: "5"
+      LOG_LEVEL: INFO
+      MODULE_SECRET_KEY: ${MODULE_SECRET_KEY:-change_me_in_production}
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
+    depends_on:
+      infra-postgres:
+        condition: service_healthy
+      infra-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - waddlebot-internal
     restart: unless-stopped
 
   infra-minio:
@@ -371,8 +404,8 @@ services:
       DATABASE_HOST: infra-postgres
       DATABASE_PORT: 5432
       DATABASE_NAME: waddlebot
-      DATABASE_USER: waddlebot
-      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      DATABASE_USER: mod_router
+      DATABASE_PASSWORD: ${DB_PASS_ROUTER:-mod_router_dev_changeme}
       READ_REPLICA_HOST: infra-postgres-replica
       READ_REPLICA_PORT: 5432
       # Redis configuration
@@ -405,7 +438,7 @@ services:
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       PORT: 8060
-      DATABASE_URL: postgresql://waddlebot:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/waddlebot
+      DATABASE_URL: postgresql://hub_admin:${DB_PASS_HUB_ADMIN:-hub_admin_dev_changeme}@infra-postgres:5432/waddlebot
       # Redis ACL: user=hub, prefix=hub:*, waddlebot:session:*, waddlebot:auth:*
       REDIS_URL: redis://hub:${REDIS_HUB_PASSWORD:-changeme}@infra-redis:6379/0
       REDIS_KEY_PREFIX: "hub:"
@@ -471,7 +504,9 @@ services:
     environment:
       MODULE_NAME: twitch-collector
       MODULE_PORT: 8002
-      DATABASE_URL: postgresql://waddlebot:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/waddlebot
+      DATABASE_URL: postgresql://twitch_trigger:mod_twitch_trigger_dev_changeme@postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
       ROUTER_API_URL: http://core-router:8000
       TWITCH_CLIENT_ID: ${TWITCH_CLIENT_ID:-}
       TWITCH_CLIENT_SECRET: ${TWITCH_CLIENT_SECRET:-}
@@ -496,7 +531,9 @@ services:
     environment:
       MODULE_NAME: discord-collector
       MODULE_PORT: 8003
-      DATABASE_URL: postgresql://waddlebot:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/waddlebot
+      DATABASE_URL: postgresql://discord_trigger:mod_discord_trigger_dev_changeme@postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
       ROUTER_API_URL: http://core-router:8000
       DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
       DISCORD_APPLICATION_ID: ${DISCORD_APPLICATION_ID:-}
@@ -520,7 +557,9 @@ services:
     environment:
       MODULE_NAME: slack-collector
       MODULE_PORT: 8004
-      DATABASE_URL: postgresql://waddlebot:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/waddlebot
+      DATABASE_URL: postgresql://slack_trigger:mod_slack_trigger_dev_changeme@postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
       ROUTER_API_URL: http://core-router:8000
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
       SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET:-}
@@ -544,7 +583,9 @@ services:
     environment:
       MODULE_NAME: youtube-live-collector
       MODULE_PORT: 8006
-      DATABASE_URL: postgresql://waddlebot:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/waddlebot
+      DATABASE_URL: postgresql://youtube_live_trigger:mod_youtube_live_trigger_dev_changeme@postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
       ROUTER_API_URL: http://core-router:8000
       YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
       YOUTUBE_CLIENT_ID: ${YOUTUBE_CLIENT_ID:-}
@@ -570,7 +611,9 @@ services:
     environment:
       MODULE_NAME: kick-collector
       MODULE_PORT: 8007
-      DATABASE_URL: postgresql://waddlebot:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/waddlebot
+      DATABASE_URL: postgresql://kick_trigger:mod_kick_trigger_dev_changeme@postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
       ROUTER_API_URL: http://core-router:8000
       KICK_CLIENT_ID: ${KICK_CLIENT_ID:-}
       KICK_CLIENT_SECRET: ${KICK_CLIENT_SECRET:-}
@@ -599,13 +642,15 @@ services:
     environment:
       MODULE_NAME: ai-interaction
       MODULE_PORT: 8005
-      DATABASE_URL: postgresql://waddlebot:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/waddlebot
+      DATABASE_URL: postgresql://ai_interaction:mod_ai_interaction_dev_changeme@postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
       ROUTER_API_URL: http://core-router:8000
       AI_PROVIDER: ${AI_PROVIDER:-ollama}
       OLLAMA_HOST: ${OLLAMA_HOST:-ai-ollama}
       OLLAMA_PORT: ${OLLAMA_PORT:-11434}
       OLLAMA_USE_TLS: ${OLLAMA_USE_TLS:-false}
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-tinyllama}  # Multilingual model for language detection
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-tinyllama}
       WADDLEAI_BASE_URL: ${WADDLEAI_BASE_URL:-}
       WADDLEAI_API_KEY: ${WADDLEAI_API_KEY:-}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
@@ -629,7 +674,9 @@ services:
     environment:
       MODULE_NAME: alias-interaction
       MODULE_PORT: 8010
-      DATABASE_URL: postgresql://waddlebot:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/waddlebot
+      DATABASE_URL: postgresql://alias_interaction:mod_alias_interaction_dev_changeme@postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
       ROUTER_API_URL: http://core-router:8000
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:
@@ -651,7 +698,9 @@ services:
     environment:
       MODULE_NAME: shoutout-interaction
       MODULE_PORT: 8011
-      DATABASE_URL: postgresql://waddlebot:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/waddlebot
+      DATABASE_URL: postgresql://shoutout_interaction:mod_shoutout_interaction_dev_changeme@postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
       ROUTER_API_URL: http://core-router:8000
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:
@@ -673,7 +722,9 @@ services:
     environment:
       MODULE_NAME: inventory-interaction
       MODULE_PORT: 8024
-      DATABASE_URL: postgresql://waddlebot:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/waddlebot
+      DATABASE_URL: postgresql://inventory_interaction:mod_inventory_interaction_dev_changeme@postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
       ROUTER_API_URL: http://core-router:8000
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:
@@ -695,7 +746,9 @@ services:
     environment:
       MODULE_NAME: calendar-interaction
       MODULE_PORT: 8030
-      DATABASE_URL: postgresql://waddlebot:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/waddlebot
+      DATABASE_URL: postgresql://calendar_interaction:mod_calendar_interaction_dev_changeme@postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
       ROUTER_API_URL: http://core-router:8000
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:
@@ -717,7 +770,9 @@ services:
     environment:
       MODULE_NAME: memories-interaction
       MODULE_PORT: 8031
-      DATABASE_URL: postgresql://waddlebot:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/waddlebot
+      DATABASE_URL: postgresql://memories_interaction:mod_memories_interaction_dev_changeme@postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
       ROUTER_API_URL: http://core-router:8000
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:
@@ -739,7 +794,9 @@ services:
     environment:
       MODULE_NAME: youtube-music
       MODULE_PORT: 8025
-      DATABASE_URL: postgresql://waddlebot:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/waddlebot
+      DATABASE_URL: postgresql://youtube_music_interaction:mod_youtube_music_interaction_dev_changeme@postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
       ROUTER_API_URL: http://core-router:8000
       BROWSER_SOURCE_API_URL: http://core-browser-source:8027
       YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
@@ -764,7 +821,9 @@ services:
     environment:
       MODULE_NAME: spotify-interaction
       MODULE_PORT: 8026
-      DATABASE_URL: postgresql://waddlebot:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/waddlebot
+      DATABASE_URL: postgresql://spotify_interaction:mod_spotify_interaction_dev_changeme@postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
       ROUTER_API_URL: http://core-router:8000
       BROWSER_SOURCE_API_URL: http://core-browser-source:8027
       SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID:-}
@@ -790,7 +849,9 @@ services:
     environment:
       MODULE_NAME: loyalty-interaction
       MODULE_PORT: 8032
-      DATABASE_URL: postgresql://waddlebot:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/waddlebot
+      DATABASE_URL: postgresql://loyalty_interaction:mod_loyalty_interaction_dev_changeme@postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
       ROUTER_API_URL: http://core-router:8000
       REPUTATION_API_URL: http://core-reputation:8021
       SERVICE_API_KEY: ${SERVICE_API_KEY:-changeme_service_key}
@@ -820,8 +881,9 @@ services:
     environment:
       MODULE_NAME: labels-core
       MODULE_PORT: 8023
-      DATABASE_URL: postgresql://waddlebot:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/waddlebot
-      # Redis ACL: uses router credentials for shared cache access
+      DATABASE_URL: postgresql://labels:mod_labels_dev_changeme@postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
       REDIS_URL: redis://router:${REDIS_ROUTER_PASSWORD:-changeme}@infra-redis:6379/0
       REDIS_KEY_PREFIX: "labels:"
       ROUTER_API_URL: http://core-router:8000
@@ -846,7 +908,9 @@ services:
     environment:
       MODULE_NAME: browser-source
       MODULE_PORT: 8027
-      DATABASE_URL: postgresql://waddlebot:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/waddlebot
+      DATABASE_URL: postgresql://browser_source:mod_browser_source_dev_changeme@postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
       ROUTER_API_URL: http://core-router:8000
       OVERLAY_BASE_URL: ${OVERLAY_BASE_URL:-http://localhost:8027}
       OVERLAY_KEY_GRACE_PERIOD_MINUTES: ${OVERLAY_KEY_GRACE_PERIOD_MINUTES:-5}
@@ -873,8 +937,9 @@ services:
     environment:
       MODULE_NAME: identity-core
       MODULE_PORT: 8050
-      DATABASE_URL: postgresql://waddlebot:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/waddlebot
-      # Redis ACL: uses hub credentials for session/auth data
+      DATABASE_URL: postgresql://identity:mod_identity_dev_changeme@postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
       REDIS_URL: redis://hub:${REDIS_HUB_PASSWORD:-changeme}@infra-redis:6379/0
       REDIS_KEY_PREFIX: "identity:"
       ROUTER_API_URL: http://core-router:8000
@@ -900,8 +965,9 @@ services:
       MODULE_NAME: ai_researcher_module
       MODULE_VERSION: 1.0.0
       MODULE_PORT: 8070
-      DATABASE_URL: postgresql://waddlebot:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/waddlebot
-      # Redis ACL: user=ai_researcher, prefix=ai:*, waddlebot:ai:*, waddlebot:rate:ai:*
+      DATABASE_URL: postgresql://ai_researcher:mod_ai_researcher_dev_changeme@postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
       REDIS_URL: redis://ai_researcher:${REDIS_AI_PASSWORD:-changeme}@infra-redis:6379/0
       REDIS_KEY_PREFIX: "ai:"
       ROUTER_API_URL: http://core-router:8000/api/v1/router
@@ -939,8 +1005,9 @@ services:
     environment:
       MODULE_NAME: workflow-core
       MODULE_PORT: 8090
-      DATABASE_URL: postgresql://waddlebot:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/waddlebot
-      # Redis ACL: user=workflow, prefix=workflow:*, waddlebot:jobs:*, waddlebot:schedule:*, waddlebot:lock:*
+      DATABASE_URL: postgresql://workflow:mod_workflow_dev_changeme@postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
       REDIS_URL: redis://workflow:${REDIS_WORKFLOW_PASSWORD:-changeme}@infra-redis:6379/0
       REDIS_KEY_PREFIX: "workflow:"
       ROUTER_API_URL: http://core-router:8000
@@ -976,7 +1043,9 @@ services:
     environment:
       MODULE_NAME: community
       MODULE_PORT: 8020
-      DATABASE_URL: postgresql://waddlebot:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/waddlebot
+      DATABASE_URL: postgresql://community:mod_community_dev_changeme@postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
       ROUTER_API_URL: http://core-router:8000
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:
@@ -998,7 +1067,9 @@ services:
     environment:
       MODULE_NAME: reputation
       MODULE_PORT: 8021
-      DATABASE_URL: postgresql://waddlebot:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/waddlebot
+      DATABASE_URL: postgresql://reputation:mod_reputation_dev_changeme@postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
       ROUTER_API_URL: http://core-router:8000
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:
@@ -1020,8 +1091,9 @@ services:
     environment:
       MODULE_NAME: analytics-core
       MODULE_PORT: 8040
-      DATABASE_URL: postgresql://waddlebot:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/waddlebot
-      # Redis ACL: user=analytics, prefix=analytics:*, waddlebot:metrics:*, waddlebot:counters:*
+      DATABASE_URL: postgresql://analytics:mod_analytics_dev_changeme@postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
       REDIS_URL: redis://analytics:${REDIS_ANALYTICS_PASSWORD:-changeme}@infra-redis:6379/0
       REDIS_KEY_PREFIX: "analytics:"
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
@@ -1047,8 +1119,9 @@ services:
     environment:
       MODULE_NAME: security-core
       MODULE_PORT: 8041
-      DATABASE_URL: postgresql://waddlebot:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/waddlebot
-      # Redis ACL: user=security, prefix=security:*, waddlebot:blacklist:*, waddlebot:threat:*
+      DATABASE_URL: postgresql://security:mod_security_dev_changeme@postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
       REDIS_URL: redis://security:${REDIS_SECURITY_PASSWORD:-changeme}@infra-redis:6379/0
       REDIS_KEY_PREFIX: "security:"
       REPUTATION_API_URL: http://core-reputation:8021
@@ -1080,7 +1153,9 @@ services:
       MODULE_NAME: discord-action
       GRPC_PORT: 50051
       REST_PORT: 8070
-      DATABASE_URL: postgresql://waddlebot:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/waddlebot
+      DATABASE_URL: postgresql://discord_action:mod_discord_action_dev_changeme@postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
       DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
       MODULE_SECRET_KEY: ${MODULE_SECRET_KEY:-changeme_module_secret}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
@@ -1106,7 +1181,9 @@ services:
       MODULE_NAME: slack-action
       GRPC_PORT: 50052
       REST_PORT: 8071
-      DATABASE_URL: postgresql://waddlebot:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/waddlebot
+      DATABASE_URL: postgresql://slack_action:mod_slack_action_dev_changeme@postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
       MODULE_SECRET_KEY: ${MODULE_SECRET_KEY:-changeme_module_secret}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
@@ -1132,7 +1209,9 @@ services:
       MODULE_NAME: twitch-action
       GRPC_PORT: 50053
       REST_PORT: 8072
-      DATABASE_URL: postgresql://waddlebot:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/waddlebot
+      DATABASE_URL: postgresql://twitch_action:mod_twitch_action_dev_changeme@postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
       TWITCH_CLIENT_ID: ${TWITCH_CLIENT_ID:-}
       TWITCH_CLIENT_SECRET: ${TWITCH_CLIENT_SECRET:-}
       MODULE_SECRET_KEY: ${MODULE_SECRET_KEY:-changeme_module_secret}
@@ -1159,7 +1238,9 @@ services:
       MODULE_NAME: youtube-action
       GRPC_PORT: 50054
       REST_PORT: 8073
-      DATABASE_URL: postgresql://waddlebot:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/waddlebot
+      DATABASE_URL: postgresql://youtube_action:mod_youtube_action_dev_changeme@postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
       YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
       YOUTUBE_CLIENT_ID: ${YOUTUBE_CLIENT_ID:-}
       YOUTUBE_CLIENT_SECRET: ${YOUTUBE_CLIENT_SECRET:-}
@@ -1191,7 +1272,9 @@ services:
       MODULE_NAME: video-proxy
       MODULE_PORT: 8092
       GRPC_PORT: 50065
-      DATABASE_URL: postgresql://waddlebot:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/waddlebot
+      DATABASE_URL: postgresql://video_proxy:mod_video_proxy_dev_changeme@postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
       MARCHPROXY_GRPC_HOST: marchproxy-rtmp
       MARCHPROXY_GRPC_PORT: 50050
       MINIO_ENDPOINT: infra-minio:9000
@@ -1226,7 +1309,9 @@ services:
       MODULE_NAME: engagement
       MODULE_PORT: 8091
       GRPC_PORT: 50066
-      DATABASE_URL: postgresql://waddlebot:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/waddlebot
+      DATABASE_URL: postgresql://engagement:mod_engagement_dev_changeme@postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
       JWT_SECRET_KEY: ${JWT_SECRET:-changeme_jwt_secret}
       MODULE_SECRET_KEY: ${MODULE_SECRET_KEY:-changeme_module_secret}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
@@ -1254,7 +1339,9 @@ services:
       LIVEKIT_HOST: ${LIVEKIT_HOST:-livekit:7880}
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
-      DATABASE_URL: postgresql://waddlebot:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/waddlebot
+      DATABASE_URL: postgresql://credential_manager:mod_credential_manager_dev_changeme@postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
       HUB_API_URL: http://hub-api:8060
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:
@@ -1289,6 +1376,36 @@ services:
       retries: 3
     restart: unless-stopped
 
+  core-credential-manager:
+    build:
+      context: .
+      dockerfile: core/credential_manager_module/Dockerfile
+    container_name: core-credential-manager
+    environment:
+      MODULE_NAME: credential-manager
+      MODULE_PORT: 8095
+      DATABASE_URL: postgresql://credential_manager:mod_credential_manager_dev_changeme@postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
+      REDIS_URL: redis://hub:${REDIS_HUB_PASSWORD:-changeme}@infra-redis:6379/0
+      REDIS_KEY_PREFIX: "credentials:"
+      TOKEN_REFRESH_BUFFER: "300"
+      POLL_INTERVAL: "60"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    networks:
+      - waddlebot-internal
+    depends_on:
+      infra-postgres:
+        condition: service_healthy
+      infra-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8095/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
   # =============================================================================
   # SERVERLESS PLATFORM ACTION MODULES
   # =============================================================================
@@ -1302,7 +1419,9 @@ services:
       MODULE_NAME: lambda-action
       GRPC_PORT: 50060
       REST_PORT: 8080
-      DATABASE_URL: postgresql://waddlebot:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/waddlebot
+      DATABASE_URL: postgresql://lambda_action:mod_lambda_action_dev_changeme@postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       AWS_REGION: ${AWS_REGION:-us-east-1}
@@ -1331,7 +1450,9 @@ services:
       MODULE_NAME: gcp-functions-action
       GRPC_PORT: 50061
       REST_PORT: 8081
-      DATABASE_URL: postgresql://waddlebot:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/waddlebot
+      DATABASE_URL: postgresql://gcp_functions_action:mod_gcp_functions_action_dev_changeme@postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
       GCP_PROJECT_ID: ${GCP_PROJECT_ID:-}
       GCP_REGION: ${GCP_REGION:-us-central1}
       GCP_SERVICE_ACCOUNT_KEY: ${GCP_SERVICE_ACCOUNT_KEY:-}
@@ -1362,7 +1483,9 @@ services:
   #     MODULE_NAME: openwhisk-action
   #     GRPC_PORT: 50062
   #     REST_PORT: 8082
-  #     DATABASE_URL: postgresql://waddlebot:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/waddlebot
+  #     DATABASE_URL: postgresql://openwhisk_action:mod_openwhisk_action_dev_changeme@postgres:5432/waddlebot
+  #     SECRETS_BACKEND: kubernetes
+  #     SECRETS_PATH: /secrets/db-passwords
   #     OPENWHISK_API_HOST: ${OPENWHISK_API_HOST:-}
   #     OPENWHISK_AUTH_KEY: ${OPENWHISK_AUTH_KEY:-}
   #     OPENWHISK_NAMESPACE: ${OPENWHISK_NAMESPACE:-}

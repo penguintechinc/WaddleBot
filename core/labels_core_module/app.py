@@ -1,5 +1,5 @@
 """
-Labels Core Module for WaddleBot - Flask/Quart Implementation
+Labels Core Module for Waddles - Flask/Quart Implementation
 Universal label management system supporting any entity type
 """
 import asyncio

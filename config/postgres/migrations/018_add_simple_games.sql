@@ -1,7 +1,7 @@
 -- Migration 018: Add Simple Games Tables
 -- Description: Implements simple luck-based games (Dice, RPS, 8-Ball)
 --              with betting, cooldown tracking, and statistics
--- Author: WaddleBot Team
+-- Author: Waddles Team
 -- Date: 2025-12-16
 
 -- =============================================================================

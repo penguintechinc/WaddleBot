@@ -28,7 +28,7 @@ export default function KongCertificates() {
     commonName: '',
     altNames: '',
     validityDays: 365,
-    organization: 'WaddleBot',
+    organization: 'Waddles',
     country: 'US',
     uploadToKong: true
   });
@@ -155,7 +155,7 @@ export default function KongCertificates() {
         commonName: '',
         altNames: '',
         validityDays: 365,
-        organization: 'WaddleBot',
+        organization: 'Waddles',
         country: 'US',
         uploadToKong: true
       });
@@ -602,7 +602,7 @@ export default function KongCertificates() {
                     type="text"
                     value={selfSignedFormData.organization}
                     onChange={(e) => setSelfSignedFormData({ ...selfSignedFormData, organization: e.target.value })}
-                    placeholder="WaddleBot"
+                    placeholder="Waddles"
                     className="w-full px-4 py-2 bg-navy-800 border border-navy-700 rounded-lg text-white focus:outline-none focus:border-green-500"
                   />
                 </div>

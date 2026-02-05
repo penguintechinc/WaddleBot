@@ -1,5 +1,5 @@
 """
-Setup configuration for WaddleBot Flask Core Library
+Setup configuration for Waddles Flask Core Library
 """
 
 from setuptools import setup, find_packages
@@ -13,9 +13,9 @@ with open("requirements.txt", "r", encoding="utf-8") as fh:
 setup(
     name="waddlebot-flask-core",
     version="2.0.0",
-    author="WaddleBot Team",
+    author="Waddles Team",
     author_email="team@waddlebot.com",
-    description="Shared utilities for WaddleBot Flask/Quart modules",
+    description="Shared utilities for Waddles Flask/Quart modules",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/waddlebot/waddlebot",

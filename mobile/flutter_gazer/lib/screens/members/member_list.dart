@@ -98,6 +98,7 @@ class _MemberListScreenState extends State<MemberListScreen> {
     }
 
     if (query.length < 2) {
+      if (!mounted) return;
       setState(() {
         _filteredMembers = [];
       });

@@ -107,10 +107,12 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
     final query = _searchController.text.toLowerCase().trim();
 
     if (query.isEmpty) {
+      if (!mounted) return;
       setState(() {
         _filteredCommunities = List.from(_communities);
       });
     } else {
+      if (!mounted) return;
       setState(() {
         _filteredCommunities = _communities
             .where((community) =>

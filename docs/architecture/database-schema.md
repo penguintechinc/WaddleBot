@@ -1,8 +1,8 @@
-# WaddleBot Database Schema Reference
+# Waddles Database Schema Reference
 
 ## Overview
 
-WaddleBot uses PostgreSQL as its primary database with read replica support for high-performance query operations. The architecture separates read operations (command lookups, permission checks) to read replicas while write operations (executions, logging) use the primary database.
+Waddles uses PostgreSQL as its primary database with read replica support for high-performance query operations. The architecture separates read operations (command lookups, permission checks) to read replicas while write operations (executions, logging) use the primary database.
 
 **Database Configuration:**
 - Primary database for writes and critical operations
@@ -80,12 +80,12 @@ commands (
 ```
 
 ### Entities Table
-Maps platform identifiers to WaddleBot entities:
+Maps platform identifiers to Waddles entities:
 
 ```sql
 entities (
     id,
-    entity_id,          -- Unique WaddleBot entity identifier
+    entity_id,          -- Unique Waddles entity identifier
     platform,           -- 'twitch', 'discord', 'slack'
     server_id,          -- Platform server/guild ID
     channel_id,         -- Platform channel ID
@@ -203,7 +203,7 @@ coordination (
     platform,           -- 'twitch', 'discord', 'slack'
     server_id,          -- Platform server/guild ID (null for Twitch)
     channel_id,         -- Platform channel ID
-    entity_id,          -- WaddleBot entity identifier
+    entity_id,          -- Waddles entity identifier
     claimed_by,         -- Container ID that claimed this entity
     claimed_at,         -- Timestamp of claim
     status,             -- 'available', 'claimed', 'offline', 'error'

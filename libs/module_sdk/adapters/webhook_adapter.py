@@ -2,7 +2,7 @@
 Webhook adapter for external marketplace modules.
 
 This module provides a WebhookAdapter class that bridges external webhook-based
-modules with WaddleBot's internal module system. It handles HTTP communication,
+modules with Waddles's internal module system. It handles HTTP communication,
 HMAC signature generation, timeout management, and health tracking.
 """
 

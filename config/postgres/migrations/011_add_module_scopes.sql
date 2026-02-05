@@ -1,7 +1,7 @@
 -- Migration: Add Module Scopes Table
 -- Description: Creates table for storing OAuth-like scope permissions for modules
 -- Dependencies: None
--- Author: WaddleBot Team
+-- Author: Waddles Team
 -- Date: 2025-12-15
 
 -- Create module_scopes table for scope-based permissions

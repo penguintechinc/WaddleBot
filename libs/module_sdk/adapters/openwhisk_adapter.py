@@ -2,7 +2,7 @@
 Apache OpenWhisk adapter for serverless module invocation.
 
 This module provides an OpenWhiskAdapter class that bridges Apache OpenWhisk
-actions with WaddleBot's internal module system. It handles HTTP communication
+actions with Waddles's internal module system. It handles HTTP communication
 to the OpenWhisk API, async action invocation, response parsing, retry logic
 with exponential backoff, and health tracking.
 """

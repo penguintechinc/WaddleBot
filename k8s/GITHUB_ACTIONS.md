@@ -1,10 +1,10 @@
 # GitHub Actions CI/CD for Kubernetes
 
-Complete guide for setting up automated deployment of WaddleBot to Kubernetes clusters using GitHub Actions.
+Complete guide for setting up automated deployment of Waddles to Kubernetes clusters using GitHub Actions.
 
 ## Overview
 
-This setup enables automatic deployment of WaddleBot containers to your Kubernetes cluster whenever you push to the main branch. The workflow:
+This setup enables automatic deployment of Waddles containers to your Kubernetes cluster whenever you push to the main branch. The workflow:
 
 1. **Builds** all module Docker images
 2. **Pushes** images to GitHub Container Registry (GHCR)
@@ -33,13 +33,13 @@ Choose the appropriate script for your cluster:
 
 **MicroK8s:**
 ```bash
-cd /home/penguin/code/WaddleBot/k8s
+cd /home/penguin/code/waddlebot/k8s
 ./setup-github-actions-microk8s.sh
 ```
 
 **kind/minikube/other:**
 ```bash
-cd /home/penguin/code/WaddleBot/k8s
+cd /home/penguin/code/waddlebot/k8s
 ./setup-github-actions-k8s.sh --kind     # or --minikube
 ```
 
@@ -58,7 +58,7 @@ The script will:
 | Secret Name | Description |
 |-------------|-------------|
 | `KUBE_CONFIG_DATA` | Base64-encoded kubeconfig |
-| `K8S_NAMESPACE` | Target namespace (default: waddlebot) |
+| `K8S_NAMESPACE` | Target namespace (default: waddles) |
 | `K8S_CLUSTER_ENDPOINT` | API server URL |
 | `K8S_CLUSTER_TYPE` | Cluster type (microk8s, kind, minikube) |
 
@@ -279,7 +279,7 @@ kubectl get events -n waddlebot --sort-by='.lastTimestamp'
 Trigger deployment without pushing code:
 
 1. Go to **Actions** tab
-2. Select **WaddleBot CI/CD Pipeline**
+2. Select **Waddles CI/CD Pipeline**
 3. Click **Run workflow**
 4. Select branch and options
 

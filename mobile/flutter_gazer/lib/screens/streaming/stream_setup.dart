@@ -8,7 +8,7 @@ import '../../services/license_service.dart';
 import 'quality_presets.dart';
 
 /// RTMP configuration screen for stream setup.
-/// Supports WaddleBot hosted RTMP and premium external RTMP option.
+/// Supports Waddles hosted RTMP and premium external RTMP option.
 class StreamSetupScreen extends StatefulWidget {
   final StreamConfig initialConfig;
   final LicenseService licenseService;
@@ -55,15 +55,16 @@ class _StreamSetupScreenState extends State<StreamSetupScreen> {
   }
 
   void _updateConfig(StreamConfig newConfig) {
+    if (!mounted) return;
     setState(() => _config = newConfig);
     widget.onConfigUpdate(_config);
   }
 
-  /// Validates if the given RTMP URL is a WaddleBot platform URL.
-  /// WaddleBot URLs: rtmp://rtmp.waddlebot.io/* or rtmps://rtmp.waddlebot.io/*
+  /// Validates if the given RTMP URL is a Waddles platform URL.
+  /// Waddles URLs: rtmp://rtmp.waddlebot.io/* or rtmps://rtmp.waddlebot.io/*
   /// All other URLs are considered external.
   bool _isWaddleBotRtmpUrl(String url) {
-    if (url.isEmpty) return true; // Default to WaddleBot for empty input
+    if (url.isEmpty) return true; // Default to Waddles for empty input
     try {
       final uri = Uri.parse(url);
       final host = uri.host.toLowerCase();
@@ -84,11 +85,12 @@ class _StreamSetupScreenState extends State<StreamSetupScreen> {
       return canUseExternal;
     }
 
-    return true; // WaddleBot URL always allowed
+    return true; // Waddles URL always allowed
   }
 
   Future<void> _toggleExternalRtmp() async {
     if (_showExternalRtmp) {
+      if (!mounted) return;
       setState(() => _showExternalRtmp = false);
       return;
     }
@@ -98,15 +100,15 @@ class _StreamSetupScreenState extends State<StreamSetupScreen> {
     final canUseExternal = license?.canStreamExternal() ?? false;
 
     if (!canUseExternal) {
-      if (mounted) {
-        _showUpgradeDialog(
-          'External RTMP Streaming',
-          'Upgrade to Pro or Enterprise tier to stream to external RTMP servers.',
-        );
-      }
+      if (!mounted) return;
+      _showUpgradeDialog(
+        'External RTMP Streaming',
+        'Upgrade to Pro or Enterprise tier to stream to external RTMP servers.',
+      );
       return;
     }
 
+    if (!mounted) return;
     setState(() {
       _showExternalRtmp = true;
       _validateAndUpdateExternalRtmpStatus();
@@ -116,6 +118,7 @@ class _StreamSetupScreenState extends State<StreamSetupScreen> {
   /// Updates the external RTMP URL validation status.
   void _validateAndUpdateExternalRtmpStatus() {
     final isExternal = !_isWaddleBotRtmpUrl(_rtmpUrlController.text);
+    if (!mounted) return;
     setState(() => _isExternalRtmpUrl = isExternal);
   }
 
@@ -194,6 +197,7 @@ class _StreamSetupScreenState extends State<StreamSetupScreen> {
   Future<void> _saveCustomQuality() async {
     final bitrateStr = _bitrateController.text;
     if (bitrateStr.isEmpty) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please enter a bitrate'),
@@ -220,10 +224,10 @@ class _StreamSetupScreenState extends State<StreamSetupScreen> {
       final newConfig = _config.copyWith(videoBitrate: bitrate);
       _updateConfig(newConfig);
 
-      if (mounted) {
-        Navigator.pop(context);
-      }
+      if (!mounted) return;
+      Navigator.pop(context);
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Invalid bitrate value'),
@@ -266,7 +270,7 @@ class _StreamSetupScreenState extends State<StreamSetupScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // WaddleBot RTMP Section
+              // Waddles RTMP Section
               _SectionTitle(title: 'RTMP Configuration'),
               const SizedBox(height: 12),
 
@@ -284,7 +288,7 @@ class _StreamSetupScreenState extends State<StreamSetupScreen> {
                       children: [
                         const Expanded(
                           child: Text(
-                            'WaddleBot RTMP',
+                            'Waddles RTMP',
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,

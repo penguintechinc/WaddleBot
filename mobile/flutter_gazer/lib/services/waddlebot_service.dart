@@ -5,7 +5,7 @@ import '../models/stream_config.dart';
 import '../models/waddlebot_models.dart';
 import 'waddlebot_auth_service.dart';
 
-/// WaddleBot event and metrics reporting service.
+/// Waddles event and metrics reporting service.
 class WaddleBotService {
   final WaddleBotAuthService _authService;
   final Dio _dio;
@@ -106,7 +106,7 @@ class WaddleBotService {
         options: _authOptions(),
       );
     } catch (_) {
-      // Best-effort — don't block streaming on WaddleBot errors
+      // Best-effort — don't block streaming on Waddles errors
     }
   }
 

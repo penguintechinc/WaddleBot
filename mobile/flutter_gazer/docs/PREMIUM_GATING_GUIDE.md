@@ -14,7 +14,7 @@
 
 ## Overview
 
-Premium gating in Flutter Gazer implements a hybrid approach to restrict features based on user license status:
+Premium gating in Waddles Gazer implements a hybrid approach to restrict features based on user license status:
 
 ### Strategy
 
@@ -1318,4 +1318,4 @@ This guide provides a comprehensive framework for implementing premium gating in
 4. **Patterns**: Common integration scenarios with code examples
 5. **Future**: Placeholder sections for upcoming monetization features
 
-For questions or integration support, refer to the main project documentation or contact the development team.
+For questions or integration support, refer to the main Waddles project documentation or contact the development team.

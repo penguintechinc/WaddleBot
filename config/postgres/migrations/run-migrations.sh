@@ -1,5 +1,5 @@
 #!/bin/bash
-# WaddleBot Database Migration Runner
+# Waddles Database Migration Runner
 # Runs all SQL migrations in order
 
 set -e
@@ -13,7 +13,7 @@ DB_PASSWORD="${POSTGRES_PASSWORD:-password}"
 
 MIGRATIONS_DIR="$(dirname "$0")"
 
-echo "=== WaddleBot Database Migrations ==="
+echo "=== Waddles Database Migrations ==="
 echo "Host: $DB_HOST:$DB_PORT"
 echo "Database: $DB_NAME"
 echo "User: $DB_USER"

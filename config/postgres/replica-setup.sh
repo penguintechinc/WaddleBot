@@ -1,5 +1,5 @@
 #!/bin/bash
-# PostgreSQL Read Replica Setup Script for WaddleBot
+# PostgreSQL Read Replica Setup Script for Waddles
 # Sets up streaming replication from primary to standby server
 # Usage: ./replica-setup.sh [primary_host] [replication_user] [replication_password]
 
@@ -152,7 +152,7 @@ fi
 # Update postgresql.auto.conf with primary connection info
 cat >> "$REPLICA_DATA_DIR/postgresql.auto.conf" << EOF
 
-# WaddleBot Read Replica Configuration
+# Waddles Read Replica Configuration
 primary_conninfo = 'host=$PRIMARY_HOST port=$PRIMARY_PORT user=$REPLICATION_USER password=$REPLICATION_PASSWORD application_name=$REPLICA_SLOT_NAME'
 primary_slot_name = '$REPLICA_SLOT_NAME'
 hot_standby = on

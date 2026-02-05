@@ -48,19 +48,17 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
   }
 
   Future<void> _onRefresh() async {
-    if (mounted) {
-      setState(() {
-        _channelsFuture = widget.chatService.getChannels(widget.communityId);
-      });
-    }
+    if (!mounted) return;
+    setState(() {
+      _channelsFuture = widget.chatService.getChannels(widget.communityId);
+    });
   }
 
   void _clearUnreadCount(String channelId) {
-    if (mounted) {
-      setState(() {
-        _unreadCounts[channelId] = 0;
-      });
-    }
+    if (!mounted) return;
+    setState(() {
+      _unreadCounts[channelId] = 0;
+    });
   }
 
   @override

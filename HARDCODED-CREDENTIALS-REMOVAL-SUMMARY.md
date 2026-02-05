@@ -8,7 +8,7 @@
 
 ## Quick Summary
 
-All hardcoded credentials have been successfully removed from the WaddleBot repository. Credentials are now exclusively provided via environment variables with no default fallback values.
+All hardcoded credentials have been successfully removed from the Waddles repository. Credentials are now exclusively provided via environment variables with no default fallback values.
 
 **Result**: Credentials can no longer be exposed through accidental repository commits or code review leaks.
 
@@ -16,7 +16,7 @@ All hardcoded credentials have been successfully removed from the WaddleBot repo
 
 ## Files Modified (6 files)
 
-### 1. `/home/penguin/code/WaddleBot/docker-compose.yml`
+### 1. `/home/penguin/code/waddlebot/docker-compose.yml`
 - **Changes**: 96 lines modified across 30+ services
 - **Removed**: 8 hardcoded defaults:
   - `POSTGRES_PASSWORD:-waddlebot_secret`
@@ -28,25 +28,25 @@ All hardcoded credentials have been successfully removed from the WaddleBot repo
   - `JWT_SECRET:-change-me-in-production`
   - `OPENWHISK_AUTH_KEY:-<hardcoded_key>`
 
-### 2. `/home/penguin/code/WaddleBot/docker-compose.minio.yml`
+### 2. `/home/penguin/code/waddlebot/docker-compose.minio.yml`
 - **Changes**: 8 lines modified
 - **Services Updated**: minio, minio-setup, postgres, portal
 - **Removed**: Hardcoded MinIO, PostgreSQL, and S3 credentials
 
-### 3. `/home/penguin/code/WaddleBot/k8s/manifests/secrets.yaml`
+### 3. `/home/penguin/code/waddlebot/k8s/manifests/secrets.yaml`
 - **Changes**: Removed credential comments
 - **Status**: Now contains empty placeholders
 - **Required Action**: Use K8s secret management solution
 
-### 4. `/home/penguin/code/WaddleBot/k8s/manifests/configmap.yaml`
+### 4. `/home/penguin/code/waddlebot/k8s/manifests/configmap.yaml`
 - **Changes**: Updated DATABASE_URL reference
 - **Removed**: Hardcoded `waddlebot_secret` password
 
-### 5. `/home/penguin/code/WaddleBot/k8s/helm/waddlebot/templates/secrets.yaml`
+### 5. `/home/penguin/code/waddlebot/k8s/helm/waddlebot/templates/secrets.yaml`
 - **Changes**: Removed OpenWhisk auth key default
 - **Status**: Now requires explicit configuration
 
-### 6. `/home/penguin/code/WaddleBot/k8s/infrastructure.yaml`
+### 6. `/home/penguin/code/waddlebot/k8s/infrastructure.yaml`
 - **Changes**: 4 major credential removals
 - **Removed**:
   - DATABASE_URL hardcoded password
@@ -59,7 +59,7 @@ All hardcoded credentials have been successfully removed from the WaddleBot repo
 
 ## Documentation Created (2 files)
 
-### 1. `/home/penguin/code/WaddleBot/docs/CREDENTIALS-ROTATION-CHECKLIST.md`
+### 1. `/home/penguin/code/waddlebot/docs/CREDENTIALS-ROTATION-CHECKLIST.md`
 Comprehensive guide for rotating all credentials in production environments:
 - Database credentials (PostgreSQL, Redis)
 - API & service secrets (JWT, Module Keys, Service Keys)
@@ -73,7 +73,7 @@ Comprehensive guide for rotating all credentials in production environments:
 - Audit logging requirements
 - Pre/post rotation checklists
 
-### 2. `/home/penguin/code/WaddleBot/SECURITY-AUDIT-HARDCODED-CREDENTIALS.md`
+### 2. `/home/penguin/code/waddlebot/SECURITY-AUDIT-HARDCODED-CREDENTIALS.md`
 Complete security audit report:
 - Executive summary
 - Detailed file-by-file changes
@@ -220,7 +220,7 @@ OPENWHISK_NAMESPACE
 
 ### Verify No Hardcoded Credentials
 ```bash
-cd /home/penguin/code/WaddleBot
+cd /home/penguin/code/waddlebot
 
 # Search for removed patterns
 git grep "waddlebot_secret\|waddlebot_redis\|waddlebot123\|kong_db_pass_change_me" \

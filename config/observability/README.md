@@ -1,6 +1,6 @@
-# WaddleBot Observability Infrastructure
+# Waddles Observability Infrastructure
 
-Complete observability solution for WaddleBot microservices with OpenTelemetry, Correlation IDs, and Prometheus Metrics.
+Complete observability solution for Waddles microservices with OpenTelemetry, Correlation IDs, and Prometheus Metrics.
 
 ## Overview
 
@@ -16,7 +16,7 @@ This observability infrastructure provides:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     WaddleBot Services                      │
+│                     Waddles Services                        │
 │  (Router, Triggers, Actions, Core, Admin)                   │
 │                                                             │
 │  Each service exports:                                      │
@@ -42,7 +42,7 @@ This observability infrastructure provides:
 ### 1. Start Observability Stack
 
 ```bash
-cd /home/penguin/code/WaddleBot/config/observability
+cd /home/penguin/code/waddlebot/config/observability
 docker-compose -f docker-compose.observability.yml up -d
 ```
 
@@ -97,7 +97,7 @@ setup_correlation_logging(correlation)
 
 ### 1. OpenTelemetry Tracing (`tracing.py`)
 
-Distributed tracing across all WaddleBot services.
+Distributed tracing across all Waddles services.
 
 #### Basic Usage
 
@@ -544,7 +544,7 @@ Use Jaeger Operator and Prometheus Operator:
 apiVersion: jaegertracing.io/v1
 kind: Jaeger
 metadata:
-  name: waddlebot-jaeger
+  name: waddles-jaeger
 spec:
   strategy: production
   storage:
@@ -554,7 +554,7 @@ spec:
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: waddlebot-services
+  name: waddles-services
 spec:
   selector:
     matchLabels:
@@ -626,7 +626,7 @@ annotations:
 
 ### Metrics
 - `METRICS_ENABLED` - Enable/disable metrics (default: true)
-- `METRICS_NAMESPACE` - Metrics prefix (default: waddlebot)
+- `METRICS_NAMESPACE` - Metrics prefix (default: waddles)
 
 ## Next Steps
 

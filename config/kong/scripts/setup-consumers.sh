@@ -1,9 +1,9 @@
 #!/bin/bash
-# Script to set up Kong consumers and API keys for WaddleBot services
+# Script to set up Kong consumers and API keys for Waddles services
 
 KONG_ADMIN_URL="http://localhost:8001"
 
-echo "Setting up Kong consumers and API keys for WaddleBot..."
+echo "Setting up Kong consumers and API keys for Waddles..."
 
 # Function to create consumer with API key
 create_consumer() {

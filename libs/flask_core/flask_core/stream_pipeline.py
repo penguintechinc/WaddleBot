@@ -43,7 +43,7 @@ class StreamEvent:
 
 class StreamPipeline:
     """
-    Redis Streams Pipeline for WaddleBot event processing.
+    Redis Streams Pipeline for Waddles event processing.
 
     Manages multiple event streams with dedicated purposes:
     - inbound: External events entering the system

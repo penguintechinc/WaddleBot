@@ -11,7 +11,7 @@ import '../models/api_response.dart' hide ApiError;
 /// Manages all community operations including retrieval, creation,
 /// updates, deletion, statistics, and activity tracking.
 ///
-/// Uses the WaddleBot API at: /api/v1/communities
+/// Uses the Waddles API at: /api/v1/communities
 class CommunityService {
   static final CommunityService _instance = CommunityService._internal();
   late final ApiClient _apiClient;

@@ -61,7 +61,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         break;
       }
     }
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() {});
   }
 
   Future<void> _save() async {
@@ -81,40 +82,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (_resolutionIndex == 4 &&
         !widget.licenseService
             .isFeatureAvailable(AppConstants.featureHdStreaming)) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('1080p requires Professional license. Using 720p.')));
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('1080p requires Professional license. Using 720p.')));
       final fallback = SettingsService.resolutions[3].value;
-      if (mounted) {
-        Navigator.pop(
-          context,
-          StreamConfig(
-            width: fallback[0],
-            height: fallback[1],
-            fps: fps,
-            videoBitrate: br,
-            rtmpUrl: _rtmpUrlController.text.trim(),
-            streamKey: _streamKeyController.text.trim(),
-          ),
-        );
-      }
-      return;
-    }
-
-    if (mounted) {
+      if (!mounted) return;
       Navigator.pop(
         context,
         StreamConfig(
-          width: res[0],
-          height: res[1],
+          width: fallback[0],
+          height: fallback[1],
           fps: fps,
           videoBitrate: br,
           rtmpUrl: _rtmpUrlController.text.trim(),
           streamKey: _streamKeyController.text.trim(),
         ),
       );
+      return;
     }
+
+    if (!mounted) return;
+    Navigator.pop(
+      context,
+      StreamConfig(
+        width: res[0],
+        height: res[1],
+        fps: fps,
+        videoBitrate: br,
+        rtmpUrl: _rtmpUrlController.text.trim(),
+        streamKey: _streamKeyController.text.trim(),
+      ),
+    );
   }
 
   @override
@@ -207,7 +205,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 24),
 
-          // WaddleBot section (license-gated)
+          // Waddles section (license-gated)
           _buildWaddleBotSection(),
 
           const SizedBox(height: 24),
@@ -271,7 +269,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 const Icon(Icons.smart_toy),
                 const SizedBox(width: 8),
-                const Text('WaddleBot Integration',
+                const Text('Waddles Integration',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 const Spacer(),
                 if (!licensed)
@@ -282,7 +280,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Text(
               licensed
                   ? 'Chat overlay and stream events are available.'
-                  : 'Professional license required for WaddleBot features.',
+                  : 'Professional license required for Waddles features.',
               style: TextStyle(
                 color: licensed ? null : Theme.of(context).disabledColor,
               ),

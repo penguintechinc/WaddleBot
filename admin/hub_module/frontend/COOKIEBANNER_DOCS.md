@@ -5,14 +5,14 @@ The `CookieBanner.jsx` component is a GDPR-compliant cookie consent banner that 
 
 ## File Location
 ```
-/home/penguin/code/WaddleBot/admin/hub_module/frontend/src/components/CookieBanner.jsx
+/home/penguin/code/Waddles/admin/hub_module/frontend/src/components/CookieBanner.jsx
 ```
 
 ## Component Features
 
 ### Visual Design
 - **Position**: Fixed bottom of screen, full width
-- **Background**: Navy dark theme (#102a43) matching WaddleBot design system
+- **Background**: Navy dark theme (#102a43) matching Waddles design system
 - **Text**: Sky blue (#e0f2fe) for primary content, navy-300 for secondary
 - **Animation**: Smooth slide-up animation on mount
 - **Z-Index**: 50 (overlays all content)

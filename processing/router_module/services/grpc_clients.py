@@ -1,4 +1,4 @@
-"""gRPC Client Manager for WaddleBot Router Module"""
+"""gRPC Client Manager for Waddles Router Module"""
 import asyncio
 import logging
 import time

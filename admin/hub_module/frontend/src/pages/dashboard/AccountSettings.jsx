@@ -245,7 +245,7 @@ function AccountSettings() {
         </div>
 
         <p className="text-navy-300 mb-6">
-          Connect your accounts to use WaddleBot across different platforms. When you log in with a platform,
+          Connect your accounts to use Waddles across different platforms. When you log in with a platform,
           it will automatically be linked to your account.
         </p>
 

@@ -265,7 +265,7 @@ Keep responses under 200 characters.
 ```
 
 ```env
-SYSTEM_PROMPT="You are WaddleBot, a friendly penguin assistant..."
+SYSTEM_PROMPT="You are Waddles, a friendly penguin assistant..."
 ```
 
 ---

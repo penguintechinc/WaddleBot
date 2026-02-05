@@ -4,6 +4,7 @@
 import { query, transaction } from '../config/database.js';
 import { errors } from '../middleware/errorHandler.js';
 import { logger } from '../utils/logger.js';
+import crypto from 'crypto';
 
 // Valid community types for validation
 const VALID_COMMUNITY_TYPES = ['shared_interest_group', 'gaming', 'creator', 'corporate', 'other'];
@@ -576,7 +577,7 @@ export async function createModule(req, res, next) {
         displayName || name,
         description || '',
         version || '1.0.0',
-        author || 'WaddleBot',
+        author || 'Waddles',
         category || 'general',
         iconUrl || null,
         isCore || false,
@@ -584,10 +585,58 @@ export async function createModule(req, res, next) {
       ]
     );
 
+        // Determine module type and permission template from category
+    const moduleTypeMap = {
+      'general': { type: 'interactive', template: 'interactive_standard' },
+      'moderation': { type: 'core', template: 'core_broad' },
+      'entertainment': { type: 'interactive', template: 'interactive_standard' },
+      'music': { type: 'interactive', template: 'interactive_standard' },
+      'utility': { type: 'core', template: 'core_broad' },
+      'games': { type: 'interactive', template: 'interactive_standard' },
+      'ai': { type: 'core', template: 'core_broad' },
+    };
+    const moduleCategory = category || 'general';
+    const typeInfo = moduleTypeMap[moduleCategory] || moduleTypeMap['general'];
+
+    // Generate a cryptographically secure password for the DB user
+    const dbPassword = crypto.randomBytes(32).toString('base64url');
+
+    // Provision scoped database account
+    let dbAccount = null;
+    try {
+      const provisionResult = await query(
+        `SELECT * FROM provision_module_db_account($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          name,
+          typeInfo.type,
+          typeInfo.template,
+          dbPassword,
+          null, // owned_tables - can be configured later
+          null, // readable_tables - can be configured later
+          null, // custom_grants
+          req.user.id,
+        ]
+      );
+      dbAccount = provisionResult.rows[0];
+      if (!dbAccount?.success) {
+        logger.warn('Module DB account provisioning failed', {
+          moduleName: name,
+          message: dbAccount?.message,
+        });
+      }
+    } catch (dbErr) {
+      // Log but don't fail module creation - DB account can be provisioned later
+      logger.warn('Module DB account provisioning error', {
+        moduleName: name,
+        error: dbErr.message,
+      });
+    }
+
     logger.audit('Module created', {
       adminId: req.user.id,
       moduleId: result.rows[0].id,
       name: result.rows[0].name,
+      dbUsername: dbAccount?.db_username || null,
     });
 
     res.status(201).json({
@@ -597,6 +646,13 @@ export async function createModule(req, res, next) {
         name: result.rows[0].name,
         displayName: result.rows[0].display_name,
         createdAt: result.rows[0].created_at?.toISOString(),
+        dbAccount: dbAccount?.success ? {
+          username: dbAccount.db_username,
+          provisioned: true,
+        } : {
+          provisioned: false,
+          message: dbAccount?.message || 'Provisioning skipped',
+        },
       },
     });
   } catch (err) {
@@ -759,6 +815,106 @@ export async function deleteModule(req, res, next) {
     });
 
     res.json({ success: true, message: 'Module deleted' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Get all module database accounts
+ * GET /api/v1/superadmin/module-db-accounts
+ */
+export async function getModuleDbAccounts(req, res, next) {
+  try {
+    const result = await query(
+      `SELECT mda.id, mda.module_name, mda.db_username, mda.module_type,
+              mda.permission_template, mda.is_active, mda.owned_tables,
+              mda.readable_tables, mda.created_at, mda.updated_at,
+              dpt.description as template_description
+       FROM module_db_accounts mda
+       LEFT JOIN db_permission_templates dpt ON dpt.template_name = mda.permission_template
+       ORDER BY mda.module_type, mda.module_name`
+    );
+
+    const accounts = result.rows.map(row => ({
+      id: row.id,
+      moduleName: row.module_name,
+      dbUsername: row.db_username,
+      moduleType: row.module_type,
+      permissionTemplate: row.permission_template,
+      templateDescription: row.template_description,
+      isActive: row.is_active,
+      ownedTables: row.owned_tables,
+      readableTables: row.readable_tables,
+      createdAt: row.created_at?.toISOString(),
+      updatedAt: row.updated_at?.toISOString(),
+    }));
+
+    res.json({ success: true, accounts });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Rotate a module database password
+ * POST /api/v1/superadmin/module-db-accounts/:moduleName/rotate
+ */
+export async function rotateModuleDbPassword(req, res, next) {
+  try {
+    const { moduleName } = req.params;
+    const newPassword = crypto.randomBytes(32).toString('base64url');
+
+    const result = await query(
+      `SELECT * FROM rotate_module_db_password($1, $2)`,
+      [moduleName, newPassword]
+    );
+
+    const outcome = result.rows[0];
+    if (!outcome?.success) {
+      return next(errors.badRequest(outcome?.message || 'Password rotation failed'));
+    }
+
+    logger.audit('Module DB password rotated', {
+      adminId: req.user.id,
+      moduleName,
+    });
+
+    res.json({
+      success: true,
+      message: outcome.message,
+      // NOTE: Password is intentionally NOT returned in the response.
+      // It should be stored in the secrets backend by a separate service call.
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Deactivate a module database account
+ * POST /api/v1/superadmin/module-db-accounts/:moduleName/deactivate
+ */
+export async function deactivateModuleDbAccount(req, res, next) {
+  try {
+    const { moduleName } = req.params;
+
+    const result = await query(
+      `SELECT * FROM deactivate_module_db_account($1)`,
+      [moduleName]
+    );
+
+    const outcome = result.rows[0];
+    if (!outcome?.success) {
+      return next(errors.badRequest(outcome?.message || 'Deactivation failed'));
+    }
+
+    logger.audit('Module DB account deactivated', {
+      adminId: req.user.id,
+      moduleName,
+    });
+
+    res.json({ success: true, message: outcome.message });
   } catch (err) {
     next(err);
   }

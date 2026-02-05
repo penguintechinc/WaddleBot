@@ -29,7 +29,7 @@ function HomePage() {
             Unite Your Communities
           </h1>
           <p className="text-xl text-navy-300 max-w-2xl mx-auto mb-8">
-            WaddleBot brings your Discord, Twitch, and Slack communities together with
+            Waddles brings your Discord, Twitch, and Slack communities together with
             powerful tools for engagement, moderation, and growth.
           </p>
           <div className="flex flex-col sm:flex-row justify-center gap-4">
@@ -133,7 +133,7 @@ function HomePage() {
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl font-bold mb-4 text-sky-100">Ready to Grow Your Community?</h2>
           <p className="text-navy-400 mb-8">
-            Join hundreds of communities already using WaddleBot to engage their audience.
+            Join hundreds of communities already using Waddles to engage their audience.
           </p>
           <Link to="/login" className="btn btn-primary px-8 py-3">
             Start Free Today

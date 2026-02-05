@@ -1,6 +1,6 @@
 -- Migration 010: Add Emote Cache for Translation Pre-Processing
 -- Description: Stores platform emotes for token preservation during translation
--- Author: WaddleBot Team
+-- Author: Waddles Team
 -- Date: 2025-12-15
 
 -- =============================================================================

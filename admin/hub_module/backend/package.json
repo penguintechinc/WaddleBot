@@ -1,7 +1,7 @@
 {
   "name": "waddlebot-hub",
   "version": "1.0.1",
-  "description": "WaddleBot Hub - Unified Community Portal and Admin Interface",
+  "description": "Waddles Hub - Unified Community Portal and Admin Interface",
   "main": "src/index.js",
   "type": "module",
   "scripts": {

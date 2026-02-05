@@ -1,7 +1,7 @@
 {
   "name": "waddlebot-e2e-tests",
   "version": "1.0.0",
-  "description": "End-to-end tests for WaddleBot critical workflows",
+  "description": "End-to-end tests for Waddles critical workflows",
   "scripts": {
     "test": "playwright test",
     "test:headed": "playwright test --headed",

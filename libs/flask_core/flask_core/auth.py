@@ -251,7 +251,7 @@ def create_api_key(prefix: str = "wa", length: int = 64) -> str:
     Create API key with prefix.
 
     Args:
-        prefix: API key prefix (default: 'wa' for WaddleBot)
+        prefix: API key prefix (default: 'wa' for Waddles)
         length: API key length (default: 64)
 
     Returns:

@@ -157,7 +157,7 @@ func setDefaults() {
 	viper.SetDefault("web-port", 8080)
 	viper.SetDefault("web-host", "127.0.0.1")
 	viper.SetDefault("log-level", "info")
-	viper.SetDefault("webauthn-display-name", "WaddleBot Bridge")
+	viper.SetDefault("webauthn-display-name", "Waddles Bridge")
 	viper.SetDefault("webauthn-origin", "http://127.0.0.1:8080")
 	viper.SetDefault("webauthn-timeout", 60)
 	viper.SetDefault("module-timeout", 30)
@@ -206,17 +206,17 @@ func setPlatformDefaults(cfg *Config) {
 	case "darwin":
 		// macOS specific defaults
 		if cfg.WebAuthnDisplayName == "" {
-			cfg.WebAuthnDisplayName = "WaddleBot Bridge for macOS"
+			cfg.WebAuthnDisplayName = "Waddles Bridge for macOS"
 		}
 	case "windows":
 		// Windows specific defaults
 		if cfg.WebAuthnDisplayName == "" {
-			cfg.WebAuthnDisplayName = "WaddleBot Bridge for Windows"
+			cfg.WebAuthnDisplayName = "Waddles Bridge for Windows"
 		}
 	case "linux":
 		// Linux specific defaults
 		if cfg.WebAuthnDisplayName == "" {
-			cfg.WebAuthnDisplayName = "WaddleBot Bridge for Linux"
+			cfg.WebAuthnDisplayName = "Waddles Bridge for Linux"
 		}
 	}
 }
@@ -233,5 +233,5 @@ func (c *Config) GetAPIEndpoint(path string) string {
 
 // GetUserAgent returns the user agent string for API requests
 func (c *Config) GetUserAgent() string {
-	return fmt.Sprintf("WaddleBot-Bridge/1.0.0 (%s %s)", runtime.GOOS, runtime.GOARCH)
+	return fmt.Sprintf("Waddles-Bridge/1.0.0 (%s %s)", runtime.GOOS, runtime.GOARCH)
 }

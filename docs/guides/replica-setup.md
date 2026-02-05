@@ -1,6 +1,6 @@
 # PostgreSQL Read Replica Setup Guide
 
-Quick reference for setting up read replicas for WaddleBot.
+Quick reference for setting up read replicas for Waddles.
 
 ## What Was Created
 

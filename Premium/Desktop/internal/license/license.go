@@ -13,47 +13,47 @@ import (
 const (
 	// LicenseText is the premium license text that users must accept
 	LicenseText = `
-WaddleBot Premium Desktop Bridge License Agreement
+Waddles Premium Desktop Bridge License Agreement
 
-Copyright (c) 2024 WaddleBot
+Copyright (c) 2024 Waddles
 
 PREMIUM SOFTWARE LICENSE
 
-This software is licensed exclusively to users with active WaddleBot Premium subscriptions.
+This software is licensed exclusively to users with active Waddles Premium subscriptions.
 
 1. GRANT OF LICENSE
-   Subject to the terms and conditions of this Agreement, WaddleBot grants you a 
-   non-exclusive, non-transferable license to use the WaddleBot Premium Desktop Bridge 
-   software solely for your personal or business use with WaddleBot Premium services.
+   Subject to the terms and conditions of this Agreement, Waddles grants you a
+   non-exclusive, non-transferable license to use the Waddles Premium Desktop Bridge
+   software solely for your personal or business use with Waddles Premium services.
 
 2. RESTRICTIONS
    - You may NOT distribute, sublicense, or share this software
    - You may NOT reverse engineer, decompile, or disassemble this software
-   - You may NOT use this software without an active WaddleBot Premium subscription
+   - You may NOT use this software without an active Waddles Premium subscription
    - You may NOT use this software for commercial purposes without proper licensing
 
 3. SUBSCRIPTION REQUIREMENT
-   This software requires an active WaddleBot Premium subscription. Use of this software 
-   without a valid subscription is strictly prohibited and constitutes a violation of 
+   This software requires an active Waddles Premium subscription. Use of this software
+   without a valid subscription is strictly prohibited and constitutes a violation of
    this license agreement.
 
 4. TERMINATION
-   This license terminates automatically if your WaddleBot Premium subscription expires 
+   This license terminates automatically if your Waddles Premium subscription expires
    or is cancelled. You must immediately cease all use of the software upon termination.
 
 5. DISCLAIMER
-   This software is provided "AS IS" without warranty of any kind. WaddleBot disclaims 
-   all warranties, express or implied, including but not limited to warranties of 
+   This software is provided "AS IS" without warranty of any kind. Waddles disclaims
+   all warranties, express or implied, including but not limited to warranties of
    merchantability and fitness for a particular purpose.
 
 6. LIMITATION OF LIABILITY
-   In no event shall WaddleBot be liable for any damages arising out of or in connection 
+   In no event shall Waddles be liable for any damages arising out of or in connection
    with the use or performance of this software.
 
-By using this software, you acknowledge that you have read, understood, and agree to be 
+By using this software, you acknowledge that you have read, understood, and agree to be
 bound by the terms of this license agreement.
 
-WaddleBot Premium Desktop Bridge v1.0.0
+Waddles Premium Desktop Bridge v1.0.0
 `
 
 	// License acceptance marker
@@ -100,15 +100,15 @@ func hasAcceptedLicense() bool {
 func promptForLicenseAcceptance() bool {
 	fmt.Println(LicenseText)
 	fmt.Println(strings.Repeat("=", 80))
-	fmt.Println("WaddleBot Premium Desktop Bridge License Agreement")
+	fmt.Println("Waddles Premium Desktop Bridge License Agreement")
 	fmt.Println(strings.Repeat("=", 80))
 
-	fmt.Print("\nDo you have an active WaddleBot Premium subscription? (y/N): ")
+	fmt.Print("\nDo you have an active Waddles Premium subscription? (y/N): ")
 	var hasSubscription string
 	fmt.Scanln(&hasSubscription)
 
 	if strings.ToLower(hasSubscription) != "y" && strings.ToLower(hasSubscription) != "yes" {
-		fmt.Println("\nThis software requires an active WaddleBot Premium subscription.")
+		fmt.Println("\nThis software requires an active Waddles Premium subscription.")
 		fmt.Println("Please visit https://waddlebot.io/premium to subscribe.")
 		return false
 	}
@@ -127,7 +127,7 @@ func promptForLicenseAcceptance() bool {
 		fmt.Printf("Warning: Failed to save license acceptance: %v\n", err)
 	}
 
-	fmt.Println("\nLicense accepted. Welcome to WaddleBot Premium Desktop Bridge!")
+	fmt.Println("\nLicense accepted. Welcome to Waddles Premium Desktop Bridge!")
 	return true
 }
 
@@ -174,7 +174,7 @@ func GetLicenseInfo() map[string]interface{} {
 		"version":     "1.0.0",
 		"type":        "Premium",
 		"platform":    fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
-		"requirement": "Active WaddleBot Premium Subscription",
+		"requirement": "Active Waddles Premium Subscription",
 	}
 }
 
@@ -182,7 +182,7 @@ func GetLicenseInfo() map[string]interface{} {
 func DisplayLicenseInfo() {
 	info := GetLicenseInfo()
 	fmt.Println("\n" + strings.Repeat("=", 50))
-	fmt.Println("WaddleBot Premium Desktop Bridge License Info")
+	fmt.Println("Waddles Premium Desktop Bridge License Info")
 	fmt.Println(strings.Repeat("=", 50))
 	fmt.Printf("Version: %s\n", info["version"])
 	fmt.Printf("Type: %s\n", info["type"])

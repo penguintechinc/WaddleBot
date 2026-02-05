@@ -2,7 +2,7 @@
 Example usage of WebhookAdapter for external marketplace modules.
 
 This file demonstrates how to create and use a WebhookAdapter to integrate
-external webhook-based modules with WaddleBot.
+external webhook-based modules with Waddles.
 """
 
 import asyncio

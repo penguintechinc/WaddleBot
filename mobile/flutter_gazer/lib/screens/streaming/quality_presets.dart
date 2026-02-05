@@ -237,9 +237,11 @@ class _QualityPresetsCardState extends State<QualityPresetsCard> {
                     .toInt();
 
                 widget.onPresetSelect(width, height, fps, bitrate, false);
+                if (!mounted) return;
                 setState(() => _selectedPresetIndex = -1);
                 Navigator.pop(context);
               } catch (e) {
+                if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Invalid values'),

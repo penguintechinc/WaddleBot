@@ -64,7 +64,7 @@ func TestWebServer_HandleIndex(t *testing.T) {
 	}
 
 	body := w.Body.String()
-	if !strings.Contains(body, "WaddleBot Premium Desktop Bridge") {
+	if !strings.Contains(body, "Waddles Premium Desktop Bridge") {
 		t.Error("Expected body to contain title")
 	}
 

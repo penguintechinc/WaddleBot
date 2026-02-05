@@ -2,11 +2,11 @@
 
 ## Overview
 
-All WaddleBot containers now use a standardized Python-based health check system that doesn't require curl or any external dependencies.
+All Waddles containers now use a standardized Python-based health check system that doesn't require curl or any external dependencies.
 
 ## Standard Endpoints
 
-Every WaddleBot module provides three standard endpoints:
+Every Waddles module provides three standard endpoints:
 
 ### 1. `/health` - Basic Health Check
 Simple health check endpoint that returns module name, version, and status.
@@ -127,7 +127,7 @@ docker exec container-name python3 /usr/local/bin/healthcheck.py http://service:
 
 ### Standard Pattern
 
-All WaddleBot Dockerfiles follow this pattern:
+All Waddles Dockerfiles follow this pattern:
 
 ```dockerfile
 FROM python:3.13-slim

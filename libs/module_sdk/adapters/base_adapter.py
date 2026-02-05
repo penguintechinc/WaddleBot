@@ -2,7 +2,7 @@
 Base adapter classes for external module integration.
 
 This module provides abstract base classes for creating adapters that
-bridge external modules with WaddleBot's module system.
+bridge external modules with Waddles's module system.
 """
 
 from abc import abstractmethod
@@ -84,7 +84,7 @@ class BaseAdapter(BaseModule):
     Abstract base class for module adapters.
 
     Adapters bridge external modules (webhook endpoints, serverless functions, etc.)
-    with WaddleBot's internal module system. They handle communication, error handling,
+    with Waddles's internal module system. They handle communication, error handling,
     and health tracking.
 
     Attributes:

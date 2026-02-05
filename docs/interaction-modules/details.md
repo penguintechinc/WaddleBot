@@ -1,6 +1,6 @@
-# WaddleBot Module Details - Action/Interactive Modules
+# Waddles Module Details - Action/Interactive Modules
 
-This document provides comprehensive technical details for WaddleBot action/interactive modules. For core components and trigger modules, see [module-details-core.md](module-details-core.md). For high-level architecture, see [CLAUDE.md](../CLAUDE.md).
+This document provides comprehensive technical details for Waddles action/interactive modules. For core components and trigger modules, see [module-details-core.md](module-details-core.md). For high-level architecture, see [CLAUDE.md](../CLAUDE.md).
 
 ## Overview
 

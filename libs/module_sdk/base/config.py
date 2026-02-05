@@ -1,5 +1,5 @@
 """
-Base configuration classes for WaddleBot modules.
+Base configuration classes for Waddles modules.
 
 This module provides base configuration classes using Pydantic for
 validation and settings management.
@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field, validator
 
 class BaseConfig(BaseModel):
     """
-    Base configuration class for WaddleBot modules.
+    Base configuration class for Waddles modules.
 
     This class uses Pydantic for validation and provides a foundation
     for module-specific configuration classes.

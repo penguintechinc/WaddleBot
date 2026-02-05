@@ -2,7 +2,7 @@
 GCP Cloud Functions adapter for external module integration.
 
 This module provides a GCPAdapter class that bridges GCP Cloud Functions
-with WaddleBot's internal module system. It handles async invocation,
+with Waddles's internal module system. It handles async invocation,
 response parsing, retry logic with exponential backoff, and health tracking.
 """
 

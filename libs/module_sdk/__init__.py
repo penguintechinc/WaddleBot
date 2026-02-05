@@ -1,7 +1,7 @@
 """
-WaddleBot Module SDK
+Waddles Module SDK
 
-A software development kit for creating WaddleBot modules with
+A software development kit for creating Waddles modules with
 standardized interfaces, configuration management, and utilities.
 
 The SDK provides:

@@ -1,6 +1,6 @@
-# WaddleBot Environment Variables Reference
+# Waddles Environment Variables Reference
 
-This document provides a comprehensive reference for all environment variables used across WaddleBot modules. Each module's configuration is organized by category with descriptions and default values where applicable.
+This document provides a comprehensive reference for all environment variables used across Waddles modules. Each module's configuration is organized by category with descriptions and default values where applicable.
 
 ## Table of Contents
 
@@ -223,7 +223,7 @@ DATABASE_URL=postgresql://user:pass@host:5432/waddlebot
 
 # Hub Configuration
 HUB_URL=http://localhost:8000
-APP_NAME=WaddleBot Community Hub
+APP_NAME=Waddles Community Hub
 
 # Email Configuration (Flask Mailer)
 SMTP_HOST=smtp.company.com

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The WaddleBot Hub Module is the central web interface for managing communities, configuring modules, and accessing analytics. This guide covers all WebUI features from user perspective.
+The Waddles Hub Module is the central web interface for managing communities, configuring modules, and accessing analytics. This guide covers all WebUI features from user perspective.
 
 **Version:** 1.0.1
 **Access URL:** `http://localhost:8060` (development) or your configured domain
@@ -1028,7 +1028,7 @@ Features:
    - Author
    - Category (loyalty, analytics, etc.)
    - Repository URL
-   - Is official (WaddleBot team)
+   - Is official (Waddles team)
    - Config schema (JSON schema)
 3. Save module (as draft)
 
@@ -1531,4 +1531,4 @@ The hub follows WCAG 2.1 AA standards:
 - **Documentation:** See other docs in `/docs/hub_module/`
 - **Support:** Contact your platform administrator
 - **Issues:** Report bugs via GitHub issues
-- **Community:** Join the WaddleBot Discord for help
+- **Community:** Join the Waddles Discord for help

@@ -1,6 +1,6 @@
-# WaddleBot Kubernetes Deployment Guide
+# Waddles Kubernetes Deployment Guide
 
-Complete technical reference for deploying, managing, and operating WaddleBot on Kubernetes clusters. Covers kubectl commands, Helm charts, scaling strategies, monitoring, and troubleshooting for production deployments.
+Complete technical reference for deploying, managing, and operating Waddles on Kubernetes clusters. Covers kubectl commands, Helm charts, scaling strategies, monitoring, and troubleshooting for production deployments.
 
 ---
 
@@ -22,7 +22,7 @@ Complete technical reference for deploying, managing, and operating WaddleBot on
 
 ## Overview
 
-WaddleBot is a microservices-based application designed for Kubernetes deployment. The platform consists of:
+Waddles is a microservices-based application designed for Kubernetes deployment. The platform consists of:
 
 - **32 Services**: 24+ application modules + 6 infrastructure services
 - **5 Infrastructure Services**: PostgreSQL, Redis, MinIO, Qdrant, Ollama
@@ -81,7 +81,7 @@ WaddleBot is a microservices-based application designed for Kubernetes deploymen
 
 **One-Command Install**:
 ```bash
-cd /home/penguin/code/WaddleBot/k8s
+cd /home/penguin/code/Waddles/k8s
 ./install-microk8s.sh --build-images
 ```
 
@@ -90,7 +90,7 @@ cd /home/penguin/code/WaddleBot/k8s
 2. Enables addons: dns, storage, registry, ingress
 3. Builds all Docker images
 4. Pushes images to cluster registry
-5. Deploys WaddleBot with Helm
+5. Deploys Waddles with Helm
 6. Configures ingress access
 
 **Access**: http://waddlebot.local or http://localhost:30080
@@ -99,7 +99,7 @@ cd /home/penguin/code/WaddleBot/k8s
 
 **One-Command Install**:
 ```bash
-cd /home/penguin/code/WaddleBot/k8s
+cd /home/penguin/code/Waddles/k8s
 ./install-k8s.sh --kind --build-images
 ```
 
@@ -107,7 +107,7 @@ cd /home/penguin/code/WaddleBot/k8s
 1. Creates kind cluster with ingress support
 2. Sets up local registry
 3. Builds and pushes Docker images
-4. Deploys WaddleBot with Helm
+4. Deploys Waddles with Helm
 5. Configures ingress
 
 **Access**: http://waddlebot.local
@@ -116,7 +116,7 @@ cd /home/penguin/code/WaddleBot/k8s
 
 **One-Command Install**:
 ```bash
-cd /home/penguin/code/WaddleBot/k8s
+cd /home/penguin/code/Waddles/k8s
 ./install-k8s.sh --minikube --build-images
 ```
 
@@ -1439,7 +1439,7 @@ kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80
 # Login: admin / prom-operator
 ```
 
-**ServiceMonitor for WaddleBot**:
+**ServiceMonitor for Waddles**:
 ```yaml
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
@@ -1565,7 +1565,7 @@ spec:
 ---
 
 **Last Updated**: 2025-12-16
-**WaddleBot Version**: 0.2.0
+**Waddles Version**: 0.2.0
 **Kubernetes Minimum**: 1.23+
 **Helm Version**: 3.x
 **Total Services**: 32 (24+ app modules + 6 infrastructure + 2 optional)

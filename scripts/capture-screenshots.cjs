@@ -5,7 +5,7 @@ const fs = require('fs');
 const BASE_URL = 'http://localhost:8060';
 const OUTPUT_DIR = path.join(__dirname, '..', 'docs', 'screenshots');
 
-// WaddleBot Hub pages to capture
+// Waddles Hub pages to capture
 // Note: Community ID 2 is the first real community (ID 1 may not exist)
 const COMMUNITY_ID = 2;
 const pages = [

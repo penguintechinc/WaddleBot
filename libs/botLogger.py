@@ -1,8 +1,8 @@
 import logging
 
-# Usage Example: 
+# Usage Example:
 # from botLogger import BotLogger       # This will import the BotLogger class
-# mylog = BotLogger(logFile="bot.log")  # This will create a logger with the name WaddleBot and logfile to bot.log
+# mylog = BotLogger(logFile="bot.log")  # This will create a logger with the name waddlebot and logfile to bot.log
 # mylog.fileLogger()                    # This will create an optional file handler for the logger, defaults to console
 # mylog.info("This is a test message")  # This will log the message to the file through redirect
 # log = mylog.logger                    # This will get the logger object directly
@@ -12,7 +12,7 @@ import logging
 # This is a class which will handle all logging for the bot
 # ---------------------
 class BotLogger:
-    def __init__(self, logname: str = "WaddleBot", logFile: str = "/var/log/waddlebot.log", 
+    def __init__(self, logname: str = "waddlebot", logFile: str = "/var/log/waddlebot.log", 
                  logHost: str ="127.0.0.1:514", json = False) -> None:
         self.logger = logging.getLogger(logname)
         self.logger.setLevel(logging.INFO)

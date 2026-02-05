@@ -42,7 +42,7 @@ func TestIntegration_FullSystem(t *testing.T) {
 		LogLevel:            "info",
 		DataDir:             tmpDir,
 		ModulesDir:          filepath.Join(tmpDir, "modules"),
-		WebAuthnDisplayName: "WaddleBot Bridge for Test",
+		WebAuthnDisplayName: "Waddles Bridge for Test",
 		WebAuthnOrigin:      "http://127.0.0.1:8080",
 		WebAuthnTimeout:     60,
 		ModuleTimeout:       30,

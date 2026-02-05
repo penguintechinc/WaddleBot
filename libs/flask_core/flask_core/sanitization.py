@@ -1,5 +1,5 @@
 """
-WaddleBot Input Sanitization Library
+Waddles Input Sanitization Library
 
 Provides XSS prevention and input sanitization utilities matching the hub module's
 sanitization approach using bleach library.

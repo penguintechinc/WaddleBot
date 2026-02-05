@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# WaddleBot Deployment Test Script
+# Waddles Deployment Test Script
 # This script tests the deployment of core services
 
 set -e  # Exit on any error
 
-echo "🚀 WaddleBot Deployment Test"
+echo "🚀 Waddles Deployment Test"
 echo "============================="
 
 # Check if docker-compose is available

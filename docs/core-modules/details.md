@@ -1,10 +1,10 @@
-# WaddleBot Module Details - Core Components & Trigger Modules
+# Waddles Module Details - Core Components & Trigger Modules
 
-This document provides comprehensive technical details for WaddleBot core components and trigger modules. For action/interactive modules, see [module-details-action.md](module-details-action.md). For high-level architecture, see [CLAUDE.md](../CLAUDE.md).
+This document provides comprehensive technical details for Waddles core components and trigger modules. For action/interactive modules, see [module-details-action.md](module-details-action.md). For high-level architecture, see [CLAUDE.md](../CLAUDE.md).
 
 ## Module Architecture Overview
 
-WaddleBot follows a modular, microservices architecture with three primary module categories:
+Waddles follows a modular, microservices architecture with three primary module categories:
 
 - **Core Components**: Central services handling routing, authentication, identity, and browser source management
 - **Trigger Modules (Receivers)**: Platform-specific modules that receive webhooks and events from Twitch, Discord, and Slack
@@ -18,7 +18,7 @@ All modules communicate through the Router Module, which handles command routing
 
 ### Router Module (`processing/router_module_flask/`)
 
-**Purpose**: High-performance command router and event processor - the central brain of WaddleBot
+**Purpose**: High-performance command router and event processor - the central brain of Waddles
 
 **Key Features**:
 - **High-Performance Processing**: Multi-threaded command processing with ThreadPoolExecutor
@@ -74,7 +74,7 @@ All modules communicate through the Router Module, which handles command routing
 - **Email Service**: SMTP/sendmail support for notifications and password resets
 - **API Key Management**: Generate and manage API keys for programmatic access
 - **Audit Trail**: Comprehensive logging of all administrative actions
-- **Service Health Monitoring**: Monitor health status of all WaddleBot services
+- **Service Health Monitoring**: Monitor health status of all Waddles services
 
 **Technical Details**:
 - Routes all API traffic to backend services with authentication
@@ -108,7 +108,7 @@ All modules communicate through the Router Module, which handles command routing
 - **API Key System**: Users can create, regenerate, and revoke their own API keys for programmatic access
 - **Session Management**: Flask session-based authentication with configurable expiration
 - **Platform Integration**: Communicates with Twitch, Discord, and Slack collectors for whisper/DM delivery
-- **Database Schema**: Extended Flask-Security user table with WaddleBot-specific fields (display_name, primary_platform, reputation_score)
+- **Database Schema**: Extended Flask-Security user table with Waddles-specific fields (display_name, primary_platform, reputation_score)
 - **Verification Security**: 6-character alphanumeric codes (excluding ambiguous characters) with 10-minute expiration
 - **Rate Limiting**: Sliding window rate limiting to prevent spam and abuse
 - **Health Monitoring**: Comprehensive health checks for all platform APIs and dependencies
@@ -180,7 +180,7 @@ All modules communicate through the Router Module, which handles command routing
    - `condition_filter`: Filter array items based on condition
 
 3. **Action Nodes** (Execute operations):
-   - `action_module`: Call WaddleBot action modules (AI, shoutout, alias, etc.)
+   - `action_module`: Call Waddles action modules (AI, shoutout, alias, etc.)
    - `action_webhook`: Make HTTP requests to external services with retry support
    - `action_chat_message`: Send message to chat platform (Twitch, Discord, Slack)
    - `action_browser_source`: Update OBS browser source with HTML/text content

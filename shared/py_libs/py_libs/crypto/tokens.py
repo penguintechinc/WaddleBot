@@ -75,7 +75,7 @@ def generate_api_key(prefix: str = "wa") -> str:
     Format: {prefix}-{random_hex}
 
     Args:
-        prefix: Prefix for the API key (default: "wa" for WaddleBot).
+        prefix: Prefix for the API key (default: "wa" for Waddles).
 
     Returns:
         API key string in format "prefix-hextoken".

@@ -5,7 +5,7 @@ import inspect
 # This is a class which will handle all logging for the bot
 # ---------------------
 class BotLogger:
-    def __init__(self, logname: str = "WaddleBot"):
+    def __init__(self, logname: str = "waddlebot"):
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logging.INFO)
         self.callFunction = None

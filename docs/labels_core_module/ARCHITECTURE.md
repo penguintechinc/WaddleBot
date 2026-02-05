@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Labels Core Module provides universal label management for WaddleBot, enabling flexible categorization and tagging of any entity type across the platform.
+The Labels Core Module provides universal label management for Waddles, enabling flexible categorization and tagging of any entity type across the platform.
 
 **Technology Stack**:
 - **Framework**: Quart (async Python web framework)
@@ -417,7 +417,7 @@ logger.system("Module started", action="startup", result="SUCCESS")
 ### Access Control
 - Implemented at application layer
 - `created_by` and `applied_by` fields track actors
-- Integration with WaddleBot authentication system
+- Integration with Waddles authentication system
 
 ---
 

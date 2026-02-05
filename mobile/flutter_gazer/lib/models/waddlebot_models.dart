@@ -1,4 +1,4 @@
-/// WaddleBot chat message.
+/// Waddles chat message.
 class ChatMessage {
   final String id;
   final String communityId;
@@ -78,7 +78,7 @@ MessageType _parseMessageType(String? typeStr) {
   }
 }
 
-/// WaddleBot typing event.
+/// Waddles typing event.
 class TypingEvent {
   final String communityId;
   final String channelName;
@@ -108,7 +108,7 @@ class TypingEvent {
 /// Message type enumeration.
 enum MessageType { text, image, video, audio, system, announcement }
 
-/// WaddleBot chat channel.
+/// Waddles chat channel.
 class ChatChannel {
   final String id;
   final String name;
@@ -140,7 +140,7 @@ class ChatChannel {
   }
 }
 
-/// WaddleBot message history with pagination support.
+/// Waddles message history with pagination support.
 class MessageHistory {
   final List<ChatMessage> messages;
   final bool hasMore;
@@ -171,7 +171,7 @@ class MessageHistory {
       };
 }
 
-/// WaddleBot stream lifecycle event.
+/// Waddles stream lifecycle event.
 class StreamEvent {
   final StreamEventType type;
   final String streamId;
@@ -198,7 +198,7 @@ class StreamEvent {
 
 enum StreamEventType { started, stopped, error }
 
-/// WaddleBot stream metrics.
+/// Waddles stream metrics.
 class StreamMetrics {
   final String streamId;
   final int bitrate;
@@ -226,5 +226,5 @@ class StreamMetrics {
       };
 }
 
-/// WaddleBot connection state.
+/// Waddles connection state.
 enum WBConnectionState { disconnected, connecting, connected, error }

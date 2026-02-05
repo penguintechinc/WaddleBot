@@ -1,10 +1,10 @@
-# WaddleBot Helm Chart
+# Waddles Helm Chart
 
-A comprehensive Helm chart for deploying WaddleBot, a multi-platform chat bot system with modular, microservices architecture supporting Twitch, Discord, Slack, YouTube Live, and Kick.
+A comprehensive Helm chart for deploying Waddles, a multi-platform chat bot system with modular, microservices architecture supporting Twitch, Discord, Slack, YouTube Live, and Kick.
 
 ## Overview
 
-WaddleBot is a scalable, production-ready chat bot platform built on a microservices architecture. This Helm chart deploys the complete WaddleBot ecosystem including:
+Waddles is a scalable, production-ready chat bot platform built on a microservices architecture. This Helm chart deploys the complete Waddles ecosystem including:
 
 - **Trigger Modules**: Platform-specific webhook receivers and pollers (Twitch, Discord, Slack, YouTube Live, Kick)
 - **Processing Module**: High-performance command router with multi-threading and caching
@@ -75,10 +75,10 @@ kubectl get ingress -n waddlebot
 6. Access the Hub UI:
 ```bash
 # Add to /etc/hosts for local development
-echo "127.0.0.1 waddlebot.local" | sudo tee -a /etc/hosts
+echo "127.0.0.1 waddles.local" | sudo tee -a /etc/hosts
 
 # Open in browser
-http://waddlebot.local
+http://waddles.local
 ```
 
 ### Production Deployment
@@ -94,7 +94,7 @@ ingress:
   enabled: true
   className: "nginx"
   hosts:
-    - host: waddlebot.yourdomain.com
+    - host: waddles.yourdomain.com
       paths:
         - path: /
           pathType: Prefix

@@ -1016,4 +1016,4 @@ curl -X POST http://localhost:8051/api/v1/queue/1/skip
 
 **Last Updated**: 2025-12-16
 **API Version**: v1
-**Maintainer**: WaddleBot Development Team
+**Maintainer**: Waddles Development Team

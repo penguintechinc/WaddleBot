@@ -150,8 +150,8 @@ jobs:
           Priority: optional
           Architecture: amd64
           Maintainer: WaddleBot Team <support@waddlebot.io>
-          Description: WaddleBot Premium Desktop Bridge
-           Local system integration platform for WaddleBot communities
+          Description: Waddles Premium Desktop Bridge
+           Local system integration platform for Waddles communities
           EOF
 
           dpkg-deb --build debian-amd64 waddlebot-bridge_1.0.0_amd64.deb
@@ -169,8 +169,8 @@ jobs:
           Priority: optional
           Architecture: arm64
           Maintainer: WaddleBot Team <support@waddlebot.io>
-          Description: WaddleBot Premium Desktop Bridge
-           Local system integration platform for WaddleBot communities
+          Description: Waddles Premium Desktop Bridge
+           Local system integration platform for Waddles communities
           EOF
 
           dpkg-deb --build debian-arm64 waddlebot-bridge_1.0.0_arm64.deb

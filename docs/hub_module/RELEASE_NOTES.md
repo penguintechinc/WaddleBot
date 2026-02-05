@@ -5,7 +5,7 @@
 **Release Date:** 2024-03-15
 
 ### Overview
-This is the initial stable release of the WaddleBot Hub Module - the central administration portal and community management interface for the WaddleBot platform.
+This is the initial stable release of the Waddles Hub Module - the central administration portal and community management interface for the Waddles platform.
 
 ---
 
@@ -358,7 +358,7 @@ This is the initial stable release of the WaddleBot Hub Module - the central adm
 
 ## Contributors
 
-- WaddleBot Development Team
+- Waddles Development Team
 - Community Contributors (see GitHub)
 
 ---
@@ -373,7 +373,7 @@ Proprietary - All rights reserved
 
 - **Documentation:** `/docs/hub_module/`
 - **Issues:** GitHub Issues
-- **Community:** WaddleBot Discord
+- **Community:** Waddles Discord
 - **Email:** support@waddlebot.io
 
 ---
@@ -429,7 +429,7 @@ Proprietary - All rights reserved
 ## Acknowledgments
 
 Special thanks to:
-- All contributors to the WaddleBot project
+- All contributors to the Waddles project
 - Open source community for amazing libraries
 - Early adopters for feedback and bug reports
 
