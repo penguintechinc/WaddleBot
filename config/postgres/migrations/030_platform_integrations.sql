@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS platform_integrations (
     client_id VARCHAR(255),
     client_secret TEXT,
     token_type VARCHAR(50) DEFAULT 'Bearer',
-    expires_at TIMESTAMP,
+    expires_at TIMESTAMP WITH TIME ZONE,
     scopes TEXT[],  -- Array of OAuth scopes granted
 
     -- Metadata
@@ -29,8 +29,8 @@ CREATE TABLE IF NOT EXISTS platform_integrations (
     is_encrypted BOOLEAN DEFAULT TRUE,
 
     -- Audit trail
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     created_by_user_id INTEGER REFERENCES hub_users(id) ON DELETE SET NULL,
     updated_by_user_id INTEGER REFERENCES hub_users(id) ON DELETE SET NULL,
 
