@@ -20,6 +20,12 @@ import formsRoutes from './forms.js';
 
 const router = Router();
 
+// Signup settings (top-level alias for /public/signup-settings)
+router.get('/signup-settings', (req, res, next) => {
+  req.url = '/signup-settings';
+  publicRoutes(req, res, next);
+});
+
 // Public routes (no auth required)
 router.use('/public', publicRoutes);
 
