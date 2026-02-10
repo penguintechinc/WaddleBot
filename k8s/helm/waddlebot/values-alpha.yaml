@@ -1,0 +1,20 @@
+## Waddlebot - Alpha Environment Overrides
+global:
+  imageRegistry: ""
+  imageTag: "alpha"
+  imagePullPolicy: Never
+infrastructure:
+  postgresql:
+    enabled: true
+    persistence: {size: 1Gi}
+  redis:
+    enabled: true
+    persistence: {size: 512Mi}
+  minio:
+    enabled: false
+  ollama:
+    enabled: false
+  qdrant:
+    enabled: false
+ingress:
+  enabled: false
