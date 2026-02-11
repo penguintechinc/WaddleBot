@@ -65,10 +65,23 @@ fi
 
 print_success "Pre-flight checks passed"
 
+# Check for NPM_TOKEN (required for @penguintechinc packages from GitHub Packages)
+if [ -z "${NPM_TOKEN}" ]; then
+    if [ -f "$HOME/code/.gh-token" ]; then
+        export NPM_TOKEN=$(grep -v '^#' "$HOME/code/.gh-token" | grep -v '^$' | head -1)
+        print_info "Loaded NPM_TOKEN from ~/code/.gh-token"
+    else
+        print_error "NPM_TOKEN is not set and ~/code/.gh-token not found"
+        print_error "Set NPM_TOKEN env var with a GitHub token that has read:packages scope"
+        exit 1
+    fi
+fi
+
 # Step 1: Build hub-webui image
 print_info "Building hub-webui image..."
 docker build \
     -f admin/hub_module/Dockerfile.webui \
+    --build-arg NPM_TOKEN=${NPM_TOKEN} \
     -t ${REGISTRY}/hub-webui:${TAG} \
     .
 
@@ -83,6 +96,7 @@ fi
 print_info "Building hub-api image..."
 docker build \
     -f admin/hub_module/Dockerfile \
+    --build-arg NPM_TOKEN=${NPM_TOKEN} \
     -t ${REGISTRY}/hub-api:${TAG} \
     .
 
