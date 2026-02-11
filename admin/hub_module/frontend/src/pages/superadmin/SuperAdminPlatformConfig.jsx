@@ -4,7 +4,7 @@ import { RefreshCw, AlertCircle, Check, X } from 'lucide-react';
 import BotCredentialTab from './credentials/BotCredentialTab';
 import CommunityOAuthTab from './credentials/CommunityOAuthTab';
 import UserOAuthTab from './credentials/UserOAuthTab';
-import '../../../styles/credentials.css';
+import '../../styles/credentials.css';
 
 export default function SuperAdminPlatformConfig() {
   const [activeTab, setActiveTab] = useState('bot');

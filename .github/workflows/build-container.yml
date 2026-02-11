@@ -112,6 +112,7 @@ jobs:
           build-args: |
             MODULE_NAME=${{ inputs.module_name }}
             MODULE_PORT=${{ inputs.module_port }}
+            NPM_TOKEN=${{ secrets.GITHUB_TOKEN }}
 
       - name: Build summary
         run: |

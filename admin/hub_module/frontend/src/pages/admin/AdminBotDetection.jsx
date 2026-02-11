@@ -4,7 +4,7 @@ import { adminApi } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import BotScoreBadge from '../../components/BotScoreBadge';
 import { ShieldCheckIcon, ExclamationTriangleIcon, UserGroupIcon, ClockIcon } from '@heroicons/react/24/outline';
-import { FormModalBuilder } from '@penguin/react_libs';
+import { FormModalBuilder } from '@penguintechinc/react-libs';
 
 // Waddles theme colors matching the existing UI
 const waddlebotColors = {

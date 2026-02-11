@@ -22,7 +22,7 @@ from datetime import datetime
 import re
 import logging
 
-# Import from shared library for re-export
+# Import from shared library for re-export (penguin-libs when available, graceful fallback)
 try:
     from py_libs.models import (
         WaddleBaseModel, WaddleRequestModel, Platform,

@@ -92,7 +92,6 @@ project-name/
 │   ├── high-perf/       # High-performance service (optional)
 │   ├── frontend/        # Frontend service
 │   └── connector/       # Integration services (placeholder)
-├── shared/              # Shared components
 ├── infrastructure/      # Infrastructure as code
 ├── scripts/             # Utility scripts
 ├── tests/               # Test suites (unit, integration, e2e, performance, smoke)

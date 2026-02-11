@@ -1,10 +1,10 @@
 /**
  * Announcement Modal Component
  * Modal for creating/editing announcements with platform broadcast capabilities
- * Migrated to use FormModalBuilder from @penguin/react_libs
+ * Migrated to use FormModalBuilder from @penguintechinc/react-libs
  */
 import { useMemo } from 'react';
-import { FormModalBuilder } from '@penguin/react_libs';
+import { FormModalBuilder } from '@penguintechinc/react-libs';
 
 // Waddles theme colors matching the existing UI
 const waddlebotColors = {

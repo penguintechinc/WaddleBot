@@ -11,10 +11,6 @@ RUN apt-get update && \
 COPY core/credential_manager_module/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy shared libraries
-COPY shared/py_libs /app/shared/py_libs
-RUN pip install --no-cache-dir /app/shared/py_libs
-
 # Copy application code
 COPY core/credential_manager_module/ .
 

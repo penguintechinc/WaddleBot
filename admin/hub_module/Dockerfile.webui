@@ -4,18 +4,18 @@
 # Stage 1: Build frontend
 FROM node:20-bookworm-slim AS builder
 
-WORKDIR /build
-
-# Copy shared react_libs first (required by frontend)
-COPY shared/react_libs ./shared/react_libs
+ARG NPM_TOKEN
 
 WORKDIR /build/admin/hub_module/frontend
 
-# Copy package files
+# Copy package files and registry config
 COPY admin/hub_module/frontend/package*.json ./
+COPY admin/hub_module/frontend/.npmrc ./
 
-# Install dependencies
-RUN npm install
+# Configure GitHub Packages auth and install dependencies
+RUN echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" >> .npmrc && \
+    npm install && \
+    sed -i '/_authToken/d' .npmrc
 
 # Copy frontend source
 COPY admin/hub_module/frontend/ ./
