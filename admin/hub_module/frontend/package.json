@@ -11,7 +11,7 @@
   "dependencies": {
     "@heroicons/react": "^2.2.0",
     "@penguin/react_libs": "file:../../../shared/react_libs",
-    "axios": "^1.7.9",
+    "axios": "^1.13.5",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
