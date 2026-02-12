@@ -1,7 +1,7 @@
 quart>=0.20.0
 hypercorn==0.15.0
-grpcio==1.60.0
-grpcio-tools==1.60.0
+grpcio>=1.64.0
+grpcio-tools>=1.64.0
 protobuf>=5.29.4
 pydal==20241111.1
 psycopg2-binary==2.9.9
