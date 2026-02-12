@@ -60,6 +60,9 @@ class Config:
     # Workflow core module integration
     WORKFLOW_CORE_URL = os.getenv('WORKFLOW_CORE_URL', 'http://workflow-core:8070')
 
+    # Security core module (for content filtering)
+    SECURITY_CORE_URL = os.getenv('SECURITY_CORE_URL', 'http://security-core:8041')
+
     # Browser source module (for captions)
     BROWSER_SOURCE_URL = os.getenv('BROWSER_SOURCE_URL', 'http://browser-source:8050')
 

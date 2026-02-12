@@ -3,9 +3,9 @@
  * Handles CRUD, encryption, validation, and platform API testing for platform_integrations
  */
 
-const db = require('../models/database');
-const crypto = require('crypto');
-const logger = require('../utils/logger');
+import { query } from '../config/database.js';
+import crypto from 'crypto';
+import { logger } from '../utils/logger.js';
 
 // Encryption configuration
 const ENCRYPTION_ALGORITHM = 'aes-256-cbc';
@@ -18,7 +18,7 @@ class CredentialService {
    */
   static async getCredentialById(id) {
     try {
-      const result = await db.query(
+      const result = await query(
         'SELECT * FROM platform_integrations WHERE id = $1',
         [id]
       );
@@ -39,7 +39,7 @@ class CredentialService {
    */
   static async getCredentialsByPlatform(platform, integrationType = 'bot') {
     try {
-      const result = await db.query(
+      const result = await query(
         `SELECT * FROM platform_integrations
          WHERE platform = $1
          AND integration_type = $2
@@ -60,7 +60,7 @@ class CredentialService {
    */
   static async getCredentialsByCommunity(communityId) {
     try {
-      const result = await db.query(
+      const result = await query(
         `SELECT * FROM platform_integrations
          WHERE community_id = $1
          AND integration_type = 'community_oauth'
@@ -81,7 +81,7 @@ class CredentialService {
    */
   static async getCredentialsByUser(userId) {
     try {
-      const result = await db.query(
+      const result = await query(
         `SELECT * FROM platform_integrations
          WHERE user_id = $1
          AND integration_type = 'user_oauth'
@@ -133,7 +133,7 @@ class CredentialService {
         ? this.encryptCredential(clientSecret)
         : null;
 
-      const result = await db.query(
+      const result = await query(
         `INSERT INTO platform_integrations (
           platform, integration_type, community_id, user_id,
           access_token, refresh_token, client_id, client_secret,
@@ -226,7 +226,7 @@ class CredentialService {
 
       const values = [id, ...Object.values(updates), userId];
 
-      const result = await db.query(
+      const result = await query(
         `UPDATE platform_integrations
          SET ${setClause}, updated_at = NOW(), updated_by_user_id = $${values.length}
          WHERE id = $1
@@ -247,7 +247,7 @@ class CredentialService {
    */
   static async deleteCredential(id, userId) {
     try {
-      const result = await db.query(
+      const result = await query(
         `UPDATE platform_integrations
          SET is_active = FALSE, updated_at = NOW(), updated_by_user_id = $2
          WHERE id = $1
@@ -482,4 +482,4 @@ class CredentialService {
   }
 }
 
-module.exports = CredentialService;
+export default CredentialService;

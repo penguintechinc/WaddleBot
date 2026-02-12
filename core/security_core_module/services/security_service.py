@@ -24,7 +24,8 @@ class SecurityService:
                           rate_limit_enabled, rate_limit_commands_per_minute,
                           rate_limit_messages_per_minute, auto_timeout_enabled,
                           timeout_base_duration_minutes, cross_platform_sync,
-                          reputation_integration_enabled, created_at, updated_at
+                          reputation_integration_enabled, use_default_profanity_list,
+                          created_at, updated_at
                    FROM security_config
                    WHERE community_id = %s""",
                 [community_id]
@@ -53,7 +54,8 @@ class SecurityService:
                     'auto_timeout_enabled': True,
                     'timeout_base_duration_minutes': 10,
                     'cross_platform_sync': False,
-                    'reputation_integration_enabled': True
+                    'reputation_integration_enabled': True,
+                    'use_default_profanity_list': Config.DEFAULT_USE_BUILTIN_PROFANITY,
                 }
 
             row = result[0]
@@ -78,8 +80,9 @@ class SecurityService:
                 'timeout_base_duration_minutes': row[16],
                 'cross_platform_sync': row[17],
                 'reputation_integration_enabled': row[18],
-                'created_at': row[19].isoformat() + 'Z' if row[19] else None,
-                'updated_at': row[20].isoformat() + 'Z' if row[20] else None
+                'use_default_profanity_list': row[19] if row[19] is not None else False,
+                'created_at': row[20].isoformat() + 'Z' if row[20] else None,
+                'updated_at': row[21].isoformat() + 'Z' if row[21] else None
             }
 
         except Exception as e:
@@ -109,9 +112,10 @@ class SecurityService:
                         warning_threshold_ban, warning_decay_days, rate_limit_enabled,
                         rate_limit_commands_per_minute, rate_limit_messages_per_minute,
                         auto_timeout_enabled, timeout_base_duration_minutes,
-                        cross_platform_sync, reputation_integration_enabled)
+                        cross_platform_sync, reputation_integration_enabled,
+                        use_default_profanity_list)
                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                               %s, %s, %s, %s, %s, %s)""",
+                               %s, %s, %s, %s, %s, %s, %s)""",
                     [
                         community_id,
                         updates.get('spam_detection_enabled', config['spam_detection_enabled']),
@@ -132,7 +136,8 @@ class SecurityService:
                         updates.get('auto_timeout_enabled', config['auto_timeout_enabled']),
                         updates.get('timeout_base_duration_minutes', config['timeout_base_duration_minutes']),
                         updates.get('cross_platform_sync', config['cross_platform_sync']),
-                        updates.get('reputation_integration_enabled', config['reputation_integration_enabled'])
+                        updates.get('reputation_integration_enabled', config['reputation_integration_enabled']),
+                        updates.get('use_default_profanity_list', config.get('use_default_profanity_list', False))
                     ]
                 )
             else:

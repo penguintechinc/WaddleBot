@@ -86,8 +86,30 @@ class CommandProcessor:
                 # Also record for reputation tracking
                 asyncio.create_task(self._record_reputation_event(event_data))
 
-                # NEW: Translate message if translation enabled for this community
+                # Translate message if translation enabled for this community
                 translation_result = await self._translate_message(event_data, entity_id)
+                if translation_result:
+                    translated_text = translation_result['translated_text']
+
+                    # Check translated text against content filter (may contain
+                    # profanity not present in the original language)
+                    community_id = await self._get_community_for_entity(entity_id)
+                    if community_id:
+                        filter_result = await self._check_content_filter(
+                            community_id=community_id,
+                            message=translated_text,
+                            platform=event_data.get('platform', 'unknown'),
+                            user_id=user_id,
+                        )
+                        if filter_result and not filter_result.get('allowed', True):
+                            logger.info(
+                                f"Translated message blocked by content filter: "
+                                f"reason={filter_result.get('blocked_reason')}, "
+                                f"pattern={filter_result.get('matched_pattern')}"
+                            )
+                            # Skip caption broadcast for filtered translations
+                            translation_result = None
+
                 if translation_result:
                     # Update event data with translated message
                     event_data['message'] = translation_result['translated_text']
@@ -869,6 +891,58 @@ class CommandProcessor:
 
         except Exception as e:
             logger.warning(f"Translation failed: {e}")
+            return None
+
+    async def _check_content_filter(
+        self,
+        community_id: int,
+        message: str,
+        platform: str,
+        user_id: str,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Check translated message against security-core content filter.
+
+        Fail-open: if security-core is unreachable, allow the message through
+        so translation isn't broken by a filter outage.
+
+        Returns:
+            Filter result dict with 'allowed' key, or None on error.
+        """
+        try:
+            if not Config.SECURITY_CORE_URL:
+                return None
+
+            session = await self._get_http_session()
+            payload = {
+                'community_id': community_id,
+                'platform': platform,
+                'platform_user_id': user_id,
+                'message': message,
+            }
+
+            headers = {}
+            if Config.SERVICE_API_KEY:
+                headers['X-Service-Key'] = Config.SERVICE_API_KEY
+
+            async with session.post(
+                f"{Config.SECURITY_CORE_URL}/api/v1/internal/check",
+                json=payload,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=3),
+            ) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    return result.get('data', result)
+                else:
+                    logger.warning(
+                        f"Content filter returned status {response.status}"
+                    )
+                    return None
+
+        except Exception as e:
+            # Fail-open: don't block translations if filter is unavailable
+            logger.warning(f"Content filter check failed (fail-open): {e}")
             return None
 
     async def _get_translation_config(

@@ -53,6 +53,9 @@ class Config:
     SECRET_KEY = os.getenv('SECRET_KEY', 'change-me-in-production')
     SERVICE_API_KEY = os.getenv('SERVICE_API_KEY', '')
 
+    # Default profanity filter (opt-in)
+    DEFAULT_USE_BUILTIN_PROFANITY = False
+
     # Default spam detection settings
     DEFAULT_SPAM_MESSAGE_THRESHOLD = 5  # messages per interval
     DEFAULT_SPAM_INTERVAL_SECONDS = 10

@@ -4,6 +4,7 @@
 import bcrypt from 'bcrypt';
 import { query, transaction } from '../config/database.js';
 import { errors } from '../middleware/errorHandler.js';
+import crypto from 'crypto';
 import { logger } from '../utils/logger.js';
 
 const SALT_ROUNDS = 10;
@@ -465,7 +466,7 @@ export async function generatePasswordReset(req, res, next) {
     const user = result.rows[0];
 
     // Generate reset token (random 32-char hex)
-    const resetToken = require('crypto').randomBytes(16).toString('hex');
+    const resetToken = crypto.randomBytes(16).toString('hex');
     const resetExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     await query(

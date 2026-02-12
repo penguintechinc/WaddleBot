@@ -3,9 +3,8 @@
  * Manages bot credentials and OAuth integrations via platform_integrations table
  */
 
-const db = require('../models/database');
-const { encryptCredential, decryptCredential } = require('../utils/encryption');
-const logger = require('../utils/logger');
+import { query } from '../config/database.js';
+import { logger } from '../utils/logger.js';
 
 class PlatformConfigController {
   /**
@@ -15,22 +14,22 @@ class PlatformConfigController {
     try {
       const { integrationType, platform } = req.query;
 
-      let query = 'SELECT * FROM platform_integrations WHERE is_active = TRUE';
+      let sql = 'SELECT * FROM platform_integrations WHERE is_active = TRUE';
       const params = [];
 
       if (integrationType) {
-        query += ' AND integration_type = $' + (params.length + 1);
+        sql += ' AND integration_type = $' + (params.length + 1);
         params.push(integrationType);
       }
 
       if (platform) {
-        query += ' AND platform = $' + (params.length + 1);
+        sql += ' AND platform = $' + (params.length + 1);
         params.push(platform);
       }
 
-      query += ' ORDER BY platform, integration_type, created_at DESC';
+      sql += ' ORDER BY platform, integration_type, created_at DESC';
 
-      const result = await db.query(query, params);
+      const result = await query(sql, params);
 
       return res.json({
         success: true,
@@ -53,7 +52,7 @@ class PlatformConfigController {
     try {
       const { platform } = req.params;
 
-      const result = await db.query(
+      const result = await query(
         `SELECT * FROM platform_integrations
          WHERE platform = $1
          AND integration_type = 'bot'
@@ -90,7 +89,7 @@ class PlatformConfigController {
     try {
       const { communityId } = req.params;
 
-      const result = await db.query(
+      const result = await query(
         `SELECT * FROM platform_integrations
          WHERE community_id = $1
          AND integration_type = 'community_oauth'
@@ -120,7 +119,7 @@ class PlatformConfigController {
     try {
       const { userId } = req.params;
 
-      const result = await db.query(
+      const result = await query(
         `SELECT * FROM platform_integrations
          WHERE user_id = $1
          AND integration_type = 'user_oauth'
@@ -179,7 +178,7 @@ class PlatformConfigController {
         });
       }
 
-      const result = await db.query(
+      const result = await query(
         `INSERT INTO platform_integrations (
           platform, integration_type, community_id, user_id,
           access_token, refresh_token, client_id, client_secret,
@@ -240,7 +239,7 @@ class PlatformConfigController {
         isActive,
       } = req.body;
 
-      const result = await db.query(
+      const result = await query(
         `UPDATE platform_integrations
          SET access_token = COALESCE($2, access_token),
              refresh_token = COALESCE($3, refresh_token),
@@ -297,7 +296,7 @@ class PlatformConfigController {
     try {
       const { id } = req.params;
 
-      const result = await db.query(
+      const result = await query(
         `UPDATE platform_integrations
          SET is_active = FALSE, updated_at = NOW(), updated_by_user_id = $2
          WHERE id = $1
@@ -334,7 +333,7 @@ class PlatformConfigController {
     try {
       const { id } = req.params;
 
-      const result = await db.query(
+      const result = await query(
         'SELECT * FROM platform_integrations WHERE id = $1',
         [id]
       );
@@ -514,4 +513,4 @@ async function testYouTubeToken(token) {
   }
 }
 
-module.exports = PlatformConfigController;
+export default PlatformConfigController;
