@@ -177,7 +177,50 @@ ingress:
           pathType: Prefix
           service: slack-collector
           port: 8004
+    - host: waddles.penguintech.io
+      paths:
+        - path: /socket.io
+          pathType: Prefix
+          service: hub-api
+          port: 8060
+        - path: /api
+          pathType: Prefix
+          service: hub-api
+          port: 8060
+        - path: /
+          pathType: Prefix
+          service: hub-webui
+          port: 80
+        - path: /api/router
+          pathType: Prefix
+          service: router
+          port: 8000
+        - path: /api/video-proxy
+          pathType: Prefix
+          service: video-proxy
+          port: 8092
+        - path: /api/engagement
+          pathType: Prefix
+          service: engagement
+          port: 8091
+        - path: /api/rtc
+          pathType: Prefix
+          service: module-rtc
+          port: 8093
+        - path: /webhooks/twitch
+          pathType: Prefix
+          service: twitch-collector
+          port: 8002
+        - path: /webhooks/discord
+          pathType: Prefix
+          service: discord-collector
+          port: 8003
+        - path: /webhooks/slack
+          pathType: Prefix
+          service: slack-collector
+          port: 8004
   tls:
     - secretName: penguintech-wildcard-tls
       hosts:
         - waddlebot.penguintech.io
+        - waddles.penguintech.io

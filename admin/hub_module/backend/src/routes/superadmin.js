@@ -3,7 +3,7 @@
  */
 import { Router } from 'express';
 import * as superadminController from '../controllers/superadminController.js';
-import * as platformConfigController from '../controllers/platformConfigController.js';
+import PlatformConfigController from '../controllers/PlatformConfigController.js';
 import * as kongController from '../controllers/kongController.js';
 import * as userManagementController from '../controllers/userManagementController.js';
 import { requireAuth, requireSuperAdmin } from '../middleware/auth.js';
@@ -66,19 +66,19 @@ router.put('/marketplace/modules/:id/publish', superadminController.publishModul
 router.delete('/marketplace/modules/:id', superadminController.deleteModule);
 
 // Platform configuration management
-router.get('/platform-config', platformConfigController.getPlatformConfigs);
+router.get('/platform-config', PlatformConfigController.getPlatformConfigs);
 router.put('/platform-config/:platform',
   validators.text('client_id', { min: 1, max: 500 }),
   validators.text('client_secret', { min: 1, max: 500 }),
   validators.url('redirect_uri'),
   validators.boolean('enabled'),
   validateRequest,
-  platformConfigController.updatePlatformConfig
+  PlatformConfigController.updatePlatformConfig
 );
-router.post('/platform-config/:platform/test', platformConfigController.testPlatformConnection);
+router.post('/platform-config/:platform/test', PlatformConfigController.testPlatformConnection);
 
 // Hub settings management (signup, email, etc.)
-router.get('/settings', platformConfigController.getHubSettings);
+router.get('/settings', PlatformConfigController.getHubSettings);
 router.put('/settings',
   validators.boolean('allow_public_signup'),
   validators.boolean('require_email_verification'),
@@ -86,7 +86,7 @@ router.put('/settings',
   validators.integer('smtp_port', { min: 1, max: 65535 }),
   validators.boolean('smtp_secure'),
   validateRequest,
-  platformConfigController.updateHubSettings
+  PlatformConfigController.updateHubSettings
 );
 
 // Kong Gateway management
