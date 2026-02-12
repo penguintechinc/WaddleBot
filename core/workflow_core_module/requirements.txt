@@ -21,8 +21,8 @@ APScheduler==3.10.4
 redis==5.0.1
 
 # Authentication & Security
-python-jose[cryptography]==3.3.0
-cryptography==43.0.3
+python-jose[cryptography]>=3.4.0
+cryptography>=44.0.3
 
 # Environment
 python-dotenv>=1.0.0

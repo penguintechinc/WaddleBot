@@ -5,18 +5,18 @@ hypercorn==0.17.3
 # gRPC
 grpcio==1.63.0
 grpcio-tools==1.63.0
-protobuf==5.27.0
+protobuf>=5.29.4
 
 # Database
 pydal==20241111.1
 psycopg2-binary==2.9.9
 
 # HTTP Client
-aiohttp==3.9.3
+aiohttp>=3.11.18
 
 # Authentication & Security
 pyjwt==2.8.0
-cryptography==42.0.5
+cryptography>=44.0.3
 
 # Storage
 minio==7.2.5

@@ -41,7 +41,7 @@ opentelemetry-instrumentation==0.48b0
 opentelemetry-instrumentation-flask==0.48b0
 opentelemetry-instrumentation-requests==0.48b0
 opentelemetry-exporter-otlp-proto-grpc==1.27.0
-protobuf>=4.25.8,<5.0.0  # Pin protobuf to avoid conflicts (CVE pending fix)
+protobuf>=5.29.4  # Updated for CVE fix
 
 # Observability - Prometheus
 prometheus-client>=0.19.0

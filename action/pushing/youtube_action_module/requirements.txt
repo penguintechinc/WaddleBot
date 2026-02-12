@@ -1,5 +1,5 @@
 # Web framework
-quart==0.19.4
+quart>=0.20.0
 hypercorn==0.16.0
 
 # gRPC
@@ -23,4 +23,4 @@ psycopg2-binary>=2.9.10
 
 # Utilities
 python-dotenv==1.0.0
-requests==2.31.0
+requests>=2.32.4
