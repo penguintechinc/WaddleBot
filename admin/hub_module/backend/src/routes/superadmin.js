@@ -3,7 +3,7 @@
  */
 import { Router } from 'express';
 import * as superadminController from '../controllers/superadminController.js';
-import PlatformConfigController from '../controllers/PlatformConfigController.js';
+import PlatformConfigController from '../controllers/platformConfigController.js';
 import * as kongController from '../controllers/kongController.js';
 import * as userManagementController from '../controllers/userManagementController.js';
 import { requireAuth, requireSuperAdmin } from '../middleware/auth.js';
