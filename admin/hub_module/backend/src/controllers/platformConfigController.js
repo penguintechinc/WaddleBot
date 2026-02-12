@@ -376,6 +376,106 @@ class PlatformConfigController {
       });
     }
   }
+
+  /**
+   * Test platform connection by platform name
+   */
+  static async testPlatformConnection(req, res) {
+    try {
+      const { platform } = req.params;
+
+      const result = await query(
+        `SELECT * FROM platform_integrations
+         WHERE platform = $1
+         AND integration_type = 'bot'
+         AND is_active = TRUE
+         LIMIT 1`,
+        [platform]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: `No credentials found for platform: ${platform}`,
+        });
+      }
+
+      const credential = result.rows[0];
+      const testResult = await testPlatformCredential(credential);
+
+      return res.json({
+        success: true,
+        data: {
+          platform,
+          valid: testResult.valid,
+          error: testResult.error || null,
+          testedAt: new Date().toISOString(),
+        },
+      });
+    } catch (error) {
+      logger.error('Error testing platform connection:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to test platform connection',
+      });
+    }
+  }
+
+  /**
+   * Get hub settings (key-value pairs from hub_settings table)
+   */
+  static async getHubSettings(req, res) {
+    try {
+      const result = await query('SELECT setting_key, setting_value FROM hub_settings');
+      const settings = {};
+      for (const row of result.rows) {
+        settings[row.setting_key] = row.setting_value;
+      }
+
+      return res.json({ success: true, data: settings });
+    } catch (error) {
+      logger.error('Error fetching hub settings:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to fetch hub settings',
+      });
+    }
+  }
+
+  /**
+   * Update hub settings
+   */
+  static async updateHubSettings(req, res) {
+    try {
+      const updates = req.body;
+
+      for (const [key, value] of Object.entries(updates)) {
+        await query(
+          `INSERT INTO hub_settings (setting_key, setting_value, updated_at)
+           VALUES ($1, $2, NOW())
+           ON CONFLICT (setting_key)
+           DO UPDATE SET setting_value = $2, updated_at = NOW()`,
+          [key, String(value)]
+        );
+      }
+
+      // Return updated settings
+      const result = await query('SELECT setting_key, setting_value FROM hub_settings');
+      const settings = {};
+      for (const row of result.rows) {
+        settings[row.setting_key] = row.setting_value;
+      }
+
+      logger.info('Hub settings updated');
+      return res.json({ success: true, data: settings });
+    } catch (error) {
+      logger.error('Error updating hub settings:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to update hub settings',
+      });
+    }
+  }
 }
 
 /**
