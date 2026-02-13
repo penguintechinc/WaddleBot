@@ -135,7 +135,7 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
   hosts:
-    - host: waddlebot.penguintech.io
+    - host: waddlebot.penguintech.cloud
       paths:
         - path: /socket.io
           pathType: Prefix
@@ -177,7 +177,7 @@ ingress:
           pathType: Prefix
           service: slack-collector
           port: 8004
-    - host: waddles.penguintech.io
+    - host: waddles.penguintech.cloud
       paths:
         - path: /socket.io
           pathType: Prefix
@@ -222,5 +222,5 @@ ingress:
   tls:
     - secretName: penguintech-wildcard-tls
       hosts:
-        - waddlebot.penguintech.io
-        - waddles.penguintech.io
+        - waddlebot.penguintech.cloud
+        - waddles.penguintech.cloud
