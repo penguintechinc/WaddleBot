@@ -32,8 +32,8 @@ declare -A SERVICES=(
     [core-module-rtc]="${PROJECT_ROOT}/services/module-rtc/Dockerfile"
 )
 
-# Default values
-TAG="${TAG:-latest}"
+# Default values — unique epoch tag per skill (never reuse beta-latest)
+TAG="${TAG:-beta-$(date +%s)}"
 SERVICES_TO_BUILD=()
 SKIP_BUILD=false
 DRY_RUN=false
@@ -223,18 +223,27 @@ build_and_push_images() {
         log_info "Building ${image_name}..."
 
         if [ "$DRY_RUN" = true ]; then
-            log_info "[DRY-RUN] docker build -f ${dockerfile} --build-arg NPM_TOKEN=*** -t ${REGISTRY}/${image_name}:${TAG} ${PROJECT_ROOT}"
+            log_info "[DRY-RUN] docker build -f ${dockerfile} --build-arg NPM_TOKEN=*** -t waddlebot-${image_name}:latest ${PROJECT_ROOT}"
+            log_info "[DRY-RUN] docker tag waddlebot-${image_name}:latest ${REGISTRY}/${image_name}:${TAG}"
+            log_info "[DRY-RUN] docker push ${REGISTRY}/${image_name}:${TAG}"
         else
+            # Build locally first (never use buildx --push against beta registry)
             if ! docker build \
                 -f "${dockerfile}" \
                 --build-arg NPM_TOKEN="${NPM_TOKEN}" \
-                -t "${REGISTRY}/${image_name}:${TAG}" \
+                -t "waddlebot-${image_name}:latest" \
                 "${PROJECT_ROOT}"; then
                 log_error "Failed to build ${image_name} image"
                 exit 1
             fi
             log_success "${image_name} image built successfully"
 
+            # Tag for beta registry (separate step per skill)
+            log_info "Tagging ${image_name} for beta registry..."
+            docker tag "waddlebot-${image_name}:latest" "${REGISTRY}/${image_name}:${TAG}"
+            log_success "${image_name} tagged as ${REGISTRY}/${image_name}:${TAG}"
+
+            # Push to beta registry (separate step — never use buildx --push)
             log_info "Pushing ${image_name} image to registry..."
             if ! docker push "${REGISTRY}/${image_name}:${TAG}"; then
                 log_error "Failed to push ${image_name} image"
@@ -252,11 +261,11 @@ do_deploy() {
     # Create namespace if it doesn't exist
     log_info "Checking if namespace ${NAMESPACE} exists..."
     if [ "$DRY_RUN" = true ]; then
-        log_info "[DRY-RUN] kubectl get namespace ${NAMESPACE}"
+        log_info "[DRY-RUN] kubectl --context ${KUBE_CONTEXT} get namespace ${NAMESPACE}"
     else
-        if ! kubectl get namespace "${NAMESPACE}" &>/dev/null; then
+        if ! kubectl --context "${KUBE_CONTEXT}" get namespace "${NAMESPACE}" &>/dev/null; then
             log_warning "Namespace ${NAMESPACE} does not exist, creating..."
-            kubectl create namespace "${NAMESPACE}" || true
+            kubectl --context "${KUBE_CONTEXT}" create namespace "${NAMESPACE}" || true
             log_success "Namespace ${NAMESPACE} created"
         else
             log_success "Namespace ${NAMESPACE} already exists"
@@ -268,6 +277,7 @@ do_deploy() {
 
     helm_cmd="helm upgrade waddlebot ${HELM_CHART} \
         --install \
+        --kube-context ${KUBE_CONTEXT} \
         --namespace ${NAMESPACE} \
         -f ${HELM_CHART}/values.yaml \
         -f ${HELM_CHART}/values-beta.yaml \
@@ -297,28 +307,52 @@ verify_deployment() {
 
     # Force restart hub services to pull new images
     log_info "Restarting hub-api deployment..."
-    kubectl rollout restart deployment waddlebot-hub-api -n "${NAMESPACE}" 2>/dev/null || log_warning "hub-api deployment not found, skipping restart"
+    kubectl --context "${KUBE_CONTEXT}" rollout restart deployment waddlebot-hub-api -n "${NAMESPACE}" 2>/dev/null || log_warning "hub-api deployment not found, skipping restart"
 
     log_info "Restarting hub-webui deployment..."
-    kubectl rollout restart deployment waddlebot-hub-webui -n "${NAMESPACE}" 2>/dev/null || log_warning "hub-webui deployment not found, skipping restart"
+    kubectl --context "${KUBE_CONTEXT}" rollout restart deployment waddlebot-hub-webui -n "${NAMESPACE}" 2>/dev/null || log_warning "hub-webui deployment not found, skipping restart"
 
     # Wait for rollout to complete
     log_info "Waiting for hub-api rollout to complete..."
-    kubectl rollout status deployment waddlebot-hub-api -n "${NAMESPACE}" --timeout=5m 2>/dev/null || log_warning "hub-api rollout status unavailable"
+    kubectl --context "${KUBE_CONTEXT}" rollout status deployment waddlebot-hub-api -n "${NAMESPACE}" --timeout=5m 2>/dev/null || log_warning "hub-api rollout status unavailable"
 
     log_info "Waiting for hub-webui rollout to complete..."
-    kubectl rollout status deployment waddlebot-hub-webui -n "${NAMESPACE}" --timeout=5m 2>/dev/null || log_warning "hub-webui rollout status unavailable"
+    kubectl --context "${KUBE_CONTEXT}" rollout status deployment waddlebot-hub-webui -n "${NAMESPACE}" --timeout=5m 2>/dev/null || log_warning "hub-webui rollout status unavailable"
+
+    # Verify pods picked up the new image
+    log_info "Verifying pods are running the expected image tag (${TAG})..."
+    echo ""
+    VERIFY_FAILED=false
+    for svc in hub-api hub-webui; do
+        POD_IMAGE=$(kubectl --context "${KUBE_CONTEXT}" get pods -n "${NAMESPACE}" \
+            -l "app.kubernetes.io/name=waddlebot-${svc}" \
+            -o jsonpath='{.items[0].spec.containers[0].image}' 2>/dev/null || echo "")
+        if [ -z "${POD_IMAGE}" ]; then
+            log_warning "${svc}: no pods found"
+            VERIFY_FAILED=true
+        elif echo "${POD_IMAGE}" | grep -q "${TAG}"; then
+            log_success "${svc} running: ${POD_IMAGE}"
+        else
+            log_warning "${svc} image mismatch! Expected tag ${TAG}, got: ${POD_IMAGE}"
+            VERIFY_FAILED=true
+        fi
+    done
+    if [ "$VERIFY_FAILED" = true ]; then
+        log_warning "Some pods may not have picked up the new image. Check manually:"
+        log_warning "  kubectl --context ${KUBE_CONTEXT} get pods -n ${NAMESPACE} -o wide"
+    fi
+    echo ""
 
     # Display deployment status
     log_info "Deployment Status:"
     echo ""
-    kubectl get pods -n "${NAMESPACE}" | grep -E "hub-api|hub-webui" || echo "No hub pods found"
+    kubectl --context "${KUBE_CONTEXT}" get pods -n "${NAMESPACE}" | grep -E "hub-api|hub-webui" || echo "No hub pods found"
     echo ""
 
     # Display ingress information
     log_info "Ingress Information:"
     echo ""
-    kubectl get ingress -n "${NAMESPACE}" || echo "No ingress found"
+    kubectl --context "${KUBE_CONTEXT}" get ingress -n "${NAMESPACE}" || echo "No ingress found"
     echo ""
 }
 
@@ -332,7 +366,7 @@ do_rollback() {
     fi
 
     log_info "Rolling back Helm release..."
-    if helm rollback waddlebot -n "${NAMESPACE}"; then
+    if helm --kube-context "${KUBE_CONTEXT}" rollback waddlebot -n "${NAMESPACE}"; then
         log_success "Rollback successful"
     else
         log_error "Rollback failed"
@@ -370,12 +404,12 @@ main() {
     log_info "API: https://waddlebot.penguintech.io/api"
     echo ""
     log_info "To view logs:"
-    log_info "  kubectl logs -f deployment/waddlebot-hub-api -n ${NAMESPACE}"
-    log_info "  kubectl logs -f deployment/waddlebot-hub-webui -n ${NAMESPACE}"
+    log_info "  kubectl --context ${KUBE_CONTEXT} logs -f deployment/waddlebot-hub-api -n ${NAMESPACE}"
+    log_info "  kubectl --context ${KUBE_CONTEXT} logs -f deployment/waddlebot-hub-webui -n ${NAMESPACE}"
     echo ""
     log_info "To check pod status:"
-    log_info "  kubectl get pods -n ${NAMESPACE} -l app.kubernetes.io/component=hub"
-    log_info "  kubectl get pods -n ${NAMESPACE} -l app.kubernetes.io/component=hub-webui"
+    log_info "  kubectl --context ${KUBE_CONTEXT} get pods -n ${NAMESPACE} -l app.kubernetes.io/component=hub"
+    log_info "  kubectl --context ${KUBE_CONTEXT} get pods -n ${NAMESPACE} -l app.kubernetes.io/component=hub-webui"
     echo ""
 }
 

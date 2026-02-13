@@ -1,0 +1,41 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: waddlebot-alpha
+namePrefix: alpha-
+
+resources:
+  - ../../base
+
+images:
+  - name: core-video-proxy
+    newName: registry-dal2.penguintech.io/waddlebot/core-video-proxy
+    newTag: latest
+  - name: core-engagement
+    newName: registry-dal2.penguintech.io/waddlebot/core-engagement
+    newTag: latest
+  - name: core-module-rtc
+    newName: registry-dal2.penguintech.io/waddlebot/core-module-rtc
+    newTag: latest
+
+labels:
+  - pairs:
+      environment: alpha
+    includeSelectors: false
+
+patches:
+  # Reduce replicas for alpha (single replica for core services)
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: core-module-rtc
+
+configMapGenerator:
+  - name: alpha-environment
+    behavior: create
+    literals:
+      - LOG_LEVEL=DEBUG
+      - RELEASE_MODE=false
