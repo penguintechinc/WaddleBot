@@ -262,8 +262,10 @@ ingress:
           service: slack-collector
           port: 8004
   tls:
-    - secretName: penguintech-wildcard-tls
+    - secretName: penguintech-cloud-wildcard-tls
       hosts:
         - waddlebot.penguintech.cloud
         - waddles.penguintech.cloud
+    - secretName: penguintech-wildcard-tls
+      hosts:
         - waddlebot.penguintech.io
