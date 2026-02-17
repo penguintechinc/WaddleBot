@@ -1,4 +1,6 @@
 .PLAN*
+*.tmp
+*.temp
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -122,6 +124,9 @@ celerybeat.pid
 
 # SageMath parsed files
 *.sage.py
+
+# NPM auth
+**/.npmrc
 
 # Environments
 .env
