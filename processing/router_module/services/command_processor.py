@@ -8,7 +8,6 @@ import aiohttp
 
 from config import Config
 from services.command_registry import CommandRegistry, CommandInfo
-from services.translation_service import TranslationService
 from services.grpc_clients import get_grpc_manager
 
 logger = logging.getLogger(__name__)
@@ -23,12 +22,12 @@ class CommandProcessor:
         self.command_registry = command_registry
         self._http_session = None
         self._response_cache: Dict[str, Any] = {}  # session_id -> response
-        self.translation_service = TranslationService(
-            dal=dal,
-            cache_manager=cache_manager
-        )
         self._grpc_manager = get_grpc_manager() if Config.GRPC_ENABLED else None
         self.stream_pipeline = stream_pipeline  # Optional Redis streams pipeline
+
+        # Translate module gRPC channel (lazy-initialised)
+        self._translate_channel = None
+        self._translate_stub = None
 
     def _setup_proto_path(self):
         """Add proto path to sys.path if not already present"""
@@ -848,16 +847,25 @@ class CommandProcessor:
             "cache_hit_rate": 0
         }
 
+    async def _get_translate_stub(self):
+        """Lazy-initialise gRPC channel and stub for translate_interaction_module."""
+        if self._translate_stub is None:
+            import grpc
+            from proto_clients.translate_interaction_pb2_grpc import TranslateInteractionStub
+            self._translate_channel = grpc.aio.insecure_channel(Config.TRANSLATE_GRPC_HOST)
+            self._translate_stub = TranslateInteractionStub(self._translate_channel)
+        return self._translate_stub
+
     async def _translate_message(
         self,
         event_data: Dict[str, Any],
         entity_id: str
     ) -> Optional[Dict[str, Any]]:
         """
-        Translate message if enabled for community.
+        Translate message via translate_interaction_module gRPC (hot-path).
 
-        Preserves @mentions, !commands, emails, URLs, and platform emotes
-        during translation using placeholder substitution.
+        The translation logic (provider fallback, emote preservation, caching)
+        now lives in translate_interaction_module; the router just proxies the call.
         """
         try:
             # Get community ID from entity
@@ -865,32 +873,49 @@ class CommandProcessor:
             if not community_id:
                 return None
 
-            # Get translation config
+            # Quick check: is translation enabled for this community?
             config = await self._get_translation_config(community_id)
             if not config or not config.get('enabled', False):
                 return None
 
+            from proto_clients import translate_interaction_pb2
+
             message = event_data.get('message', '')
             target_lang = config.get('default_language', 'en')
-
-            # Extract platform context for emote detection
             platform = event_data.get('platform', 'unknown')
             channel_id = event_data.get('channel_id', entity_id)
 
-            # Translate using service (with platform context for emote preservation)
-            result = await self.translation_service.translate(
+            token = self._grpc_manager.generate_token() if self._grpc_manager else ''
+
+            stub = await self._get_translate_stub()
+            req = translate_interaction_pb2.TranslateRequest(
                 text=message,
                 target_lang=target_lang,
-                community_id=community_id,
-                config=config,
+                community_id=str(community_id),
                 platform=platform,
-                channel_id=channel_id
+                channel_id=str(channel_id),
+                token=token,
             )
+            resp = await stub.Translate(req, timeout=10)
 
-            return result
+            if not resp.success:
+                logger.warning(f"Translation failed: {resp.error}")
+                return None
+            if resp.skipped:
+                return None
+            return {
+                'translated_text': resp.translated_text,
+                'original_text': resp.original_text,
+                'detected_lang': resp.detected_lang,
+                'target_lang': resp.target_lang,
+                'confidence': resp.confidence,
+                'provider': resp.provider,
+                'cached': resp.cached,
+                'tokens_preserved': resp.tokens_preserved,
+            }
 
         except Exception as e:
-            logger.warning(f"Translation failed: {e}")
+            logger.warning(f"Translate gRPC call failed: {e}")
             return None
 
     async def _check_content_filter(

@@ -1,0 +1,124 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: interactive-spotify
+  labels:
+    app: interactive-spotify
+    app.kubernetes.io/component: interactive
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: interactive-spotify
+  template:
+    metadata:
+      labels:
+        app: interactive-spotify
+        app.kubernetes.io/component: interactive
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      initContainers:
+      - name: db-migrate
+        image: waddlebot-migrations:latest
+        imagePullPolicy: Always
+        envFrom:
+        - configMapRef:
+            name: waddlebot-config
+        - secretRef:
+            name: waddlebot-secrets
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "64Mi"
+          limits:
+            cpu: "200m"
+            memory: "128Mi"
+      containers:
+      - name: spotify-interaction
+        image: interactive-spotify:latest
+        imagePullPolicy: Always
+        ports:
+        - name: http
+          containerPort: 8026
+          protocol: TCP
+        envFrom:
+        - secretRef:
+            name: waddlebot-secrets
+            optional: true
+        env:
+        - name: MODULE_NAME
+          value: "spotify"
+        - name: MODULE_PORT
+          value: "8026"
+        - name: DB_HOST
+          value: "infra-postgres"
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_NAME
+          value: "waddlebot"
+        - name: DB_USER
+          value: "waddlebot"
+        - name: DB_PASS
+          valueFrom:
+            secretKeyRef:
+              name: waddlebot-secrets
+              key: POSTGRES_PASSWORD
+        - name: REDIS_HOST
+          value: "infra-redis"
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          requests:
+            cpu: 250m
+            memory: 256Mi
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+        volumeMounts:
+        - name: logs
+          mountPath: /var/log/waddlebotlog
+        - name: databases
+          mountPath: /app/databases
+      volumes:
+      - name: logs
+        emptyDir: {}
+      - name: databases
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: interactive-spotify
+  labels:
+    app: interactive-spotify
+    app.kubernetes.io/component: interactive
+spec:
+  type: ClusterIP
+  selector:
+    app: interactive-spotify
+  ports:
+  - name: http
+    port: 8026
+    targetPort: http
+    protocol: TCP

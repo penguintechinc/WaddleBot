@@ -33,6 +33,7 @@ class GrpcClientManager:
             'browser_source': Config.BROWSER_SOURCE_GRPC_HOST,
             'identity': Config.IDENTITY_GRPC_HOST,
             'hub_internal': Config.HUB_GRPC_HOST,
+            'translate': Config.TRANSLATE_GRPC_HOST,
         }
 
     def generate_token(self, payload: Optional[Dict] = None) -> str:

@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 app = Quart(__name__)
 
 # Initialize database
-db = DAL(Config.DATABASE_URL, folder=None, pool_size=10)
+db = DAL(Config.DATABASE_URL, folder=None, pool_size=10, migrate_enabled=False)
 
 # Initialize Discord service
 discord_service = DiscordService(db)

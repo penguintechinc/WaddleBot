@@ -48,7 +48,7 @@ class CommunityPoll(db.Model):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
-    community = relationship("Community", back_populates="polls")
+    community = relationship("Community", backref="polls")
     options = relationship("PollOption", back_populates="poll", cascade="all, delete-orphan")
     votes = relationship("PollVote", back_populates="poll", cascade="all, delete-orphan")
     
@@ -81,14 +81,14 @@ class PollVote(db.Model):
     id = Column(Integer, primary_key=True)
     poll_id = Column(Integer, ForeignKey('community_polls.id'), nullable=False)
     option_id = Column(Integer, ForeignKey('poll_options.id'), nullable=False)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=True)
+    user_id = Column(Integer, ForeignKey('hub_users.id'), nullable=True)
     ip_hash = Column(String(64))  # SHA-256 hash for anonymous deduplication
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
     # Relationships
     poll = relationship("CommunityPoll", back_populates="votes")
     option = relationship("PollOption", back_populates="votes")
-    user = relationship("User")
+    user = relationship("HubUser")
     
     def __repr__(self):
         return f"<PollVote(id={self.id}, poll_id={self.poll_id}, option_id={self.option_id}, user_id={self.user_id})>"
@@ -111,7 +111,7 @@ class CommunityForm(db.Model):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
-    community = relationship("Community", back_populates="forms")
+    community = relationship("Community", backref="forms")
     fields = relationship("FormField", back_populates="form", cascade="all, delete-orphan")
     submissions = relationship("FormSubmission", back_populates="form", cascade="all, delete-orphan")
     
@@ -148,13 +148,13 @@ class FormSubmission(db.Model):
     
     id = Column(Integer, primary_key=True)
     form_id = Column(Integer, ForeignKey('community_forms.id'), nullable=False)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=True)
+    user_id = Column(Integer, ForeignKey('hub_users.id'), nullable=True)
     ip_hash = Column(String(64))  # SHA-256 hash for anonymous deduplication
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
     # Relationships
     form = relationship("CommunityForm", back_populates="submissions")
-    user = relationship("User")
+    user = relationship("HubUser")
     field_values = relationship("FormFieldValue", back_populates="submission", cascade="all, delete-orphan")
     
     def __repr__(self):

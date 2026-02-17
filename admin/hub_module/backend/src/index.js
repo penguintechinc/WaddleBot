@@ -25,6 +25,10 @@ import { setupWebSocket } from './websocket/index.js';
  * Initialize database tables and default admin
  */
 async function initializeDatabase() {
+  if (process.env.SKIP_DB_INIT === 'true') {
+    logger.system('SKIP_DB_INIT=true — skipping Node.js schema creation (Alembic owns schema)');
+    return;
+  }
   try {
     // Create hub_admins table if not exists
     await query(`
@@ -143,6 +147,18 @@ async function initializeDatabase() {
       )
     `);
 
+    // Create community_type enum if not exists
+    await query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'community_type') THEN
+          CREATE TYPE community_type AS ENUM (
+            'shared_interest_group', 'gaming', 'creator', 'corporate', 'other'
+          );
+        END IF;
+      END $$
+    `);
+
     // Create communities table if not exists
     await query(`
       CREATE TABLE IF NOT EXISTS communities (
@@ -157,6 +173,8 @@ async function initializeDatabase() {
         platform_server_id VARCHAR(255),
         owner_id VARCHAR(255),
         owner_name VARCHAR(255),
+        community_type community_type NOT NULL DEFAULT 'creator',
+        join_mode VARCHAR(50) DEFAULT 'open',
         member_count INTEGER DEFAULT 0,
         is_active BOOLEAN DEFAULT true,
         is_public BOOLEAN DEFAULT true,
@@ -175,14 +193,17 @@ async function initializeDatabase() {
         id SERIAL PRIMARY KEY,
         community_id INTEGER REFERENCES communities(id) ON DELETE CASCADE,
         user_id VARCHAR(255),
-        platform VARCHAR(50) NOT NULL,
+        platform VARCHAR(50),
         platform_user_id VARCHAR(255),
         display_name VARCHAR(255),
         avatar_url TEXT,
+        bio TEXT,
+        social_links JSONB DEFAULT '{}',
         role VARCHAR(50) DEFAULT 'member',
         reputation INTEGER DEFAULT 600,
         is_active BOOLEAN DEFAULT true,
         joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        left_at TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(community_id, platform, platform_user_id)
       )

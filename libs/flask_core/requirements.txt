@@ -9,6 +9,9 @@ quart-flask-patch>=0.3.0  # Flask compatibility for Quart
 # Database
 pydal>=20240906.1,<20250101
 psycopg2-binary>=2.9.9  # PostgreSQL adapter
+sqlalchemy>=2.0  # SQLAlchemy ORM (Alembic migrations + model definitions)
+flask-sqlalchemy>=3.1.0  # Flask-SQLAlchemy integration
+alembic>=1.13  # Database migration framework
 
 # Authentication & Authorization
 flask-security-too>=5.4.0

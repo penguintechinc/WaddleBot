@@ -2,11 +2,10 @@
 
 import os
 from logging.config import fileConfig
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
+from sqlalchemy import engine_from_config, pool, text
 from alembic import context
 
-# Import models
+# Import models — triggers all model registrations on db.metadata
 from libs.flask_core.flask_core.models import db
 
 # this is the Alembic Config object
@@ -28,6 +27,17 @@ if database_url:
 target_metadata = db.metadata
 
 
+def include_name(name, type_, parent_names):
+    """Filter autogenerate to only tables with SQLAlchemy models.
+
+    Prevents Alembic from generating DROP TABLE for tables managed by
+    Node.js hub-api or other systems that lack SQLAlchemy models.
+    """
+    if type_ == "table":
+        return name in target_metadata.tables
+    return True
+
+
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
     url = config.get_main_option("sqlalchemy.url")
@@ -36,6 +46,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_name=include_name,
     )
 
     with context.begin_transaction():
@@ -43,7 +54,7 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    """Run migrations in 'online' mode."""
+    """Run migrations in 'online' mode with advisory locking."""
     configuration = config.get_section(config.config_ini_section)
     configuration["sqlalchemy.url"] = config.get_main_option("sqlalchemy.url")
 
@@ -54,12 +65,20 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        # Acquire PostgreSQL advisory lock to prevent concurrent migrations
+        connection.execute(text("SELECT pg_advisory_lock(20250001)"))
+        try:
+            context.configure(
+                connection=connection,
+                target_metadata=target_metadata,
+                include_name=include_name,
+            )
 
-        with context.begin_transaction():
-            context.run_migrations()
+            with context.begin_transaction():
+                context.run_migrations()
+        finally:
+            connection.execute(text("SELECT pg_advisory_unlock(20250001)"))
+            connection.commit()
 
 
 if context.is_offline_mode():

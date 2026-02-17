@@ -116,6 +116,8 @@ class Config:
     BROWSER_SOURCE_GRPC_HOST = os.getenv('BROWSER_SOURCE_GRPC_HOST', 'browser-source:50050')
     IDENTITY_GRPC_HOST = os.getenv('IDENTITY_GRPC_HOST', 'identity-core:50030')
     HUB_GRPC_HOST = os.getenv('HUB_GRPC_HOST', 'hub:50060')
+    TRANSLATE_GRPC_HOST = os.getenv('TRANSLATE_GRPC_HOST', 'interactive-translate:50033')
+    TRANSLATE_API_URL = os.getenv('TRANSLATE_API_URL', 'http://interactive-translate:8033')
 
     # gRPC settings
     GRPC_KEEPALIVE_TIME_MS = int(os.getenv('GRPC_KEEPALIVE_TIME_MS', '30000'))

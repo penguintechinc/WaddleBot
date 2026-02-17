@@ -4,28 +4,54 @@ kind: Kustomization
 namespace: waddlebot
 
 resources:
+  # Shared resources
   - namespace.yaml
   - serviceaccount.yaml
   - secrets.yaml
-  - video-proxy.yaml
-  - engagement.yaml
-  - module-rtc.yaml
+  - configmap.yaml
+  - ingress.yaml
+
+  # Core services
+  - core/hub-api.yaml
+  - core/hub-webui.yaml
+  - core/router.yaml
+  - core/identity.yaml
+  - core/labels.yaml
+  - core/browser-source.yaml
+  - core/reputation.yaml
+  - core/community.yaml
+  - core/ai-researcher.yaml
+  - core/video-proxy.yaml
+  - core/engagement.yaml
+  - core/module-rtc.yaml
+
+  # Collectors
+  - collectors/twitch.yaml
+  - collectors/discord.yaml
+  - collectors/slack.yaml
+  - collectors/youtube-live.yaml
+  - collectors/kick.yaml
+
+  # Interactive modules
+  - interactive/ai.yaml
+  - interactive/alias.yaml
+  - interactive/shoutout.yaml
+  - interactive/inventory.yaml
+  - interactive/calendar.yaml
+  - interactive/memories.yaml
+  - interactive/youtube-music.yaml
+  - interactive/spotify.yaml
+  - interactive/loyalty.yaml
+  - interactive/translate.yaml
+
+  # Pushing/Action modules
+  - pushing/discord-action.yaml
+  - pushing/slack-action.yaml
+  - pushing/twitch-action.yaml
+  - pushing/youtube-action.yaml
 
 labels:
   - pairs:
       app.kubernetes.io/part-of: waddlebot
       app.kubernetes.io/managed-by: kustomize
     includeSelectors: true
-
-# Image registry configuration
-# Override for beta deployment (matches docker-compose registry)
-images:
-  - name: core-engagement
-    newName: registry-dal2.penguintech.io/waddlebot/core-engagement
-    newTag: latest
-  - name: core-video-proxy
-    newName: registry-dal2.penguintech.io/waddlebot/core-video-proxy
-    newTag: latest
-  - name: core-module-rtc
-    newName: registry-dal2.penguintech.io/waddlebot/core-module-rtc
-    newTag: latest

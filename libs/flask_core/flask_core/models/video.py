@@ -37,7 +37,7 @@ class VideoStreamDestination(db.Model):
     __tablename__ = 'video_stream_destinations'
     
     id = db.Column(db.Integer, primary_key=True)
-    config_id = db.Column(db.Integer, db.ForeignKey('video_stream_config.id'), nullable=False)
+    config_id = db.Column(db.Integer, db.ForeignKey('video_stream_configs.id'), nullable=False)
     platform = db.Column(db.String(50), nullable=False)
     rtmp_url = db.Column(db.String(500), nullable=False)
     stream_key_encrypted = db.Column(db.Text, nullable=False)
@@ -59,7 +59,7 @@ class VideoStreamSession(db.Model):
     __tablename__ = 'video_stream_sessions'
     
     id = db.Column(db.Integer, primary_key=True)
-    config_id = db.Column(db.Integer, db.ForeignKey('video_stream_config.id'), nullable=False)
+    config_id = db.Column(db.Integer, db.ForeignKey('video_stream_configs.id'), nullable=False)
     started_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     ended_at = db.Column(db.DateTime(timezone=True))
     viewer_count_peak = db.Column(db.Integer, default=0)
@@ -102,7 +102,7 @@ class CommunityCallParticipant(db.Model):
     __tablename__ = 'community_call_participants'
     
     id = db.Column(db.Integer, primary_key=True)
-    room_id = db.Column(db.Integer, db.ForeignKey('community_call_room.id'), nullable=False)
+    room_id = db.Column(db.Integer, db.ForeignKey('community_call_rooms.id'), nullable=False)
     user_id = db.Column(db.Integer, nullable=False, index=True)
     role = db.Column(db.Enum(CallParticipantRole), default=CallParticipantRole.VIEWER, nullable=False)
     joined_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow, nullable=False)
@@ -123,7 +123,7 @@ class CallRaisedHand(db.Model):
     __tablename__ = 'call_raised_hands'
     
     id = db.Column(db.Integer, primary_key=True)
-    participant_id = db.Column(db.Integer, db.ForeignKey('community_call_participant.id'), nullable=False)
+    participant_id = db.Column(db.Integer, db.ForeignKey('community_call_participants.id'), nullable=False)
     raised_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     acknowledged_at = db.Column(db.DateTime(timezone=True))
     acknowledged_by = db.Column(db.Integer)
@@ -142,7 +142,7 @@ class CallAnnotation(db.Model):
     __tablename__ = 'call_annotations'
     
     id = db.Column(db.Integer, primary_key=True)
-    room_id = db.Column(db.Integer, db.ForeignKey('community_call_room.id'), nullable=False)
+    room_id = db.Column(db.Integer, db.ForeignKey('community_call_rooms.id'), nullable=False)
     user_id = db.Column(db.Integer, nullable=False)
     annotation_data = db.Column(db.JSON, nullable=False)
     created_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow, nullable=False)

@@ -1,0 +1,27 @@
+FROM python:3.13-slim
+
+WORKDIR /app
+
+# Install migration dependencies
+RUN pip install --no-cache-dir \
+    alembic>=1.13 \
+    sqlalchemy>=2.0 \
+    psycopg2-binary \
+    flask-sqlalchemy \
+    flask-security-too
+
+# Copy Alembic configuration
+COPY alembic.ini .
+COPY alembic/ alembic/
+
+# Copy SQLAlchemy models (needed for target_metadata)
+COPY libs/flask_core/ libs/flask_core/
+
+# Copy legacy SQL migrations (used by baseline migration)
+COPY config/postgres/migrations/ config/postgres/migrations/
+
+# Copy migration runner
+COPY migrations/run-alembic.sh ./run.sh
+RUN chmod +x ./run.sh
+
+ENTRYPOINT ["./run.sh"]

@@ -77,7 +77,7 @@ class EmoteService:
             return
 
         try:
-            from services.emote_providers import (
+            from services.translation_providers.emote_providers import (
                 TwitchEmoteProvider,
                 DiscordEmoteProvider,
                 SlackEmoteProvider,
