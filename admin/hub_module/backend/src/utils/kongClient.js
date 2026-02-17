@@ -14,6 +14,33 @@ class KongClient {
     });
   }
 
+  /**
+   * Check if Kong Admin API is available
+   * Returns a promise that resolves to true/false, never throws
+   */
+  async isAvailable() {
+    try {
+      const response = await axios.get(`${KONG_ADMIN_URL}/status`, {
+        timeout: 2000
+      });
+      return response.status === 200;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * Get Kong configuration and availability status
+   */
+  async getHealth() {
+    const isAvailable = await this.isAvailable();
+    return {
+      configured: !!KONG_ADMIN_URL,
+      available: isAvailable,
+      url: KONG_ADMIN_URL
+    };
+  }
+
   // Services
   async getServices() { return this.client.get('/services'); }
   async getService(id) { return this.client.get(`/services/${id}`); }

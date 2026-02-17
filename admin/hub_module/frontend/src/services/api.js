@@ -63,6 +63,7 @@ export const publicApi = {
 
 export const communityApi = {
   getMyCommunities: () => api.get('/api/v1/communities/my'),
+  create: (data) => api.post('/api/v1/communities/create', data),
   getDashboard: (id) => api.get(`/api/v1/communities/${id}/dashboard`),
   getLeaderboard: (id, params) => api.get(`/api/v1/communities/${id}/leaderboard`, { params }),
   getActivity: (id, params) => api.get(`/api/v1/communities/${id}/activity`, { params }),
@@ -602,6 +603,9 @@ export const streamApi = {
 
 // Kong Gateway API
 export const kongApi = {
+  // Health check
+  getKongHealth: () => api.get('/api/v1/superadmin/kong/health'),
+
   // Status
   getKongStatus: () => api.get('/api/v1/superadmin/kong/status'),
 
@@ -710,4 +714,42 @@ export const workflowApi = {
     api.delete(`/api/v1/admin/${communityId}/workflows/${workflowId}/webhooks/${webhookId}`),
   regenerateWebhookSecret: (communityId, workflowId, webhookId) =>
     api.post(`/api/v1/admin/${communityId}/workflows/${workflowId}/webhooks/${webhookId}/regenerate`),
+};
+
+// Calendar API
+export const calendarApi = {
+  // OAuth
+  getGoogleAuthUrl: () => api.get('/api/v1/calendar/oauth/google/auth-url'),
+  getMicrosoftAuthUrl: () => api.get('/api/v1/calendar/oauth/microsoft/auth-url'),
+  getConnectedCalendars: () => api.get('/api/v1/calendar/oauth/calendars'),
+  syncCalendar: (id) => api.post(`/api/v1/calendar/oauth/calendars/${id}/sync`),
+  disconnectCalendar: (id) => api.delete(`/api/v1/calendar/oauth/calendars/${id}`),
+
+  // Availability
+  getAvailabilitySettings: () => api.get('/api/v1/calendar/availability/settings'),
+  updateAvailabilitySettings: (data) => api.put('/api/v1/calendar/availability/settings', data),
+  getWeeklyAvailability: () => api.get('/api/v1/calendar/availability/weekly'),
+  updateWeeklyAvailability: (data) => api.put('/api/v1/calendar/availability/weekly', data),
+  getAvailableSlots: (userId, date, duration) => api.get(`/api/v1/calendar/availability/${userId}/slots`, { params: { date, duration } }),
+
+  // Booking Pages
+  createBookingPage: (data) => api.post('/api/v1/calendar/booking-pages', data),
+  getBookingPages: () => api.get('/api/v1/calendar/booking-pages'),
+  getBookingPage: (idOrSlug) => api.get(`/api/v1/calendar/booking-pages/${idOrSlug}`),
+  updateBookingPage: (id, data) => api.put(`/api/v1/calendar/booking-pages/${id}`, data),
+  deleteBookingPage: (id) => api.delete(`/api/v1/calendar/booking-pages/${id}`),
+
+  // Public Booking
+  getBookingSlots: (slug, date) => api.get(`/api/v1/calendar/book/${slug}/slots`, { params: { date } }),
+  createBooking: (slug, data) => api.post(`/api/v1/calendar/book/${slug}`, data),
+  getBooking: (uuid) => api.get(`/api/v1/calendar/bookings/${uuid}`),
+  cancelBooking: (uuid) => api.delete(`/api/v1/calendar/bookings/${uuid}`),
+  getMyBookings: (params) => api.get('/api/v1/calendar/my-bookings', { params }),
+
+  // Group
+  addGroupMember: (pageId, data) => api.post(`/api/v1/calendar/booking-pages/${pageId}/members`, data),
+  removeGroupMember: (pageId, userId) => api.delete(`/api/v1/calendar/booking-pages/${pageId}/members/${userId}`),
+  getGroupMembers: (pageId) => api.get(`/api/v1/calendar/booking-pages/${pageId}/members`),
+  getGroupAvailability: (pageId, date) => api.get(`/api/v1/calendar/booking-pages/${pageId}/group-availability`, { params: { date } }),
+  getBestSlots: (pageId, start, end, limit) => api.get(`/api/v1/calendar/booking-pages/${pageId}/best-slots`, { params: { start, end, limit } }),
 };

@@ -2,11 +2,17 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { communityApi } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { getPlatformIcon, getPlatformLabel } from '../../utils/platformConfig';
 
 function DashboardHome() {
-  const { user, isSuperAdmin } = useAuth();
+  const { user, isSuperAdmin, refreshUser } = useAuth();
   const [communities, setCommunities] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Refresh user data on mount to ensure role flags (e.g. isSuperAdmin) are current
+  useEffect(() => {
+    refreshUser();
+  }, [refreshUser]);
 
   useEffect(() => {
     async function fetchCommunities() {
@@ -96,8 +102,15 @@ function DashboardHome() {
               </div>
               <div className="p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="font-semibold truncate text-sky-100">{community.displayName}</h3>
-                  <span className={`text-xs px-2 py-1 rounded-full ${roleColor(community.role)}`}>
+                  <div className="flex items-center space-x-2 min-w-0">
+                    {community.primaryPlatform && (
+                      <span title={getPlatformLabel(community.primaryPlatform)}>
+                        {getPlatformIcon(community.primaryPlatform)}
+                      </span>
+                    )}
+                    <h3 className="font-semibold truncate text-sky-100">{community.displayName}</h3>
+                  </div>
+                  <span className={`text-xs px-2 py-1 rounded-full whitespace-nowrap ${roleColor(community.role)}`}>
                     {roleLabel(community.role)}
                   </span>
                 </div>

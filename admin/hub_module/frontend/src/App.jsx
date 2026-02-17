@@ -20,6 +20,12 @@ import OAuthCallback from './pages/auth/OAuthCallback';
 // Cookie Policy page
 import CookiePolicy from './pages/CookiePolicy';
 
+// Calendar pages
+import CalendarSettings from './pages/calendar/CalendarSettings';
+import BookingPages from './pages/calendar/BookingPages';
+import MyBookings from './pages/calendar/MyBookings';
+import BookingPagePublic from './pages/calendar/BookingPagePublic';
+
 // Dashboard pages
 import DashboardHome from './pages/dashboard/DashboardHome';
 import CommunityDashboard from './pages/dashboard/CommunityDashboard';
@@ -29,6 +35,7 @@ import CommunityLeaderboard from './pages/dashboard/CommunityLeaderboard';
 import CommunityMembers from './pages/dashboard/CommunityMembers';
 import AccountSettings from './pages/dashboard/AccountSettings';
 import UserProfileEdit from './pages/dashboard/UserProfileEdit';
+import CreateCommunity from './pages/dashboard/CreateCommunity';
 
 // Admin pages
 import AdminHome from './pages/admin/AdminHome';
@@ -144,6 +151,9 @@ function App() {
         <Route path="/auth/callback" element={<OAuthCallback />} />
         <Route path="/cookie-policy" element={<CookiePolicy />} />
 
+        {/* Public booking page (no auth required) */}
+        <Route path="/book/:slug" element={<BookingPagePublic />} />
+
         {/* Vendor submission routes (public) */}
         <Route path="/vendor/submit" element={<VendorSubmissionForm />} />
         <Route path="/vendor/submission-status" element={<VendorSubmissionStatus />} />
@@ -160,11 +170,17 @@ function App() {
         <Route path="/dashboard" element={<DashboardHome />} />
         <Route path="/dashboard/settings" element={<AccountSettings />} />
         <Route path="/dashboard/profile" element={<UserProfileEdit />} />
+        <Route path="/communities/create" element={<CreateCommunity />} />
         <Route path="/dashboard/community/:id" element={<CommunityDashboard />} />
         <Route path="/dashboard/community/:id/settings" element={<CommunitySettings />} />
         <Route path="/dashboard/community/:id/chat" element={<CommunityChat />} />
         <Route path="/dashboard/community/:id/leaderboard" element={<CommunityLeaderboard />} />
         <Route path="/dashboard/community/:id/members" element={<CommunityMembers />} />
+
+        {/* Calendar routes (authenticated) */}
+        <Route path="/calendar/settings" element={<CalendarSettings />} />
+        <Route path="/calendar/booking-pages" element={<BookingPages />} />
+        <Route path="/calendar/my-bookings" element={<MyBookings />} />
 
         {/* Vendor dashboard routes (authenticated vendors) */}
         <Route path="/vendor/dashboard" element={<VendorDashboard />} />

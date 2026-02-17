@@ -10,13 +10,11 @@ import {
   ClockIcon,
 } from '@heroicons/react/24/outline';
 import { adminApi } from '../services/api';
+import { getAllPlatformOptions } from '../utils/platformConfig';
 
-const PLATFORMS = [
-  { id: 'discord', label: 'Discord', color: 'bg-indigo-500' },
-  { id: 'slack', label: 'Slack', color: 'bg-green-500' },
-  { id: 'twitch', label: 'Twitch', color: 'bg-purple-500' },
-  { id: 'youtube', label: 'YouTube', color: 'bg-red-500' },
-];
+const PLATFORMS = getAllPlatformOptions()
+  .filter((p) => p.id !== 'hub')
+  .map((p) => ({ id: p.id, label: p.label, color: p.color }));
 
 export default function BroadcastStatusModal({
   isOpen,

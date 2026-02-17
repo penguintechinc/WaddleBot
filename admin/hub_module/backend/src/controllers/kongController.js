@@ -7,6 +7,66 @@ import {
   getCertbotCertificates
 } from '../utils/certificates.js';
 
+/**
+ * Handle Kong API errors gracefully
+ * Returns a standardized error response object and HTTP status code
+ */
+const handleKongError = (error) => {
+  // Connection errors (Kong not available)
+  if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND' || error.code === 'ETIMEDOUT' || !error.response) {
+    return {
+      status: 503,
+      response: {
+        success: false,
+        error: 'Kong Gateway is not available',
+        details: 'Kong Admin API is not reachable at the configured URL. Please verify Kong is deployed and KONG_ADMIN_URL is configured correctly.',
+        kongConfigured: false
+      }
+    };
+  }
+
+  // Kong API errors with response
+  if (error.response) {
+    return {
+      status: error.response.status || 500,
+      response: {
+        success: false,
+        error: error.response.data?.message || 'Kong API error',
+        details: error.response.data?.message || null,
+        kongConfigured: true
+      }
+    };
+  }
+
+  // Generic error
+  return {
+    status: 500,
+    response: {
+      success: false,
+      error: 'Failed to process request',
+      details: error.message || 'Unknown error occurred',
+      kongConfigured: false
+    }
+  };
+};
+
+/**
+ * Get Kong health/availability status
+ */
+export const getHealth = async (req, res) => {
+  try {
+    const health = await kongClient.getHealth();
+    res.json(health);
+  } catch (error) {
+    console.error('Error checking Kong health:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to check Kong health',
+      configured: false
+    });
+  }
+};
+
 // Services
 export const getServices = async (req, res) => {
   try {
@@ -14,7 +74,8 @@ export const getServices = async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Error fetching Kong services:', error);
-    res.status(500).json({ error: 'Failed to fetch services' });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -24,9 +85,8 @@ export const getService = async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Error fetching Kong service:', error);
-    res.status(error.response?.status || 500).json({
-      error: error.response?.data?.message || 'Failed to fetch service'
-    });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -36,9 +96,8 @@ export const createService = async (req, res) => {
     res.status(201).json(response.data);
   } catch (error) {
     console.error('Error creating Kong service:', error);
-    res.status(error.response?.status || 500).json({
-      error: error.response?.data?.message || 'Failed to create service'
-    });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -48,9 +107,8 @@ export const updateService = async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Error updating Kong service:', error);
-    res.status(error.response?.status || 500).json({
-      error: error.response?.data?.message || 'Failed to update service'
-    });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -60,9 +118,8 @@ export const deleteService = async (req, res) => {
     res.status(204).send();
   } catch (error) {
     console.error('Error deleting Kong service:', error);
-    res.status(error.response?.status || 500).json({
-      error: error.response?.data?.message || 'Failed to delete service'
-    });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -73,7 +130,8 @@ export const getRoutes = async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Error fetching Kong routes:', error);
-    res.status(500).json({ error: 'Failed to fetch routes' });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -83,9 +141,8 @@ export const getRoute = async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Error fetching Kong route:', error);
-    res.status(error.response?.status || 500).json({
-      error: error.response?.data?.message || 'Failed to fetch route'
-    });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -95,9 +152,8 @@ export const getServiceRoutes = async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Error fetching service routes:', error);
-    res.status(error.response?.status || 500).json({
-      error: error.response?.data?.message || 'Failed to fetch service routes'
-    });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -108,9 +164,8 @@ export const createRoute = async (req, res) => {
     res.status(201).json(response.data);
   } catch (error) {
     console.error('Error creating Kong route:', error);
-    res.status(error.response?.status || 500).json({
-      error: error.response?.data?.message || 'Failed to create route'
-    });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -120,9 +175,8 @@ export const updateRoute = async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Error updating Kong route:', error);
-    res.status(error.response?.status || 500).json({
-      error: error.response?.data?.message || 'Failed to update route'
-    });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -132,9 +186,8 @@ export const deleteRoute = async (req, res) => {
     res.status(204).send();
   } catch (error) {
     console.error('Error deleting Kong route:', error);
-    res.status(error.response?.status || 500).json({
-      error: error.response?.data?.message || 'Failed to delete route'
-    });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -145,7 +198,8 @@ export const getPlugins = async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Error fetching Kong plugins:', error);
-    res.status(500).json({ error: 'Failed to fetch plugins' });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -155,9 +209,8 @@ export const getPlugin = async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Error fetching Kong plugin:', error);
-    res.status(error.response?.status || 500).json({
-      error: error.response?.data?.message || 'Failed to fetch plugin'
-    });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -167,9 +220,8 @@ export const createPlugin = async (req, res) => {
     res.status(201).json(response.data);
   } catch (error) {
     console.error('Error creating Kong plugin:', error);
-    res.status(error.response?.status || 500).json({
-      error: error.response?.data?.message || 'Failed to create plugin'
-    });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -179,9 +231,8 @@ export const updatePlugin = async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Error updating Kong plugin:', error);
-    res.status(error.response?.status || 500).json({
-      error: error.response?.data?.message || 'Failed to update plugin'
-    });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -191,9 +242,8 @@ export const deletePlugin = async (req, res) => {
     res.status(204).send();
   } catch (error) {
     console.error('Error deleting Kong plugin:', error);
-    res.status(error.response?.status || 500).json({
-      error: error.response?.data?.message || 'Failed to delete plugin'
-    });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -204,7 +254,8 @@ export const getConsumers = async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Error fetching Kong consumers:', error);
-    res.status(500).json({ error: 'Failed to fetch consumers' });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -214,9 +265,8 @@ export const getConsumer = async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Error fetching Kong consumer:', error);
-    res.status(error.response?.status || 500).json({
-      error: error.response?.data?.message || 'Failed to fetch consumer'
-    });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -226,9 +276,8 @@ export const createConsumer = async (req, res) => {
     res.status(201).json(response.data);
   } catch (error) {
     console.error('Error creating Kong consumer:', error);
-    res.status(error.response?.status || 500).json({
-      error: error.response?.data?.message || 'Failed to create consumer'
-    });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -238,9 +287,8 @@ export const deleteConsumer = async (req, res) => {
     res.status(204).send();
   } catch (error) {
     console.error('Error deleting Kong consumer:', error);
-    res.status(error.response?.status || 500).json({
-      error: error.response?.data?.message || 'Failed to delete consumer'
-    });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -251,7 +299,8 @@ export const getUpstreams = async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Error fetching Kong upstreams:', error);
-    res.status(500).json({ error: 'Failed to fetch upstreams' });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -261,9 +310,8 @@ export const getUpstream = async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Error fetching Kong upstream:', error);
-    res.status(error.response?.status || 500).json({
-      error: error.response?.data?.message || 'Failed to fetch upstream'
-    });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -273,9 +321,8 @@ export const createUpstream = async (req, res) => {
     res.status(201).json(response.data);
   } catch (error) {
     console.error('Error creating Kong upstream:', error);
-    res.status(error.response?.status || 500).json({
-      error: error.response?.data?.message || 'Failed to create upstream'
-    });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -285,9 +332,8 @@ export const updateUpstream = async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Error updating Kong upstream:', error);
-    res.status(error.response?.status || 500).json({
-      error: error.response?.data?.message || 'Failed to update upstream'
-    });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -297,9 +343,8 @@ export const deleteUpstream = async (req, res) => {
     res.status(204).send();
   } catch (error) {
     console.error('Error deleting Kong upstream:', error);
-    res.status(error.response?.status || 500).json({
-      error: error.response?.data?.message || 'Failed to delete upstream'
-    });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -310,9 +355,8 @@ export const getTargets = async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Error fetching Kong targets:', error);
-    res.status(error.response?.status || 500).json({
-      error: error.response?.data?.message || 'Failed to fetch targets'
-    });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -322,9 +366,8 @@ export const createTarget = async (req, res) => {
     res.status(201).json(response.data);
   } catch (error) {
     console.error('Error creating Kong target:', error);
-    res.status(error.response?.status || 500).json({
-      error: error.response?.data?.message || 'Failed to create target'
-    });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -334,9 +377,8 @@ export const deleteTarget = async (req, res) => {
     res.status(204).send();
   } catch (error) {
     console.error('Error deleting Kong target:', error);
-    res.status(error.response?.status || 500).json({
-      error: error.response?.data?.message || 'Failed to delete target'
-    });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -347,7 +389,8 @@ export const getCertificates = async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Error fetching Kong certificates:', error);
-    res.status(500).json({ error: 'Failed to fetch certificates' });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -357,9 +400,8 @@ export const getCertificate = async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Error fetching Kong certificate:', error);
-    res.status(error.response?.status || 500).json({
-      error: error.response?.data?.message || 'Failed to fetch certificate'
-    });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -369,9 +411,8 @@ export const createCertificate = async (req, res) => {
     res.status(201).json(response.data);
   } catch (error) {
     console.error('Error creating Kong certificate:', error);
-    res.status(error.response?.status || 500).json({
-      error: error.response?.data?.message || 'Failed to create certificate'
-    });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -381,9 +422,8 @@ export const deleteCertificate = async (req, res) => {
     res.status(204).send();
   } catch (error) {
     console.error('Error deleting Kong certificate:', error);
-    res.status(error.response?.status || 500).json({
-      error: error.response?.data?.message || 'Failed to delete certificate'
-    });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -434,9 +474,14 @@ export const generateSelfSigned = async (req, res) => {
     });
   } catch (error) {
     console.error('Error generating self-signed certificate:', error);
-    res.status(500).json({
-      error: error.message || 'Failed to generate self-signed certificate'
-    });
+    if (uploadToKong) {
+      const { status, response: errorResponse } = handleKongError(error);
+      res.status(status).json(errorResponse);
+    } else {
+      res.status(500).json({
+        error: error.message || 'Failed to generate self-signed certificate'
+      });
+    }
   }
 };
 
@@ -496,9 +541,14 @@ export const generateCertbot = async (req, res) => {
     });
   } catch (error) {
     console.error('Error generating Certbot certificate:', error);
-    res.status(500).json({
-      error: error.message || 'Failed to generate Let\'s Encrypt certificate'
-    });
+    if (uploadToKong) {
+      const { status, response: errorResponse } = handleKongError(error);
+      res.status(status).json(errorResponse);
+    } else {
+      res.status(500).json({
+        error: error.message || 'Failed to generate Let\'s Encrypt certificate'
+      });
+    }
   }
 };
 
@@ -550,7 +600,8 @@ export const getSNIs = async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Error fetching Kong SNIs:', error);
-    res.status(500).json({ error: 'Failed to fetch SNIs' });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -560,9 +611,8 @@ export const createSNI = async (req, res) => {
     res.status(201).json(response.data);
   } catch (error) {
     console.error('Error creating Kong SNI:', error);
-    res.status(error.response?.status || 500).json({
-      error: error.response?.data?.message || 'Failed to create SNI'
-    });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -572,9 +622,8 @@ export const deleteSNI = async (req, res) => {
     res.status(204).send();
   } catch (error) {
     console.error('Error deleting Kong SNI:', error);
-    res.status(error.response?.status || 500).json({
-      error: error.response?.data?.message || 'Failed to delete SNI'
-    });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };
 
@@ -585,6 +634,7 @@ export const getStatus = async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Error fetching Kong status:', error);
-    res.status(500).json({ error: 'Failed to fetch Kong status' });
+    const { status, response: errorResponse } = handleKongError(error);
+    res.status(status).json(errorResponse);
   }
 };

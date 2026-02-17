@@ -9,6 +9,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { superAdminApi } from '../../services/api';
 import { FormModalBuilder } from '@penguintechinc/react-libs';
+import { WADDLES_GOLD_COLORS } from '../../theme/waddlebotTheme';
 
 function SuperAdminUsers() {
   const [users, setUsers] = useState([]);
@@ -166,6 +167,7 @@ function SuperAdminUsers() {
       label: 'Email',
       placeholder: 'user@example.com',
       required: true,
+      defaultValue: '',
     },
     {
       name: 'password',
@@ -173,6 +175,7 @@ function SuperAdminUsers() {
       label: 'Password',
       placeholder: 'Enter password',
       required: true,
+      defaultValue: '',
     },
   ], []);
 
@@ -193,36 +196,6 @@ function SuperAdminUsers() {
     },
   ], [editInitialValues]);
 
-  // Custom color config to match the navy/gold theme
-  const modalColors = useMemo(() => ({
-    modalBackground: 'bg-navy-900',
-    headerBackground: 'bg-navy-900',
-    footerBackground: 'bg-navy-900',
-    overlayBackground: 'bg-black bg-opacity-50',
-    titleText: 'text-gold-400',
-    labelText: 'text-navy-300',
-    descriptionText: 'text-navy-400',
-    errorText: 'text-red-400',
-    buttonText: 'text-navy-950',
-    fieldBackground: 'bg-navy-800',
-    fieldBorder: 'border-navy-700',
-    fieldText: 'text-sky-100',
-    fieldPlaceholder: 'placeholder-navy-400',
-    focusRing: 'focus:ring-gold-500',
-    focusBorder: 'focus:border-gold-500',
-    primaryButton: 'bg-gold-500',
-    primaryButtonHover: 'hover:bg-gold-600',
-    secondaryButton: 'bg-navy-700',
-    secondaryButtonHover: 'hover:bg-navy-600',
-    secondaryButtonBorder: 'border-navy-700',
-    activeTab: 'text-gold-400',
-    activeTabBorder: 'border-gold-500',
-    inactiveTab: 'text-navy-400',
-    inactiveTabHover: 'hover:text-navy-300',
-    tabBorder: 'border-navy-700',
-    errorTabText: 'text-red-400',
-    errorTabBorder: 'border-red-500',
-  }), []);
 
   return (
     <div className="space-y-6">
@@ -435,7 +408,8 @@ function SuperAdminUsers() {
         onSubmit={handleCreateUser}
         submitButtonText="Create"
         cancelButtonText="Cancel"
-        colors={modalColors}
+        themeMode="dark"
+        colors={WADDLES_GOLD_COLORS}
       />
 
       {/* Edit User Modal */}
@@ -447,7 +421,8 @@ function SuperAdminUsers() {
         onSubmit={handleEditUser}
         submitButtonText="Update"
         cancelButtonText="Cancel"
-        colors={modalColors}
+        themeMode="dark"
+        colors={WADDLES_GOLD_COLORS}
       />
 
       {/* Role Assignment Modal */}

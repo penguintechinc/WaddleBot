@@ -7,15 +7,7 @@ import {
   ArrowRightIcon,
 } from '@heroicons/react/24/outline';
 import { adminApi } from '../../services/api';
-
-const PLATFORM_CONFIG = {
-  discord: { name: 'Discord', icon: '🎮', color: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' },
-  twitch: { name: 'Twitch', icon: '📺', color: 'bg-purple-500/20 text-purple-300 border-purple-500/30' },
-  kick: { name: 'Kick', icon: '🎬', color: 'bg-green-500/20 text-green-300 border-green-500/30' },
-  youtube: { name: 'YouTube', icon: '▶️', color: 'bg-red-500/20 text-red-300 border-red-500/30' },
-  slack: { name: 'Slack', icon: '💬', color: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30' },
-  hub: { name: 'Hub Chat', icon: '🐧', color: 'bg-sky-500/20 text-sky-300 border-sky-500/30' },
-};
+import { getPlatformConfig } from '../../utils/platformConfig';
 
 function AdminConnectedPlatforms() {
   const { communityId } = useParams();
@@ -41,7 +33,8 @@ function AdminConnectedPlatforms() {
   };
 
   const getPlatformInfo = (platformId) => {
-    return PLATFORM_CONFIG[platformId] || { name: platformId, icon: '🔗', color: 'bg-navy-700 text-navy-300 border-navy-600' };
+    const cfg = getPlatformConfig(platformId);
+    return { name: cfg.label, icon: cfg.icon, color: cfg.color };
   };
 
   if (loading) {

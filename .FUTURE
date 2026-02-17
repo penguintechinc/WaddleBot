@@ -1,0 +1,76 @@
+# Calendar and Event Management Module Updates
+- Ensure the ability for users to connect their invidual cloud calendars (Google Calendar, Office Calendar, etc.)
+- Allow individual users to set their calendar availability on a "Public(Internet), Register Users, and Community scope"  to Hidden, Free/Busy Only, or Details
+- Allow individual users to set an appointment setup time within their public profile where a user clicks a "Create Appointment" button on the user's public profile and it pops open a modal for them to select free windows
+- Allow individual users to set how soon (delay, ie: can't create anything within 4 hours or 4 days), what time slots (15 minute, 30 minute, and/or 60 minute), and how far out into the future (ie: can't create beyond 30 days)
+- Allow group admins to see a "most available" timeslot (but not see individual user calendar free/busy) and a count of can make it, might make it (maybe conflcits), and can't make it
+- Allow group admins to enable a group appointment calendar which shows the free time slots (15 minute, 30 minute, or 60 minute) which is visible to either public (internet), registered users, community members, or community moderators and admins
+- All of these reservation pages should allow for custom fields the individual or admin (depending on scope / where created) to set, and should support the full FormModalCreator  (react-libs) forms basis but max out at 8 fields, the creator can select if optional or required too
+- All of these reservation pages should create a shareable link which if someone goes to and has access they should be able to select an appoint and fill out field
+- This is essentially embedding something like calendly or google appointments into our app to make it easier for our business customers
+
+# Update the website
+- We need to update the marketing website in ~/code/website/waddlebot
+- It needs to use the new branding (waddlebot -> waddles, new logo)
+- It needs to call out the new features and remove the fake testimonials
+- It needs to call out it is a full fledged modular and open community management, connection, and building solution
+- Explicitly call out that communities can bring their own AI LLM Key if they want to be 100% sure we aren't training on their data and they don't want to deploy their own local stack
+- Compare us with platforms like eXo and any others
+
+# Update waddles dashboards to show all platforms 
+- many are only showing some but not all possible platforms.. ie: twitch, slack, discord but not kick, etc.
+
+# Bugs to fix
+- https://waddles.penguintech.io/communities when I click on create community it takes me to https://waddles.penguintech.io/dashboard instead of the modal for a new community 
+- https://waddles.penguintech.io/dashboard it doesn't show the super admin stuff for me sometimes until I refresh the page... even when I initially clear the cache and hard reload, especially happens when I am redirected there by accident by the prior bug 
+- https://waddles.penguintech.io/superadmin/communities/new could likely just be merged with the one we generally offer out to any registered user? 
+- https://waddles.penguintech.io/superadmin/users When I go to create a user: {title: 'Create New User'}title: "Create New 
+User"[[Prototype]]: Object index-BLz74YBA.js:56 Uncaught (in promise) TypeError: (void 0) is not a function
+    at L3 (index-BLz74YBA.js:56:174950) at index-BLz74YBA.js:57:282 at Array.forEach (<anonymous>) at index-BLz74YBA.js:57:257 at ee (index-BLz74YBA.js:57:777) at Object.vd (index-BLz74YBA.js:37:9833) at jd 
+    (index-BLz74YBA.js:37:9990) at Ol (index-BLz74YBA.js:37:10047) at mx (index-BLz74YBA.js:37:31415)
+    at hx (index-BLz74YBA.js:37:31835)
+- https://waddles.penguintech.io/superadmin/platform-config Anything we set  in the DB (via api or webui) should override ENV variables in general in regards to this notice: Security Note All credentials are encrypted at rest and require authentication to access. Environment variables take precedence over stored values. For production deployments, consider using environment variables for sensitive credentials.
+- https://waddles.penguintech.io/superadmin/kong seems like nothing in this page on any tab is working? Did we not deploy kong? 
+ index-BLz74YBA.js:53 GET https://waddles.penguintech.io/api/v1/superadmin/kong/services?search= 500 (Internal Server Error) (anonymous) @ index-BLz74YBA.js:53 xhr @ index-BLz74YBA.js:53 _f @ index-BLz74YBA.js:55 Promise.then 
+_request @ index-BLz74YBA.js:56 request @ index-BLz74YBA.js:55 Ur.<computed> @ index-BLz74YBA.js:56 (anonymous) @ index-BLz74YBA.js:51 getKongServices @ index-BLz74YBA.js:56 $ @ index-BLz74YBA.js:329 (anonymous) @ 
+index-BLz74YBA.js:329 Io @ index-BLz74YBA.js:40 Sa @ index-BLz74YBA.js:40 (anonymous) @ index-BLz74YBA.js:40 k @ index-BLz74YBA.js:25 U @ index-BLz74YBA.js:25 index-BLz74YBA.js:53 GET 
+https://waddles.penguintech.io/api/v1/superadmin/kong/services 500 (Internal Server Error) (anonymous) @ index-BLz74YBA.js:53 xhr @ index-BLz74YBA.js:53 _f @ index-BLz74YBA.js:55 Promise.then _request @ index-BLz74YBA.js:56 
+request @ index-BLz74YBA.js:55 Ur.<computed> @ index-BLz74YBA.js:56 (anonymous) @ index-BLz74YBA.js:51 getKongServices @ index-BLz74YBA.js:56 O @ index-BLz74YBA.js:329 (anonymous) @ index-BLz74YBA.js:329 Io @ 
+index-BLz74YBA.js:40 Sa @ index-BLz74YBA.js:40 l2 @ index-BLz74YBA.js:40 $r @ index-BLz74YBA.js:40 Fp @ index-BLz74YBA.js:40 Qn @ index-BLz74YBA.js:38 (anonymous) @ index-BLz74YBA.js:40 index-BLz74YBA.js:329 Failed to load 
+services: Ve {message: 'Request failed with status code 500', name: 'AxiosError', code: 'ERR_BAD_RESPONSE', config: {…}, request: XMLHttpRequest, …} O @ index-BLz74YBA.js:329 await in O (anonymous) @ index-BLz74YBA.js:329 Io @ 
+index-BLz74YBA.js:40 Sa @ index-BLz74YBA.js:40 l2 @ index-BLz74YBA.js:40 $r @ index-BLz74YBA.js:40 Fp @ index-BLz74YBA.js:40 Qn @ index-BLz74YBA.js:38 (anonymous) @ index-BLz74YBA.js:40 index-BLz74YBA.js:53 GET 
+https://waddles.penguintech.io/api/v1/superadmin/kong/routes?search=&service_id= 500 (Internal Server Error) (anonymous) @ index-BLz74YBA.js:53 xhr @ index-BLz74YBA.js:53 _f @ index-BLz74YBA.js:55 Promise.then _request @ 
+index-BLz74YBA.js:56 request @ index-BLz74YBA.js:55 Ur.<computed> @ index-BLz74YBA.js:56 (anonymous) @ index-BLz74YBA.js:51 getKongRoutes @ index-BLz74YBA.js:56 L @ index-BLz74YBA.js:329 (anonymous) @ index-BLz74YBA.js:329 Io @ 
+index-BLz74YBA.js:40 Sa @ index-BLz74YBA.js:40 l2 @ index-BLz74YBA.js:40 $r @ index-BLz74YBA.js:40 Fp @ index-BLz74YBA.js:40 Qn @ index-BLz74YBA.js:38 (anonymous) @ index-BLz74YBA.js:40 index-BLz74YBA.js:53 GET 
+https://waddles.penguintech.io/api/v1/superadmin/kong/plugins?search=&scope= 500 (Internal Server Error) (anonymous) @ index-BLz74YBA.js:53 xhr @ index-BLz74YBA.js:53 _f @ index-BLz74YBA.js:55 Promise.then _request @ 
+index-BLz74YBA.js:56 request @ index-BLz74YBA.js:55 Ur.<computed> @ index-BLz74YBA.js:56 (anonymous) @ index-BLz74YBA.js:51 getKongPlugins @ index-BLz74YBA.js:56 L @ index-BLz74YBA.js:329 (anonymous) @ index-BLz74YBA.js:329 Io 
+@ index-BLz74YBA.js:40 Sa @ index-BLz74YBA.js:40 l2 @ index-BLz74YBA.js:40 $r @ index-BLz74YBA.js:40 Fp @ index-BLz74YBA.js:40 Qn @ index-BLz74YBA.js:38 (anonymous) @ index-BLz74YBA.js:40 index-BLz74YBA.js:53 GET 
+https://waddles.penguintech.io/api/v1/superadmin/kong/routes 500 (Internal Server Error) (anonymous) @ index-BLz74YBA.js:53 xhr @ index-BLz74YBA.js:53 _f @ index-BLz74YBA.js:55 Promise.then _request @ index-BLz74YBA.js:56 
+request @ index-BLz74YBA.js:55 Ur.<computed> @ index-BLz74YBA.js:56 (anonymous) @ index-BLz74YBA.js:51 getKongRoutes @ index-BLz74YBA.js:56 L @ index-BLz74YBA.js:329 (anonymous) @ index-BLz74YBA.js:329 Io @ index-BLz74YBA.js:40 
+Sa @ index-BLz74YBA.js:40 l2 @ index-BLz74YBA.js:40 $r @ index-BLz74YBA.js:40 Fp @ index-BLz74YBA.js:40 Qn @ index-BLz74YBA.js:38 (anonymous) @ index-BLz74YBA.js:40 index-BLz74YBA.js:53 GET 
+https://waddles.penguintech.io/api/v1/superadmin/kong/services 500 (Internal Server Error) (anonymous) @ index-BLz74YBA.js:53 xhr @ index-BLz74YBA.js:53 _f @ index-BLz74YBA.js:55 Promise.then _request @ index-BLz74YBA.js:56 
+request @ index-BLz74YBA.js:55 Ur.<computed> @ index-BLz74YBA.js:56 (anonymous) @ index-BLz74YBA.js:51 getKongServices @ index-BLz74YBA.js:56 L @ index-BLz74YBA.js:329 (anonymous) @ index-BLz74YBA.js:329 Io @ 
+index-BLz74YBA.js:40 Sa @ index-BLz74YBA.js:40 l2 @ index-BLz74YBA.js:40 $r @ index-BLz74YBA.js:40 Fp @ index-BLz74YBA.js:40 Qn @ index-BLz74YBA.js:38 (anonymous) @ index-BLz74YBA.js:40 index-BLz74YBA.js:53 GET 
+https://waddles.penguintech.io/api/v1/superadmin/kong/consumers?search= 500 (Internal Server Error) (anonymous) @ index-BLz74YBA.js:53 xhr @ index-BLz74YBA.js:53 _f @ index-BLz74YBA.js:55 Promise.then _request @ 
+index-BLz74YBA.js:56 request @ index-BLz74YBA.js:55 Ur.<computed> @ index-BLz74YBA.js:56 (anonymous) @ index-BLz74YBA.js:51 getKongConsumers @ index-BLz74YBA.js:56 v @ index-BLz74YBA.js:329 (anonymous) @ index-BLz74YBA.js:329 
+Io @ index-BLz74YBA.js:40 Sa @ index-BLz74YBA.js:40 l2 @ index-BLz74YBA.js:40 $r @ index-BLz74YBA.js:40 Fp @ index-BLz74YBA.js:40 Qn @ index-BLz74YBA.js:38 (anonymous) @ index-BLz74YBA.js:40 index-BLz74YBA.js:53 GET 
+https://waddles.penguintech.io/api/v1/superadmin/kong/upstreams?search= 500 (Internal Server Error) (anonymous) @ index-BLz74YBA.js:53 xhr @ index-BLz74YBA.js:53 _f @ index-BLz74YBA.js:55 Promise.then _request @ 
+index-BLz74YBA.js:56 request @ index-BLz74YBA.js:55 Ur.<computed> @ index-BLz74YBA.js:56 (anonymous) @ index-BLz74YBA.js:51 getKongUpstreams @ index-BLz74YBA.js:56 A @ index-BLz74YBA.js:329 (anonymous) @ index-BLz74YBA.js:329 
+Io @ index-BLz74YBA.js:40 Sa @ index-BLz74YBA.js:40 l2 @ index-BLz74YBA.js:40 $r @ index-BLz74YBA.js:40 Fp @ index-BLz74YBA.js:40 Qn @ index-BLz74YBA.js:38 (anonymous) @ index-BLz74YBA.js:40 index-BLz74YBA.js:53 GET 
+https://waddles.penguintech.io/api/v1/superadmin/kong/snis 500 (Internal Server Error) (anonymous) @ index-BLz74YBA.js:53 xhr @ index-BLz74YBA.js:53 _f @ index-BLz74YBA.js:55 Promise.then _request @ index-BLz74YBA.js:56 request 
+@ index-BLz74YBA.js:55 Ur.<computed> @ index-BLz74YBA.js:56 (anonymous) @ index-BLz74YBA.js:51 getKongSNIs @ index-BLz74YBA.js:56 S @ index-BLz74YBA.js:329 (anonymous) @ index-BLz74YBA.js:329 Io @ index-BLz74YBA.js:40 Sa @ 
+index-BLz74YBA.js:40 l2 @ index-BLz74YBA.js:40 $r @ index-BLz74YBA.js:40 Fp @ index-BLz74YBA.js:40 Qn @ index-BLz74YBA.js:38 (anonymous) @ index-BLz74YBA.js:40 index-BLz74YBA.js:53 GET 
+https://waddles.penguintech.io/api/v1/superadmin/kong/certificates?search= 500 (Internal Server Error) (anonymous) @ index-BLz74YBA.js:53 xhr @ index-BLz74YBA.js:53 _f @ index-BLz74YBA.js:55 Promise.then _request @ 
+index-BLz74YBA.js:56 request @ index-BLz74YBA.js:55 Ur.<computed> @ index-BLz74YBA.js:56 (anonymous) @ index-BLz74YBA.js:51 getKongCertificates @ index-BLz74YBA.js:56 S @ index-BLz74YBA.js:329 (anonymous) @ 
+index-BLz74YBA.js:329 Io @ index-BLz74YBA.js:40 Sa @ index-BLz74YBA.js:40 l2 @ index-BLz74YBA.js:40 $r @ index-BLz74YBA.js:40 Fp @ index-BLz74YBA.js:40 Qn @ index-BLz74YBA.js:38 (anonymous) @ index-BLz74YBA.js:40 
+index-BLz74YBA.js:53 GET https://waddles.penguintech.io/api/v1/superadmin/kong/services 500 (Internal Server Error) (anonymous) @ index-BLz74YBA.js:53 xhr @ index-BLz74YBA.js:53 _f @ index-BLz74YBA.js:55 Promise.then _request @ 
+index-BLz74YBA.js:56 request @ index-BLz74YBA.js:55 Ur.<computed> @ index-BLz74YBA.js:56 (anonymous) @ index-BLz74YBA.js:51 getKongServices @ index-BLz74YBA.js:56 M @ index-BLz74YBA.js:333 (anonymous) @ index-BLz74YBA.js:333 Io 
+@ index-BLz74YBA.js:40 Sa @ index-BLz74YBA.js:40 l2 @ index-BLz74YBA.js:40 $r @ index-BLz74YBA.js:40 Fp @ index-BLz74YBA.js:40 Qn @ index-BLz74YBA.js:38 (anonymous) @ index-BLz74YBA.js:40 index-BLz74YBA.js:53 GET 
+https://waddles.penguintech.io/api/v1/superadmin/kong/plugins?search=rate-limiting 500 (Internal Server Error) (anonymous) @ index-BLz74YBA.js:53 xhr @ index-BLz74YBA.js:53 _f @ index-BLz74YBA.js:55 Promise.then _request @ 
+index-BLz74YBA.js:56 request @ index-BLz74YBA.js:55 Ur.<computed> @ index-BLz74YBA.js:56 (anonymous) @ index-BLz74YBA.js:51 getKongPlugins @ index-BLz74YBA.js:56 M @ index-BLz74YBA.js:333 (anonymous) @ index-BLz74YBA.js:333 Io 
+@ index-BLz74YBA.js:40 Sa @ index-BLz74YBA.js:40 l2 @ index-BLz74YBA.js:40 $r @ index-BLz74YBA.js:40 Fp @ index-BLz74YBA.js:40 Qn @ index-BLz74YBA.js:38 (anonymous) @ index-BLz74YBA.js:40 index-BLz74YBA.js:53 GET 
+https://waddles.penguintech.io/api/v1/superadmin/kong/routes 500 (Internal Server Error) (anonymous) @ index-BLz74YBA.js:53 xhr @ index-BLz74YBA.js:53 _f @ index-BLz74YBA.js:55 Promise.then _request @ index-BLz74YBA.js:56 
+request @ index-BLz74YBA.js:55 Ur.<computed> @ index-BLz74YBA.js:56 (anonymous) @ index-BLz74YBA.js:51 getKongRoutes @ index-BLz74YBA.js:56 M @ index-BLz74YBA.js:333 (anonymous) @ index-BLz74YBA.js:333 Io @ index-BLz74YBA.js:40 
+Sa @ index-BLz74YBA.js:40 l2 @ index-BLz74YBA.js:40 $r @ index-BLz74YBA.js:40 Fp @ index-BLz74YBA.js:40 Qn @ index-BLz74YBA.js:38
+(anonymous) @ index-BLz74YBA.js:40
+

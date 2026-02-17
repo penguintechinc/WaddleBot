@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { kongApi } from '../../../services/api';
+import { handleKongError } from '../../../utils/kongErrorHandler';
 import { Plus, Edit2, Trash2, Copy } from 'lucide-react';
 
 export default function KongServices() {
@@ -31,7 +32,7 @@ export default function KongServices() {
       const response = await kongApi.getKongServices({ search });
       setServices(response.data.data || []);
     } catch (err) {
-      setError(err.response?.data?.error?.message || 'Failed to load services');
+      setError(handleKongError(err, 'Failed to load services'));
     } finally {
       setLoading(false);
     }
@@ -46,7 +47,7 @@ export default function KongServices() {
       resetForm();
       loadServices();
     } catch (err) {
-      setError(err.response?.data?.error?.message || 'Failed to create service');
+      setError(handleKongError(err, 'Failed to create service'));
     }
   };
 
@@ -60,7 +61,7 @@ export default function KongServices() {
       resetForm();
       loadServices();
     } catch (err) {
-      setError(err.response?.data?.error?.message || 'Failed to update service');
+      setError(handleKongError(err, 'Failed to update service'));
     }
   };
 
@@ -72,7 +73,7 @@ export default function KongServices() {
       setSuccess('Service deleted successfully');
       loadServices();
     } catch (err) {
-      setError(err.response?.data?.error?.message || 'Failed to delete service');
+      setError(handleKongError(err, 'Failed to delete service'));
     }
   };
 

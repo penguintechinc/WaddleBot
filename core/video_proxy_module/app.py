@@ -100,8 +100,7 @@ db = DAL(
     config.DATABASE_URL,
     folder="databases",
     pool_size=config.DB_POOL_SIZE,
-    migrate_enabled=True,
-    fake_migrate_all=False
+    migrate_enabled=False,
 )
 
 # Define database tables
@@ -117,7 +116,7 @@ def init_database():
         Field('is_active', 'boolean', default=True),
         Field('created_at', 'datetime', default=datetime.utcnow),
         Field('updated_at', 'datetime', update=datetime.utcnow),
-        migrate=True
+        migrate=False
     )
 
     # Stream destinations table
@@ -132,7 +131,7 @@ def init_database():
         Field('max_resolution', 'string', length=20, default='1080p'),
         Field('created_at', 'datetime', default=datetime.utcnow),
         Field('updated_at', 'datetime', update=datetime.utcnow),
-        migrate=True
+        migrate=False
     )
 
     # Stream status table
@@ -144,7 +143,7 @@ def init_database():
         Field('bitrate_kbps', 'integer', default=0),
         Field('start_time', 'datetime'),
         Field('last_update', 'datetime', default=datetime.utcnow),
-        migrate=True
+        migrate=False
     )
 
     db.commit()

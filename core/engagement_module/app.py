@@ -84,8 +84,7 @@ db = DAL(
     config.DATABASE_URL,
     folder="databases",
     pool_size=config.DB_POOL_SIZE,
-    migrate_enabled=True,
-    fake_migrate_all=False
+    migrate_enabled=False,
 )
 
 
@@ -106,7 +105,7 @@ def init_database():
         Field('is_active', 'boolean', default=True),
         Field('created_at', 'datetime', default=datetime.utcnow),
         Field('updated_at', 'datetime', update=datetime.utcnow),
-        migrate=True
+        migrate=False
     )
 
     db.define_table(
@@ -115,7 +114,7 @@ def init_database():
         Field('option_text', 'string', length=500, notnull=True),
         Field('sort_order', 'integer', default=0),
         Field('created_at', 'datetime', default=datetime.utcnow),
-        migrate=True
+        migrate=False
     )
 
     db.define_table(
@@ -125,7 +124,7 @@ def init_database():
         Field('user_id', 'integer'),
         Field('ip_hash', 'string', length=64),
         Field('voted_at', 'datetime', default=datetime.utcnow),
-        migrate=True
+        migrate=False
     )
 
     db.define_table(
@@ -141,7 +140,7 @@ def init_database():
         Field('is_active', 'boolean', default=True),
         Field('created_at', 'datetime', default=datetime.utcnow),
         Field('updated_at', 'datetime', update=datetime.utcnow),
-        migrate=True
+        migrate=False
     )
 
     db.define_table(
@@ -155,7 +154,7 @@ def init_database():
         Field('validation_json', 'json'),
         Field('sort_order', 'integer', default=0),
         Field('created_at', 'datetime', default=datetime.utcnow),
-        migrate=True
+        migrate=False
     )
 
     db.define_table(
@@ -164,7 +163,7 @@ def init_database():
         Field('user_id', 'integer'),
         Field('ip_hash', 'string', length=64),
         Field('submitted_at', 'datetime', default=datetime.utcnow),
-        migrate=True
+        migrate=False
     )
 
     db.define_table(
@@ -174,7 +173,7 @@ def init_database():
         Field('value_text', 'text'),
         Field('value_json', 'json'),
         Field('created_at', 'datetime', default=datetime.utcnow),
-        migrate=True
+        migrate=False
     )
 
     db.commit()

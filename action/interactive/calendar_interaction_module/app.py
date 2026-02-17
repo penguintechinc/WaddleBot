@@ -29,7 +29,15 @@ from validation_models import (
     TicketUndoCheckInRequest, TicketTransferRequest,
     TicketSearchParams, CheckInLogParams, TicketingConfigRequest,
     # Event admin models
-    EventAdminAssignRequest, EventAdminUpdateRequest
+    EventAdminAssignRequest, EventAdminUpdateRequest,
+    # Calendar OAuth & Availability models
+    AvailabilitySettingsUpdateRequest, WeeklyAvailabilityUpdateRequest,
+    AvailableSlotsParams,
+    # Booking models
+    BookingPageCreateRequest, BookingPageUpdateRequest,
+    BookingCreateRequest, AvailableSlotsQueryParams,
+    BookingListParams, GroupBookingPageCreateRequest,
+    GroupMemberAddRequest, BestSlotsParams
 )
 
 
@@ -51,6 +59,10 @@ context_service = None
 rsvp_service = None
 ticket_service = None
 event_admin_service = None
+calendar_oauth_service = None
+availability_service = None
+booking_service = None
+group_availability_service = None
 
 
 def get_user_context():
@@ -74,7 +86,7 @@ def get_user_context():
 
 def init_services():
     """Initialize database and services (can be called from startup or tests)."""
-    global dal, calendar_service, permission_service, context_service, rsvp_service, ticket_service, event_admin_service
+    global dal, calendar_service, permission_service, context_service, rsvp_service, ticket_service, event_admin_service, calendar_oauth_service, availability_service, booking_service, group_availability_service
 
     if calendar_service is not None:
         return  # Already initialized
@@ -85,6 +97,10 @@ def init_services():
     from services.rsvp_service import RSVPService
     from services.ticket_service import TicketService
     from services.event_admin_service import EventAdminService
+    from services.calendar_oauth_service import CalendarOAuthService
+    from services.availability_service import AvailabilityService
+    from services.booking_service import BookingService
+    from services.group_availability_service import GroupAvailabilityService
 
     logger.system("Starting calendar module", action="startup")
     dal = init_database(Config.DATABASE_URL)
@@ -99,6 +115,10 @@ def init_services():
     event_admin_service = EventAdminService(dal, permission_service)
     ticket_service = TicketService(dal, permission_service)
     rsvp_service = RSVPService(dal, ticket_service=ticket_service)
+    calendar_oauth_service = CalendarOAuthService(dal)
+    availability_service = AvailabilityService(dal)
+    booking_service = BookingService(dal)
+    group_availability_service = GroupAvailabilityService(dal)
 
     app.config['calendar_service'] = calendar_service
     app.config['permission_service'] = permission_service
@@ -106,6 +126,10 @@ def init_services():
     app.config['rsvp_service'] = rsvp_service
     app.config['ticket_service'] = ticket_service
     app.config['event_admin_service'] = event_admin_service
+    app.config['calendar_oauth_service'] = calendar_oauth_service
+    app.config['booking_service'] = booking_service
+    app.config['group_availability_service'] = group_availability_service
+    app.config['availability_service'] = availability_service
 
     logger.system("Calendar module started", result="SUCCESS")
 
@@ -1107,6 +1131,591 @@ async def get_my_permissions(community_id, event_id):
     ) if event_admin_service else {}
 
     return success_response({'permissions': permissions})
+
+
+# ============================================================================
+# CALENDAR OAUTH ENDPOINTS (Phase 4A)
+# ============================================================================
+
+@calendar_bp.route('/oauth/google/auth-url', methods=['GET'])
+@async_endpoint
+async def google_auth_url():
+    """Get Google Calendar OAuth authorization URL."""
+    user_context = get_user_context()
+    user_id = user_context.get('user_id')
+
+    if not user_id:
+        return error_response("User authentication required", status_code=401)
+
+    redirect_uri = request.args.get('redirect_uri')
+    if not redirect_uri:
+        return error_response("redirect_uri parameter required", status_code=400)
+
+    auth_url = await calendar_oauth_service.get_google_auth_url(user_id, redirect_uri)
+    return success_response({'auth_url': auth_url})
+
+
+@calendar_bp.route('/oauth/google/callback', methods=['GET'])
+@async_endpoint
+async def google_callback():
+    """Handle Google Calendar OAuth callback."""
+    user_context = get_user_context()
+    user_id = user_context.get('user_id')
+
+    if not user_id:
+        return error_response("User authentication required", status_code=401)
+
+    code = request.args.get('code')
+    redirect_uri = request.args.get('redirect_uri')
+
+    if not code or not redirect_uri:
+        return error_response("code and redirect_uri required", status_code=400)
+
+    calendar = await calendar_oauth_service.handle_google_callback(
+        user_id, code, redirect_uri
+    )
+
+    if calendar:
+        return success_response(calendar, status_code=201)
+    else:
+        return error_response("Failed to connect Google Calendar", status_code=400)
+
+
+@calendar_bp.route('/oauth/microsoft/auth-url', methods=['GET'])
+@async_endpoint
+async def microsoft_auth_url():
+    """Get Microsoft Calendar OAuth authorization URL."""
+    user_context = get_user_context()
+    user_id = user_context.get('user_id')
+
+    if not user_id:
+        return error_response("User authentication required", status_code=401)
+
+    redirect_uri = request.args.get('redirect_uri')
+    if not redirect_uri:
+        return error_response("redirect_uri parameter required", status_code=400)
+
+    auth_url = await calendar_oauth_service.get_microsoft_auth_url(user_id, redirect_uri)
+    return success_response({'auth_url': auth_url})
+
+
+@calendar_bp.route('/oauth/microsoft/callback', methods=['GET'])
+@async_endpoint
+async def microsoft_callback():
+    """Handle Microsoft Calendar OAuth callback."""
+    user_context = get_user_context()
+    user_id = user_context.get('user_id')
+
+    if not user_id:
+        return error_response("User authentication required", status_code=401)
+
+    code = request.args.get('code')
+    redirect_uri = request.args.get('redirect_uri')
+
+    if not code or not redirect_uri:
+        return error_response("code and redirect_uri required", status_code=400)
+
+    calendar = await calendar_oauth_service.handle_microsoft_callback(
+        user_id, code, redirect_uri
+    )
+
+    if calendar:
+        return success_response(calendar, status_code=201)
+    else:
+        return error_response("Failed to connect Microsoft Calendar", status_code=400)
+
+
+@calendar_bp.route('/oauth/calendars', methods=['GET'])
+@async_endpoint
+async def list_connected_calendars():
+    """List connected calendars for current user."""
+    user_context = get_user_context()
+    user_id = user_context.get('user_id')
+
+    if not user_id:
+        return error_response("User authentication required", status_code=401)
+
+    calendars = await calendar_oauth_service.list_connected_calendars(user_id)
+    return success_response({'calendars': calendars, 'count': len(calendars)})
+
+
+@calendar_bp.route('/oauth/calendars/<int:calendar_id>/sync', methods=['POST'])
+@async_endpoint
+async def sync_calendar(calendar_id):
+    """Manually trigger free/busy sync for a connected calendar."""
+    user_context = get_user_context()
+    user_id = user_context.get('user_id')
+
+    if not user_id:
+        return error_response("User authentication required", status_code=401)
+
+    # Get date range from request (default to next 30 days)
+    from datetime import datetime, timedelta, timezone
+    start_date = datetime.now(timezone.utc)
+    end_date = start_date + timedelta(days=30)
+
+    success = await calendar_oauth_service.sync_free_busy(
+        user_id, calendar_id, start_date, end_date
+    )
+
+    if success:
+        return success_response({'message': 'Calendar synced successfully'})
+    else:
+        return error_response("Failed to sync calendar", status_code=400)
+
+
+@calendar_bp.route('/oauth/calendars/<int:calendar_id>', methods=['DELETE'])
+@async_endpoint
+async def disconnect_calendar(calendar_id):
+    """Disconnect a calendar."""
+    user_context = get_user_context()
+    user_id = user_context.get('user_id')
+
+    if not user_id:
+        return error_response("User authentication required", status_code=401)
+
+    success = await calendar_oauth_service.disconnect_calendar(user_id, calendar_id)
+
+    if success:
+        return success_response({'message': 'Calendar disconnected successfully'})
+    else:
+        return error_response("Failed to disconnect calendar", status_code=400)
+
+
+# ============================================================================
+# AVAILABILITY ENDPOINTS (Phase 4B)
+# ============================================================================
+
+@calendar_bp.route('/availability/settings', methods=['GET'])
+@async_endpoint
+async def get_availability_settings():
+    """Get availability settings for current user."""
+    user_context = get_user_context()
+    user_id = user_context.get('user_id')
+
+    if not user_id:
+        return error_response("User authentication required", status_code=401)
+
+    settings = await availability_service.get_settings(user_id)
+    return success_response(settings)
+
+
+@calendar_bp.route('/availability/settings', methods=['PUT'])
+@async_endpoint
+@validate_json(AvailabilitySettingsUpdateRequest)
+async def update_availability_settings(validated_data: AvailabilitySettingsUpdateRequest):
+    """Update availability settings for current user."""
+    user_context = get_user_context()
+    user_id = user_context.get('user_id')
+
+    if not user_id:
+        return error_response("User authentication required", status_code=401)
+
+    settings_dict = validated_data.dict(exclude_unset=True)
+    success = await availability_service.update_settings(user_id, settings_dict)
+
+    if success:
+        return success_response({'message': 'Settings updated successfully'})
+    else:
+        return error_response("Failed to update settings", status_code=400)
+
+
+@calendar_bp.route('/availability/weekly', methods=['GET'])
+@async_endpoint
+async def get_weekly_availability():
+    """Get weekly availability schedule for current user."""
+    user_context = get_user_context()
+    user_id = user_context.get('user_id')
+
+    if not user_id:
+        return error_response("User authentication required", status_code=401)
+
+    availability = await availability_service.get_weekly_availability(user_id)
+    return success_response({'weekly_availability': availability})
+
+
+@calendar_bp.route('/availability/weekly', methods=['PUT'])
+@async_endpoint
+@validate_json(WeeklyAvailabilityUpdateRequest)
+async def update_weekly_availability(validated_data: WeeklyAvailabilityUpdateRequest):
+    """Update weekly availability schedule for current user."""
+    user_context = get_user_context()
+    user_id = user_context.get('user_id')
+
+    if not user_id:
+        return error_response("User authentication required", status_code=401)
+
+    availability = validated_data.dict()
+    success = await availability_service.update_weekly_availability(user_id, availability)
+
+    if success:
+        return success_response({'message': 'Weekly availability updated successfully'})
+    else:
+        return error_response("Failed to update weekly availability", status_code=400)
+
+
+@calendar_bp.route('/availability/<int:target_user_id>/slots', methods=['GET'])
+@async_endpoint
+@validate_query(AvailableSlotsParams)
+async def get_available_slots(query_params: AvailableSlotsParams, target_user_id):
+    """Get available time slots for a user on a specific date."""
+    from datetime import datetime
+
+    # Parse date
+    try:
+        date = datetime.strptime(query_params.date, '%Y-%m-%d')
+    except ValueError:
+        return error_response("Invalid date format, use YYYY-MM-DD", status_code=400)
+
+    slots = await availability_service.compute_available_slots(
+        target_user_id, date, query_params.duration
+    )
+
+    return success_response({'slots': slots, 'count': len(slots), 'date': query_params.date})
+
+
+# ============================================================================
+# BOOKING PAGE ENDPOINTS (Phase 4C)
+# ============================================================================
+
+@calendar_bp.route('/booking-pages', methods=['POST'])
+@async_endpoint
+@validate_json(BookingPageCreateRequest)
+async def create_booking_page(validated_data: BookingPageCreateRequest):
+    """Create an individual booking page."""
+    user_context = get_user_context()
+    user_id = user_context.get('user_id')
+
+    if not user_id:
+        return error_response("User authentication required", status_code=401)
+
+    data = validated_data.dict()
+    page = await booking_service.create_booking_page(user_id, data)
+
+    if page:
+        return success_response(page, status_code=201)
+    else:
+        return error_response("Failed to create booking page", status_code=400)
+
+
+@calendar_bp.route('/booking-pages', methods=['GET'])
+@async_endpoint
+async def list_booking_pages():
+    """List current user's booking pages."""
+    user_context = get_user_context()
+    user_id = user_context.get('user_id')
+
+    if not user_id:
+        return error_response("User authentication required", status_code=401)
+
+    pages = await booking_service.list_user_booking_pages(user_id)
+    return success_response({'pages': pages, 'count': len(pages)})
+
+
+@calendar_bp.route('/booking-pages/<slug_or_id>', methods=['GET'])
+@async_endpoint
+async def get_booking_page(slug_or_id):
+    """Get booking page by slug or ID."""
+    page = await booking_service.get_booking_page(slug_or_id)
+
+    if page:
+        return success_response(page)
+    else:
+        return error_response("Booking page not found", status_code=404)
+
+
+@calendar_bp.route('/booking-pages/<int:page_id>', methods=['PUT'])
+@async_endpoint
+@validate_json(BookingPageUpdateRequest)
+async def update_booking_page(validated_data: BookingPageUpdateRequest, page_id):
+    """Update booking page (owner only)."""
+    user_context = get_user_context()
+    user_id = user_context.get('user_id')
+
+    if not user_id:
+        return error_response("User authentication required", status_code=401)
+
+    data = validated_data.dict(exclude_unset=True)
+    page = await booking_service.update_booking_page(page_id, user_id, data)
+
+    if page:
+        return success_response(page)
+    else:
+        return error_response("Failed to update booking page", status_code=400)
+
+
+@calendar_bp.route('/booking-pages/<int:page_id>', methods=['DELETE'])
+@async_endpoint
+async def delete_booking_page(page_id):
+    """Delete booking page (owner only)."""
+    user_context = get_user_context()
+    user_id = user_context.get('user_id')
+
+    if not user_id:
+        return error_response("User authentication required", status_code=401)
+
+    success = await booking_service.delete_booking_page(page_id, user_id)
+
+    if success:
+        return success_response({'message': 'Booking page deleted successfully'})
+    else:
+        return error_response("Failed to delete booking page", status_code=400)
+
+
+# ============================================================================
+# BOOKING ENDPOINTS (Phase 4C)
+# ============================================================================
+
+@calendar_bp.route('/book/<slug>/slots', methods=['GET'])
+@async_endpoint
+@validate_query(AvailableSlotsQueryParams)
+async def get_booking_slots(query_params: AvailableSlotsQueryParams, slug):
+    """
+    Get available slots for a booking page (public endpoint).
+    Works without authentication for public booking pages.
+    """
+    from datetime import datetime
+
+    # Get booking page
+    page = await booking_service.get_booking_page(slug)
+    if not page:
+        return error_response("Booking page not found", status_code=404)
+
+    # Check access scope (implement access control if needed)
+    # For now, allow public access based on access_scope
+
+    # Parse date
+    try:
+        date = datetime.strptime(query_params.date, '%Y-%m-%d')
+    except ValueError:
+        return error_response("Invalid date format, use YYYY-MM-DD", status_code=400)
+
+    slots = await booking_service.get_available_slots(page['id'], date)
+    return success_response({'slots': slots, 'count': len(slots), 'date': query_params.date})
+
+
+@calendar_bp.route('/book/<slug>', methods=['POST'])
+@async_endpoint
+@validate_json(BookingCreateRequest)
+async def create_booking(validated_data: BookingCreateRequest, slug):
+    """
+    Create a booking on a booking page (public endpoint).
+    Works without authentication for public booking pages.
+    """
+    from datetime import datetime
+
+    # Get booking page
+    page = await booking_service.get_booking_page(slug)
+    if not page:
+        return error_response("Booking page not found", status_code=404)
+
+    # Check access scope
+    user_context = get_user_context()
+    access_scope = page.get('access_scope', 'public')
+
+    if access_scope == 'registered' and not user_context.get('user_id'):
+        return error_response("Authentication required for this booking page", status_code=401)
+
+    if access_scope == 'community':
+        # Would need to check community membership here
+        pass
+
+    # Prepare guest data
+    guest_data = {
+        'guest_user_id': user_context.get('user_id'),
+        'guest_name': validated_data.guest_name,
+        'guest_email': validated_data.guest_email
+    }
+
+    booking = await booking_service.create_booking(
+        booking_page_id=page['id'],
+        guest_data=guest_data,
+        slot_start=validated_data.slot_start,
+        slot_end=validated_data.slot_end,
+        form_responses=validated_data.form_responses
+    )
+
+    if booking:
+        return success_response(booking, status_code=201)
+    else:
+        return error_response("Failed to create booking (slot may be taken)", status_code=400)
+
+
+@calendar_bp.route('/bookings/<uuid>', methods=['GET'])
+@async_endpoint
+async def get_booking(uuid):
+    """Get booking details by UUID."""
+    booking = await booking_service.get_booking(uuid)
+
+    if booking:
+        return success_response(booking)
+    else:
+        return error_response("Booking not found", status_code=404)
+
+
+@calendar_bp.route('/bookings/<uuid>', methods=['DELETE'])
+@async_endpoint
+async def cancel_booking(uuid):
+    """Cancel a booking."""
+    user_context = get_user_context()
+    user_id = user_context.get('user_id')
+
+    # Get booking to determine if user is host or guest
+    booking = await booking_service.get_booking(uuid)
+    if not booking:
+        return error_response("Booking not found", status_code=404)
+
+    # Determine cancellation role
+    if user_id == booking['host_user_id']:
+        cancelled_by = 'host'
+    elif user_id == booking.get('guest_user_id'):
+        cancelled_by = 'guest'
+    else:
+        return error_response("Not authorized to cancel this booking", status_code=403)
+
+    reason = request.args.get('reason')
+    success = await booking_service.cancel_booking(uuid, cancelled_by, reason)
+
+    if success:
+        return success_response({'message': 'Booking cancelled successfully'})
+    else:
+        return error_response("Failed to cancel booking", status_code=400)
+
+
+@calendar_bp.route('/my-bookings', methods=['GET'])
+@async_endpoint
+@validate_query(BookingListParams)
+async def list_my_bookings(query_params: BookingListParams):
+    """List bookings for current user (as host)."""
+    user_context = get_user_context()
+    user_id = user_context.get('user_id')
+
+    if not user_id:
+        return error_response("User authentication required", status_code=401)
+
+    # Parse dates if provided
+    from datetime import datetime
+    start_date = None
+    end_date = None
+
+    if query_params.start:
+        try:
+            start_date = datetime.strptime(query_params.start, '%Y-%m-%d')
+        except ValueError:
+            return error_response("Invalid start date format", status_code=400)
+
+    if query_params.end:
+        try:
+            end_date = datetime.strptime(query_params.end, '%Y-%m-%d')
+        except ValueError:
+            return error_response("Invalid end date format", status_code=400)
+
+    bookings = await booking_service.list_host_bookings(
+        user_id, query_params.status, start_date, end_date
+    )
+
+    return success_response({'bookings': bookings, 'count': len(bookings)})
+
+
+# ============================================================================
+# GROUP AVAILABILITY ENDPOINTS (Phase 4D)
+# ============================================================================
+
+@calendar_bp.route('/booking-pages/<int:page_id>/members', methods=['POST'])
+@async_endpoint
+@validate_json(GroupMemberAddRequest)
+async def add_group_member(validated_data: GroupMemberAddRequest, page_id):
+    """Add a member to a group booking page."""
+    user_context = get_user_context()
+    user_id = user_context.get('user_id')
+
+    if not user_id:
+        return error_response("User authentication required", status_code=401)
+
+    # TODO: Check if user is community admin or page owner
+
+    success = await group_availability_service.add_member(
+        page_id, validated_data.user_id, validated_data.is_required
+    )
+
+    if success:
+        return success_response({'message': 'Member added successfully'})
+    else:
+        return error_response("Failed to add member", status_code=400)
+
+
+@calendar_bp.route('/booking-pages/<int:page_id>/members/<int:user_id>', methods=['DELETE'])
+@async_endpoint
+async def remove_group_member(page_id, user_id):
+    """Remove a member from a group booking page."""
+    user_context = get_user_context()
+    current_user_id = user_context.get('user_id')
+
+    if not current_user_id:
+        return error_response("User authentication required", status_code=401)
+
+    # TODO: Check if user is community admin or page owner
+
+    success = await group_availability_service.remove_member(page_id, user_id)
+
+    if success:
+        return success_response({'message': 'Member removed successfully'})
+    else:
+        return error_response("Failed to remove member", status_code=400)
+
+
+@calendar_bp.route('/booking-pages/<int:page_id>/members', methods=['GET'])
+@async_endpoint
+async def get_group_members(page_id):
+    """Get member list for a group booking page."""
+    members = await group_availability_service.get_group_members(page_id)
+    return success_response({'members': members, 'count': len(members)})
+
+
+@calendar_bp.route('/booking-pages/<int:page_id>/group-availability', methods=['GET'])
+@async_endpoint
+@validate_query(AvailableSlotsQueryParams)
+async def get_group_availability(query_params: AvailableSlotsQueryParams, page_id):
+    """Get aggregate availability for a group booking page."""
+    from datetime import datetime
+
+    # Parse date
+    try:
+        date = datetime.strptime(query_params.date, '%Y-%m-%d')
+    except ValueError:
+        return error_response("Invalid date format, use YYYY-MM-DD", status_code=400)
+
+    slots = await group_availability_service.get_group_availability(page_id, date)
+    return success_response({'slots': slots, 'count': len(slots), 'date': query_params.date})
+
+
+@calendar_bp.route('/booking-pages/<int:page_id>/best-slots', methods=['GET'])
+@async_endpoint
+@validate_query(BestSlotsParams)
+async def get_best_slots(query_params: BestSlotsParams, page_id):
+    """Get the N most available slots across a date range for a group."""
+    from datetime import datetime
+
+    # Parse dates
+    try:
+        start_date = datetime.strptime(query_params.start, '%Y-%m-%d')
+        end_date = datetime.strptime(query_params.end, '%Y-%m-%d')
+    except ValueError:
+        return error_response("Invalid date format, use YYYY-MM-DD", status_code=400)
+
+    if end_date <= start_date:
+        return error_response("end date must be after start date", status_code=400)
+
+    slots = await group_availability_service.get_most_available_slots(
+        page_id, start_date, end_date, query_params.limit
+    )
+
+    return success_response({
+        'slots': slots,
+        'count': len(slots),
+        'start': query_params.start,
+        'end': query_params.end
+    })
 
 
 # Register blueprints

@@ -2,51 +2,11 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import api from '../../services/api';
 import { FormModalBuilder } from '@penguintechinc/react-libs';
+import { getPlatformIcon, getPlatformColor } from '../../utils/platformConfig';
+import { WADDLES_COLORS } from '../../theme/waddlebotTheme';
 
-// Waddles theme colors matching the existing UI
-const waddlebotColors = {
-  modalBackground: 'bg-navy-800',
-  headerBackground: 'bg-navy-800',
-  footerBackground: 'bg-navy-850',
-  overlayBackground: 'bg-black bg-opacity-50',
-  titleText: 'text-sky-100',
-  labelText: 'text-sky-100',
-  descriptionText: 'text-navy-400',
-  errorText: 'text-red-400',
-  buttonText: 'text-white',
-  fieldBackground: 'bg-navy-700',
-  fieldBorder: 'border-navy-600',
-  fieldText: 'text-sky-100',
-  fieldPlaceholder: 'placeholder-navy-400',
-  focusRing: 'focus:ring-gold-500',
-  focusBorder: 'focus:border-gold-500',
-  primaryButton: 'bg-sky-600',
-  primaryButtonHover: 'hover:bg-sky-700',
-  secondaryButton: 'bg-navy-700',
-  secondaryButtonHover: 'hover:bg-navy-600',
-  secondaryButtonBorder: 'border-navy-600',
-  activeTab: 'text-gold-400',
-  activeTabBorder: 'border-gold-500',
-  inactiveTab: 'text-navy-400',
-  inactiveTabHover: 'hover:text-navy-300 hover:border-navy-500',
-  tabBorder: 'border-navy-700',
-  errorTabText: 'text-red-400',
-  errorTabBorder: 'border-red-500',
-};
-
-const PLATFORM_ICONS = {
-  discord: '🎮',
-  twitch: '📺',
-  slack: '💬',
-  youtube: '▶️',
-};
-
-const PLATFORM_COLORS = {
-  discord: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
-  twitch: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
-  slack: 'bg-green-500/20 text-green-300 border-green-500/30',
-  youtube: 'bg-red-500/20 text-red-300 border-red-500/30',
-};
+const PLATFORM_ICONS = new Proxy({}, { get: (_, key) => getPlatformIcon(key) });
+const PLATFORM_COLORS = new Proxy({}, { get: (_, key) => getPlatformColor(key) });
 
 function LoyaltyLeaderboard() {
   const { communityId } = useParams();
@@ -384,7 +344,8 @@ function LoyaltyLeaderboard() {
         submitButtonText={actionLoading ? 'Processing...' : 'Apply Adjustment'}
         cancelButtonText="Cancel"
         width="md"
-        colors={waddlebotColors}
+        themeMode="dark"
+        colors={WADDLES_COLORS}
       />
 
       {/* Wipe Confirmation Modal */}
@@ -404,7 +365,8 @@ function LoyaltyLeaderboard() {
         submitButtonText={actionLoading ? 'Wiping...' : 'Confirm Wipe'}
         cancelButtonText="Cancel"
         width="md"
-        colors={waddlebotColors}
+        themeMode="dark"
+        colors={WADDLES_COLORS}
       />
     </div>
   );

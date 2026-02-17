@@ -3,13 +3,26 @@
  * Individual chat message with avatar, username, and timestamp
  */
 import { useAuth } from '../../contexts/AuthContext';
+import { getPlatformConfig } from '../../utils/platformConfig';
 
-// Platform badges
+// Build platform badges from shared config, mapping to the shape used below
+const buildBadge = (platform) => {
+  const cfg = getPlatformConfig(platform);
+  // Extract just the first bg- class for the solid badge background
+  const bgClass = cfg.color.split(' ').find((c) => c.startsWith('bg-'))?.replace('/20', '') || 'bg-navy-700';
+  return { emoji: cfg.icon, color: bgClass, name: cfg.label };
+};
 const PLATFORM_BADGES = {
-  discord: { emoji: '💬', color: 'bg-indigo-500', name: 'Discord' },
-  twitch: { emoji: '📺', color: 'bg-purple-500', name: 'Twitch' },
-  slack: { emoji: '💼', color: 'bg-green-500', name: 'Slack' },
-  hub: { emoji: '🌐', color: 'bg-blue-500', name: 'Hub' },
+  discord: buildBadge('discord'),
+  twitch: buildBadge('twitch'),
+  slack: buildBadge('slack'),
+  youtube: buildBadge('youtube'),
+  kick: buildBadge('kick'),
+  telegram: buildBadge('telegram'),
+  matrix: buildBadge('matrix'),
+  guilded: buildBadge('guilded'),
+  revolt: buildBadge('revolt'),
+  hub: buildBadge('hub'),
 };
 
 export default function ChatMessage({ message }) {

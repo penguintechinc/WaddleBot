@@ -423,6 +423,8 @@ class PlatformConfigController {
 
   /**
    * Get hub settings (key-value pairs from hub_settings table)
+   * Database values take precedence over environment variables.
+   * If a setting is not in the database, environment variable fallback is used.
    */
   static async getHubSettings(req, res) {
     try {

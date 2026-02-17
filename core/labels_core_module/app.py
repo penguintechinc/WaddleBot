@@ -106,7 +106,7 @@ def define_tables(db):
         db.Field('created_at', 'datetime', default=datetime.utcnow),
         db.Field('updated_at', 'datetime', update=datetime.utcnow),
         db.Field('is_active', 'boolean', default=True),
-        migrate=True
+        migrate=False
     )
 
     # Entity labels table - stores label assignments to entities
@@ -121,7 +121,7 @@ def define_tables(db):
         db.Field('expires_at', 'datetime'),
         db.Field('metadata', 'json'),
         db.Field('is_active', 'boolean', default=True),
-        migrate=True
+        migrate=False
     )
 
     db.commit()

@@ -90,6 +90,7 @@ router.put('/settings',
 );
 
 // Kong Gateway management
+router.get('/kong/health', kongController.getHealth);
 router.get('/kong/status', kongController.getStatus);
 
 // Services

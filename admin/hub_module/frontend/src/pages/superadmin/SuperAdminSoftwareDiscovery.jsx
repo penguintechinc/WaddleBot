@@ -15,37 +15,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { FormModalBuilder } from '@penguintechinc/react-libs';
-
-// Waddles theme colors matching the existing UI
-const waddlebotColors = {
-  modalBackground: 'bg-navy-800',
-  headerBackground: 'bg-navy-800',
-  footerBackground: 'bg-navy-800',
-  overlayBackground: 'bg-black bg-opacity-50',
-  titleText: 'text-gold-400',
-  labelText: 'text-gray-400',
-  descriptionText: 'text-gray-500',
-  errorText: 'text-red-400',
-  buttonText: 'text-navy-900',
-  fieldBackground: 'bg-navy-700',
-  fieldBorder: 'border-navy-600',
-  fieldText: 'text-white',
-  fieldPlaceholder: 'placeholder-gray-500',
-  focusRing: 'focus:ring-sky-500',
-  focusBorder: 'focus:border-sky-500',
-  primaryButton: 'bg-gold-500',
-  primaryButtonHover: 'hover:bg-gold-600',
-  secondaryButton: 'bg-navy-700',
-  secondaryButtonHover: 'hover:bg-navy-600',
-  secondaryButtonBorder: 'border-navy-600',
-  activeTab: 'text-gold-400',
-  activeTabBorder: 'border-gold-500',
-  inactiveTab: 'text-gray-400',
-  inactiveTabHover: 'hover:text-gray-300 hover:border-navy-500',
-  tabBorder: 'border-navy-700',
-  errorTabText: 'text-red-400',
-  errorTabBorder: 'border-red-500',
-};
+import { WADDLES_GOLD_COLORS } from '../../theme/waddlebotTheme';
 
 // Git provider icons
 const GitHubIcon = () => (
@@ -549,7 +519,8 @@ export default function SuperAdminSoftwareDiscovery() {
         submitButtonText="Add Repository"
         cancelButtonText="Cancel"
         width="lg"
-        colors={waddlebotColors}
+        themeMode="dark"
+        colors={WADDLES_GOLD_COLORS}
       />
 
       {/* Info Section */}

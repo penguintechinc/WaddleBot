@@ -2,14 +2,14 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { adminApi } from '../../services/api';
 
-const PLATFORMS = [
-  { id: 'twitch', name: 'Twitch', icon: '📺', color: 'bg-purple-500/20 text-purple-300 border-purple-500/30' },
-  { id: 'kick', name: 'KICK', icon: '🎬', color: 'bg-green-500/20 text-green-300 border-green-500/30' },
-  { id: 'youtube', name: 'YouTube', icon: '▶️', color: 'bg-red-500/20 text-red-300 border-red-500/30' },
-  { id: 'discord', name: 'Discord', icon: '🎮', color: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' },
-  { id: 'slack', name: 'Slack', icon: '💬', color: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30' },
-  { id: 'hub', name: 'Hub Chat', icon: '🐧', color: 'bg-sky-500/20 text-sky-300 border-sky-500/30' },
-];
+import { getAllPlatformOptions } from '../../utils/platformConfig';
+
+const PLATFORMS = getAllPlatformOptions().map((p) => ({
+  id: p.id,
+  name: p.label,
+  icon: p.icon,
+  color: p.color,
+}));
 
 function AdminLeaderboardConfig() {
   const { communityId } = useParams();

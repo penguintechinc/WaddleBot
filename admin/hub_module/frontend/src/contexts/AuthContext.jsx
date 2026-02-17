@@ -1,12 +1,16 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import api from '../services/api';
 
 const AuthContext = createContext(null);
+
+// Threshold in milliseconds before user data is considered stale
+const USER_STALE_THRESHOLD_MS = 30 * 1000; // 30 seconds
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const lastFetchedAt = useRef(null);
 
   // Check for existing session on mount
   useEffect(() => {
@@ -23,6 +27,7 @@ export function AuthProvider({ children }) {
       const response = await api.get('/api/v1/auth/me');
       if (response.data.success && response.data.user) {
         setUser(response.data.user);
+        lastFetchedAt.current = Date.now();
       } else {
         localStorage.removeItem('token');
       }
@@ -33,6 +38,23 @@ export function AuthProvider({ children }) {
       setLoading(false);
     }
   };
+
+  /**
+   * Re-fetch current user data from the server.
+   * Skips if data was fetched within the staleness threshold
+   * unless force=true is passed.
+   */
+  const refreshUser = useCallback(async (force = false) => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    const now = Date.now();
+    if (!force && lastFetchedAt.current && (now - lastFetchedAt.current) < USER_STALE_THRESHOLD_MS) {
+      return; // Data is still fresh
+    }
+
+    await fetchCurrentUser();
+  }, []);
 
   const loginWithOAuth = useCallback(async (platform) => {
     try {
@@ -169,6 +191,7 @@ export function AuthProvider({ children }) {
     handleOAuthCallback,
     logout,
     refreshToken,
+    refreshUser,
     isAuthenticated: !!user,
     // Role checks - use roles array directly
     hasRole: (role) => user?.roles?.includes(role),

@@ -1,20 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { adminApi } from '../../services/api';
+import { getPlatformIcon, getPlatformColor } from '../../utils/platformConfig';
 
-const PLATFORM_ICONS = {
-  discord: '🎮',
-  twitch: '📺',
-  slack: '💬',
-  youtube: '▶️',
-};
-
-const PLATFORM_COLORS = {
-  discord: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
-  twitch: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
-  slack: 'bg-green-500/20 text-green-300 border-green-500/30',
-  youtube: 'bg-red-500/20 text-red-300 border-red-500/30',
-};
+const PLATFORM_ICONS = new Proxy({}, { get: (_, key) => getPlatformIcon(key) });
+const PLATFORM_COLORS = new Proxy({}, { get: (_, key) => getPlatformColor(key) });
 
 function AdminServers() {
   const { communityId } = useParams();

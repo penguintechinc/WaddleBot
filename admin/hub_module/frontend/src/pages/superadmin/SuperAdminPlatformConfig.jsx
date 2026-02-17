@@ -129,8 +129,7 @@ export default function SuperAdminPlatformConfig() {
         <h4 className="font-medium text-sky-300 mb-2">Security Note</h4>
         <p className="text-sm text-sky-400">
           All credentials are encrypted at rest and require authentication to access.
-          Environment variables take precedence over stored values. For production deployments,
-          consider using environment variables for sensitive credentials.
+          Database values take precedence over environment variables. Values set through this interface will override any corresponding environment variables. For initial deployment, environment variables can be used as defaults until configured here.
         </p>
       </div>
     </div>

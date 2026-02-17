@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { superAdminApi } from '../../services/api';
+import { getPlatformIcon, getPlatformColor, getPlatformLabel, getAllPlatformOptions } from '../../utils/platformConfig';
 
 function SuperAdminCommunities() {
   const [communities, setCommunities] = useState([]);
@@ -106,11 +107,13 @@ function SuperAdminCommunities() {
             className="input w-40"
           >
             <option value="">All Platforms</option>
-            <option value="discord">Discord</option>
-            <option value="twitch">Twitch</option>
-            <option value="slack">Slack</option>
-            <option value="youtube">YouTube</option>
-            <option value="kick">KICK</option>
+            {getAllPlatformOptions()
+              .filter((p) => p.id !== 'hub')
+              .map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.icon} {p.label}
+                </option>
+              ))}
           </select>
           <select
             value={isActive}
@@ -166,14 +169,8 @@ function SuperAdminCommunities() {
                     <div className="text-sm text-navy-400">{community.name}</div>
                   </td>
                   <td>
-                    <span className={`badge ${
-                      community.platform === 'discord' ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' :
-                      community.platform === 'twitch' ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' :
-                      community.platform === 'youtube' ? 'bg-red-500/20 text-red-300 border border-red-500/30' :
-                      community.platform === 'kick' ? 'bg-green-500/20 text-green-300 border border-green-500/30' :
-                      'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                    }`}>
-                      {community.platform}
+                    <span className={`badge border ${getPlatformColor(community.platform)}`}>
+                      {getPlatformIcon(community.platform)} {getPlatformLabel(community.platform)}
                     </span>
                   </td>
                   <td>

@@ -1,14 +1,13 @@
 import { useState, useEffect } from 'react';
 import { superAdminApi } from '../../../services/api';
 import { Save, X, RefreshCw, Eye, EyeOff } from 'lucide-react';
+import { getAllPlatformOptions } from '../../../utils/platformConfig';
 
 const PLATFORMS = [
-  { value: 'twitch', label: 'Twitch' },
-  { value: 'discord', label: 'Discord' },
-  { value: 'slack', label: 'Slack' },
-  { value: 'youtube', label: 'YouTube' },
+  ...getAllPlatformOptions()
+    .filter((p) => p.id !== 'hub')
+    .map((p) => ({ value: p.id, label: p.label })),
   { value: 'spotify', label: 'Spotify' },
-  { value: 'kick', label: 'Kick' },
   { value: 'reddit', label: 'Reddit' },
   { value: 'twitter', label: 'Twitter/X' },
 ];
