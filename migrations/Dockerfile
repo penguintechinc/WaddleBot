@@ -15,7 +15,9 @@ COPY alembic.ini .
 COPY alembic/ alembic/
 
 # Copy SQLAlchemy models (needed for target_metadata)
+# Create __init__.py files so Python recognizes the nested package path
 COPY libs/flask_core/ libs/flask_core/
+RUN touch libs/__init__.py libs/flask_core/__init__.py
 
 # Copy legacy SQL migrations (used by baseline migration)
 COPY config/postgres/migrations/ config/postgres/migrations/

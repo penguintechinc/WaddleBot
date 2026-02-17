@@ -1,12 +1,25 @@
 """Alembic environment configuration for WaddleBot migrations."""
 
 import os
+import sys
+import types
 from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool, text
 from alembic import context
 
-# Import models — triggers all model registrations on db.metadata
-from libs.flask_core.flask_core.models import db
+# Stub the flask_core package so its __init__.py (which eagerly imports pydal,
+# authlib, redis, etc.) never runs.  The migration container only ships
+# alembic + sqlalchemy + psycopg2 — those heavy deps aren't installed.
+# Model submodules import "from flask_core.models import db", so we add
+# libs/flask_core to sys.path and replace the flask_core package entry.
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'libs', 'flask_core'))
+_stub = types.ModuleType('flask_core')
+_stub.__path__ = [os.path.join(os.path.dirname(__file__), '..', 'libs', 'flask_core', 'flask_core')]
+_stub.__package__ = 'flask_core'
+sys.modules['flask_core'] = _stub
+
+# Now import models — only triggers models/__init__.py (flask-sqlalchemy + model defs)
+from flask_core.models import db  # noqa: E402
 
 # this is the Alembic Config object
 config = context.config
