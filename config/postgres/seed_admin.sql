@@ -2,7 +2,7 @@
 -- Run this after init.sql and migrations to create the default admin account
 --
 -- Default credentials:
---   Email: admin@localhost.net
+--   Email: admin@localhost.local
 --   Password: admin123
 --
 -- IMPORTANT: Change these credentials in production!
@@ -23,7 +23,7 @@ INSERT INTO hub_users (
     created_at,
     updated_at
 ) VALUES (
-    'admin@localhost.net',
+    'admin@localhost.local',
     'admin',
     '$2b$12$4bHCtATjQNY//n42FMy/P.Uieygqwj.Hh5FbuPJJweqXcZbaTSK0u',
     true,
@@ -83,7 +83,7 @@ SELECT
     NOW()
 FROM hub_users u
 CROSS JOIN communities c
-WHERE u.email = 'admin@localhost.net'
+WHERE u.email = 'admin@localhost.local'
   AND c.name = 'waddlebot-global'
 ON CONFLICT (community_id, user_id) DO UPDATE SET
     role = 'admin',
@@ -107,7 +107,7 @@ DO $$
 DECLARE
     admin_id INTEGER;
 BEGIN
-    SELECT id INTO admin_id FROM hub_users WHERE email = 'admin@localhost.net';
+    SELECT id INTO admin_id FROM hub_users WHERE email = 'admin@localhost.local';
     IF admin_id IS NULL THEN
         RAISE EXCEPTION 'Failed to create admin user';
     ELSE
