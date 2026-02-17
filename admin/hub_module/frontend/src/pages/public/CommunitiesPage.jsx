@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { publicApi } from '../../services/api';
 import CommunityTypeBadge, { communityTypeConfig } from '../../components/CommunityTypeBadge';
+import { getPlatformIcon, getPlatformLabel, getAllPlatformOptions } from '../../utils/platformConfig';
 
 function CommunitiesPage() {
   const { isAuthenticated } = useAuth();
@@ -12,6 +13,7 @@ function CommunitiesPage() {
   const [pagination, setPagination] = useState(null);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  const [platformFilter, setPlatformFilter] = useState('');
 
   // Debounce search
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -27,6 +29,7 @@ function CommunitiesPage() {
         const params = { page, limit: 12 };
         if (debouncedSearch) params.search = debouncedSearch;
         if (typeFilter) params.type = typeFilter;
+        if (platformFilter) params.platform = platformFilter;
         const response = await publicApi.getCommunities(params);
         setCommunities(response.data.communities);
         setPagination(response.data.pagination);
@@ -37,21 +40,20 @@ function CommunitiesPage() {
       }
     }
     fetchCommunities();
-  }, [page, debouncedSearch, typeFilter]);
+  }, [page, debouncedSearch, typeFilter, platformFilter]);
 
   // Reset page when filters change
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, typeFilter]);
+  }, [debouncedSearch, typeFilter, platformFilter]);
 
-  const platformIcon = (platform) => {
-    switch (platform) {
-      case 'discord': return '💬';
-      case 'twitch': return '📺';
-      case 'slack': return '💼';
-      default: return '🌐';
-    }
-  };
+  const platformFilterOptions = [
+    { value: '', label: 'All Platforms' },
+    ...getAllPlatformOptions().map((p) => ({
+      value: p.id,
+      label: `${p.icon} ${p.label}`,
+    })),
+  ];
 
   const typeFilterOptions = [
     { value: '', label: 'All Types' },
@@ -66,12 +68,20 @@ function CommunitiesPage() {
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold mb-4 gradient-text">Discover Communities</h1>
         <p className="text-navy-400">Browse public communities using Waddles</p>
-        {isAuthenticated && (
+        {isAuthenticated ? (
           <Link
-            to="/superadmin/communities/new"
+            to="/communities/create"
             className="btn btn-primary mt-4 inline-block"
+            data-testid="create-community-btn"
           >
             + Create a Community
+          </Link>
+        ) : (
+          <Link
+            to="/login"
+            className="btn btn-secondary mt-4 inline-block"
+          >
+            Sign in to Create a Community
           </Link>
         )}
       </div>
@@ -86,6 +96,19 @@ function CommunitiesPage() {
             onChange={(e) => setSearch(e.target.value)}
             className="input w-full"
           />
+        </div>
+        <div className="sm:w-48">
+          <select
+            value={platformFilter}
+            onChange={(e) => setPlatformFilter(e.target.value)}
+            className="input w-full"
+          >
+            {platformFilterOptions.map(option => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="sm:w-48">
           <select
@@ -129,7 +152,7 @@ function CommunitiesPage() {
                 <div className="p-4">
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center space-x-2 min-w-0">
-                      <span>{platformIcon(community.primaryPlatform)}</span>
+                      <span title={getPlatformLabel(community.primaryPlatform)}>{getPlatformIcon(community.primaryPlatform)}</span>
                       <h3 className="font-semibold truncate text-sky-100">{community.displayName}</h3>
                     </div>
                     {community.communityType && (

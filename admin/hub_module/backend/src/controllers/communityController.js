@@ -1,7 +1,7 @@
 /**
  * Community Controller - Authenticated member features
  */
-import { query } from '../config/database.js';
+import { query, transaction } from '../config/database.js';
 import { errors } from '../middleware/errorHandler.js';
 import { logger } from '../utils/logger.js';
 import { formatReputation, clampReputation } from '../utils/reputation.js';
@@ -9,6 +9,8 @@ import {
   verifyPlatformAdmin,
   isUserCommunityAdmin,
 } from '../services/platformPermissionService.js';
+
+const VALID_COMMUNITY_TYPES = ['shared_interest_group', 'gaming', 'creator', 'corporate', 'other'];
 
 /**
  * Get user's communities
@@ -970,6 +972,105 @@ export async function cancelServerLinkRequest(req, res, next) {
     });
 
     res.json({ success: true, message: 'Server link request cancelled' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Create a new community (authenticated user becomes owner)
+ * POST /api/v1/communities/create
+ */
+export async function createCommunity(req, res, next) {
+  try {
+    const { name, displayName, description, platform, platformServerId, isPublic, communityType } = req.body;
+
+    if (!name || !platform) {
+      return next(errors.badRequest('Name and platform are required'));
+    }
+
+    // Validate community type
+    const validatedCommunityType = communityType || 'creator';
+    if (!VALID_COMMUNITY_TYPES.includes(validatedCommunityType)) {
+      return next(errors.badRequest(
+        `Invalid community type. Must be one of: ${VALID_COMMUNITY_TYPES.join(', ')}`
+      ));
+    }
+
+    // Normalize community name
+    const normalizedName = name
+      .toLowerCase()
+      .replace(/[^a-z0-9\s\-_]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .slice(0, 100);
+
+    if (!normalizedName) {
+      return next(errors.badRequest('Community name must contain valid characters'));
+    }
+
+    // Check if community name already exists
+    const existingResult = await query(
+      'SELECT id FROM communities WHERE name = $1',
+      [normalizedName]
+    );
+
+    if (existingResult.rows.length > 0) {
+      return next(errors.conflict('Community name already exists'));
+    }
+
+    const result = await transaction(async (client) => {
+      // Create the community with the current user as owner
+      const communityResult = await client.query(
+        `INSERT INTO communities
+         (name, display_name, description, platform, platform_server_id,
+          owner_id, owner_name, is_public, community_type, member_count, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 1, $6)
+         RETURNING id, name, display_name, platform, community_type, created_at`,
+        [
+          normalizedName,
+          displayName || name,
+          description || '',
+          platform,
+          platformServerId || null,
+          req.user.id,
+          req.user.username || null,
+          isPublic !== false,
+          validatedCommunityType,
+        ]
+      );
+
+      const newCommunity = communityResult.rows[0];
+
+      // Add creator as community-owner member (reputation starts at 600)
+      await client.query(
+        `INSERT INTO community_members
+         (community_id, user_id, role, reputation, is_active, joined_at)
+         VALUES ($1, $2, 'community-owner', 600, true, NOW())`,
+        [newCommunity.id, req.user.id]
+      );
+
+      return newCommunity;
+    });
+
+    logger.audit('Community created by user', {
+      userId: req.user.id,
+      communityId: result.id,
+      name: result.name,
+      communityType: result.community_type,
+    });
+
+    res.status(201).json({
+      success: true,
+      community: {
+        id: result.id,
+        name: result.name,
+        displayName: result.display_name,
+        platform: result.platform,
+        communityType: result.community_type,
+        createdAt: result.created_at?.toISOString(),
+      },
+    });
   } catch (err) {
     next(err);
   }
