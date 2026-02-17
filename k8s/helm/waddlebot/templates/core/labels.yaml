@@ -22,6 +22,8 @@ spec:
       serviceAccountName: {{ include "waddlebot.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+      {{- include "waddlebot.dbMigrateInitContainer" . | nindent 6 }}
       containers:
       - name: labels-core
         image: "{{ .Values.global.imageRegistry }}/core-labels:{{ .Values.modules.labelsCore.imageTag | default .Values.global.imageTag }}"

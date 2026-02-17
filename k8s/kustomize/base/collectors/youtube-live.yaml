@@ -1,0 +1,124 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: collector-youtube-live
+  labels:
+    app: collector-youtube-live
+    app.kubernetes.io/component: collector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: collector-youtube-live
+  template:
+    metadata:
+      labels:
+        app: collector-youtube-live
+        app.kubernetes.io/component: collector
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      initContainers:
+      - name: db-migrate
+        image: waddlebot-migrations:latest
+        imagePullPolicy: Always
+        envFrom:
+        - configMapRef:
+            name: waddlebot-config
+        - secretRef:
+            name: waddlebot-secrets
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "64Mi"
+          limits:
+            cpu: "200m"
+            memory: "128Mi"
+      containers:
+      - name: youtube-live-collector
+        image: collector-youtube-live:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8006
+          protocol: TCP
+        envFrom:
+        - secretRef:
+            name: waddlebot-secrets
+            optional: true
+        env:
+        - name: MODULE_NAME
+          value: "youtube-live-collector"
+        - name: MODULE_PORT
+          value: "8006"
+        - name: DB_HOST
+          value: "infra-postgres"
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_NAME
+          value: "waddlebot"
+        - name: DB_USER
+          value: "waddlebot"
+        - name: DB_PASS
+          valueFrom:
+            secretKeyRef:
+              name: waddlebot-secrets
+              key: POSTGRES_PASSWORD
+        - name: REDIS_HOST
+          value: "infra-redis"
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        volumeMounts:
+        - name: logs
+          mountPath: /var/log/waddlebotlog
+        - name: databases
+          mountPath: /app/databases
+      volumes:
+      - name: logs
+        emptyDir: {}
+      - name: databases
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: collector-youtube-live
+  labels:
+    app: collector-youtube-live
+    app.kubernetes.io/component: collector
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8006
+    targetPort: http
+    protocol: TCP
+  selector:
+    app: collector-youtube-live

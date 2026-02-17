@@ -26,6 +26,8 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      initContainers:
+      {{- include "waddlebot.dbMigrateInitContainer" . | nindent 8 }}
       containers:
         - name: twitch-collector
           image: "{{ .Values.global.imageRegistry }}/{{ .Values.modules.collectors.twitch.image }}:{{ .Values.modules.collectors.twitch.tag | default "latest" }}"

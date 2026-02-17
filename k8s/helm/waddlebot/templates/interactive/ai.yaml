@@ -22,6 +22,8 @@ spec:
       serviceAccountName: {{ include "waddlebot.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+      {{- include "waddlebot.dbMigrateInitContainer" . | nindent 6 }}
       containers:
       - name: ai-interaction
         image: "{{ .Values.global.imageRegistry }}/interactive-ai:{{ .Values.modules.interactive.ai.imageTag | default .Values.global.imageTag }}"

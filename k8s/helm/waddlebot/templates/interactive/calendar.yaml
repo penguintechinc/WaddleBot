@@ -22,6 +22,8 @@ spec:
       serviceAccountName: {{ include "waddlebot.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+      {{- include "waddlebot.dbMigrateInitContainer" . | nindent 6 }}
       containers:
       - name: calendar-interaction
         image: "{{ .Values.global.imageRegistry }}/interactive-calendar:{{ .Values.modules.interactive.calendar.imageTag | default .Values.global.imageTag }}"

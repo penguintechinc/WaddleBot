@@ -1,0 +1,138 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: core-video-proxy
+  labels:
+    app: core-video-proxy
+    app.kubernetes.io/component: video-proxy
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: core-video-proxy
+  template:
+    metadata:
+      labels:
+        app: core-video-proxy
+        app.kubernetes.io/component: video-proxy
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      initContainers:
+      - name: db-migrate
+        image: waddlebot-migrations:latest
+        imagePullPolicy: Always
+        envFrom:
+        - configMapRef:
+            name: waddlebot-config
+        - secretRef:
+            name: waddlebot-secrets
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "64Mi"
+          limits:
+            cpu: "200m"
+            memory: "128Mi"
+      containers:
+      - name: video-proxy
+        image: core-video-proxy:latest
+        imagePullPolicy: Always
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+        ports:
+        - name: http
+          containerPort: 8092
+          protocol: TCP
+        - name: grpc
+          containerPort: 50065
+          protocol: TCP
+        env:
+        - name: MODULE_NAME
+          value: "video-proxy"
+        - name: MODULE_PORT
+          value: "8092"
+        - name: GRPC_PORT
+          value: "50065"
+        - name: DB_HOST
+          value: "infra-postgres"
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_NAME
+          value: "waddlebot"
+        - name: DB_USER
+          value: "waddlebot"
+        - name: DB_PASS
+          valueFrom:
+            secretKeyRef:
+              name: waddlebot-secrets
+              key: POSTGRES_PASSWORD
+        - name: REDIS_HOST
+          value: "infra-redis"
+        - name: MINIO_ENDPOINT
+          value: "infra-minio:9000"
+        - name: MARCHPROXY_GRPC_HOST
+          value: "marchproxy-rtmp"
+        - name: MARCHPROXY_GRPC_PORT
+          value: "50050"
+        envFrom:
+        - secretRef:
+            name: waddlebot-secrets
+            optional: true
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "256Mi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
+        volumeMounts:
+        - name: logs
+          mountPath: /var/log/waddlebotlog
+        - name: databases
+          mountPath: /app/databases
+      volumes:
+      - name: logs
+        emptyDir: {}
+      - name: databases
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: core-video-proxy
+  labels:
+    app: core-video-proxy
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8092
+    targetPort: http
+    protocol: TCP
+    name: http
+  - port: 50065
+    targetPort: grpc
+    protocol: TCP
+    name: grpc
+  selector:
+    app: core-video-proxy
