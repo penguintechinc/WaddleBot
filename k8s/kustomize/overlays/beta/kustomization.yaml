@@ -93,6 +93,9 @@ images:
   - name: interactive-loyalty
     newName: registry-dal2.penguintech.io/waddlebot/interactive-loyalty
     newTag: latest
+  - name: interactive-translate
+    newName: registry-dal2.penguintech.io/waddlebot/interactive-translate
+    newTag: latest
 
   # Action/Pushing Services
   - name: action-discord
