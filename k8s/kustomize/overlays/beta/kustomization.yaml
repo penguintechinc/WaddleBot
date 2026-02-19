@@ -96,6 +96,15 @@ images:
   - name: interactive-translate
     newName: registry-dal2.penguintech.io/waddlebot/interactive-translate
     newTag: latest
+  - name: ghcr.io/penguintechinc/waddlebot/clip-interaction
+    newName: registry-dal2.penguintech.io/waddlebot/clip-interaction
+    newTag: latest
+  - name: ghcr.io/penguintechinc/waddlebot/lfg-interaction
+    newName: registry-dal2.penguintech.io/waddlebot/lfg-interaction
+    newTag: latest
+  - name: ghcr.io/penguintechinc/waddlebot/server-status-interaction
+    newName: registry-dal2.penguintech.io/waddlebot/server-status-interaction
+    newTag: latest
 
   # Action/Pushing Services
   - name: action-discord
