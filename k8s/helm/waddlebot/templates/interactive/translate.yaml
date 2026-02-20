@@ -1,0 +1,104 @@
+{{- if .Values.modules.interactive.translate.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "waddlebot.fullname" . }}-translate-interaction
+  labels:
+    {{- include "waddlebot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: translate-interaction
+spec:
+  replicas: {{ .Values.modules.interactive.translate.replicas }}
+  selector:
+    matchLabels:
+      {{- include "waddlebot.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: translate-interaction
+  template:
+    metadata:
+      labels:
+        {{- include "waddlebot.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: translate-interaction
+    spec:
+      serviceAccountName: {{ include "waddlebot.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+      {{- include "waddlebot.dbMigrateInitContainer" . | nindent 6 }}
+      containers:
+      - name: translate-interaction
+        image: "{{ .Values.global.imageRegistry }}/interactive-translate:{{ .Values.modules.interactive.translate.imageTag | default .Values.global.imageTag }}"
+        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 10 }}
+        ports:
+        - name: http
+          containerPort: 8033
+          protocol: TCP
+        - name: grpc
+          containerPort: 50033
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: {{ include "waddlebot.fullname" . }}-config
+        - configMapRef:
+            name: {{ include "waddlebot.fullname" . }}-translate-interaction-config
+            optional: true
+        - secretRef:
+            name: {{ include "waddlebot.fullname" . }}-secrets
+        - secretRef:
+            name: {{ include "waddlebot.fullname" . }}-translate-interaction-secret
+            optional: true
+        env:
+        - name: MODULE_NAME
+          value: "interactive-translate"
+        - name: MODULE_PORT
+          value: "8033"
+        - name: GRPC_PORT
+          value: "50033"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          {{- toYaml .Values.modules.interactive.translate.resources | nindent 10 }}
+        volumeMounts:
+        - name: logs
+          mountPath: /var/log/waddlebotlog
+      volumes:
+      - name: logs
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "waddlebot.fullname" . }}-translate-interaction
+  labels:
+    {{- include "waddlebot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: translate-interaction
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8033
+    targetPort: http
+    protocol: TCP
+    name: http
+  - port: 50033
+    targetPort: grpc
+    protocol: TCP
+    name: grpc
+  selector:
+    {{- include "waddlebot.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: translate-interaction
+{{- end }}
