@@ -74,10 +74,13 @@ modules:
   collectors:
     twitch:
       image: trigger-twitch
+      replicas: 1
     discord:
       image: trigger-discord
+      replicas: 1
     slack:
       image: trigger-slack
+      replicas: 1
     youtubeLive:
       image: trigger-youtube
     kick:
@@ -87,31 +90,45 @@ modules:
   interactive:
     ai:
       image: interactive-ai
+      replicas: 1
     alias:
       image: interactive-alias
+      replicas: 1
     shoutout:
       image: interactive-shoutout
+      replicas: 1
     inventory:
       image: interactive-inventory
+      replicas: 1
     calendar:
       image: interactive-calendar
+      replicas: 1
     memories:
       image: interactive-memories
+      replicas: 1
     youtubeMusic:
       image: interactive-youtube-music
     spotify:
       image: interactive-spotify
     loyalty:
       image: interactive-loyalty
+      replicas: 1
+    translate:
+      enabled: true
+      image: interactive-translate
+      replicas: 1
 
   # Platform Action Modules
   platformActions:
     discord:
       image: action-discord
+      replicas: 1
     slack:
       image: action-slack
+      replicas: 1
     twitch:
       image: action-twitch
+      replicas: 1
     youtube:
       image: action-youtube
 
