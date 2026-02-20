@@ -124,6 +124,7 @@ modules:
       replicas: 1
     translate:
       enabled: true
+      name: translate-interaction
       image: interactive-translate
       replicas: 1
 
