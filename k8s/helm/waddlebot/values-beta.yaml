@@ -34,29 +34,37 @@ modules:
   # Router
   router:
     image: router
+    replicas: 1
 
   # Hub
   hub:
     image: hub-api
+    replicas: 1
 
   hubWebui:
     image: hub-webui
+    replicas: 1
 
   # Core Modules
   identityCore:
     image: core-identity
+    replicas: 1
 
   labelsCore:
     image: core-labels
+    replicas: 1
 
   browserSource:
     image: core-browser-source
+    replicas: 1
 
   reputation:
     image: core-reputation
+    replicas: 1
 
   community:
     image: core-community
+    replicas: 1
 
   aiResearcher:
     image: ai-researcher
@@ -69,6 +77,7 @@ modules:
 
   moduleRtc:
     image: core-module-rtc
+    replicas: 1
 
   # Collectors/Triggers
   collectors:
