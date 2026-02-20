@@ -9,6 +9,7 @@ Complete technical reference for deploying, managing, and operating Waddles on K
 - [Overview](#overview)
 - [Prerequisites](#prerequisites)
 - [Quick Start](#quick-start)
+- [Deployment Tool by Environment](#deployment-tool-by-environment)
 - [Deployment Methods](#deployment-methods)
 - [Kubectl Deployment Steps](#kubectl-deployment-steps)
 - [Helm Chart Usage](#helm-chart-usage)
@@ -121,6 +122,30 @@ cd /home/penguin/code/Waddles/k8s
 ```
 
 **Access**: http://waddlebot.local or `minikube service hub -n waddlebot`
+
+---
+
+## Deployment Tool by Environment
+
+| Environment | Tool | Rationale |
+|---|---|---|
+| **Beta** (`dal2-beta`) | **Helm** | Release tracking, rollback history, atomic upgrades, values-based config per env |
+| **Alpha** (local/minikube) | **Kustomize** | Lightweight, no Helm dependency for local dev, fast iteration |
+
+> **This split is canonical.** Do not mix deployment tools within an environment.
+
+### Beta Deploy Command
+
+```bash
+helm upgrade --install waddlebot k8s/helm/waddlebot \
+  --kube-context dal2-beta \
+  --namespace waddlebot \
+  --create-namespace \
+  -f k8s/helm/waddlebot/values.yaml \
+  -f k8s/helm/waddlebot/values-beta.yaml \
+  --timeout 10m \
+  --wait
+```
 
 ---
 
