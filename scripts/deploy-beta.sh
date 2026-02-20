@@ -51,12 +51,17 @@ declare -A SERVICES=(
     [interactive-youtube-music]="${PROJECT_ROOT}/action/interactive/youtube_music_module/Dockerfile"
     [interactive-spotify]="${PROJECT_ROOT}/action/interactive/spotify_interaction_module/Dockerfile"
     [interactive-loyalty]="${PROJECT_ROOT}/action/interactive/loyalty_interaction_module/Dockerfile"
+    [interactive-translate]="${PROJECT_ROOT}/action/interactive/translate_interaction_module/Dockerfile"
     [action-discord]="${PROJECT_ROOT}/action/pushing/discord_action_module/Dockerfile"
     [action-slack]="${PROJECT_ROOT}/action/pushing/slack_action_module/Dockerfile"
     [action-twitch]="${PROJECT_ROOT}/action/pushing/twitch_action_module/Dockerfile"
     [action-youtube]="${PROJECT_ROOT}/action/pushing/youtube_action_module/Dockerfile"
     [waddlebot-migrations]="${PROJECT_ROOT}/migrations/Dockerfile"
 )
+
+# Deployment tool by environment:
+#   Beta  (dal2-beta)      → Helm      (this script)
+#   Alpha (local/minikube) → Kustomize (see future deploy-alpha.sh)
 
 # Default values — unique epoch tag per skill (never reuse beta-latest)
 TAG="${TAG:-beta-$(date +%s)}"
@@ -120,7 +125,7 @@ SERVICES:
   collector-youtube-live, collector-kick
   interactive-ai, interactive-alias, interactive-shoutout
   interactive-inventory, interactive-calendar, interactive-memories
-  interactive-youtube-music, interactive-spotify, interactive-loyalty
+  interactive-youtube-music, interactive-spotify, interactive-loyalty, interactive-translate
   action-discord, action-slack, action-twitch, action-youtube
 
 EXAMPLES:
