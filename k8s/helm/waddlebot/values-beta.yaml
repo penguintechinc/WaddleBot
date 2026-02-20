@@ -78,6 +78,9 @@ modules:
   moduleRtc:
     image: core-module-rtc
     replicas: 1
+    autoscaling:
+      minReplicas: 1
+      maxReplicas: 2
 
   # Collectors/Triggers
   collectors:
