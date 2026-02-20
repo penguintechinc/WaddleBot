@@ -694,6 +694,17 @@ modules:
         PORT: "8032"
         LOG_LEVEL: "INFO"
 
+    translate:
+      enabled: false
+      replicas: 1
+      resources:
+        requests:
+          memory: "128Mi"
+          cpu: "50m"
+        limits:
+          memory: "256Mi"
+          cpu: "200m"
+
   # Action Modules - Pushing (disabled for now)
   pushing:
     discordAction:
