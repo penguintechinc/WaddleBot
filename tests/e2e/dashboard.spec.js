@@ -52,10 +52,42 @@ async function injectCsrfCookie(page) {
   }
 }
 
-async function loginWithPassword(page, email, password) {
-  await injectCsrfCookie(page);
+/**
+ * Suppress all fixed-position overlays (cookie banner, vendor footer) by
+ * injecting the localStorage keys they check. Call BEFORE navigating to
+ * pages that render these overlays.
+ */
+async function suppressOverlays(page) {
+  await page.evaluate(() => {
+    if (!localStorage.getItem('cookieConsent')) {
+      localStorage.setItem('cookieConsent', JSON.stringify({
+        essential: true, analytics: true, marketing: true, preferences: true,
+        timestamp: new Date().toISOString(), policyVersion: '1.0'
+      }));
+    }
+    localStorage.setItem('vendor-request-dismissed', 'true');
+  });
+}
 
-  // Use resilient selectors that work with or without data-testids deployed
+/** Dismiss cookie consent banner and vendor request footer if present */
+async function dismissOverlays(page) {
+  const acceptBtn = page.locator('button[aria-label="Accept all cookies"], button:has-text("Accept All")').first();
+  if (await acceptBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
+    await acceptBtn.click();
+    await acceptBtn.waitFor({ state: 'hidden', timeout: 3000 }).catch(() => {});
+  }
+  const vendorDismiss = page.locator('button[title="Dismiss"]').first();
+  if (await vendorDismiss.isVisible({ timeout: 1000 }).catch(() => false)) {
+    await vendorDismiss.click();
+    await vendorDismiss.waitFor({ state: 'hidden', timeout: 3000 }).catch(() => {});
+  }
+}
+
+async function loginWithPassword(page, email, password, retries = 3) {
+  await injectCsrfCookie(page);
+  await suppressOverlays(page);
+  await dismissOverlays(page);
+
   await page.fill('[data-testid="email-input"], input[type="email"]', email);
   await page.fill('[data-testid="password-input"], input[type="password"]', password);
 
@@ -67,12 +99,61 @@ async function loginWithPassword(page, email, password) {
     page.click('[data-testid="auth-submit"], button[type="submit"]'),
   ]);
 
-  const data = await loginResponse.json().catch(() => ({}));
+  const bodyText = await loginResponse.text().catch(() => '(unreadable)');
+  let data;
+  try { data = JSON.parse(bodyText); } catch { data = {}; }
+
+  if (data?.error?.code === 'RATE_LIMITED' && retries > 0) {
+    console.log(`[loginWithPassword] Rate limited, waiting 10s before retry (${retries} left)...`);
+    await page.waitForTimeout(10000);
+    return loginWithPassword(page, email, password, retries - 1);
+  }
+
   if (!data.success) {
-    throw new Error(`Login failed: ${JSON.stringify(data)}`);
+    throw new Error(`Login failed: ${JSON.stringify(data)} (status ${loginResponse.status()})`);
   }
 
   await page.waitForURL(url => !url.toString().includes('/login'), { timeout: 10000 });
+  await suppressOverlays(page);
+}
+
+/**
+ * Intercept /api/v1/auth/me requests and retry on 429 rate limit.
+ * The React app's fetchCurrentUser clears the token and sets user=null
+ * on ANY error. This ensures the auth/me endpoint succeeds by retrying.
+ */
+async function installRateLimitRetry(page) {
+  await page.route('**/api/**', async (route) => {
+    try {
+      let response = await route.fetch();
+      let retries = 2;
+      while (response.status() === 429 && retries > 0) {
+        console.log(`[rate-limit-retry] 429 on ${route.request().url()}, waiting 15s (${retries} left)...`);
+        await new Promise(r => setTimeout(r, 15000));
+        response = await route.fetch();
+        retries--;
+      }
+      await route.fulfill({ response });
+    } catch {
+      // Context/page closed while route was in-flight — ignore gracefully
+    }
+  });
+}
+
+async function ensureAuthenticated(page) {
+  await installRateLimitRetry(page);
+
+  await page.goto('/', { waitUntil: 'networkidle' });
+  await suppressOverlays(page);
+
+  const token = await page.evaluate(() => localStorage.getItem('token'));
+  if (token) {
+    await page.goto('/dashboard', { waitUntil: 'networkidle', timeout: 60000 });
+    await suppressOverlays(page);
+    if (!page.url().includes('/login')) return;
+  }
+
+  await loginWithPassword(page, TEST_EMAIL, TEST_PASS);
 }
 
 // ---------------------------------------------------------------------------
@@ -81,8 +162,16 @@ async function loginWithPassword(page, email, password) {
 
 test.describe('Dashboard - Home Page', () => {
   test.beforeEach(async ({ page }) => {
-    await loginWithPassword(page, TEST_EMAIL, TEST_PASS);
+    await ensureAuthenticated(page);
     await page.goto('/dashboard', { waitUntil: 'networkidle' });
+    await dismissOverlays(page);
+
+    // Guard: if rate limiting cleared the token and bounced us to /login, re-authenticate
+    if (page.url().includes('/login')) {
+      await loginWithPassword(page, TEST_EMAIL, TEST_PASS);
+      await page.goto('/dashboard', { waitUntil: 'networkidle' });
+      await dismissOverlays(page);
+    }
   });
 
   test('dashboard home renders welcome message with username', async ({ page }) => {
@@ -94,13 +183,15 @@ test.describe('Dashboard - Home Page', () => {
     expect(text.trim().length).toBeGreaterThan('Welcome back, '.length);
   });
 
-  test('dashboard home shows loading spinner initially', async ({ page }) => {
-    // Navigate fresh and check that spinner appears before content
-    // (may be brief — just confirm no crash, content eventually appears)
+  test('dashboard home shows loading state or content after navigation', async ({ page }) => {
+    // Navigate fresh — spinner may be too brief to catch, so accept either spinner or content
     await page.goto('/dashboard');
-    // Either spinner or content must be visible
-    const spinnerOrContent = page.locator('[data-testid="dashboard-loading"], [data-testid="dashboard-welcome"]');
-    await expect(spinnerOrContent.first()).toBeVisible({ timeout: 8000 });
+    await suppressOverlays(page);
+    // Wait for either the loading spinner or the actual content (welcome message or community grid)
+    await page.waitForSelector(
+      '[data-testid="dashboard-loading"], [data-testid="dashboard-welcome"], [data-testid="communities-grid"], [data-testid="no-communities"]',
+      { timeout: 12000 }
+    );
   });
 
   test('dashboard shows community content or empty state after loading', async ({ page }) => {
@@ -163,7 +254,7 @@ test.describe('Dashboard - Home Page', () => {
 
 test.describe('Dashboard - Navigation', () => {
   test.beforeEach(async ({ page }) => {
-    await loginWithPassword(page, TEST_EMAIL, TEST_PASS);
+    await ensureAuthenticated(page);
   });
 
   test('/dashboard/settings renders account settings page', async ({ page }) => {
@@ -188,6 +279,7 @@ test.describe('Dashboard - Navigation', () => {
 
   test('/communities renders public communities page', async ({ page }) => {
     await page.goto('/communities', { waitUntil: 'networkidle' });
+    await dismissOverlays(page);
     await expect(page).toHaveURL(/\/communities$/);
     // Authenticated user sees the create community button
     await expect(page.locator('[data-testid="create-community-btn"]')).toBeVisible({ timeout: 8000 });
@@ -200,8 +292,9 @@ test.describe('Dashboard - Navigation', () => {
 
 test.describe('Dashboard - Super Admin', () => {
   test('super admin user sees the control panel banner on /dashboard', async ({ page }) => {
-    await loginWithPassword(page, TEST_EMAIL, TEST_PASS);
+    await ensureAuthenticated(page);
     await page.goto('/dashboard', { waitUntil: 'networkidle' });
+    await dismissOverlays(page);
 
     // Check if this account is a super admin by looking for the banner
     // (admin@localhost.local is seeded as super_admin, so this should appear)
@@ -221,8 +314,9 @@ test.describe('Dashboard - Super Admin', () => {
   });
 
   test('super admin can navigate to /superadmin', async ({ page }) => {
-    await loginWithPassword(page, TEST_EMAIL, TEST_PASS);
+    await ensureAuthenticated(page);
     await page.goto('/superadmin', { waitUntil: 'networkidle' });
+    await dismissOverlays(page);
 
     // Should either load the superadmin page or redirect to dashboard if not super admin
     const url = page.url();

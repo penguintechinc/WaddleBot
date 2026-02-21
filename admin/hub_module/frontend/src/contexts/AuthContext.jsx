@@ -33,7 +33,12 @@ export function AuthProvider({ children }) {
       }
     } catch (err) {
       console.error('Failed to fetch user:', err);
-      localStorage.removeItem('token');
+      // Only clear token on auth errors (401/403). Transient errors like
+      // 429 rate limiting or network failures should not log the user out.
+      const status = err.response?.status;
+      if (status === 401 || status === 403) {
+        localStorage.removeItem('token');
+      }
     } finally {
       setLoading(false);
     }

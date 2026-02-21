@@ -24,6 +24,9 @@
  */
 
 const { defineConfig, devices } = require('@playwright/test');
+const path = require('path');
+
+const AUTH_STATE_PATH = path.join(__dirname, '.auth-state.json');
 
 module.exports = defineConfig({
   testDir: './',
@@ -41,12 +44,34 @@ module.exports = defineConfig({
     ignoreHTTPSErrors: true, // For self-signed / internal certs
   },
 
-  timeout: 60000, // 60 seconds per test
+  timeout: 90000, // 90 seconds per test (allows for rate-limit retries)
 
   projects: [
+    // Setup project: logs in once and saves auth state for reuse
     {
-      name: 'chromium',
+      name: 'setup',
+      testMatch: 'auth.setup.js',
       use: { ...devices['Desktop Chrome'] },
+    },
+    // Authenticated tests run FIRST: reuse storageState (no login API calls)
+    // This keeps the rate limit counter low for the auth tests that follow.
+    {
+      name: 'authenticated-tests',
+      testMatch: ['community-creation.spec.js', 'community-workflow.spec.js', 'dashboard.spec.js', 'vendor-workflow.spec.js'],
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: AUTH_STATE_PATH,
+      },
+      dependencies: ['setup'],
+    },
+    // Auth tests: test login/logout flows with fresh (unauthenticated) contexts.
+    // Depends on setup completing, runs after authenticated-tests (which use
+    // storageState and don't make login calls) to minimize rate limit pressure.
+    {
+      name: 'auth-tests',
+      testMatch: ['auth.spec.js', 'auth-workflow.spec.js'],
+      use: { ...devices['Desktop Chrome'] },
+      dependencies: ['setup'],
     },
   ],
 

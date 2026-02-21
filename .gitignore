@@ -2,6 +2,11 @@
 *.tmp
 *.temp
 
+# Playwright
+tests/e2e/.auth-state.json
+tests/e2e/test-results/
+tests/e2e/playwright-report/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
