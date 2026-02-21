@@ -63,6 +63,7 @@ calendar_oauth_service = None
 availability_service = None
 booking_service = None
 group_availability_service = None
+tournament_service = None
 
 
 def get_user_context():
@@ -86,7 +87,7 @@ def get_user_context():
 
 def init_services():
     """Initialize database and services (can be called from startup or tests)."""
-    global dal, calendar_service, permission_service, context_service, rsvp_service, ticket_service, event_admin_service, calendar_oauth_service, availability_service, booking_service, group_availability_service
+    global dal, calendar_service, permission_service, context_service, rsvp_service, ticket_service, event_admin_service, calendar_oauth_service, availability_service, booking_service, group_availability_service, tournament_service
 
     if calendar_service is not None:
         return  # Already initialized
@@ -101,6 +102,7 @@ def init_services():
     from services.availability_service import AvailabilityService
     from services.booking_service import BookingService
     from services.group_availability_service import GroupAvailabilityService
+    from services.tournament_service import TournamentService
 
     logger.system("Starting calendar module", action="startup")
     dal = init_database(Config.DATABASE_URL)
@@ -119,6 +121,7 @@ def init_services():
     availability_service = AvailabilityService(dal)
     booking_service = BookingService(dal)
     group_availability_service = GroupAvailabilityService(dal)
+    tournament_service = TournamentService(dal, Config)
 
     app.config['calendar_service'] = calendar_service
     app.config['permission_service'] = permission_service
@@ -1718,10 +1721,171 @@ async def get_best_slots(query_params: BestSlotsParams, page_id):
     })
 
 
+# ============================================================================
+# TOURNAMENT BRACKET ENDPOINTS
+# ============================================================================
+
+tournament_bp = Blueprint('tournament', __name__, url_prefix='/api/v1/tournament')
+
+
+@tournament_bp.route('', methods=['POST'])
+@async_endpoint
+async def create_tournament():
+    """Create a new tournament."""
+    data = await request.get_json()
+    community_id = data.get('community_id')
+    name = data.get('name')
+
+    if not community_id or not name:
+        return error_response("community_id and name are required", status_code=400)
+
+    result = await tournament_service.create_tournament(
+        community_id=community_id,
+        name=name,
+        bracket_type=data.get('bracket_type', 'single_elim'),
+        max_participants=data.get('max_participants', 64),
+        description=data.get('description'),
+        event_id=data.get('event_id'),
+        prize_pool_points=data.get('prize_pool_points', 0),
+        prize_giveaway_id=data.get('prize_giveaway_id'),
+        seeding_method=data.get('seeding_method', 'random'),
+        check_in_required=data.get('check_in_required', False),
+        registration_closes_at=data.get('registration_closes_at'),
+    )
+
+    if result and 'error' in result:
+        return error_response(result['error'], status_code=400)
+
+    return success_response(result, 201)
+
+
+@tournament_bp.route('/<int:tournament_id>', methods=['GET'])
+@async_endpoint
+async def get_tournament(tournament_id: int):
+    """Get tournament details."""
+    result = await tournament_service.get_tournament(tournament_id)
+    if not result:
+        return error_response("Tournament not found", status_code=404)
+    return success_response(result)
+
+
+@tournament_bp.route('/<int:tournament_id>/register', methods=['POST'])
+@async_endpoint
+async def register_participant(tournament_id: int):
+    """Register a participant."""
+    data = await request.get_json()
+    user_id = str(data.get('user_id', ''))
+    platform = data.get('platform', '')
+
+    if not user_id or not platform:
+        return error_response("user_id and platform are required", status_code=400)
+
+    result = await tournament_service.register_participant(
+        tournament_id=tournament_id,
+        user_id=user_id,
+        platform=platform,
+        display_name=data.get('display_name'),
+    )
+
+    status = 200 if result.get('success') else 400
+    return success_response(result) if result.get('success') else error_response(result['message'], status_code=status)
+
+
+@tournament_bp.route('/<int:tournament_id>/seed', methods=['POST'])
+@async_endpoint
+async def seed_bracket(tournament_id: int):
+    """Seed participants and generate bracket matches."""
+    result = await tournament_service.seed_bracket(tournament_id)
+    if 'error' in result:
+        return error_response(result['error'], status_code=400)
+    return success_response(result)
+
+
+@tournament_bp.route('/<int:tournament_id>/start', methods=['POST'])
+@async_endpoint
+async def start_tournament(tournament_id: int):
+    """Start the tournament (transition from seeding to active)."""
+    result = await tournament_service.start_tournament(tournament_id)
+    if 'error' in result:
+        return error_response(result['error'], status_code=400)
+    return success_response(result)
+
+
+@tournament_bp.route('/<int:tournament_id>/bracket', methods=['GET'])
+@async_endpoint
+async def get_bracket(tournament_id: int):
+    """Get full bracket state with all rounds and matches."""
+    result = await tournament_service.get_bracket_state(tournament_id)
+    if 'error' in result:
+        return error_response(result['error'], status_code=400)
+    return success_response(result)
+
+
+@tournament_bp.route('/<int:tournament_id>/matches/<int:match_id>/result', methods=['POST'])
+@async_endpoint
+async def report_match(tournament_id: int, match_id: int):
+    """Report a match result."""
+    data = await request.get_json()
+    winner_id = data.get('winner_id')
+
+    if not winner_id:
+        return error_response("winner_id is required", status_code=400)
+
+    result = await tournament_service.report_match_result(
+        tournament_id=tournament_id,
+        match_id=match_id,
+        winner_id=winner_id,
+        score_a=data.get('score_a', 0),
+        score_b=data.get('score_b', 0),
+    )
+
+    if 'error' in result:
+        return error_response(result['error'], status_code=400)
+    return success_response(result)
+
+
+@tournament_bp.route('/<int:tournament_id>/standings', methods=['GET'])
+@async_endpoint
+async def get_standings(tournament_id: int):
+    """Get tournament standings."""
+    standings = await tournament_service.get_standings(tournament_id)
+    return success_response({
+        'standings': standings,
+        'count': len(standings),
+    })
+
+
+@tournament_bp.route('/<int:tournament_id>/complete', methods=['POST'])
+@async_endpoint
+async def complete_tournament(tournament_id: int):
+    """Complete tournament and award prizes."""
+    result = await tournament_service.complete_tournament(tournament_id)
+    if 'error' in result:
+        return error_response(result['error'], status_code=400)
+    return success_response(result)
+
+
+@calendar_bp.route('/<int:community_id>/tournaments', methods=['GET'])
+@async_endpoint
+async def list_community_tournaments(community_id: int):
+    """List tournaments for a community."""
+    status_filter = request.args.get('status')
+    limit = request.args.get('limit', 20, type=int)
+
+    tournaments = await tournament_service.list_community_tournaments(
+        community_id, status=status_filter, limit=limit,
+    )
+    return success_response({
+        'tournaments': tournaments,
+        'count': len(tournaments),
+    })
+
+
 # Register blueprints
 app.register_blueprint(calendar_bp)
 app.register_blueprint(context_bp)
 app.register_blueprint(ticket_bp)
+app.register_blueprint(tournament_bp)
 
 if __name__ == '__main__':
     import hypercorn.asyncio

@@ -60,16 +60,16 @@ function DashboardHome() {
       )}
 
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-sky-100">Welcome back, {user?.username}!</h1>
+        <h1 className="text-2xl font-bold text-sky-100" data-testid="dashboard-welcome">Welcome back, {user?.username}!</h1>
         <p className="text-navy-400">Manage your communities and explore activity</p>
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-12">
+        <div className="flex justify-center py-12" data-testid="dashboard-loading">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-400"></div>
         </div>
       ) : communities.length === 0 ? (
-        <div className="card p-12 text-center">
+        <div className="card p-12 text-center" data-testid="no-communities">
           <div className="mb-4 flex justify-center">
             <img src="/waddlebot-logo.png" alt="Community Logo" className="w-24 h-24" />
           </div>
@@ -77,17 +77,18 @@ function DashboardHome() {
           <p className="text-navy-400 mb-6">
             You haven't joined any communities yet. Browse available communities to get started.
           </p>
-          <Link to="/communities" className="btn btn-primary">
+          <Link to="/communities" className="btn btn-primary" data-testid="browse-communities-btn">
             Browse Communities
           </Link>
         </div>
       ) : (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6" data-testid="communities-grid">
           {communities.map((community) => (
             <Link
               key={community.id}
               to={`/dashboard/community/${community.id}`}
               className="card hover:border-sky-500 transition-all overflow-hidden group"
+              data-testid="community-card"
             >
               <div className="aspect-video bg-gradient-to-br from-navy-700 to-navy-800 flex items-center justify-center group-hover:from-sky-900 group-hover:to-navy-800 transition-all">
                 {community.logoUrl ? (

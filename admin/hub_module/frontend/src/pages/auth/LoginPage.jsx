@@ -126,7 +126,10 @@ function LoginPage() {
 
         <div className="card p-6">
           {(authError || localError) && (
-            <div className="mb-4 p-3 bg-red-500/20 border border-red-500/30 rounded-lg text-red-300 text-sm">
+            <div
+              className="mb-4 p-3 bg-red-500/20 border border-red-500/30 rounded-lg text-red-300 text-sm"
+              data-testid="auth-error"
+            >
               {authError || localError}
             </div>
           )}
@@ -233,6 +236,7 @@ function LoginPage() {
                     className="input"
                     placeholder="Choose a username"
                     autoComplete="username"
+                    data-testid="username-input"
                   />
                 </div>
               )}
@@ -248,6 +252,7 @@ function LoginPage() {
                   placeholder="you@example.com"
                   required
                   autoComplete="email"
+                  data-testid="email-input"
                 />
               </div>
               <div>
@@ -263,11 +268,13 @@ function LoginPage() {
                   required
                   autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
                   minLength={mode === 'register' ? 8 : undefined}
+                  data-testid="password-input"
                 />
               </div>
               <button
                 type="submit"
                 disabled={loading}
+                data-testid="auth-submit"
                 className="btn btn-primary w-full disabled:opacity-50"
               >
                 {loading ? 'Please wait...' : mode === 'register' ? 'Create Account' : 'Sign In'}
@@ -284,6 +291,7 @@ function LoginPage() {
                   <button
                     onClick={() => { setMode('register'); setVerificationSent(false); }}
                     className="text-sky-400 hover:text-sky-300 font-medium"
+                    data-testid="register-toggle"
                   >
                     Sign up
                   </button>

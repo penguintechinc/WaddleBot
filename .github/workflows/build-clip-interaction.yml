@@ -1,0 +1,27 @@
+name: Build clip-interaction
+
+on:
+  push:
+    branches: [ main, develop, 'feature/**', 'bugfix/**' ]
+    paths:
+      - 'action/interactive/clip_interaction_module/**'
+      - 'libs/flask_core/**'
+      - '.version'
+      - '.github/workflows/build-clip-interaction.yml'
+      - '.github/workflows/build-container.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'action/interactive/clip_interaction_module/**'
+      - 'libs/flask_core/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build clip-interaction Container
+    uses: ./.github/workflows/build-container.yml
+    with:
+      module_path: 'action/interactive/clip_interaction_module'
+      module_name: 'clip-interaction'
+      module_port: '8098'
+    secrets: inherit

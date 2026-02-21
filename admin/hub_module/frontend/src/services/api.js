@@ -8,13 +8,27 @@ const api = axios.create({
   },
 });
 
-// Request interceptor to add auth token
+// Request interceptor to add auth token and CSRF token
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    // Add CSRF token for state-changing requests (double-submit cookie pattern).
+    // The backend skips CSRF when a Bearer token is present, but the login
+    // endpoint has no Bearer token yet — so we must send X-XSRF-TOKEN there.
+    if (!['get', 'head', 'options'].includes((config.method || '').toLowerCase())) {
+      const csrfToken = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('XSRF-TOKEN='))
+        ?.split('=')[1];
+      if (csrfToken) {
+        config.headers['X-XSRF-TOKEN'] = csrfToken;
+      }
+    }
+
     return config;
   },
   (error) => Promise.reject(error)

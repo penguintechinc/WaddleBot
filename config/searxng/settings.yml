@@ -1,0 +1,77 @@
+# SearXNG Configuration for WaddleBot Game Lookup
+# API-only usage — no public-facing UI needed
+
+general:
+  instance_name: "waddlebot-searxng"
+  debug: false
+  privacypolicy_url: false
+  contact_url: false
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  default_lang: "en"
+  formats:
+    - json
+
+server:
+  port: 8888
+  bind_address: "0.0.0.0"
+  secret_key: "waddlebot-searxng-internal-key"
+  limiter: false    # rate limiting handled by game_lookup_service
+  image_proxy: false
+  method: "GET"
+
+ui:
+  static_use_hash: true
+
+outgoing:
+  request_timeout: 10
+  max_request_timeout: 15
+  useragent_suffix: ""
+  pool_connections: 50
+  pool_maxsize: 20
+
+engines:
+  # General web search
+  - name: google
+    engine: google
+    shortcut: g
+    disabled: false
+
+  - name: duckduckgo
+    engine: duckduckgo
+    shortcut: ddg
+    disabled: false
+
+  - name: bing
+    engine: bing
+    shortcut: bi
+    disabled: false
+
+  - name: brave
+    engine: brave
+    shortcut: br
+    disabled: false
+
+  # Reference / wiki
+  - name: wikipedia
+    engine: wikipedia
+    shortcut: wp
+    disabled: false
+
+  - name: wikidata
+    engine: wikidata
+    shortcut: wd
+    disabled: false
+
+  # Disable categories not useful for game lookups
+  - name: reddit
+    engine: reddit
+    shortcut: re
+    disabled: true
+
+  - name: twitter
+    engine: twitter
+    shortcut: tw
+    disabled: true

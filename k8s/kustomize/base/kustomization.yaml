@@ -43,6 +43,9 @@ resources:
   - interactive/spotify.yaml
   - interactive/loyalty.yaml
   - interactive/translate.yaml
+  - interactive/lfg.yaml
+  - interactive/server-status.yaml
+  - interactive/clip.yaml
 
   # Pushing/Action modules
   - pushing/discord-action.yaml

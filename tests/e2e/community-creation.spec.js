@@ -22,11 +22,40 @@ const TEST_PASS = process.env.HUB_TEST_PASS || 'admin123';
 // ---------------------------------------------------------------------------
 
 /**
+ * Recover XSRF-TOKEN from Set-Cookie headers and inject as an accessible
+ * cookie. Required when testing over HTTP (port-forward) because the backend
+ * sets Secure cookies in production mode, which browsers silently drop on HTTP.
+ */
+async function injectCsrfCookie(page) {
+  let csrfToken = null;
+  const handler = async (response) => {
+    const raw = response.headers()['set-cookie'] || '';
+    const match = raw.match(/XSRF-TOKEN=([^;]+)/);
+    if (match) csrfToken = match[1];
+  };
+  page.on('response', handler);
+  await page.goto('/login', { waitUntil: 'networkidle' });
+  page.off('response', handler);
+  if (csrfToken) {
+    const url = new URL(page.url());
+    await page.context().addCookies([{
+      name: 'XSRF-TOKEN',
+      value: csrfToken,
+      domain: url.hostname,
+      path: '/',
+      httpOnly: false,
+      secure: false,
+      sameSite: 'Lax',
+    }]);
+  }
+}
+
+/**
  * Log in via the hub email/password form.
  * Returns true if login succeeded, throws on failure.
  */
 async function loginWithPassword(page, email, password) {
-  await page.goto('/login', { waitUntil: 'networkidle' });
+  await injectCsrfCookie(page);
 
   // Fill email and password inputs
   await page.fill('input[type="email"], input[name="email"]', email);

@@ -321,6 +321,25 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  # SearXNG metasearch engine for Game Lookup sub-module
+  infra-searxng:
+    image: searxng/searxng:latest
+    container_name: infra-searxng
+    volumes:
+      - ./config/searxng/settings.yml:/etc/searxng/settings.yml:ro
+    networks:
+      - waddlebot-internal
+    # Port exposed for local development/testing only
+    ports:
+      - "8888:8888"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8888/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
   # Apache OpenWhisk standalone for testing serverless actions
   # NOTE: Disabled on ARM64 - openwhisk/standalone:nightly lacks native ARM64 support
   # x86_64 emulation on ARM64 (linux/amd64) fails with exit code 255 (platform mismatch)
@@ -882,6 +901,85 @@ services:
       retries: 3
     restart: unless-stopped
 
+  interactive-lfg:
+    build:
+      context: .
+      dockerfile: action/interactive/lfg_interaction_module/Dockerfile
+    container_name: interactive-lfg
+    environment:
+      MODULE_NAME: lfg-interaction
+      MODULE_PORT: 8096
+      DATABASE_URL: postgresql://lfg_interaction:mod_lfg_interaction_dev_changeme@infra-postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
+      ROUTER_API_URL: http://core-router:8000
+      SERVICE_API_KEY: ${SERVICE_API_KEY:-changeme_service_key}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    networks:
+      - waddlebot-internal
+    depends_on:
+      - infra-postgres
+      - core-router
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8096/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  interactive-server-status:
+    build:
+      context: .
+      dockerfile: action/interactive/server_status_interaction_module/Dockerfile
+    container_name: interactive-server-status
+    environment:
+      MODULE_NAME: server-status-interaction
+      MODULE_PORT: 8097
+      DATABASE_URL: postgresql://server_status_interaction:mod_server_status_interaction_dev_changeme@infra-postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
+      ROUTER_API_URL: http://core-router:8000
+      SERVICE_API_KEY: ${SERVICE_API_KEY:-changeme_service_key}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    networks:
+      - waddlebot-internal
+    depends_on:
+      - infra-postgres
+      - core-router
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8097/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  interactive-clip:
+    build:
+      context: .
+      dockerfile: action/interactive/clip_interaction_module/Dockerfile
+    container_name: interactive-clip
+    environment:
+      MODULE_NAME: clip-interaction
+      MODULE_PORT: 8098
+      DATABASE_URL: postgresql://clip_interaction:mod_clip_interaction_dev_changeme@infra-postgres:5432/waddlebot
+      SECRETS_BACKEND: kubernetes
+      SECRETS_PATH: /secrets/db-passwords
+      ROUTER_API_URL: http://core-router:8000
+      TWITCH_MODULE_URL: http://action-twitch:8010
+      SERVICE_API_KEY: ${SERVICE_API_KEY:-changeme_service_key}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    networks:
+      - waddlebot-internal
+    depends_on:
+      - infra-postgres
+      - core-router
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8098/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
   # =============================================================================
   # CORE SYSTEM MODULES (Internal)
   # =============================================================================
@@ -990,6 +1088,8 @@ services:
       AI_MODEL: ${OLLAMA_MODEL:-tinyllama}
       MEM0_VECTOR_STORE: ${MEM0_VECTOR_STORE:-qdrant}
       QDRANT_URL: ${QDRANT_URL:-http://infra-qdrant:6333}
+      GAME_LOOKUP_ENABLED: ${GAME_LOOKUP_ENABLED:-true}
+      SEARXNG_URL: ${SEARXNG_URL:-http://infra-searxng:8888}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:
       - waddlebot-internal
@@ -999,6 +1099,8 @@ services:
       infra-redis:
         condition: service_healthy
       infra-qdrant:
+        condition: service_healthy
+      infra-searxng:
         condition: service_healthy
     # Port removed - access via Kong at api.waddlebot.io
     # ports:

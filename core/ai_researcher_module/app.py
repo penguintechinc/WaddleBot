@@ -35,6 +35,14 @@ from services.insights_service import InsightsService  # noqa: E402
 from services.anomaly_detector import AnomalyDetector  # noqa: E402
 from services.behavior_profiler import BehaviorProfiler  # noqa: E402
 from services.sentiment_analyzer import SentimentAnalyzer  # noqa: E402
+from services.searxng_service import SearXNGService  # noqa: E402
+from blueprints.game_bp import game_bp, setup as setup_game_bp  # noqa: E402
+from blueprints.patch_bp import patch_bp, setup as setup_patch_bp  # noqa: E402
+from blueprints.build_bp import build_bp, setup as setup_build_bp  # noqa: E402
+from blueprints.tech_bp import tech_bp, setup as setup_tech_bp  # noqa: E402
+from blueprints.price_bp import price_bp, setup as setup_price_bp  # noqa: E402
+from blueprints.clip_researcher_bp import clip_researcher_bp, setup as setup_clip_researcher_bp  # noqa: E402
+from blueprints.event_lookup_bp import event_lookup_bp, setup as setup_event_lookup_bp  # noqa: E402
 
 app = Quart(__name__)
 app = cors(app, allow_origin="*")
@@ -58,6 +66,7 @@ safety_layer = None
 rate_limiter = None
 research_service = None
 summary_service = None
+searxng_service = None
 bot_detection_services = {}  # community_id -> BotDetectionService
 mem0_services = {}  # community_id -> Mem0Service
 
@@ -93,7 +102,7 @@ def _get_bot_detection_service(community_id: int, is_premium: bool = False) -> B
 @app.before_serving
 async def startup():
     global dal, redis_client, ai_provider, safety_layer, rate_limiter
-    global research_service, summary_service
+    global research_service, summary_service, searxng_service
     logger.system("Starting ai_researcher_module", action="startup")
 
     # Initialize database
@@ -128,15 +137,76 @@ async def startup():
     # Note: ResearchService and SummaryService are created per-request
     # since they need community-specific mem0 instances
 
+    # Initialize SearXNG-based sub-modules (shared SearXNG client)
+    _searxng_needed = any([
+        Config.GAME_LOOKUP_ENABLED,
+        Config.PATCH_NOTES_ENABLED,
+        Config.BUILD_ADVISOR_ENABLED,
+        Config.TECH_TROUBLESHOOTER_ENABLED,
+        Config.PRICE_TRACKER_ENABLED,
+        Config.CLIP_RESEARCHER_ENABLED,
+        Config.EVENT_LOOKUP_ENABLED,
+    ])
+
+    if _searxng_needed and not searxng_service:
+        searxng_service = SearXNGService(
+            base_url=Config.SEARXNG_URL,
+            timeout=Config.SEARXNG_TIMEOUT,
+            max_concurrent=Config.SEARXNG_MAX_CONCURRENT,
+        )
+        logger.system("SearXNG client initialized", result="SUCCESS")
+
+    _bp_kwargs = dict(
+        dal=dal,
+        redis_client=redis_client,
+        ai_provider=ai_provider,
+        safety_layer=safety_layer,
+        rate_limiter=rate_limiter,
+        searxng_service=searxng_service,
+        get_mem0_fn=_get_mem0_service,
+        config=Config,
+    )
+
+    if Config.GAME_LOOKUP_ENABLED:
+        setup_game_bp(**_bp_kwargs)
+        logger.system("Game Lookup sub-module initialized", result="SUCCESS")
+
+    if Config.PATCH_NOTES_ENABLED:
+        setup_patch_bp(**_bp_kwargs)
+        logger.system("Patch Notes sub-module initialized", result="SUCCESS")
+
+    if Config.BUILD_ADVISOR_ENABLED:
+        setup_build_bp(**_bp_kwargs)
+        logger.system("Build Advisor sub-module initialized", result="SUCCESS")
+
+    if Config.TECH_TROUBLESHOOTER_ENABLED:
+        setup_tech_bp(**_bp_kwargs)
+        logger.system("Tech Troubleshooter sub-module initialized", result="SUCCESS")
+
+    if Config.PRICE_TRACKER_ENABLED:
+        setup_price_bp(**_bp_kwargs)
+        logger.system("Price Tracker sub-module initialized", result="SUCCESS")
+
+    if Config.CLIP_RESEARCHER_ENABLED:
+        setup_clip_researcher_bp(**_bp_kwargs)
+        logger.system("Clip Researcher sub-module initialized", result="SUCCESS")
+
+    if Config.EVENT_LOOKUP_ENABLED:
+        setup_event_lookup_bp(**_bp_kwargs)
+        logger.system("Event Lookup sub-module initialized", result="SUCCESS")
+
     logger.system("ai_researcher_module started", result="SUCCESS")
 
 
 @app.after_serving
 async def shutdown():
-    global redis_client, ai_provider
+    global redis_client, ai_provider, searxng_service
     logger.system("Shutting down ai_researcher_module", action="shutdown")
 
     # Cleanup services
+    if searxng_service:
+        await searxng_service.close()
+
     if ai_provider:
         await ai_provider.close()
 
@@ -163,7 +233,14 @@ async def status():
             "bot_detection": Config.BOT_DETECTION_ENABLED,
             "mem0_integration": True,
             "context_tracking": Config.FIREHOSE_ENABLED,
-            "stream_awareness": True
+            "stream_awareness": True,
+            "game_lookup": Config.GAME_LOOKUP_ENABLED,
+            "patch_notes": Config.PATCH_NOTES_ENABLED,
+            "build_advisor": Config.BUILD_ADVISOR_ENABLED,
+            "tech_troubleshooter": Config.TECH_TROUBLESHOOTER_ENABLED,
+            "price_tracker": Config.PRICE_TRACKER_ENABLED,
+            "clip_researcher": Config.CLIP_RESEARCHER_ENABLED,
+            "event_lookup": Config.EVENT_LOOKUP_ENABLED,
         }
     })
 
@@ -1191,6 +1268,13 @@ async def get_bot_detection(community_id: int):
 app.register_blueprint(api_bp)
 app.register_blueprint(researcher_bp)
 app.register_blueprint(admin_bp)
+app.register_blueprint(game_bp)
+app.register_blueprint(patch_bp)
+app.register_blueprint(build_bp)
+app.register_blueprint(tech_bp)
+app.register_blueprint(price_bp)
+app.register_blueprint(clip_researcher_bp)
+app.register_blueprint(event_lookup_bp)
 
 if __name__ == '__main__':
     import hypercorn.asyncio
