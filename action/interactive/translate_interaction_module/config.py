@@ -22,10 +22,12 @@ class Config:
     JWT_EXPIRATION_SECONDS = int(os.getenv('JWT_EXPIRATION_SECONDS', '3600'))
 
     # Database
-    DATABASE_URL = os.getenv(
+    # PyDAL expects 'postgres://' not 'postgresql://'
+    _raw_db_url = os.getenv(
         'DATABASE_URL',
-        'postgresql://waddlebot:password@localhost:5432/waddlebot'
+        'postgres://waddlebot:password@localhost:5432/waddlebot'
     )
+    DATABASE_URL = _raw_db_url.replace('postgresql://', 'postgres://')
 
     # Redis
     REDIS_URL = os.getenv('REDIS_URL', '')

@@ -9,12 +9,14 @@ CREATE TABLE IF NOT EXISTS shoutout_history (
     target_user_id VARCHAR(255),
     platform VARCHAR(50) NOT NULL DEFAULT 'twitch',
     message TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
-    -- Indexes
-    INDEX idx_shoutout_history_community (community_id, created_at DESC),
-    INDEX idx_shoutout_history_target (target_username, community_id)
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Indexes for shoutout_history
+CREATE INDEX IF NOT EXISTS idx_shoutout_history_community
+    ON shoutout_history(community_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_shoutout_history_target
+    ON shoutout_history(target_username, community_id);
 
 -- Custom shoutout templates table
 CREATE TABLE IF NOT EXISTS shoutout_templates (

@@ -14,10 +14,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY action/interactive/translate_interaction_module /app/
 
 # Generate gRPC stubs at build time
+# Use -I . so protoc sees proto/ as a package prefix, generating
+# 'from proto import translate_interaction_pb2' (not bare import)
 RUN python -m grpc_tools.protoc \
-    -I proto \
-    --python_out=proto \
-    --grpc_python_out=proto \
+    -I . \
+    --python_out=. \
+    --grpc_python_out=. \
     proto/translate_interaction.proto
 
 # Non-root user

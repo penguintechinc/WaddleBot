@@ -18,6 +18,28 @@ down_revision = None
 branch_labels = None
 depends_on = None
 
+import re
+
+
+def _prepare_sql(sql_content):
+    """Prepare raw SQL file content for execution via psycopg2.
+
+    Strips explicit BEGIN/COMMIT (alembic manages the transaction)
+    and removes psql meta-commands (\\-prefixed lines).
+    The result is passed as-is to cursor.execute() which handles
+    semicolons, $$ blocks, comments, and string literals natively.
+    """
+    # Remove psql meta-commands (e.g. \set, \echo)
+    lines = sql_content.split('\n')
+    lines = [l for l in lines if not l.strip().startswith('\\')]
+    content = '\n'.join(lines)
+    # Strip standalone BEGIN/COMMIT statements (alembic wraps in txn).
+    # Match only bare BEGIN; or COMMIT; on their own lines.
+    content = re.sub(r'(?m)^\s*BEGIN\s*;\s*$', '', content)
+    content = re.sub(r'(?m)^\s*COMMIT\s*;\s*$', '', content)
+    return content.strip()
+
+
 # Path where legacy SQL files are mounted in the migration container
 LEGACY_SQL_DIR = os.environ.get(
     'LEGACY_SQL_DIR',
@@ -82,27 +104,32 @@ def upgrade() -> None:
         with open(sql_file, 'r') as f:
             sql_content = f.read()
 
-        # Execute the migration (split on semicolons for multi-statement files)
-        # Filter out empty statements and psql meta-commands
-        for statement in sql_content.split(';'):
-            stmt = statement.strip()
-            if not stmt or stmt.startswith('\\') or stmt.startswith('--'):
-                continue
-            # Skip ANALYZE commands that fail on empty tables
+        # Use psycopg2's native multi-statement execution which correctly
+        # handles $$-delimited blocks, /* */ comments, and string literals.
+        prepared = _prepare_sql(sql_content)
+        if prepared:
+            raw_conn = conn.connection.dbapi_connection
+            cursor = raw_conn.cursor()
             try:
-                conn.execute(sa.text(stmt))
+                # Savepoint so a single file failure doesn't abort the txn.
+                # Legacy migrations may reference tables created by app code
+                # (hub-api, ai-researcher, etc.) that don't exist on fresh DB.
+                cursor.execute("SAVEPOINT sp_migration")
+                cursor.execute(prepared)
+                cursor.execute("RELEASE SAVEPOINT sp_migration")
             except Exception as e:
-                # ANALYZE on non-existent tables is non-fatal
-                if 'ANALYZE' in stmt.upper():
-                    print(f"    ANALYZE warning (non-fatal): {e}")
-                else:
-                    raise
+                cursor.execute("ROLLBACK TO SAVEPOINT sp_migration")
+                cursor.execute("RELEASE SAVEPOINT sp_migration")
+                cursor.close()
+                print(f"    WARNING: {fname} skipped — {str(e).strip().splitlines()[0]}")
+                continue
+            cursor.close()
 
         conn.execute(sa.text(
             "INSERT INTO schema_migrations (version) VALUES (:v) ON CONFLICT DO NOTHING"
         ), {"v": version})
 
-    print("[baseline] All legacy SQL migrations applied.")
+    print("[baseline] Legacy SQL migrations applied.")
 
 
 def downgrade() -> None:

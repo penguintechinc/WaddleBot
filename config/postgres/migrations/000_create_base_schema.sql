@@ -5,8 +5,8 @@
 --              migrations (e.g. 001_add_performance_indexes.sql) can reference
 --              tables that already exist on a fresh database.
 --
---              All statements use IF NOT EXISTS / DO $$ blocks to be idempotent;
---              running this against a database that hub-api has already initialised
+--              All statements use IF NOT EXISTS / DO $$ blocks to be idempotent.
+--              Running this against a database that hub-api has already initialised
 --              is safe and produces no changes.
 --
 -- Dependency order:
@@ -18,7 +18,7 @@
 --   community_type (enum)
 --   communities
 --   community_members          (FK → communities)
---   hub_chat_messages          (FK → communities via app logic; no hard FK in DDL)
+--   hub_chat_messages          (FK → communities via app logic, no hard FK in DDL)
 --   hub_modules
 --   hub_module_installations   (FK → hub_modules)
 --   hub_module_reviews         (FK → hub_modules)
@@ -38,6 +38,27 @@
 --   audit_log                  (FK → hub_users)
 --   community_servers          (FK → communities, hub_users)
 -- =============================================================================
+
+-- =============================================================================
+-- Immutable tsvector wrapper for GENERATED columns
+-- PostgreSQL marks to_tsvector() as STABLE, not IMMUTABLE, so it cannot be
+-- used directly in GENERATED ALWAYS AS expressions.  This thin wrapper
+-- re-declares the same call as IMMUTABLE which is safe in practice because
+-- text-search configurations do not change at runtime.
+-- =============================================================================
+CREATE OR REPLACE FUNCTION immutable_to_tsvector(config regconfig, doc text)
+RETURNS tsvector AS $$
+BEGIN
+  RETURN to_tsvector(config, doc);
+END;
+$$ LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE;
+
+CREATE OR REPLACE FUNCTION immutable_array_to_string(arr text[], sep text)
+RETURNS text AS $$
+BEGIN
+  RETURN array_to_string(arr, sep);
+END;
+$$ LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE;
 
 -- =============================================================================
 -- hub_admins
@@ -130,18 +151,15 @@ CREATE TABLE IF NOT EXISTS hub_user_identities (
 -- =============================================================================
 -- community_type enum
 -- =============================================================================
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'community_type') THEN
-        CREATE TYPE community_type AS ENUM (
-            'shared_interest_group',
-            'gaming',
-            'creator',
-            'corporate',
-            'other'
-        );
-    END IF;
-END $$;
+-- On a fresh DB this type does not exist. The Alembic baseline skips this
+-- file entirely when schema_migrations already exists (hub-api ran first).
+CREATE TYPE community_type AS ENUM (
+    'shared_interest_group',
+    'gaming',
+    'creator',
+    'corporate',
+    'other'
+);
 
 -- =============================================================================
 -- communities

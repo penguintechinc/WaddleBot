@@ -95,7 +95,7 @@ CREATE INDEX IF NOT EXISTS idx_community_polls_is_active ON community_polls(is_a
 CREATE INDEX IF NOT EXISTS idx_community_polls_expires_at ON community_polls(expires_at);
 CREATE INDEX IF NOT EXISTS idx_community_polls_active_unexpired
     ON community_polls(community_id, is_active)
-    WHERE is_active = TRUE AND (expires_at IS NULL OR expires_at > NOW());
+    WHERE is_active = TRUE;
 
 -- Indexes for poll_options
 CREATE INDEX IF NOT EXISTS idx_poll_options_poll_id ON poll_options(poll_id);
