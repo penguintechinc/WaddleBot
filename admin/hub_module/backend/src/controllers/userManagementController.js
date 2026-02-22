@@ -480,8 +480,7 @@ export async function setEmailVerification(req, res, next) {
       // When verifying, also clear any pending verification token
       await query(
         `UPDATE hub_users
-         SET email_verified = true, email_verification_token = NULL,
-             email_verification_expires = NULL, updated_at = NOW()
+         SET email_verified = true, email_verification_token = NULL, updated_at = NOW()
          WHERE id = $1`,
         [userId]
       );

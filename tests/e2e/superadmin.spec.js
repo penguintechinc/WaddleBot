@@ -261,6 +261,48 @@ test.describe('Super Admin - User Management', () => {
     await expect(verifiedBadge).toBeVisible({ timeout: 5000 });
   });
 
+  test('verify email API call succeeds via modal confirm', async ({ page }) => {
+    if (!await verifySuperAdminAccess(page)) return;
+
+    const table = page.locator('table');
+    const isVisible = await table.isVisible({ timeout: 8000 }).catch(() => false);
+    if (!isVisible) {
+      test.skip(true, 'No users table rendered (empty database)');
+      return;
+    }
+
+    // Click the verify button on the first row
+    const verifyBtn = page.locator('table tbody tr').first()
+      .locator('button[title="Verify email"], button[title="Remove email verification"]');
+    await verifyBtn.click();
+
+    // Modal should appear
+    await expect(page.getByText('Email Verification')).toBeVisible({ timeout: 5000 });
+
+    // Click Verify/Unverify and capture the API response
+    const actionBtn = page.getByRole('button', { name: /^(Verify|Unverify)$/i });
+    const [apiResponse] = await Promise.all([
+      page.waitForResponse(
+        r => r.url().includes('/verify-email') && r.request().method() === 'POST',
+        { timeout: 15000 }
+      ),
+      actionBtn.click(),
+    ]);
+
+    const status = apiResponse.status();
+
+    if (status === 429) {
+      test.skip(true, 'Rate limited during verify email');
+      return;
+    }
+
+    // Should succeed (200)
+    expect(status).toBe(200);
+
+    // Modal should close on success
+    await expect(page.getByText('Email Verification')).not.toBeVisible({ timeout: 5000 });
+  });
+
   test('search filter narrows user list', async ({ page }) => {
     if (!await verifySuperAdminAccess(page)) return;
 
