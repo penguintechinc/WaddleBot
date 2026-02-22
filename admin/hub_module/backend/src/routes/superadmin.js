@@ -177,6 +177,11 @@ router.post('/users/:userId/vendor-role',
   validateRequest,
   userManagementController.assignVendorRole
 );
+router.post('/users/:userId/verify-email',
+  validators.boolean('verified'),
+  validateRequest,
+  userManagementController.setEmailVerification
+);
 router.post('/users/:userId/password-reset', userManagementController.generatePasswordReset);
 
 export default router;

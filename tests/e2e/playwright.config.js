@@ -57,7 +57,7 @@ module.exports = defineConfig({
     // This keeps the rate limit counter low for the auth tests that follow.
     {
       name: 'authenticated-tests',
-      testMatch: ['community-creation.spec.js', 'community-workflow.spec.js', 'dashboard.spec.js', 'vendor-workflow.spec.js'],
+      testMatch: ['community-creation.spec.js', 'community-workflow.spec.js', 'dashboard.spec.js', 'vendor-workflow.spec.js', 'superadmin.spec.js'],
       use: {
         ...devices['Desktop Chrome'],
         storageState: AUTH_STATE_PATH,

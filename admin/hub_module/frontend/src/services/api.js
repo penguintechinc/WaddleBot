@@ -567,6 +567,8 @@ export const superAdminApi = {
     api.post(`/api/v1/superadmin/users/${userId}/super-admin-role`, { grant }),
   assignVendorRole: (userId, grant) =>
     api.post(`/api/v1/superadmin/users/${userId}/vendor-role`, { grant }),
+  setEmailVerification: (userId, verified) =>
+    api.post(`/api/v1/superadmin/users/${userId}/verify-email`, { verified }),
   generatePasswordReset: (userId) =>
     api.post(`/api/v1/superadmin/users/${userId}/password-reset`),
 };

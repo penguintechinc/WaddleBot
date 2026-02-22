@@ -6,6 +6,7 @@ import {
   PencilIcon,
   ShieldCheckIcon,
   ShoppingCartIcon,
+  CheckBadgeIcon,
 } from '@heroicons/react/24/outline';
 import { superAdminApi } from '../../services/api';
 import { FormModalBuilder } from '@penguintechinc/react-libs';
@@ -27,6 +28,7 @@ function SuperAdminUsers() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [roleName, setRoleName] = useState('');
@@ -152,6 +154,27 @@ function SuperAdminUsers() {
       grant: role === 'super_admin' ? !user.isSuperAdmin : !user.isVendor,
     });
     setShowRoleModal(true);
+  };
+
+  const openVerifyModal = (user) => {
+    setSelectedUser(user);
+    setShowVerifyModal(true);
+  };
+
+  const handleSetEmailVerification = async () => {
+    if (!selectedUser) return;
+
+    try {
+      await superAdminApi.setEmailVerification(selectedUser.id, !selectedUser.emailVerified);
+      setShowVerifyModal(false);
+      await loadUsers();
+    } catch (err) {
+      const errorMsg = err.response?.data?.error?.message ||
+                      err.response?.data?.error ||
+                      err.message ||
+                      'Unknown error';
+      setError('Failed to update verification: ' + errorMsg);
+    }
   };
 
   const openDeleteModal = (user) => {
@@ -303,7 +326,7 @@ function SuperAdminUsers() {
                 <tr key={user.id} className="hover:bg-navy-700/50 transition-colors">
                   <td className="px-6 py-4 text-sm text-sky-100">{user.email}</td>
                   <td className="px-6 py-4 text-sm text-sky-100">{user.username}</td>
-                  <td className="px-6 py-4 text-sm">
+                  <td className="px-6 py-4 text-sm space-x-1">
                     <span
                       className={`inline-block px-2 py-1 rounded text-xs font-medium ${
                         user.isActive
@@ -312,6 +335,15 @@ function SuperAdminUsers() {
                       }`}
                     >
                       {user.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                    <span
+                      className={`inline-block px-2 py-1 rounded text-xs font-medium ${
+                        user.emailVerified
+                          ? 'bg-emerald-900/30 text-emerald-300 border border-emerald-500/30'
+                          : 'bg-amber-900/30 text-amber-300 border border-amber-500/30'
+                      }`}
+                    >
+                      {user.emailVerified ? 'Verified' : 'Unverified'}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-sm space-y-1">
@@ -360,6 +392,17 @@ function SuperAdminUsers() {
                       title={user.isVendor ? 'Revoke vendor' : 'Grant vendor'}
                     >
                       <ShoppingCartIcon className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => openVerifyModal(user)}
+                      className={`inline-flex items-center px-2 py-1 rounded transition-colors ${
+                        user.emailVerified
+                          ? 'text-emerald-400 hover:text-emerald-300 hover:bg-navy-700'
+                          : 'text-navy-400 hover:text-navy-300 hover:bg-navy-700'
+                      }`}
+                      title={user.emailVerified ? 'Remove email verification' : 'Verify email'}
+                    >
+                      <CheckBadgeIcon className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => openDeleteModal(user)}
@@ -454,6 +497,34 @@ function SuperAdminUsers() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Verify Email Modal */}
+      {showVerifyModal && selectedUser && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-navy-900 border border-navy-700 rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold text-gold-400 mb-4">Email Verification</h2>
+            <p className="text-navy-300 mb-4">
+              {selectedUser.emailVerified
+                ? <>Remove email verification from <span className="font-medium text-sky-100">{selectedUser.username}</span>?</>
+                : <>Mark <span className="font-medium text-sky-100">{selectedUser.username}</span> as email verified?</>}
+            </p>
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setShowVerifyModal(false)}
+                className="flex-1 px-4 py-2 bg-navy-700 text-sky-100 rounded hover:bg-navy-600 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSetEmailVerification}
+                className="flex-1 px-4 py-2 bg-gold-500 text-navy-950 rounded hover:bg-gold-600 transition-colors font-medium"
+              >
+                {selectedUser.emailVerified ? 'Unverify' : 'Verify'}
+              </button>
+            </div>
           </div>
         </div>
       )}

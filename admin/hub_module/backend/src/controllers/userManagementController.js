@@ -448,6 +448,69 @@ export async function assignVendorRole(req, res, next) {
 }
 
 /**
+ * Set email verification status for a user
+ */
+export async function setEmailVerification(req, res, next) {
+  try {
+    const userId = parseInt(req.params.userId, 10);
+    const { verified } = req.body;
+
+    if (verified === undefined) {
+      return next(errors.badRequest('Verified parameter required'));
+    }
+
+    const result = await query(
+      'SELECT id, email_verified FROM hub_users WHERE id = $1',
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      return next(errors.notFound('User not found'));
+    }
+
+    const user = result.rows[0];
+    if (user.email_verified === verified) {
+      return res.json({
+        success: true,
+        message: `User email is already ${verified ? 'verified' : 'unverified'}`,
+      });
+    }
+
+    if (verified) {
+      // When verifying, also clear any pending verification token
+      await query(
+        `UPDATE hub_users
+         SET email_verified = true, email_verification_token = NULL,
+             email_verification_expires = NULL, updated_at = NOW()
+         WHERE id = $1`,
+        [userId]
+      );
+    } else {
+      await query(
+        'UPDATE hub_users SET email_verified = false, updated_at = NOW() WHERE id = $1',
+        [userId]
+      );
+    }
+
+    logger.audit('Set email verification', {
+      community: 'platform',
+      user: req.user.id,
+      action: 'set_email_verification',
+      targetUser: userId,
+      verified,
+      result: 'success',
+    });
+
+    res.json({
+      success: true,
+      message: `Email ${verified ? 'verified' : 'unverified'}`,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * Generate password reset token
  */
 export async function generatePasswordReset(req, res, next) {
