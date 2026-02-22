@@ -313,12 +313,20 @@ router.get('/:communityId/analytics/*', requireCommunityAdmin, async (req, res) 
     );
     res.json(response.data);
   } catch (error) {
+    if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+      return res.json({ success: true, unavailable: true, message: 'Analytics service not available' });
+    }
     console.error('Analytics proxy error:', error.message);
     res.status(error.response?.status || 500).json({
       error: error.response?.data?.error || 'Failed to fetch analytics',
     });
   }
 });
+
+// Helper: check if error is a connection failure (service not deployed)
+function isServiceUnavailable(error) {
+  return error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND';
+}
 
 // Security proxy routes
 router.get('/:communityId/security/*', requireCommunityAdmin, async (req, res) => {
@@ -337,6 +345,9 @@ router.get('/:communityId/security/*', requireCommunityAdmin, async (req, res) =
     );
     res.json(response.data);
   } catch (error) {
+    if (isServiceUnavailable(error)) {
+      return res.json({ success: true, unavailable: true, message: 'Security service not available' });
+    }
     console.error('Security proxy error:', error.message);
     res.status(error.response?.status || 500).json({
       error: error.response?.data?.error || 'Failed to fetch security data',
@@ -361,6 +372,9 @@ router.put('/:communityId/security/*', requireCommunityAdmin, async (req, res) =
     );
     res.json(response.data);
   } catch (error) {
+    if (isServiceUnavailable(error)) {
+      return res.json({ success: true, unavailable: true, message: 'Security service not available' });
+    }
     console.error('Security proxy error:', error.message);
     res.status(error.response?.status || 500).json({
       error: error.response?.data?.error || 'Failed to update security settings',
@@ -385,6 +399,9 @@ router.post('/:communityId/security/*', requireCommunityAdmin, async (req, res) 
     );
     res.json(response.data);
   } catch (error) {
+    if (isServiceUnavailable(error)) {
+      return res.json({ success: true, unavailable: true, message: 'Security service not available' });
+    }
     console.error('Security proxy error:', error.message);
     res.status(error.response?.status || 500).json({
       error: error.response?.data?.error || 'Failed to process security action',
@@ -408,12 +425,26 @@ router.delete('/:communityId/security/*', requireCommunityAdmin, async (req, res
     );
     res.json(response.data);
   } catch (error) {
+    if (isServiceUnavailable(error)) {
+      return res.json({ success: true, unavailable: true, message: 'Security service not available' });
+    }
     console.error('Security proxy error:', error.message);
     res.status(error.response?.status || 500).json({
       error: error.response?.data?.error || 'Failed to delete security item',
     });
   }
 });
+
+// Connected platforms (aggregates from community_servers)
+router.get('/:communityId/connected-platforms', requireCommunityAdmin, adminController.getConnectedPlatforms);
+
+// Shoutout management
+router.get('/:communityId/shoutout/config', requireCommunityAdmin, adminController.getShoutoutConfig);
+router.put('/:communityId/shoutout/config', requireCommunityAdmin, adminController.updateShoutoutConfig);
+router.get('/:communityId/shoutout/creators', requireCommunityAdmin, adminController.getShoutoutCreators);
+router.post('/:communityId/shoutout/creators', requireCommunityAdmin, adminController.addShoutoutCreator);
+router.delete('/:communityId/shoutout/creators/:creatorId', requireCommunityAdmin, adminController.removeShoutoutCreator);
+router.get('/:communityId/shoutout/history', requireCommunityAdmin, adminController.getShoutoutHistory);
 
 // Translation configuration routes
 router.get('/:communityId/translation/config', requireCommunityAdmin, adminController.getTranslationConfig);

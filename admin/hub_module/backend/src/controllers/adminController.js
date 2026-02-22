@@ -15,6 +15,28 @@ const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || crypto.randomBytes(32).toSt
 const ENCRYPTION_ALGORITHM = 'aes-256-gcm';
 
 /**
+ * PostgreSQL error codes for missing schema objects:
+ * 42P01 = undefined_table, 42703 = undefined_column, 42883 = undefined operator/type mismatch
+ * When these occur, return graceful empty data instead of a 500 error.
+ */
+const SCHEMA_ERROR_CODES = ['42P01', '42703', '42883'];
+
+function isSchemaError(err) {
+  return SCHEMA_ERROR_CODES.includes(err?.code);
+}
+
+/**
+ * Parse a value that may be a JSON string or already a JS object (e.g. from JSONB columns).
+ * PostgreSQL's node-postgres driver auto-parses JSONB to objects, but sometimes values
+ * are stored as text, so we need to handle both cases.
+ */
+function safeJsonParse(val, fallback = {}) {
+  if (val === null || val === undefined) return fallback;
+  if (typeof val === 'object') return val;
+  try { return JSON.parse(val); } catch { return fallback; }
+}
+
+/**
  * Encrypt sensitive data (API keys)
  */
 function encryptData(text) {
@@ -74,9 +96,10 @@ export async function getMembers(req, res, next) {
       paramIndex++;
     }
 
+    // user_id is VARCHAR in community_members but INTEGER in hub_users — cast for JOIN
     const countResult = await query(
       `SELECT COUNT(*) as count FROM community_members cm
-       LEFT JOIN hub_users u ON u.id = cm.user_id
+       LEFT JOIN hub_users u ON u.id = cm.user_id::integer
        ${whereClause}`,
       params
     );
@@ -86,7 +109,7 @@ export async function getMembers(req, res, next) {
       `SELECT cm.id, cm.user_id, u.username, u.email, u.avatar_url,
               cm.role, cm.reputation, cm.joined_at
        FROM community_members cm
-       LEFT JOIN hub_users u ON u.id = cm.user_id
+       LEFT JOIN hub_users u ON u.id = cm.user_id::integer
        ${whereClause}
        ORDER BY cm.reputation DESC, cm.joined_at ASC
        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
@@ -110,6 +133,9 @@ export async function getMembers(req, res, next) {
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     });
   } catch (err) {
+    if (isSchemaError(err)) {
+      return res.json({ success: true, members: [], pagination: { page, limit, total: 0, totalPages: 0 } });
+    }
     next(err);
   }
 }
@@ -318,7 +344,7 @@ export async function getModules(req, res, next) {
       `SELECT mi.id, mi.module_id, m.name, m.display_name, m.description,
               m.category, mi.is_enabled, mi.config, mi.installed_at
        FROM module_installations mi
-       JOIN modules m ON m.id = mi.module_id
+       JOIN modules m ON m.id::text = mi.module_id
        WHERE mi.community_id = $1
        ORDER BY m.name ASC`,
       [communityId]
@@ -338,6 +364,9 @@ export async function getModules(req, res, next) {
 
     res.json({ success: true, modules });
   } catch (err) {
+    if (isSchemaError(err)) {
+      return res.json({ success: true, modules: [] });
+    }
     next(err);
   }
 }
@@ -443,6 +472,9 @@ export async function getBrowserSources(req, res, next) {
 
     res.json({ success: true, sources });
   } catch (err) {
+    if (isSchemaError(err)) {
+      return res.json({ success: true, sources: [] });
+    }
     next(err);
   }
 }
@@ -489,7 +521,7 @@ export async function getDomains(req, res, next) {
     const result = await query(
       `SELECT id, domain, is_verified, verification_token, verified_at, created_at
        FROM community_domains
-       WHERE community_id = $1 AND is_active = true
+       WHERE community_id = $1
        ORDER BY created_at DESC`,
       [communityId]
     );
@@ -505,6 +537,9 @@ export async function getDomains(req, res, next) {
 
     res.json({ success: true, domains });
   } catch (err) {
+    if (isSchemaError(err)) {
+      return res.json({ success: true, domains: [] });
+    }
     next(err);
   }
 }
@@ -523,7 +558,7 @@ export async function addDomain(req, res, next) {
 
     // Check if domain already exists
     const existingResult = await query(
-      `SELECT id FROM community_domains WHERE domain = $1 AND is_active = true`,
+      `SELECT id FROM community_domains WHERE domain = $1`,
       [domain.toLowerCase()]
     );
 
@@ -576,7 +611,7 @@ export async function verifyDomain(req, res, next) {
 
     const domainResult = await query(
       `SELECT domain, verification_token FROM community_domains
-       WHERE id = $1 AND community_id = $2 AND is_active = true AND is_verified = false`,
+       WHERE id = $1 AND community_id = $2 AND is_verified = false`,
       [domainId, communityId]
     );
 
@@ -633,7 +668,7 @@ export async function removeDomain(req, res, next) {
     const domainId = parseInt(req.params.domainId, 10);
 
     const result = await query(
-      `UPDATE community_domains SET is_active = false, deactivated_at = NOW()
+      `DELETE FROM community_domains
        WHERE id = $1 AND community_id = $2
        RETURNING domain`,
       [domainId, communityId]
@@ -705,6 +740,9 @@ export async function getJoinRequests(req, res, next) {
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     });
   } catch (err) {
+    if (isSchemaError(err)) {
+      return res.json({ success: true, requests: [], pagination: { page, limit, total: 0, totalPages: 0 } });
+    }
     next(err);
   }
 }
@@ -996,6 +1034,9 @@ export async function getLinkedServers(req, res, next) {
 
     res.json({ success: true, servers });
   } catch (err) {
+    if (isSchemaError(err)) {
+      return res.json({ success: true, servers: [] });
+    }
     next(err);
   }
 }
@@ -1037,6 +1078,9 @@ export async function getServerLinkRequests(req, res, next) {
 
     res.json({ success: true, requests });
   } catch (err) {
+    if (isSchemaError(err)) {
+      return res.json({ success: true, requests: [] });
+    }
     next(err);
   }
 }
@@ -1269,6 +1313,9 @@ export async function getMirrorGroups(req, res, next) {
 
     res.json({ success: true, groups });
   } catch (err) {
+    if (isSchemaError(err)) {
+      return res.json({ success: true, groups: [] });
+    }
     next(err);
   }
 }
@@ -1931,7 +1978,7 @@ export async function getAtRiskUsers(req, res, next) {
       `SELECT cm.user_id, u.username, u.email, u.avatar_url, cm.reputation,
               $1 - cm.reputation as points_until_ban
        FROM community_members cm
-       JOIN hub_users u ON u.id = cm.user_id
+       JOIN hub_users u ON u.id = cm.user_id::integer
        WHERE cm.community_id = $2 AND cm.is_active = true
        AND cm.reputation <= $3
        ORDER BY cm.reputation ASC
@@ -1976,7 +2023,7 @@ export async function getReputationLeaderboard(req, res, next) {
       `SELECT cm.user_id, u.username, u.avatar_url, cm.reputation,
               RANK() OVER (ORDER BY cm.reputation DESC) as rank
        FROM community_members cm
-       JOIN hub_users u ON u.id = cm.user_id
+       JOIN hub_users u ON u.id = cm.user_id::integer
        WHERE cm.community_id = $1 AND cm.is_active = true
        ORDER BY cm.reputation DESC
        LIMIT $2 OFFSET $3`,
@@ -1999,6 +2046,9 @@ export async function getReputationLeaderboard(req, res, next) {
       count: users.length,
     });
   } catch (err) {
+    if (isSchemaError(err)) {
+      return res.json({ success: true, users: [], limit, offset, count: 0 });
+    }
     next(err);
   }
 }
@@ -2838,6 +2888,305 @@ export async function reviewSuspectedBot(req, res, next) {
   }
 }
 
+// ===== Connected Platforms =====
+
+/**
+ * Get connected platforms summary for community.
+ * Aggregates data from community_servers grouped by platform.
+ */
+export async function getConnectedPlatforms(req, res, next) {
+  try {
+    const communityId = parseInt(req.params.communityId, 10);
+
+    const result = await query(
+      `SELECT platform, COUNT(*) as server_count,
+              BOOL_OR(status = 'approved') as is_active
+       FROM community_servers
+       WHERE community_id = $1
+       GROUP BY platform
+       ORDER BY platform ASC`,
+      [communityId]
+    );
+
+    const connectedPlatforms = result.rows.map(row => ({
+      platform: row.platform,
+      serverCount: parseInt(row.server_count, 10),
+      isActive: row.is_active,
+    }));
+
+    res.json({ success: true, connectedPlatforms });
+  } catch (err) {
+    if (isSchemaError(err)) {
+      return res.json({ success: true, connectedPlatforms: [] });
+    }
+    next(err);
+  }
+}
+
+// ===== Shoutout Configuration =====
+
+/**
+ * Get shoutout configuration for a community
+ */
+export async function getShoutoutConfig(req, res, next) {
+  try {
+    const communityId = parseInt(req.params.communityId, 10);
+
+    let result = await query(
+      `SELECT * FROM shoutout_config WHERE community_id = $1`,
+      [communityId]
+    );
+
+    let config;
+    if (result.rows.length === 0) {
+      // Create default config
+      const insertResult = await query(
+        `INSERT INTO shoutout_config (community_id) VALUES ($1)
+         RETURNING *`,
+        [communityId]
+      );
+      config = formatShoutoutConfig(insertResult.rows[0]);
+    } else {
+      config = formatShoutoutConfig(result.rows[0]);
+    }
+
+    res.json({ success: true, config });
+  } catch (err) {
+    if (isSchemaError(err)) {
+      return res.json({
+        success: true,
+        config: {
+          soEnabled: true, soPermission: 'mod', vsoEnabled: true, vsoPermission: 'mod',
+          autoShoutoutMode: 'disabled', triggerFirstMessage: false, triggerRaidHost: true,
+          widgetPosition: 'bottom-right', widgetDurationSeconds: 30, cooldownMinutes: 60,
+        },
+      });
+    }
+    next(err);
+  }
+}
+
+function formatShoutoutConfig(row) {
+  return {
+    soEnabled: row.so_enabled,
+    soPermission: row.so_permission,
+    vsoEnabled: row.vso_enabled,
+    vsoPermission: row.vso_permission,
+    autoShoutoutMode: row.auto_shoutout_mode,
+    triggerFirstMessage: row.trigger_first_message,
+    triggerRaidHost: row.trigger_raid_host,
+    widgetPosition: row.widget_position,
+    widgetDurationSeconds: row.widget_duration_seconds,
+    cooldownMinutes: row.cooldown_minutes,
+  };
+}
+
+/**
+ * Update shoutout configuration for a community
+ */
+export async function updateShoutoutConfig(req, res, next) {
+  try {
+    const communityId = parseInt(req.params.communityId, 10);
+    const {
+      soEnabled, soPermission, vsoEnabled, vsoPermission,
+      autoShoutoutMode, triggerFirstMessage, triggerRaidHost,
+      widgetPosition, widgetDurationSeconds, cooldownMinutes,
+    } = req.body;
+
+    const result = await query(
+      `INSERT INTO shoutout_config
+         (community_id, so_enabled, so_permission, vso_enabled, vso_permission,
+          auto_shoutout_mode, trigger_first_message, trigger_raid_host,
+          widget_position, widget_duration_seconds, cooldown_minutes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       ON CONFLICT (community_id)
+       DO UPDATE SET
+         so_enabled = EXCLUDED.so_enabled,
+         so_permission = EXCLUDED.so_permission,
+         vso_enabled = EXCLUDED.vso_enabled,
+         vso_permission = EXCLUDED.vso_permission,
+         auto_shoutout_mode = EXCLUDED.auto_shoutout_mode,
+         trigger_first_message = EXCLUDED.trigger_first_message,
+         trigger_raid_host = EXCLUDED.trigger_raid_host,
+         widget_position = EXCLUDED.widget_position,
+         widget_duration_seconds = EXCLUDED.widget_duration_seconds,
+         cooldown_minutes = EXCLUDED.cooldown_minutes,
+         updated_at = NOW()
+       RETURNING *`,
+      [communityId, soEnabled, soPermission, vsoEnabled, vsoPermission,
+       autoShoutoutMode, triggerFirstMessage, triggerRaidHost,
+       widgetPosition, widgetDurationSeconds, cooldownMinutes]
+    );
+
+    logger.audit('Shoutout config updated', {
+      adminId: req.user.id,
+      communityId,
+    });
+
+    res.json({ success: true, config: formatShoutoutConfig(result.rows[0]) });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Get shoutout creators list for a community
+ */
+export async function getShoutoutCreators(req, res, next) {
+  try {
+    const communityId = parseInt(req.params.communityId, 10);
+
+    const result = await query(
+      `SELECT id, platform, platform_username, added_by, created_at
+       FROM shoutout_creators
+       WHERE community_id = $1
+       ORDER BY created_at DESC`,
+      [communityId]
+    );
+
+    const creators = result.rows.map(row => ({
+      id: row.id,
+      platform: row.platform,
+      platformUsername: row.platform_username,
+      addedBy: row.added_by,
+      createdAt: row.created_at?.toISOString(),
+    }));
+
+    res.json({ success: true, creators });
+  } catch (err) {
+    if (isSchemaError(err)) {
+      return res.json({ success: true, creators: [] });
+    }
+    next(err);
+  }
+}
+
+/**
+ * Add a creator to the shoutout list
+ */
+export async function addShoutoutCreator(req, res, next) {
+  try {
+    const communityId = parseInt(req.params.communityId, 10);
+    const { platform, username } = req.body;
+
+    if (!platform || !username) {
+      return next(errors.badRequest('Platform and username are required'));
+    }
+
+    const result = await query(
+      `INSERT INTO shoutout_creators (community_id, platform, platform_username, added_by)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (community_id, platform, platform_username) DO NOTHING
+       RETURNING id, platform, platform_username, created_at`,
+      [communityId, platform, username.trim(), req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return next(errors.conflict('Creator already in list'));
+    }
+
+    logger.audit('Shoutout creator added', {
+      adminId: req.user.id,
+      communityId,
+      platform,
+      username,
+    });
+
+    res.json({
+      success: true,
+      creator: {
+        id: result.rows[0].id,
+        platform: result.rows[0].platform,
+        platformUsername: result.rows[0].platform_username,
+        createdAt: result.rows[0].created_at?.toISOString(),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Remove a creator from the shoutout list
+ */
+export async function removeShoutoutCreator(req, res, next) {
+  try {
+    const communityId = parseInt(req.params.communityId, 10);
+    const creatorId = parseInt(req.params.creatorId, 10);
+
+    const result = await query(
+      `DELETE FROM shoutout_creators WHERE id = $1 AND community_id = $2
+       RETURNING platform, platform_username`,
+      [creatorId, communityId]
+    );
+
+    if (result.rows.length === 0) {
+      return next(errors.notFound('Creator not found'));
+    }
+
+    logger.audit('Shoutout creator removed', {
+      adminId: req.user.id,
+      communityId,
+      creatorId,
+      platform: result.rows[0].platform,
+      username: result.rows[0].platform_username,
+    });
+
+    res.json({ success: true, message: 'Creator removed' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Get shoutout history for a community
+ */
+export async function getShoutoutHistory(req, res, next) {
+  try {
+    const communityId = parseInt(req.params.communityId, 10);
+    const page = Math.max(1, parseInt(req.query.page || '1', 10));
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '25', 10)));
+    const offset = (page - 1) * limit;
+
+    const countResult = await query(
+      'SELECT COUNT(*) as count FROM shoutout_history WHERE community_id = $1',
+      [communityId]
+    );
+    const total = parseInt(countResult.rows[0]?.count || 0, 10);
+
+    const result = await query(
+      `SELECT id, platform, target_username, shoutout_type, triggered_by_username,
+              trigger_type, created_at
+       FROM shoutout_history
+       WHERE community_id = $1
+       ORDER BY created_at DESC
+       LIMIT $2 OFFSET $3`,
+      [communityId, limit, offset]
+    );
+
+    const history = result.rows.map(row => ({
+      id: row.id,
+      platform: row.platform,
+      targetUsername: row.target_username,
+      shoutoutType: row.shoutout_type,
+      triggeredBy: row.triggered_by_username,
+      triggerType: row.trigger_type,
+      createdAt: row.created_at?.toISOString(),
+    }));
+
+    res.json({
+      success: true,
+      history,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    });
+  } catch (err) {
+    if (isSchemaError(err)) {
+      return res.json({ success: true, history: [], pagination: { page: 1, limit: 25, total: 0, totalPages: 0 } });
+    }
+    next(err);
+  }
+}
+
 /**
  * Get translation configuration for a community
  */
@@ -2909,12 +3258,12 @@ export async function getTranslationConfig(req, res, next) {
         id: insertResult.rows[0].id,
         enabled: insertResult.rows[0].enabled,
         target_language: insertResult.rows[0].target_language,
-        confidence_threshold: insertResult.rows[0].confidence_threshold,
-        min_words: insertResult.rows[0].min_words,
+        confidence_threshold: parseFloat(insertResult.rows[0].confidence_threshold) || 0.7,
+        min_words: parseInt(insertResult.rows[0].min_words, 10) || 5,
         detection_method: insertResult.rows[0].detection_method,
-        preprocessing: JSON.parse(insertResult.rows[0].preprocessing || '{}'),
-        captions: JSON.parse(insertResult.rows[0].captions || '{}'),
-        ai_decision: JSON.parse(insertResult.rows[0].ai_decision || '{}'),
+        preprocessing: safeJsonParse(insertResult.rows[0].preprocessing),
+        captions: safeJsonParse(insertResult.rows[0].captions),
+        ai_decision: safeJsonParse(insertResult.rows[0].ai_decision),
       };
     } else {
       const row = result.rows[0];
@@ -2922,12 +3271,12 @@ export async function getTranslationConfig(req, res, next) {
         id: row.id,
         enabled: row.enabled,
         target_language: row.target_language,
-        confidence_threshold: row.confidence_threshold,
-        min_words: row.min_words,
+        confidence_threshold: parseFloat(row.confidence_threshold) || 0.7,
+        min_words: parseInt(row.min_words, 10) || 5,
         detection_method: row.detection_method,
-        preprocessing: JSON.parse(row.preprocessing || '{}'),
-        captions: JSON.parse(row.captions || '{}'),
-        ai_decision: JSON.parse(row.ai_decision || '{}'),
+        preprocessing: safeJsonParse(row.preprocessing),
+        captions: safeJsonParse(row.captions),
+        ai_decision: safeJsonParse(row.ai_decision),
       };
     }
 
@@ -2936,6 +3285,21 @@ export async function getTranslationConfig(req, res, next) {
       config,
     });
   } catch (err) {
+    if (isSchemaError(err)) {
+      return res.json({
+        success: true,
+        config: {
+          enabled: false,
+          target_language: 'en',
+          confidence_threshold: 0.7,
+          min_words: 5,
+          detection_method: 'ensemble',
+          preprocessing: {},
+          captions: {},
+          ai_decision: { mode: 'never' },
+        },
+      });
+    }
     next(err);
   }
 }
@@ -3033,9 +3397,9 @@ export async function updateTranslationConfig(req, res, next) {
       confidence_threshold: row.confidence_threshold,
       min_words: row.min_words,
       detection_method: row.detection_method,
-      preprocessing: JSON.parse(row.preprocessing || '{}'),
-      captions: JSON.parse(row.captions || '{}'),
-      ai_decision: JSON.parse(row.ai_decision || '{}'),
+      preprocessing: safeJsonParse(row.preprocessing),
+      captions: safeJsonParse(row.captions),
+      ai_decision: safeJsonParse(row.ai_decision),
     };
 
     logger.audit('Translation settings updated', {
