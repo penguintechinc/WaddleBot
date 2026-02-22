@@ -22,6 +22,41 @@ const upload = multer({
 
 router.use(requireAuth);
 
+// Members management
+router.get('/:communityId/members', requireCommunityAdmin, adminController.getMembers);
+router.put('/:communityId/members/:userId/role', requireCommunityAdmin, adminController.updateMemberRole);
+router.put('/:communityId/members/:userId/reputation', requireCommunityAdmin, adminController.adjustReputation);
+router.delete('/:communityId/members/:userId', requireCommunityAdmin, adminController.removeMember);
+router.post('/:communityId/members/:userId/temp-password', requireCommunityAdmin, adminController.generateTempPassword);
+
+// Modules management
+router.get('/:communityId/modules', requireCommunityAdmin, adminController.getModules);
+router.put('/:communityId/modules/:moduleId/config', requireCommunityAdmin, adminController.updateModuleConfig);
+
+// Browser sources
+router.get('/:communityId/browser-sources', requireCommunityAdmin, adminController.getBrowserSources);
+router.post('/:communityId/browser-sources/regenerate', requireCommunityAdmin, adminController.regenerateBrowserSources);
+
+// Custom domains
+router.get('/:communityId/domains', requireCommunityAdmin, adminController.getDomains);
+router.post('/:communityId/domains', requireCommunityAdmin, adminController.addDomain);
+router.post('/:communityId/domains/:domainId/verify', requireCommunityAdmin, adminController.verifyDomain);
+router.delete('/:communityId/domains/:domainId', requireCommunityAdmin, adminController.removeDomain);
+
+// Linked servers
+router.get('/:communityId/servers', requireCommunityAdmin, adminController.getLinkedServers);
+router.put('/:communityId/servers/:serverId', requireCommunityAdmin, adminController.updateServer);
+router.delete('/:communityId/servers/:serverId', requireCommunityAdmin, adminController.removeServer);
+
+// Community settings
+router.get('/:communityId/settings', requireCommunityAdmin, adminController.getCommunitySettings);
+router.put('/:communityId/settings', requireCommunityAdmin, adminController.updateCommunitySettings);
+
+// Join requests
+router.get('/:communityId/join-requests', requireCommunityAdmin, adminController.getJoinRequests);
+router.post('/:communityId/join-requests/:requestId/approve', requireCommunityAdmin, adminController.approveJoinRequest);
+router.post('/:communityId/join-requests/:requestId/reject', requireCommunityAdmin, adminController.rejectJoinRequest);
+
 // Server link requests
 router.get('/:communityId/server-link-requests', requireCommunityAdmin, adminController.getServerLinkRequests);
 router.post('/:communityId/server-link-requests/:requestId/approve', requireCommunityAdmin, adminController.approveServerLinkRequest);

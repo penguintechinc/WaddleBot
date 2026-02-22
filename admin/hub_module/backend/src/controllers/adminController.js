@@ -1759,6 +1759,28 @@ export async function getReputationConfig(req, res, next) {
       },
     });
   } catch (err) {
+    // If table doesn't exist yet (migration not run), return defaults
+    if (err.code === '42P01') {
+      return res.json({
+        success: true,
+        config: {
+          isPremium: false,
+          weights: {
+            chatMessage: 0.01, commandUsage: -0.1, giveawayEntry: -1.0,
+            follow: 1.0, subscription: 5.0, subscriptionTier2: 10.0,
+            subscriptionTier3: 20.0, giftSubscription: 3.0,
+            donationPerDollar: 1.0, cheerPer100Bits: 1.0,
+            raid: 2.0, boost: 5.0, warn: -25.0, timeout: -50.0,
+            kick: -75.0, ban: -200.0,
+          },
+          policy: {
+            autoBanEnabled: false, autoBanThreshold: 450,
+            startingScore: 600, minScore: 300, maxScore: 850,
+          },
+          canCustomize: false,
+        },
+      });
+    }
     next(err);
   }
 }
@@ -1934,6 +1956,9 @@ export async function getAtRiskUsers(req, res, next) {
       count: users.length,
     });
   } catch (err) {
+    if (err.code === '42P01') {
+      return res.json({ success: true, autoBanEnabled: false, threshold: 450, users: [], count: 0 });
+    }
     next(err);
   }
 }
@@ -2033,6 +2058,9 @@ export async function getAIInsights(req, res, next) {
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     });
   } catch (err) {
+    if (err.code === '42P01') {
+      return res.json({ success: true, insights: [], pagination: { page: 1, limit: 25, total: 0, totalPages: 0 } });
+    }
     next(err);
   }
 }
@@ -2154,6 +2182,20 @@ export async function getAIResearcherConfig(req, res, next) {
       },
     });
   } catch (err) {
+    // If table doesn't exist yet (migration not run), return defaults
+    if (err.code === '42P01') {
+      return res.json({
+        success: true,
+        config: {
+          isEnabled: false, aiProvider: 'ollama', aiModel: 'tinyllama',
+          streamSummary: { enabled: false, intervalHours: 6 },
+          weeklyRollup: { enabled: false, day: 'sunday' },
+          botDetection: { enabled: false, sensitivity: 'medium' },
+          context: { windowDays: 7, maxTokens: 4000 },
+          isPremium: false,
+        },
+      });
+    }
     next(err);
   }
 }
@@ -2476,6 +2518,14 @@ export async function getBotDetectionResults(req, res, next) {
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     });
   } catch (err) {
+    // If table doesn't exist yet (migration not run), return empty results
+    if (err.code === '42P01') {
+      return res.json({
+        success: true,
+        results: [],
+        pagination: { page: 1, limit: 25, total: 0, totalPages: 0 },
+      });
+    }
     next(err);
   }
 }
@@ -2603,6 +2653,18 @@ export async function getAIContext(req, res, next) {
       },
     });
   } catch (err) {
+    // If table doesn't exist yet (migration not run), return empty context
+    if (err.code === '42P01') {
+      return res.json({
+        success: true,
+        context: {
+          windowDays: 7,
+          stats: { activeUsers: 0, totalMessages: 0, activeDays: 0 },
+          topUsers: [],
+          activityByHour: [],
+        },
+      });
+    }
     next(err);
   }
 }
@@ -2664,6 +2726,12 @@ export async function getBotScore(req, res, next) {
       },
     });
   } catch (err) {
+    if (err.code === '42P01') {
+      return res.json({
+        success: true,
+        botScore: { score: null, grade: null, message: 'Bot score not yet calculated', isCalculated: false },
+      });
+    }
     next(err);
   }
 }
@@ -2715,6 +2783,9 @@ export async function getSuspectedBots(req, res, next) {
       filters: { minConfidence, limit },
     });
   } catch (err) {
+    if (err.code === '42P01') {
+      return res.json({ success: true, suspectedBots: [], count: 0, filters: { minConfidence: 50, limit: 50 } });
+    }
     next(err);
   }
 }

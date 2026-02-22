@@ -204,6 +204,14 @@ export function AuthProvider({ children }) {
     isSuperAdmin: user?.roles?.includes('super_admin'),
     isPlatformAdmin: user?.roles?.includes('platform-admin'),
     isVendor: user?.roles?.includes('vendor'),
+    // Community-level admin check (for any community, or a specific one)
+    isCommunityAdmin: (communityId) => {
+      const adminRoles = ['community-owner', 'community-admin', 'moderator'];
+      if (communityId) {
+        return user?.communities?.some(c => c.id === Number(communityId) && adminRoles.includes(c.role));
+      }
+      return user?.communities?.some(c => adminRoles.includes(c.role));
+    },
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

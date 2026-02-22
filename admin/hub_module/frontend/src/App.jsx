@@ -111,7 +111,7 @@ function LoadingSpinner() {
 }
 
 // Protected route wrapper
-function ProtectedRoute({ children, requireAdmin = false, requirePlatformAdmin = false, requireSuperAdmin = false }) {
+function ProtectedRoute({ children, requireCommunityAdmin = false, requirePlatformAdmin = false, requireSuperAdmin = false }) {
   const { user, loading, hasRole } = useAuth();
 
   if (loading) {
@@ -122,8 +122,14 @@ function ProtectedRoute({ children, requireAdmin = false, requirePlatformAdmin =
     return <Navigate to="/login" replace />;
   }
 
-  if (requireAdmin && !hasRole('admin') && !hasRole('super_admin')) {
-    return <Navigate to="/dashboard" replace />;
+  if (requireCommunityAdmin) {
+    // Super admins always have access; community-level admins checked per-community
+    const isSuperAdmin = hasRole('admin') || hasRole('super_admin');
+    const communityAdminRoles = ['community-owner', 'community-admin', 'moderator'];
+    const hasCommunityAdmin = user.communities?.some(c => communityAdminRoles.includes(c.role));
+    if (!isSuperAdmin && !hasCommunityAdmin) {
+      return <Navigate to="/dashboard" replace />;
+    }
   }
 
   if (requirePlatformAdmin && !hasRole('platform-admin')) {
@@ -191,7 +197,7 @@ function App() {
       {/* Admin routes (community admin) */}
       <Route
         element={
-          <ProtectedRoute requireAdmin>
+          <ProtectedRoute requireCommunityAdmin>
             <AdminLayout />
           </ProtectedRoute>
         }
