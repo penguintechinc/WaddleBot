@@ -254,3 +254,7 @@ ingress:
       hosts:
         - waddlebot.penguintech.cloud
         - waddles.penguintech.cloud
+
+# Kong API Gateway - explicitly enabled in beta
+kong:
+  enabled: true
