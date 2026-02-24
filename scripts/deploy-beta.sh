@@ -23,32 +23,32 @@ NAMESPACE="waddlebot"
 HELM_CHART="${PROJECT_ROOT}/k8s/helm/waddlebot"
 KUBE_CONTEXT="dal2-beta"
 
-# Services to build and push
+# Services to build and push — paths must match actual project layout
 declare -A SERVICES=(
     [hub-api]="${PROJECT_ROOT}/admin/hub_module/Dockerfile"
     [hub-webui]="${PROJECT_ROOT}/admin/hub_module/Dockerfile.webui"
-    [core-video-proxy]="${PROJECT_ROOT}/services/video-proxy/Dockerfile"
-    [core-engagement]="${PROJECT_ROOT}/services/engagement/Dockerfile"
-    [core-module-rtc]="${PROJECT_ROOT}/services/module-rtc/Dockerfile"
-    [core-router]="${PROJECT_ROOT}/services/router/Dockerfile"
-    [core-identity]="${PROJECT_ROOT}/services/identity/Dockerfile"
-    [core-labels]="${PROJECT_ROOT}/services/labels/Dockerfile"
-    [core-browser-source]="${PROJECT_ROOT}/services/browser-source/Dockerfile"
-    [core-reputation]="${PROJECT_ROOT}/services/reputation/Dockerfile"
-    [core-community]="${PROJECT_ROOT}/services/community/Dockerfile"
-    [core-ai-researcher]="${PROJECT_ROOT}/services/ai-researcher/Dockerfile"
-    [collector-twitch]="${PROJECT_ROOT}/services/collectors/twitch/Dockerfile"
-    [collector-discord]="${PROJECT_ROOT}/services/collectors/discord/Dockerfile"
-    [collector-slack]="${PROJECT_ROOT}/services/collectors/slack/Dockerfile"
-    [collector-youtube-live]="${PROJECT_ROOT}/services/collectors/youtube-live/Dockerfile"
-    [collector-kick]="${PROJECT_ROOT}/services/collectors/kick/Dockerfile"
+    [core-video-proxy]="${PROJECT_ROOT}/core/video_proxy_module/Dockerfile"
+    [core-engagement]="${PROJECT_ROOT}/core/engagement_module/Dockerfile"
+    [core-module-rtc]="${PROJECT_ROOT}/core/module_rtc/Dockerfile"
+    [core-router]="${PROJECT_ROOT}/processing/router_module/Dockerfile"
+    [core-identity]="${PROJECT_ROOT}/core/identity_core_module/Dockerfile"
+    [core-labels]="${PROJECT_ROOT}/core/labels_core_module/Dockerfile"
+    [core-browser-source]="${PROJECT_ROOT}/core/browser_source_core_module/Dockerfile"
+    [core-reputation]="${PROJECT_ROOT}/core/reputation_module/Dockerfile"
+    [core-community]="${PROJECT_ROOT}/core/community_module/Dockerfile"
+    [core-ai-researcher]="${PROJECT_ROOT}/core/ai_researcher_module/Dockerfile"
+    [collector-twitch]="${PROJECT_ROOT}/trigger/receiver/twitch_module/Dockerfile"
+    [collector-discord]="${PROJECT_ROOT}/trigger/receiver/discord_module/Dockerfile"
+    [collector-slack]="${PROJECT_ROOT}/trigger/receiver/slack_module/Dockerfile"
+    [collector-youtube-live]="${PROJECT_ROOT}/trigger/receiver/youtube_live_module/Dockerfile"
+    [collector-kick]="${PROJECT_ROOT}/trigger/receiver/kick_module_flask/Dockerfile"
     [interactive-ai]="${PROJECT_ROOT}/action/interactive/ai_interaction_module/Dockerfile"
     [interactive-alias]="${PROJECT_ROOT}/action/interactive/alias_interaction_module/Dockerfile"
     [interactive-shoutout]="${PROJECT_ROOT}/action/interactive/shoutout_interaction_module/Dockerfile"
     [interactive-inventory]="${PROJECT_ROOT}/action/interactive/inventory_interaction_module/Dockerfile"
     [interactive-calendar]="${PROJECT_ROOT}/action/interactive/calendar_interaction_module/Dockerfile"
     [interactive-memories]="${PROJECT_ROOT}/action/interactive/memories_interaction_module/Dockerfile"
-    [interactive-youtube-music]="${PROJECT_ROOT}/action/interactive/youtube_music_module/Dockerfile"
+    [interactive-youtube-music]="${PROJECT_ROOT}/action/interactive/youtube_music_interaction_module/Dockerfile"
     [interactive-spotify]="${PROJECT_ROOT}/action/interactive/spotify_interaction_module/Dockerfile"
     [interactive-loyalty]="${PROJECT_ROOT}/action/interactive/loyalty_interaction_module/Dockerfile"
     [interactive-translate]="${PROJECT_ROOT}/action/interactive/translate_interaction_module/Dockerfile"
@@ -131,12 +131,6 @@ SERVICES:
 EXAMPLES:
   # Deploy all services with a specific tag
   $0 --tag v1.2.3
-
-  # Deploy using Kustomize
-  $0 --method kustomize
-
-  # Deploy specific services with Kustomize
-  $0 --method kustomize --service hub-api --service hub-webui
 
   # Deploy only hub-api
   $0 --service hub-api
@@ -331,6 +325,24 @@ do_deploy() {
             log_success "Namespace ${NAMESPACE} created"
         else
             log_success "Namespace ${NAMESPACE} already exists"
+        fi
+    fi
+
+    # Recover stuck Helm release (pending-install/pending-upgrade/pending-rollback)
+    if [ "$DRY_RUN" = false ]; then
+        RELEASE_STATUS=$(helm --kube-context "${KUBE_CONTEXT}" status waddlebot -n "${NAMESPACE}" -o json 2>/dev/null | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "")
+        if [[ "$RELEASE_STATUS" == pending-* ]]; then
+            log_warning "Helm release stuck in '${RELEASE_STATUS}' — rolling back to clear lock..."
+            LAST_GOOD=$(helm --kube-context "${KUBE_CONTEXT}" history waddlebot -n "${NAMESPACE}" -o json 2>/dev/null \
+                | python3 -c "import sys,json; revs=[r for r in json.load(sys.stdin) if r['status'] in ('deployed','failed')]; print(revs[-1]['revision'] if revs else '')" 2>/dev/null || echo "")
+            if [ -n "$LAST_GOOD" ]; then
+                helm --kube-context "${KUBE_CONTEXT}" rollback waddlebot "$LAST_GOOD" -n "${NAMESPACE}" --timeout 2m 2>/dev/null || true
+                log_success "Rolled back to revision ${LAST_GOOD}, lock cleared"
+            else
+                log_warning "No previous revision found — uninstalling stuck release..."
+                helm --kube-context "${KUBE_CONTEXT}" uninstall waddlebot -n "${NAMESPACE}" --no-hooks 2>/dev/null || true
+                log_success "Uninstalled stuck release, will do fresh install"
+            fi
         fi
     fi
 
