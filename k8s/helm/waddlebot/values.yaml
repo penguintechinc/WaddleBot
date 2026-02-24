@@ -1015,3 +1015,62 @@ networkPolicy:
   policyTypes:
     - Ingress
     - Egress
+
+# Kong API Gateway subchart configuration
+# https://github.com/Kong/charts/tree/main/charts/kong
+kong:
+  enabled: true
+
+  fullnameOverride: kong
+
+  # DB-backed mode using shared infra-postgres
+  env:
+    database: postgres
+    pg_host: infra-postgres
+    pg_port: "5432"
+    pg_database:
+      valueFrom:
+        configMapKeyRef:
+          name: waddlebot-config
+          key: KONG_PG_DATABASE
+    pg_user:
+      valueFrom:
+        configMapKeyRef:
+          name: waddlebot-config
+          key: KONG_PG_USER
+    pg_password:
+      valueFrom:
+        secretKeyRef:
+          name: waddlebot-secrets
+          key: KONG_PG_PASSWORD
+
+  # Run migrations automatically on upgrade
+  migrations:
+    preUpgrade: true
+    postUpgrade: true
+
+  # Admin API only — no proxy (WaddleBot uses nginx ingress directly)
+  proxy:
+    enabled: false
+
+  admin:
+    enabled: true
+    http:
+      enabled: true
+      servicePort: 8001
+      containerPort: 8001
+    tls:
+      enabled: false
+
+  # Disable Kong Ingress Controller — we use nginx
+  ingressController:
+    enabled: false
+
+  # Minimal resources for beta
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
