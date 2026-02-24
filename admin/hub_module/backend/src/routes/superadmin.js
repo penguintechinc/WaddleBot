@@ -3,6 +3,7 @@
  */
 import { Router } from 'express';
 import * as superadminController from '../controllers/superadminController.js';
+import * as analyticsController from '../controllers/analyticsController.js';
 import PlatformConfigController from '../controllers/platformConfigController.js';
 import * as kongController from '../controllers/kongController.js';
 import * as userManagementController from '../controllers/userManagementController.js';
@@ -17,6 +18,12 @@ router.use(requireSuperAdmin);
 
 // Dashboard stats
 router.get('/dashboard', superadminController.getDashboardStats);
+
+// Analytics
+router.get('/analytics', analyticsController.getPlatformOverview);
+router.get('/analytics/reputation', analyticsController.getReputationDistribution);
+router.get('/analytics/growth', analyticsController.getGrowthTrends);
+router.get('/analytics/activity', analyticsController.getActivityBreakdown);
 
 // Community management
 router.get('/communities', superadminController.listCommunities);

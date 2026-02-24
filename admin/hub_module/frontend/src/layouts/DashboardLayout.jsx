@@ -16,8 +16,10 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   ShoppingCartIcon,
+  LinkIcon,
 } from '@heroicons/react/24/outline';
 import { useState } from 'react';
+import GlobalBanner from '../components/GlobalBanner';
 
 function DashboardLayout() {
   const { user, logout, isSuperAdmin, isVendor } = useAuth();
@@ -30,6 +32,7 @@ function DashboardLayout() {
     { to: '/dashboard', icon: HomeIcon, label: 'My Communities' },
     { to: '/dashboard/profile', icon: UserIcon, label: 'My Profile' },
     { to: '/dashboard/settings', icon: UserCircleIcon, label: 'Account Settings' },
+    { to: '/dashboard/my-channels', icon: LinkIcon, label: 'My Channels' },
   ];
 
   // Super Admin navigation
@@ -39,6 +42,7 @@ function DashboardLayout() {
     { to: '/superadmin/modules', icon: BuildingStorefrontIcon, label: 'Module Registry' },
     { to: '/superadmin/users', icon: UserIcon, label: 'User Management' },
     { to: '/superadmin/vendor-requests', icon: ShoppingCartIcon, label: 'Vendor Requests' },
+    { to: '/superadmin/analytics', icon: ChartBarIcon, label: 'Analytics' },
     { to: '/superadmin/platform-config', icon: Cog6ToothIcon, label: 'Platform Config' },
     { to: '/superadmin/kong', icon: ShieldCheckIcon, label: 'Kong Gateway' },
   ];
@@ -60,6 +64,7 @@ function DashboardLayout() {
 
   return (
     <div className="min-h-screen bg-navy-950">
+      <GlobalBanner />
       {/* Top bar */}
       <header className="bg-navy-900 border-b border-navy-700 sticky top-0 z-50">
         <div className="flex justify-between items-center h-16 px-4 sm:px-6 lg:px-8">

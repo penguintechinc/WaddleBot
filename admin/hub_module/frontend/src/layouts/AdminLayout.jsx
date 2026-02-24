@@ -1,5 +1,6 @@
 import { Outlet, Link, useLocation, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import GlobalBanner from '../components/GlobalBanner';
 import {
   HomeIcon,
   UserGroupIcon,
@@ -24,6 +25,11 @@ import {
   CommandLineIcon,
   SpeakerWaveIcon,
   LanguageIcon,
+  CalendarDaysIcon,
+  TicketIcon,
+  HashtagIcon,
+  AdjustmentsHorizontalIcon,
+  SignalIcon,
 } from '@heroicons/react/24/outline';
 
 function AdminLayout() {
@@ -41,6 +47,9 @@ function AdminLayout() {
         { to: `/admin/${communityId}/analytics`, icon: ChartBarIcon, label: 'Analytics' },
         { to: `/admin/${communityId}/security`, icon: FireIcon, label: 'Security' },
         { to: `/admin/${communityId}/servers`, icon: ServerStackIcon, label: 'Linked Servers' },
+        { to: `/admin/${communityId}/rcon`, icon: SignalIcon, label: 'Game Servers', premium: true },
+        { to: `/admin/${communityId}/platform-settings`, icon: AdjustmentsHorizontalIcon, label: 'Platform Settings' },
+        { to: `/admin/${communityId}/commands`, icon: HashtagIcon, label: 'Commands' },
         { to: `/admin/${communityId}/connected-platforms`, icon: RectangleGroupIcon, label: 'Connected Platforms' },
         { to: `/admin/${communityId}/mirror-groups`, icon: ArrowsRightLeftIcon, label: 'Chat Mirroring' },
         { to: `/admin/${communityId}/leaderboard`, icon: TrophyIcon, label: 'Leaderboards' },
@@ -53,6 +62,8 @@ function AdminLayout() {
         { to: `/admin/${communityId}/domains`, icon: GlobeAltIcon, label: 'Custom Domains' },
         { to: `/admin/${communityId}/shoutouts`, icon: SpeakerWaveIcon, label: 'Shoutouts' },
         { to: `/admin/${communityId}/translation`, icon: LanguageIcon, label: 'Translation & Captions' },
+        { to: `/admin/${communityId}/calendar/events`, icon: CalendarDaysIcon, label: 'Calendar Events' },
+        { to: `/admin/${communityId}/support`, icon: TicketIcon, label: 'Support Tickets' },
         { to: `/admin/${communityId}/loyalty`, icon: CurrencyDollarIcon, label: 'Loyalty System' },
       ]
     : [];
@@ -69,6 +80,7 @@ function AdminLayout() {
     { to: '/superadmin', icon: ChartBarIcon, label: 'Dashboard', exact: true },
     { to: '/superadmin/communities', icon: HomeIcon, label: 'Communities' },
     { to: '/superadmin/modules', icon: BuildingStorefrontIcon, label: 'Module Registry' },
+    { to: '/superadmin/analytics', icon: ChartBarIcon, label: 'Analytics' },
     { to: '/superadmin/platform-config', icon: Cog6ToothIcon, label: 'Platform Config' },
   ];
 
@@ -92,6 +104,7 @@ function AdminLayout() {
 
   return (
     <div className="min-h-screen bg-navy-950">
+      <GlobalBanner />
       {/* Top bar */}
       <header className="bg-navy-900 border-b border-navy-700 sticky top-0 z-50">
         <div className="flex justify-between items-center h-16 px-4 sm:px-6 lg:px-8">

@@ -69,6 +69,7 @@ import AdminMusicSettings from './pages/admin/AdminMusicSettings';
 import AdminMusicProviders from './pages/admin/AdminMusicProviders';
 import AdminRadioStations from './pages/admin/AdminRadioStations';
 import AdminVendorReview from './pages/admin/AdminVendorReview';
+import AdminCalendarEvents from './pages/admin/AdminCalendarEvents';
 import AdminCalendarTicketing from './pages/admin/AdminCalendarTicketing';
 import AdminCalendarScanner from './pages/admin/AdminCalendarScanner';
 import AdminCalendarAttendance from './pages/admin/AdminCalendarAttendance';
@@ -76,6 +77,21 @@ import AdminLiveStreams from './pages/admin/AdminLiveStreams';
 import AdminCommunityCalls from './pages/admin/AdminCommunityCalls';
 import AdminPolls from './pages/admin/AdminPolls';
 import AdminForms from './pages/admin/AdminForms';
+import AdminSupportDashboard from './pages/admin/AdminSupportDashboard';
+import AdminSupportTicketDetail from './pages/admin/AdminSupportTicketDetail';
+import AdminJoinRequests from './pages/admin/AdminJoinRequests';
+import AdminInventory from './pages/admin/AdminInventory';
+import AdminRconServers from './pages/admin/AdminRconServers';
+import AdminCommunityTokens from './pages/admin/AdminCommunityTokens';
+import AdminCommands from './pages/admin/AdminCommands';
+import AdminPlatformSettings from './pages/admin/AdminPlatformSettings';
+import MyChannels from './pages/dashboard/MyChannels';
+import SupportSubmitTicket from './pages/community/SupportSubmitTicket';
+import SupportMyTickets from './pages/community/SupportMyTickets';
+import InventoryBrowse from './pages/community/InventoryBrowse';
+import GameServers from './pages/community/GameServers';
+import InventoryMyItems from './pages/community/InventoryMyItems';
+import PersonalAccessToken from './pages/dashboard/PersonalAccessToken';
 
 // Vendor pages
 import VendorSubmissionForm from './pages/vendor/VendorSubmissionForm';
@@ -100,6 +116,7 @@ import SuperAdminSoftwareDiscovery from './pages/superadmin/SuperAdminSoftwareDi
 import SuperAdminServiceDiscovery from './pages/superadmin/SuperAdminServiceDiscovery';
 import SuperAdminVendorRequests from './pages/superadmin/SuperAdminVendorRequests';
 import SuperAdminUsers from './pages/superadmin/SuperAdminUsers';
+import SuperAdminAnalytics from './pages/superadmin/SuperAdminAnalytics';
 
 // Loading spinner
 function LoadingSpinner() {
@@ -183,6 +200,20 @@ function App() {
         <Route path="/dashboard/community/:id/leaderboard" element={<CommunityLeaderboard />} />
         <Route path="/dashboard/community/:id/members" element={<CommunityMembers />} />
 
+        {/* Support ticket routes (authenticated) */}
+        <Route path="/community/:communityId/support/submit" element={<SupportSubmitTicket />} />
+        <Route path="/community/:communityId/support/my-tickets" element={<SupportMyTickets />} />
+
+        {/* Inventory (Quartermaster) routes (authenticated) */}
+        <Route path="/community/:communityId/inventory" element={<InventoryBrowse />} />
+        <Route path="/community/:communityId/inventory/my-items" element={<InventoryMyItems />} />
+        <Route path="/community/:communityId/game-servers" element={<GameServers />} />
+
+        {/* Personal Access Token */}
+        <Route path="/account/tokens" element={<PersonalAccessToken />} />
+        {/* My Channels */}
+        <Route path="/dashboard/my-channels" element={<MyChannels />} />
+
         {/* Calendar routes (authenticated) */}
         <Route path="/calendar/settings" element={<CalendarSettings />} />
         <Route path="/calendar/booking-pages" element={<BookingPages />} />
@@ -232,6 +263,7 @@ function App() {
         <Route path="/admin/:communityId/music/settings" element={<AdminMusicSettings />} />
         <Route path="/admin/:communityId/music/providers" element={<AdminMusicProviders />} />
         <Route path="/admin/:communityId/music/radio" element={<AdminRadioStations />} />
+        <Route path="/admin/:communityId/calendar/events" element={<AdminCalendarEvents />} />
         <Route path="/admin/:communityId/calendar/events/:eventId/tickets" element={<AdminCalendarTicketing />} />
         <Route path="/admin/:communityId/calendar/events/:eventId/scanner" element={<AdminCalendarScanner />} />
         <Route path="/admin/:communityId/calendar/events/:eventId/attendance" element={<AdminCalendarAttendance />} />
@@ -239,6 +271,14 @@ function App() {
         <Route path="/admin/:communityId/calls" element={<AdminCommunityCalls />} />
         <Route path="/admin/:communityId/polls" element={<AdminPolls />} />
         <Route path="/admin/:communityId/forms" element={<AdminForms />} />
+        <Route path="/admin/:communityId/support" element={<AdminSupportDashboard />} />
+        <Route path="/admin/:communityId/support/tickets/:ticketId" element={<AdminSupportTicketDetail />} />
+        <Route path="/admin/:communityId/join-requests" element={<AdminJoinRequests />} />
+        <Route path="/admin/:communityId/inventory" element={<AdminInventory />} />
+        <Route path="/admin/:communityId/rcon" element={<AdminRconServers />} />
+        <Route path="/admin/:communityId/tokens" element={<AdminCommunityTokens />} />
+        <Route path="/admin/:communityId/commands" element={<AdminCommands />} />
+        <Route path="/admin/:communityId/platform-settings" element={<AdminPlatformSettings />} />
       </Route>
 
       {/* Platform admin routes */}
@@ -274,6 +314,7 @@ function App() {
         <Route path="/superadmin/kong" element={<SuperAdminKongGateway />} />
         <Route path="/superadmin/software-discovery" element={<SuperAdminSoftwareDiscovery />} />
         <Route path="/superadmin/services" element={<SuperAdminServiceDiscovery />} />
+        <Route path="/superadmin/analytics" element={<SuperAdminAnalytics />} />
       </Route>
 
       {/* Catch all - redirect to home */}

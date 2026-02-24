@@ -6,6 +6,7 @@
  *   - Communities: page loads, list renders
  *   - Platform Config: page loads
  *   - Module Registry: page loads
+ *   - Analytics: page loads, summary cards, section headings
  *
  * These tests require the logged-in user to have super_admin role.
  * Tests are skipped gracefully if the user is not a super admin.
@@ -377,5 +378,38 @@ test.describe('Super Admin - Page Navigation', () => {
     if (!await verifySuperAdminAccess(page)) return;
 
     await expect(page.locator('h1, h2').first()).toBeVisible({ timeout: 8000 });
+  });
+
+  test('/superadmin/analytics loads analytics page', async ({ page }) => {
+    await page.goto('/superadmin/analytics', { waitUntil: 'networkidle' });
+    await dismissOverlays(page);
+    if (!await verifySuperAdminAccess(page)) return;
+
+    await expect(page.locator('h1:has-text("Platform Analytics")')).toBeVisible({ timeout: 8000 });
+  });
+
+  test('/superadmin/analytics displays summary cards', async ({ page }) => {
+    const responsePromise = page.waitForResponse(
+      (resp) => resp.url().includes('/api/v1/superadmin/analytics') && resp.status() === 200,
+      { timeout: 10000 }
+    ).catch(() => null);
+
+    await page.goto('/superadmin/analytics', { waitUntil: 'networkidle' });
+    await dismissOverlays(page);
+    if (!await verifySuperAdminAccess(page)) return;
+
+    await responsePromise;
+
+    // Verify summary cards are present
+    await expect(page.locator('text=Total Users')).toBeVisible({ timeout: 8000 });
+    await expect(page.locator('text=Active Users (30d)')).toBeVisible();
+    await expect(page.locator('text=Total Communities')).toBeVisible();
+    await expect(page.locator('text=Avg Platform Reputation')).toBeVisible();
+
+    // Verify section headings
+    await expect(page.locator('text=Reputation Tier Distribution')).toBeVisible();
+    await expect(page.locator('text=Platform Breakdown')).toBeVisible();
+    await expect(page.locator('text=User Growth')).toBeVisible();
+    await expect(page.locator('text=Activity Segments')).toBeVisible();
   });
 });
