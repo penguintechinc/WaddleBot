@@ -48,6 +48,11 @@ data:
     GRANT ALL PRIVILEGES ON SCHEMA router TO {{ .Values.infrastructure.postgresql.username }};
     GRANT ALL PRIVILEGES ON SCHEMA identity TO {{ .Values.infrastructure.postgresql.username }};
     GRANT ALL PRIVILEGES ON SCHEMA community TO {{ .Values.infrastructure.postgresql.username }};
+
+    -- Kong API Gateway database and user
+    CREATE USER {{ .Values.infrastructure.postgresql.kongUser }} WITH PASSWORD '{{ .Values.infrastructure.postgresql.kongPassword }}';
+    CREATE DATABASE {{ .Values.infrastructure.postgresql.kongDatabase }} OWNER {{ .Values.infrastructure.postgresql.kongUser }};
+    GRANT ALL PRIVILEGES ON DATABASE {{ .Values.infrastructure.postgresql.kongDatabase }} TO {{ .Values.infrastructure.postgresql.kongUser }};
 ---
 apiVersion: apps/v1
 kind: Deployment
