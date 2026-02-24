@@ -68,6 +68,9 @@ infrastructure:
     username: "waddlebot"
     database: "waddlebot"
     password: "changeme"  # Only used for secrets, actual DB already running
+    kongUser: "kong"
+    kongDatabase: "kong"
+    kongPassword: "changeme_kong_pg"
     image: postgres:16
     service:
       name: "infra-postgres"

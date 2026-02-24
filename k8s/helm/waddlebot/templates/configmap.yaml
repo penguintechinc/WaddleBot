@@ -17,6 +17,9 @@ data:
   DB_TYPE: "postgres"
   POSTGRES_USER: {{ .Values.infrastructure.postgresql.username | quote }}
   POSTGRES_DB: {{ .Values.infrastructure.postgresql.database | quote }}
+  # Kong Postgres Configuration
+  KONG_PG_USER: {{ .Values.infrastructure.postgresql.kongUser | quote }}
+  KONG_PG_DATABASE: {{ .Values.infrastructure.postgresql.kongDatabase | quote }}
   # Alternative naming convention used by some modules (router, etc.)
   DATABASE_HOST: {{ .Values.infrastructure.postgresql.service.name | quote }}
   DATABASE_PORT: {{ .Values.infrastructure.postgresql.service.port | quote }}
