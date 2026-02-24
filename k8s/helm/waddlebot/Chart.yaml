@@ -14,3 +14,9 @@ keywords:
 home: https://github.com/waddlebot/waddlebot
 maintainers:
   - name: Waddles Team
+
+dependencies:
+  - name: kong
+    version: "2.52.0"
+    repository: "https://charts.konghq.com"
+    condition: kong.enabled
