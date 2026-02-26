@@ -204,6 +204,7 @@ export function AuthProvider({ children }) {
     isSuperAdmin: user?.roles?.includes('super_admin'),
     isPlatformAdmin: user?.roles?.includes('platform-admin'),
     isVendor: user?.roles?.includes('vendor'),
+    isAnalyticsConsumer: user?.isAnalyticsConsumer || false,
     // Community-level admin check (for any community, or a specific one)
     isCommunityAdmin: (communityId) => {
       const adminRoles = ['community-owner', 'community-admin', 'moderator'];

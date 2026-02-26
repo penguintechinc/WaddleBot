@@ -7,8 +7,9 @@ import {
   ShieldCheckIcon,
   ShoppingCartIcon,
   CheckBadgeIcon,
+  ChartBarIcon,
 } from '@heroicons/react/24/outline';
-import { superAdminApi } from '../../services/api';
+import api, { superAdminApi } from '../../services/api';
 import { FormModalBuilder } from '@penguintechinc/react-libs';
 import { WADDLES_GOLD_COLORS } from '../../theme/waddlebotTheme';
 
@@ -126,6 +127,8 @@ function SuperAdminUsers() {
         await superAdminApi.assignSuperAdminRole(selectedUser.id, roleFormData.grant);
       } else if (roleName === 'vendor') {
         await superAdminApi.assignVendorRole(selectedUser.id, roleFormData.grant);
+      } else if (roleName === 'analytics_consumer') {
+        await api.post(`/api/v1/superadmin/users/${selectedUser.id}/analytics-consumer-role`, { grant: roleFormData.grant });
       }
       setShowRoleModal(false);
       await loadUsers();
@@ -150,9 +153,12 @@ function SuperAdminUsers() {
   const openRoleModal = (user, role) => {
     setSelectedUser(user);
     setRoleName(role);
-    setRoleFormData({
-      grant: role === 'super_admin' ? !user.isSuperAdmin : !user.isVendor,
-    });
+    let grant;
+    if (role === 'super_admin') grant = !user.isSuperAdmin;
+    else if (role === 'vendor') grant = !user.isVendor;
+    else if (role === 'analytics_consumer') grant = !user.isAnalyticsConsumer;
+    else grant = true;
+    setRoleFormData({ grant });
     setShowRoleModal(true);
   };
 
@@ -353,11 +359,16 @@ function SuperAdminUsers() {
                       </div>
                     )}
                     {user.isVendor && (
-                      <div className="inline-block px-2 py-1 bg-emerald-500/20 text-emerald-300 rounded text-xs border border-emerald-500/30">
+                      <div className="inline-block mr-2 px-2 py-1 bg-emerald-500/20 text-emerald-300 rounded text-xs border border-emerald-500/30">
                         Vendor
                       </div>
                     )}
-                    {!user.isSuperAdmin && !user.isVendor && (
+                    {user.isAnalyticsConsumer && (
+                      <div className="inline-block px-2 py-1 bg-sky-500/20 text-sky-300 rounded text-xs border border-sky-500/30">
+                        Analytics Consumer
+                      </div>
+                    )}
+                    {!user.isSuperAdmin && !user.isVendor && !user.isAnalyticsConsumer && (
                       <span className="text-navy-400">—</span>
                     )}
                   </td>
@@ -392,6 +403,17 @@ function SuperAdminUsers() {
                       title={user.isVendor ? 'Revoke vendor' : 'Grant vendor'}
                     >
                       <ShoppingCartIcon className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => openRoleModal(user, 'analytics_consumer')}
+                      className={`inline-flex items-center px-2 py-1 rounded transition-colors ${
+                        user.isAnalyticsConsumer
+                          ? 'text-sky-400 hover:text-sky-300 hover:bg-navy-700'
+                          : 'text-navy-400 hover:text-navy-300 hover:bg-navy-700'
+                      }`}
+                      title={user.isAnalyticsConsumer ? 'Revoke analytics consumer' : 'Grant analytics consumer'}
+                    >
+                      <ChartBarIcon className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => openVerifyModal(user)}
@@ -473,12 +495,18 @@ function SuperAdminUsers() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-navy-900 border border-navy-700 rounded-lg p-6 w-full max-w-md">
             <h2 className="text-xl font-bold text-gold-400 mb-4">
-              {roleName === 'super_admin' ? 'Super Admin Role' : 'Vendor Role'}
+              {roleName === 'super_admin'
+                ? 'Super Admin Role'
+                : roleName === 'vendor'
+                ? 'Vendor Role'
+                : 'Analytics Consumer Role'}
             </h2>
             <p className="text-navy-300 mb-4">
               {roleName === 'super_admin'
                 ? `${roleFormData.grant ? 'Grant' : 'Revoke'} super admin access to ${selectedUser.username}?`
-                : `${roleFormData.grant ? 'Grant' : 'Revoke'} vendor access to ${selectedUser.username}?`}
+                : roleName === 'vendor'
+                ? `${roleFormData.grant ? 'Grant' : 'Revoke'} vendor access to ${selectedUser.username}?`
+                : `${roleFormData.grant ? 'Grant' : 'Revoke'} analytics consumer access to ${selectedUser.username}?`}
             </p>
             <form onSubmit={handleAssignRole} className="space-y-4">
               <div className="flex space-x-3">

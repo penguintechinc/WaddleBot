@@ -115,6 +115,7 @@ async function verifyToken(req) {
       email: decoded.email,
       avatarUrl: decoded.avatarUrl,
       isSuperAdmin: decoded.isSuperAdmin,
+      isAnalyticsConsumer: decoded.isAnalyticsConsumer || false,
       roles: decoded.roles || [],
       communityRoles: decoded.communityRoles || {},
     };
@@ -211,6 +212,16 @@ export function requireSuperAdmin(req, res, next) {
     return next(errors.forbidden('Super admin access required'));
   }
   next();
+}
+
+/**
+ * Require analytics consumer role OR super admin.
+ * GDPR-safe: analytics consumers see aggregates only (hub enforces this at route level).
+ */
+export function requireAnalyticsConsumer(req, res, next) {
+  if (!req.user) return next(errors.unauthorized('Authentication required'));
+  if (req.user.isSuperAdmin || req.user.isAnalyticsConsumer) return next();
+  return next(errors.forbidden('Analytics consumer access required'));
 }
 
 /**
@@ -411,6 +422,7 @@ export default {
   optionalAuth,
   requireAuth,
   requireSuperAdmin,
+  requireAnalyticsConsumer,
   requirePlatformAdmin,
   requireMember,
   requireCommunityAdmin,

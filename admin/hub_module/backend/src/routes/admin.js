@@ -10,6 +10,7 @@ import * as communityProfileController from '../controllers/communityProfileCont
 import * as overlayController from '../controllers/overlayController.js';
 import * as loyaltyController from '../controllers/loyaltyController.js';
 import * as announcementController from '../controllers/announcementController.js';
+import * as aiChatterController from '../controllers/aiChatterController.js';
 import PlatformConfigController from '../controllers/platformConfigController.js';
 import { requireAuth, requireCommunityAdmin } from '../middleware/auth.js';
 import { validators, validateRequest } from '../middleware/validation.js';
@@ -464,5 +465,9 @@ router.put('/:communityId/translation/config', requireCommunityAdmin, adminContr
 
 // Workflow routes
 router.use('/:communityId/workflows', workflowRoutes);
+
+// AI Chatter configuration
+router.get('/:communityId/ai-chatter/config', requireCommunityAdmin, aiChatterController.getChatterConfig);
+router.put('/:communityId/ai-chatter/config', requireCommunityAdmin, aiChatterController.updateChatterConfig);
 
 export default router;

@@ -219,6 +219,11 @@ export const adminApi = {
     api.put(`/api/v1/admin/${communityId}/ai-researcher/config`, data),
   getAvailableAIModels: (communityId) =>
     api.get(`/api/v1/admin/${communityId}/ai-researcher/available-models`),
+  // AI Chatter Config
+  getAIChatterConfig: (communityId) =>
+    api.get(`/api/v1/admin/${communityId}/ai-chatter/config`),
+  updateAIChatterConfig: (communityId, config) =>
+    api.put(`/api/v1/admin/${communityId}/ai-chatter/config`, config),
   // Bot Detection
   getBotDetections: (communityId, params) =>
     api.get(`/api/v1/admin/${communityId}/bot-detection`, { params }),
@@ -724,6 +729,20 @@ export const userApi = {
   getPublicProfile: (userId) => api.get(`/api/v1/public/users/${userId}/profile`),
   getMemberProfile: (communityId, userId) =>
     api.get(`/api/v1/communities/${communityId}/members/${userId}/profile`),
+};
+
+// Analytics API
+export const analyticsApi = {
+  getMyStats: () => api.get('/api/v1/analytics/me/stats'),
+  getMyReputation: () => api.get('/api/v1/analytics/me/reputation'),
+  getMemberStats: (communityId, userId) => api.get(`/api/v1/analytics/community/${communityId}/members/${userId}/stats`),
+  getMemberReputation: (communityId, userId) => api.get(`/api/v1/analytics/community/${communityId}/members/${userId}/reputation`),
+  getPlatformOverview: () => api.get('/api/v1/analytics/platform/overview'),
+  getPlatformReputation: () => api.get('/api/v1/analytics/platform/reputation'),
+  getPlatformGrowth: (period = '30d') => api.get(`/api/v1/analytics/platform/growth?period=${period}`),
+  getPlatformActivity: () => api.get('/api/v1/analytics/platform/activity'),
+  getCommunityHealth: (limit = 50) => api.get(`/api/v1/analytics/platform/community-health?limit=${limit}`),
+  getAdminUserStats: (userId) => api.get(`/api/v1/analytics/admin/users/${userId}/stats`),
 };
 
 // Stream API

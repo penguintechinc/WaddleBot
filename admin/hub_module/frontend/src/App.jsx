@@ -36,6 +36,7 @@ import CommunityMembers from './pages/dashboard/CommunityMembers';
 import AccountSettings from './pages/dashboard/AccountSettings';
 import UserProfileEdit from './pages/dashboard/UserProfileEdit';
 import CreateCommunity from './pages/dashboard/CreateCommunity';
+import MyAnalytics from './pages/dashboard/MyAnalytics';
 
 // Admin pages
 import AdminHome from './pages/admin/AdminHome';
@@ -55,9 +56,11 @@ import AdminCommunityProfile from './pages/admin/AdminCommunityProfile';
 import ReputationSettings from './pages/admin/ReputationSettings';
 import AdminAIInsights from './pages/admin/AdminAIInsights';
 import AdminAIResearcherConfig from './pages/admin/AdminAIResearcherConfig';
+import AdminAIChatterConfig from './pages/admin/AdminAIChatterConfig';
 import AdminBotDetection from './pages/admin/AdminBotDetection';
 import AdminAnnouncements from './pages/admin/AdminAnnouncements';
 import AdminAnalytics from './pages/admin/AdminAnalytics';
+import AdminMemberAnalytics from './pages/admin/AdminMemberAnalytics';
 import AdminSecurity from './pages/admin/AdminSecurity';
 import LoyaltySettings from './pages/admin/LoyaltySettings';
 import LoyaltyLeaderboard from './pages/admin/LoyaltyLeaderboard';
@@ -115,6 +118,7 @@ import VendorRequest from './pages/vendor/VendorRequest';
 import PlatformDashboard from './pages/platform/PlatformDashboard';
 import PlatformUsers from './pages/platform/PlatformUsers';
 import PlatformCommunities from './pages/platform/PlatformCommunities';
+import PlatformAnalytics from './pages/platform/PlatformAnalytics';
 
 // Super admin pages
 import SuperAdminDashboard from './pages/superadmin/SuperAdminDashboard';
@@ -155,8 +159,8 @@ function LoadingSpinner() {
 }
 
 // Protected route wrapper
-function ProtectedRoute({ children, requireCommunityAdmin = false, requirePlatformAdmin = false, requireSuperAdmin = false }) {
-  const { user, loading, hasRole } = useAuth();
+function ProtectedRoute({ children, requireCommunityAdmin = false, requirePlatformAdmin = false, requireSuperAdmin = false, requireAnalyticsConsumerOrSuperAdmin = false }) {
+  const { user, loading, hasRole, isAnalyticsConsumer } = useAuth();
 
   if (loading) {
     return <LoadingSpinner />;
@@ -181,6 +185,10 @@ function ProtectedRoute({ children, requireCommunityAdmin = false, requirePlatfo
   }
 
   if (requireSuperAdmin && !hasRole('super_admin')) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  if (requireAnalyticsConsumerOrSuperAdmin && !isAnalyticsConsumer && !hasRole('super_admin')) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -243,6 +251,8 @@ function App() {
         <Route path="/account/tokens" element={<PersonalAccessToken />} />
         {/* My Channels */}
         <Route path="/dashboard/my-channels" element={<MyChannels />} />
+        {/* My Analytics */}
+        <Route path="/dashboard/my-analytics" element={<MyAnalytics />} />
 
         {/* Calendar routes (authenticated) */}
         <Route path="/calendar/settings" element={<CalendarSettings />} />
@@ -286,6 +296,7 @@ function App() {
         <Route path="/admin/:communityId/reputation" element={<ReputationSettings />} />
         <Route path="/admin/:communityId/ai-insights" element={<AdminAIInsights />} />
         <Route path="/admin/:communityId/ai-config" element={<AdminAIResearcherConfig />} />
+        <Route path="/admin/:communityId/ai-chatter" element={<AdminAIChatterConfig />} />
         <Route path="/admin/:communityId/bot-detection" element={<AdminBotDetection />} />
         <Route path="/admin/:communityId/announcements" element={<AdminAnnouncements />} />
         <Route path="/admin/:communityId/analytics" element={<AdminAnalytics />} />
@@ -319,6 +330,7 @@ function App() {
         <Route path="/admin/:communityId/platform-settings" element={<AdminPlatformSettings />} />
         <Route path="/admin/:communityId/interaction-channels" element={<AdminInteractionChannels />} />
         <Route path="/admin/:communityId/roles" element={<AdminCommunityRoles />} />
+        <Route path="/admin/:communityId/members/:userId/analytics" element={<AdminMemberAnalytics />} />
       </Route>
 
       {/* Platform admin routes */}
@@ -332,6 +344,17 @@ function App() {
         <Route path="/platform" element={<PlatformDashboard />} />
         <Route path="/platform/users" element={<PlatformUsers />} />
         <Route path="/platform/communities" element={<PlatformCommunities />} />
+      </Route>
+
+      {/* Platform Analytics — analyticsConsumer or superAdmin */}
+      <Route
+        element={
+          <ProtectedRoute requireAnalyticsConsumerOrSuperAdmin>
+            <DashboardLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route path="/platform/analytics" element={<PlatformAnalytics />} />
       </Route>
 
       {/* Super admin routes - uses DashboardLayout with sidebar admin section */}

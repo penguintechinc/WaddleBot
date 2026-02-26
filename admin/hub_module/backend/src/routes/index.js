@@ -27,6 +27,7 @@ import passkeyRoutes from './passkeys.js';
 import joinRequestRoutes from './joinRequests.js';
 import interactionAdminRoutes, { communityInteractionRouter, internalRelayRouter } from './interaction.js';
 import tenantRoutes from './tenant.js';
+import analyticsRoutes from './analytics.js';
 
 const router = Router();
 
@@ -99,6 +100,9 @@ router.use('/admin', joinRequestRoutes);
 
 // Platform admin routes (platform-admin role required)
 router.use('/platform', platformRoutes);
+
+// Analytics routes (self-stats + platform analytics)
+router.use('/analytics', analyticsRoutes);
 
 // Super admin routes (super_admin role required)
 router.use('/superadmin', superadminRoutes);

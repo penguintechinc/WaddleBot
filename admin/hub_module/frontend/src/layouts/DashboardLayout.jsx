@@ -22,7 +22,7 @@ import { useState } from 'react';
 import GlobalBanner from '../components/GlobalBanner';
 
 function DashboardLayout() {
-  const { user, logout, isSuperAdmin, isVendor } = useAuth();
+  const { user, logout, isSuperAdmin, isVendor, isAnalyticsConsumer } = useAuth();
   const location = useLocation();
   const { id: communityId } = useParams();
   const [adminCollapsed, setAdminCollapsed] = useState(false);
@@ -33,6 +33,7 @@ function DashboardLayout() {
     { to: '/dashboard/profile', icon: UserIcon, label: 'My Profile' },
     { to: '/dashboard/settings', icon: UserCircleIcon, label: 'Account Settings' },
     { to: '/dashboard/my-channels', icon: LinkIcon, label: 'My Channels' },
+    { to: '/dashboard/my-analytics', icon: ChartBarIcon, label: 'My Analytics' },
   ];
 
   // Super Admin navigation
@@ -146,6 +147,23 @@ function DashboardLayout() {
                   <span className="text-sm font-medium">Admin Panel</span>
                 </Link>
               </>
+            )}
+
+            {/* Platform Analytics - visible to analyticsConsumer and superAdmins */}
+            {(isAnalyticsConsumer || isSuperAdmin) && (
+              <div className="mt-4">
+                <Link
+                  to="/platform/analytics"
+                  className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
+                    location.pathname === '/platform/analytics'
+                      ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30'
+                      : 'text-navy-300 hover:bg-navy-800 hover:text-sky-300'
+                  }`}
+                >
+                  <ChartBarIcon className="w-5 h-5" />
+                  <span className="text-sm font-medium">Platform Analytics</span>
+                </Link>
+              </div>
             )}
 
             {/* Vendor Section - Standalone for vendors (appears first) */}

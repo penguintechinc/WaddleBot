@@ -10,12 +10,22 @@ from config import Config
 from services.command_registry import CommandRegistry, CommandInfo
 from services.context_service import ContextService
 from services.grpc_clients import get_grpc_manager
+from services.ai_chatter_config_cache import AiChatterConfigCache
 
 logger = logging.getLogger(__name__)
 
 
 class CommandProcessor:
-    def __init__(self, dal, cache_manager, rate_limiter, session_manager, command_registry: CommandRegistry, stream_pipeline=None):
+    def __init__(
+        self,
+        dal,
+        cache_manager,
+        rate_limiter,
+        session_manager,
+        command_registry: CommandRegistry,
+        stream_pipeline=None,
+        ai_chatter_config_cache=None,
+    ):
         self.dal = dal
         self.cache = cache_manager
         self.rate_limiter = rate_limiter
@@ -25,6 +35,7 @@ class CommandProcessor:
         self._response_cache: Dict[str, Any] = {}  # session_id -> response
         self._grpc_manager = get_grpc_manager() if Config.GRPC_ENABLED else None
         self.stream_pipeline = stream_pipeline  # Optional Redis streams pipeline
+        self.ai_chatter_config_cache = ai_chatter_config_cache  # AIChatter config cache
 
         # Context service: per-user community context overrides
         self.context_service = ContextService(dal, cache_manager)
@@ -88,6 +99,9 @@ class CommandProcessor:
                 asyncio.create_task(self._record_message_activity(event_data))
                 # Also record for reputation tracking
                 asyncio.create_task(self._record_reputation_event(event_data))
+
+                # AIChatter: proactive response if community has opted in (fire-and-forget)
+                asyncio.create_task(self._maybe_ai_chatter_respond(event_data))
 
                 # Translate message if translation enabled for this community
                 translation_result = await self._translate_message(event_data, entity_id)
@@ -1261,3 +1275,58 @@ class CommandProcessor:
         except Exception as e:
             logger.error(f"Failed to process stream event: {e}")
             return {"success": False, "error": str(e)}
+
+    async def _maybe_ai_chatter_respond(self, event_data: dict) -> None:
+        """
+        Fire-and-forget: check if community has AIChatter enabled,
+        and if so, POST to ai_interaction_module proactive-chat endpoint.
+        Never raises — logs failures silently.
+        """
+        try:
+            community_id = event_data.get('community_id')
+            if not community_id:
+                return
+
+            # Check config cache (fast Redis lookup)
+            if not self.ai_chatter_config_cache:
+                return
+
+            config = await self.ai_chatter_config_cache.get(int(community_id))
+            if not config or not config.get('enabled', False):
+                return
+
+            # POST to ai_interaction_module proactive-chat endpoint
+            ai_interaction_url = self._get_ai_interaction_url()
+            if not ai_interaction_url:
+                return
+
+            payload = {
+                'session_id': event_data.get('session_id', ''),
+                'community_id': community_id,
+                'user_id': event_data.get('user_id', ''),
+                'platform_user_id': event_data.get('platform_user_id', ''),
+                'message': event_data.get('message_content', event_data.get('message', '')),
+                'platform': event_data.get('platform', 'unknown'),
+                'channel_id': event_data.get('entity_id', event_data.get('channel_id', '')),
+            }
+
+            session = await self._get_http_session()
+            async with session.post(
+                f"{ai_interaction_url}/api/v1/ai/proactive-chat",
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=5),
+            ) as resp:
+                if resp.status not in (200, 202):
+                    logger.warning(
+                        f"Proactive chat returned {resp.status}",
+                        extra={'community_id': community_id}
+                    )
+
+        except Exception as e:
+            # Fire-and-forget: log and swallow
+            logger.warning(f"AIChatter proactive response failed (non-critical): {e}")
+
+    def _get_ai_interaction_url(self) -> str:
+        """Get the ai_interaction_module base URL from config."""
+        import os
+        return os.getenv('AI_INTERACTION_API_URL', 'http://ai-interaction:8005')
