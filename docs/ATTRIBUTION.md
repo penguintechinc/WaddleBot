@@ -88,7 +88,8 @@ The Translation module - enabling real-time chat translation and caption overlay
 
 | Contributor | Contributions |
 |-------------|---------------|
-| *Be the first contributor!* | |
+| ArcherPupper | Initial architecture support |
+| thysw95 | Initial code support support |
 
 ---
 
@@ -100,7 +101,7 @@ The Translation module - enabling real-time chat translation and caption overlay
 
 | Reviewer | Areas |
 |----------|-------|
-| *Be the first reviewer!* | |
+| Apollonaut | Initial reviewer and feedback on discord integration, recommended PyCord utilization instead of discordpy |
 
 ---
 
