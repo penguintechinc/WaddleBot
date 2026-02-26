@@ -10,6 +10,7 @@ import * as communityProfileController from '../controllers/communityProfileCont
 import * as overlayController from '../controllers/overlayController.js';
 import * as loyaltyController from '../controllers/loyaltyController.js';
 import * as announcementController from '../controllers/announcementController.js';
+import PlatformConfigController from '../controllers/platformConfigController.js';
 import { requireAuth, requireCommunityAdmin } from '../middleware/auth.js';
 import { validators, validateRequest } from '../middleware/validation.js';
 import workflowRoutes from './workflow.js';
@@ -59,8 +60,12 @@ router.post('/:communityId/join-requests/:requestId/reject', requireCommunityAdm
 
 // Server link requests
 router.get('/:communityId/server-link-requests', requireCommunityAdmin, adminController.getServerLinkRequests);
+router.post('/:communityId/server-link-requests', requireCommunityAdmin, adminController.createServerLinkRequest);
 router.post('/:communityId/server-link-requests/:requestId/approve', requireCommunityAdmin, adminController.approveServerLinkRequest);
 router.post('/:communityId/server-link-requests/:requestId/reject', requireCommunityAdmin, adminController.rejectServerLinkRequest);
+
+// Commands reference
+router.get('/:communityId/commands', requireCommunityAdmin, adminController.getCommands);
 
 // Mirror groups
 router.get('/:communityId/mirror-groups', requireCommunityAdmin, adminController.getMirrorGroups);
@@ -437,6 +442,13 @@ router.delete('/:communityId/security/*', requireCommunityAdmin, async (req, res
 
 // Connected platforms (aggregates from community_servers)
 router.get('/:communityId/connected-platforms', requireCommunityAdmin, adminController.getConnectedPlatforms);
+
+// Community OAuth credential management (community admin only)
+router.get('/:communityId/oauth/credentials', requireCommunityAdmin, PlatformConfigController.getCommunityCredentials);
+router.post('/:communityId/oauth/credentials', requireCommunityAdmin, PlatformConfigController.createCommunityCredential);
+router.put('/:communityId/oauth/credentials/:id', requireCommunityAdmin, PlatformConfigController.updateCommunityCredential);
+router.delete('/:communityId/oauth/credentials/:id', requireCommunityAdmin, PlatformConfigController.deleteCommunityCredential);
+router.post('/:communityId/oauth/credentials/:id/test', requireCommunityAdmin, PlatformConfigController.testCredential);
 
 // Shoutout management
 router.get('/:communityId/shoutout/config', requireCommunityAdmin, adminController.getShoutoutConfig);

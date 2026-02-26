@@ -227,6 +227,57 @@ export async function getRaisedHands(req, res) {
 }
 
 /**
+ * Join a voice room (member-facing) — gets a LiveKit token
+ */
+export async function joinVoiceRoom(req, res) {
+  try {
+    const communityId = req.params.communityId || req.params.id;
+    const { roomName } = req.params;
+    const response = await axios.post(
+      `${MODULE_RTC_URL}/api/v1/rooms/${encodeURIComponent(roomName)}/join`,
+      {
+        community_id: communityId,
+        user_id: String(req.user?.id),
+        username: req.user?.username,
+      },
+      { headers: { Authorization: req.headers.authorization } }
+    );
+    res.json({ success: true, token: response.data.token, url: response.data.url });
+  } catch (error) {
+    logger.error('Failed to join voice room:', error.message);
+    res.status(error.response?.status || 500).json({
+      success: false,
+      error: error.response?.data?.error || 'Failed to join room'
+    });
+  }
+}
+
+/**
+ * Leave a voice room (member-facing)
+ */
+export async function leaveVoiceRoom(req, res) {
+  try {
+    const communityId = req.params.communityId || req.params.id;
+    const { roomName } = req.params;
+    await axios.post(
+      `${MODULE_RTC_URL}/api/v1/rooms/${encodeURIComponent(roomName)}/leave`,
+      {
+        community_id: communityId,
+        user_id: String(req.user?.id),
+      },
+      { headers: { Authorization: req.headers.authorization } }
+    );
+    res.json({ success: true, message: 'Left room' });
+  } catch (error) {
+    logger.error('Failed to leave voice room:', error.message);
+    res.status(error.response?.status || 500).json({
+      success: false,
+      error: error.response?.data?.error || 'Failed to leave room'
+    });
+  }
+}
+
+/**
  * Acknowledge a raised hand
  */
 export async function acknowledgeHand(req, res) {

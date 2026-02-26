@@ -8,6 +8,9 @@ import { validators, validationRules, validateRequest } from '../middleware/vali
 
 const router = Router();
 
+// Tenant login info (public)
+router.get('/tenant/:slug', authController.getTenantLoginInfo);
+
 // Local auth (email/password)
 router.post('/register',
   validationRules.register,

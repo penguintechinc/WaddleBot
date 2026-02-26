@@ -97,35 +97,37 @@ Infrastructure (PostgreSQL, Redis, MinIO, Qdrant)
 
 ## Screenshots
 
-### Login
-![Login Page](docs/screenshots/login.png)
+> Screenshots use tier prefixes: **freemium-** (available to all) and **premium-** (requires premium subscription).
+> Regenerate with `node scripts/capture-screenshots.cjs` (requires hub backend + frontend on port 8060).
+
+### Login & Public
+![Login Page](docs/screenshots/freemium-login.png)
+![Home Page](docs/screenshots/freemium-home.png)
 
 ### User Dashboard
-![User Dashboard](docs/screenshots/dashboard.png)
+![User Dashboard](docs/screenshots/freemium-dashboard.png)
 
 ### Community Portal
-![Communities List](docs/screenshots/communities.png)
-
-![Community Dashboard](docs/screenshots/community-dashboard.png)
+![Communities List](docs/screenshots/freemium-communities.png)
+![Community Dashboard](docs/screenshots/freemium-community-dashboard.png)
 
 ### Admin Panel
-![Admin Overview](docs/screenshots/admin-overview.png)
+![Admin Overview](docs/screenshots/freemium-admin-overview.png)
+![Admin Members](docs/screenshots/freemium-admin-members.png)
+![Admin Servers](docs/screenshots/freemium-admin-servers.png)
+![Admin Modules](docs/screenshots/freemium-admin-modules.png)
+![Admin Announcements](docs/screenshots/freemium-admin-announcements.png)
+![Admin Analytics](docs/screenshots/freemium-admin-analytics.png)
 
-![Admin Members](docs/screenshots/admin-members.png)
-
-![Admin Servers](docs/screenshots/admin-servers.png)
-
-![Admin Modules](docs/screenshots/admin-modules.png)
-
-![Admin Announcements](docs/screenshots/admin-announcements.png)
-
-### OBS Browser Source Integration
-![OBS Overlays](docs/screenshots/admin-overlays.png)
+### Premium Features
+![AI Config](docs/screenshots/premium-admin-ai-config.png) `PREMIUM`
+![Workflows](docs/screenshots/premium-admin-workflows.png) `PREMIUM`
+![Bot Detection](docs/screenshots/premium-admin-bot-detection.png) `PREMIUM`
+![RCON Servers](docs/screenshots/premium-admin-rcon.png) `PREMIUM`
 
 ### Super Admin
-![Super Admin Dashboard](docs/screenshots/superadmin-dashboard.png)
-
-![Community Management](docs/screenshots/superadmin-communities.png)
+![Super Admin Dashboard](docs/screenshots/freemium-superadmin-dashboard.png)
+![Community Management](docs/screenshots/freemium-superadmin-communities.png)
 
 ## What's New in v0.2.0
 

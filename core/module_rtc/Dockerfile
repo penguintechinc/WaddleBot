@@ -10,12 +10,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy go mod files first for layer caching
-COPY go.mod go.sum* ./
+# Copy go mod files first for layer caching (build context is project root)
+COPY core/module_rtc/go.mod core/module_rtc/go.sum* ./
 RUN go mod download
 
-# Copy source code
-COPY . .
+# Copy module source code
+COPY core/module_rtc/ .
 
 # Build binary
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /build/module_rtc ./cmd/server

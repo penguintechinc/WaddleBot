@@ -8,6 +8,7 @@ import aiohttp
 
 from config import Config
 from services.command_registry import CommandRegistry, CommandInfo
+from services.context_service import ContextService
 from services.grpc_clients import get_grpc_manager
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,9 @@ class CommandProcessor:
         self._response_cache: Dict[str, Any] = {}  # session_id -> response
         self._grpc_manager = get_grpc_manager() if Config.GRPC_ENABLED else None
         self.stream_pipeline = stream_pipeline  # Optional Redis streams pipeline
+
+        # Context service: per-user community context overrides
+        self.context_service = ContextService(dal, cache_manager)
 
         # Translate module gRPC channel (lazy-initialised)
         self._translate_channel = None
@@ -204,33 +208,92 @@ class CommandProcessor:
         session_id: str,
         metadata: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Process button click, modal submit, or select menu"""
+        """Process button click, modal submit, or select menu.
+
+        custom_id format: module:action:context  (e.g. "inventory:buy:item_123")
+        Looks up the module URL and POSTs to its /api/v1/execute endpoint.
+        """
         interaction_type = event_data.get('message_type')
         custom_id = metadata.get('custom_id', '')
         values = metadata.get('values', {})
         platform = event_data.get('platform', 'unknown')
 
-        # Parse custom_id to determine action
-        # Format: module:action:context (e.g., "inventory:buy:item_123")
+        # Parse custom_id → module : action : context
         parts = custom_id.split(':')
-        module = parts[0] if parts else ''
+        module_name = parts[0] if parts else ''
         action = parts[1] if len(parts) > 1 else ''
         context = ':'.join(parts[2:]) if len(parts) > 2 else ''
 
         logger.info(f"Processing interaction: {interaction_type} - {custom_id}")
 
-        # Route to appropriate module based on custom_id
-        return {
-            "success": True,
-            "session_id": session_id,
-            "interaction_type": interaction_type,
-            "module": module,
+        if not module_name:
+            return {
+                "success": False,
+                "error": "Interaction has no module identifier in custom_id",
+                "session_id": session_id,
+            }
+
+        # Resolve community for this entity
+        community_id = await self._get_community_for_entity(entity_id)
+
+        # Look up the module's HTTP URL from the command registry (fast) or DB (fallback)
+        module_url: Optional[str] = None
+        try:
+            result = self.dal.executesql(
+                "SELECT url FROM hub_modules WHERE name = %s AND is_active = true LIMIT 1",
+                [module_name],
+            )
+            if result:
+                module_url = result[0][0]
+        except Exception as e:
+            logger.warning(f"Failed to look up module URL for '{module_name}': {e}")
+
+        if not module_url:
+            # Reasonable default: modules are discoverable by name on a fixed port
+            module_url = f"http://{module_name}:8000"
+            logger.debug(f"Module URL not found in DB, falling back to {module_url}")
+
+        # Build the execute payload (same schema as execute_command uses)
+        payload = {
             "action": action,
             "context": context,
             "values": values,
+            "user_id": user_id,
+            "entity_id": entity_id,
+            "community_id": community_id,
+            "session_id": session_id,
+            "platform": platform,
+            "interaction_type": interaction_type,
             "interaction_id": metadata.get('interaction_id'),
             "interaction_token": metadata.get('interaction_token'),
-            "platform": platform
+        }
+
+        module_response = await self._call_module_with_retry(
+            f"{module_url}/api/v1/execute",
+            payload,
+            max_retries=2,
+        )
+
+        if module_response:
+            await self.handle_module_response({"session_id": session_id, "response": module_response})
+            return {
+                "success": True,
+                "session_id": session_id,
+                "module": module_name,
+                "action": action,
+                "interaction_id": metadata.get('interaction_id'),
+                "interaction_token": metadata.get('interaction_token'),
+                "platform": platform,
+                "response": module_response,
+            }
+
+        return {
+            "success": False,
+            "error": f"Module '{module_name}' did not respond to interaction",
+            "session_id": session_id,
+            "interaction_id": metadata.get('interaction_id'),
+            "interaction_token": metadata.get('interaction_token'),
+            "platform": platform,
         }
 
     async def _record_stream_activity(self, event_data: Dict[str, Any]):
@@ -358,22 +421,40 @@ class CommandProcessor:
             # Don't let activity tracking failures affect message processing
             logger.warning(f"Failed to record message activity: {e}")
 
-    async def _get_community_for_entity(self, entity_id: str) -> int | None:
-        """Get community ID for an entity from cache or database"""
+    async def _get_community_for_entity(
+        self,
+        entity_id: str,
+        user_id: Optional[str] = None,
+        platform: Optional[str] = None,
+    ) -> int | None:
+        """Get community ID for an entity, respecting per-user context overrides.
+
+        Resolution order:
+          1. Per-user override (Redis / user_platform_context table)
+          2. Channel/server primary community (community_servers, cached)
+          3. None
+        """
         if not entity_id:
             return None
 
-        # Check cache first
+        # 1. Per-user override (only when user_id and platform are provided)
+        if user_id and platform:
+            user_ctx = await self.context_service.get_context(platform, user_id, entity_id)
+            if user_ctx:
+                return user_ctx
+
+        # 2. Channel/server default — check cache first
         cache_key = f"entity:community:{entity_id}"
         cached = await self.cache.get(cache_key)
         if cached:
             return int(cached)
 
-        # Query database for server -> community mapping
+        # 3. Query database for server -> primary community mapping
         try:
             result = self.dal.executesql(
                 """SELECT cs.community_id FROM community_servers cs
                    WHERE cs.platform_server_id = %s AND cs.is_active = true
+                   ORDER BY cs.is_primary DESC NULLS LAST
                    LIMIT 1""",
                 [entity_id],
             )

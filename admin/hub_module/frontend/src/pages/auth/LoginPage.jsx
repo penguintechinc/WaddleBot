@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useNavigate, useSearchParams, useParams, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import axios from 'axios';
+import { passkeyApi } from '../../services/api';
+import { KeyIcon } from '@heroicons/react/24/outline';
 
 function LoginPage() {
   const navigate = useNavigate();
@@ -16,6 +18,12 @@ function LoginPage() {
   const [signupSettings, setSignupSettings] = useState({ signupEnabled: false, loading: true });
   const [verificationSent, setVerificationSent] = useState(false);
   const [resendingVerification, setResendingVerification] = useState(false);
+  const [passkeyLoginLoading, setPasskeyLoginLoading] = useState(false);
+  const [passkeyLoginError, setPasskeyLoginError] = useState('');
+  const { tenantSlug } = useParams();
+  const [tenantInfo, setTenantInfo] = useState(null);
+  const [tenantLoading, setTenantLoading] = useState(!!tenantSlug);
+  const [tenantError, setTenantError] = useState('');
 
   // Fetch signup settings on mount
   useEffect(() => {
@@ -33,6 +41,26 @@ function LoginPage() {
     };
     fetchSignupSettings();
   }, []);
+
+  // Fetch tenant info if slug provided
+  useEffect(() => {
+    if (!tenantSlug) return;
+    const fetchTenantInfo = async () => {
+      try {
+        const response = await axios.get(`/api/v1/auth/tenant/${tenantSlug}`);
+        setTenantInfo(response.data.tenant);
+        setTenantLoading(false);
+      } catch (err) {
+        if (err.response?.status === 404) {
+          setTenantError('Tenant not found');
+        } else {
+          setTenantError(err.response?.data?.error || 'Failed to load tenant');
+        }
+        setTenantLoading(false);
+      }
+    };
+    fetchTenantInfo();
+  }, [tenantSlug]);
 
   // Check for OAuth errors in URL
   useEffect(() => {
@@ -66,7 +94,7 @@ function LoginPage() {
           return;
         }
       } else {
-        const result = await login(email, password);
+        const result = await login(email, password, tenantSlug);
         // Check if user needs to verify email
         if (result?.requiresVerification) {
           setLocalError('Please verify your email address before logging in');
@@ -101,11 +129,43 @@ function LoginPage() {
     }
   };
 
+  const handlePasskeyLogin = async () => {
+    setPasskeyLoginLoading(true);
+    setPasskeyLoginError('');
+    try {
+      const optRes = await passkeyApi.startLogin({});
+      const options = optRes.data;
+      const credential = await navigator.credentials.get({ publicKey: {
+        ...options,
+        challenge: Uint8Array.from(atob(options.challenge.replace(/-/g,'+').replace(/_/g,'/')), c => c.charCodeAt(0)),
+        allowCredentials: (options.allowCredentials || []).map(ac => ({ ...ac, id: Uint8Array.from(atob(ac.id.replace(/-/g,'+').replace(/_/g,'/')), c => c.charCodeAt(0)) })),
+      }});
+      const encoded = {
+        id: credential.id,
+        rawId: btoa(String.fromCharCode(...new Uint8Array(credential.rawId))),
+        type: credential.type,
+        response: {
+          authenticatorData: btoa(String.fromCharCode(...new Uint8Array(credential.response.authenticatorData))),
+          clientDataJSON: btoa(String.fromCharCode(...new Uint8Array(credential.response.clientDataJSON))),
+          signature: btoa(String.fromCharCode(...new Uint8Array(credential.response.signature))),
+          userHandle: credential.response.userHandle ? btoa(String.fromCharCode(...new Uint8Array(credential.response.userHandle))) : null,
+        },
+      };
+      const loginRes = await passkeyApi.finishLogin(encoded);
+      login(loginRes.data.token, loginRes.data.user);
+      navigate('/dashboard');
+    } catch (err) {
+      setPasskeyLoginError(err?.response?.data?.error || err?.message || 'Passkey login failed.');
+    } finally {
+      setPasskeyLoginLoading(false);
+    }
+  };
+
   const handleOAuth = async (platform) => {
     setLocalError('');
     setLoading(true);
     try {
-      await loginWithOAuth(platform);
+      await loginWithOAuth(platform, tenantSlug);
     } catch {
       setLoading(false);
     }
@@ -116,11 +176,16 @@ function LoginPage() {
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
-            <img src="/waddlebot-logo.png" alt="Waddles" className="w-24 h-24" />
+            <img src={tenantInfo?.logoUrl || '/waddlebot-logo.png'} alt={tenantInfo?.displayName || 'Waddles'} className="w-24 h-24" />
           </div>
-          <h1 className="text-3xl font-bold mt-4 gradient-text">Welcome to Waddles</h1>
+          <h1 className="text-3xl font-bold mt-4 gradient-text">
+            {tenantInfo ? `Welcome to ${tenantInfo.displayName}` : 'Welcome to Waddles'}
+          </h1>
           <p className="text-navy-300 mt-2">
-            {mode === 'register' ? 'Create your account' : 'Sign in to access your communities'}
+            {tenantLoading ? 'Loading...' : tenantError ? tenantError :
+             mode === 'register' ? 'Create your account' :
+             tenantInfo ? `Sign in to ${tenantInfo.displayName}` :
+             'Sign in to access your communities'}
           </p>
         </div>
 
@@ -210,6 +275,23 @@ function LoginPage() {
               <span className="font-medium text-sky-100">Continue with KICK</span>
             </button>
           </div>
+
+          {/* Passkey Login */}
+          {passkeyLoginError && (
+            <div className="mb-3 p-3 bg-red-500/20 border border-red-500/30 rounded-lg text-red-300 text-sm">
+              {passkeyLoginError}
+            </div>
+          )}
+          <button
+            onClick={handlePasskeyLogin}
+            disabled={passkeyLoginLoading || loading}
+            className="w-full flex items-center justify-center space-x-3 px-4 py-3 mb-6 bg-navy-800 border border-navy-600 rounded-lg hover:bg-navy-700 hover:border-gold-500 transition-all disabled:opacity-50"
+          >
+            <KeyIcon className="w-5 h-5 text-gold-400" />
+            <span className="font-medium text-sky-100">
+              {passkeyLoginLoading ? 'Waiting for passkey...' : 'Sign in with Passkey'}
+            </span>
+          </button>
 
           {/* Divider */}
           <div className="relative mb-6">
@@ -320,6 +402,16 @@ function LoginPage() {
         <p className="mt-6 text-center text-sm text-navy-500">
           By signing in, you agree to our Terms of Service and Privacy Policy.
         </p>
+        {!tenantSlug && (
+          <div className="mt-4 text-center">
+            <p className="text-sm text-navy-500 mb-2">Have a company tenant?</p>
+            <form onSubmit={(e) => { e.preventDefault(); const slug = e.target.slug.value.trim(); if (slug) navigate(`/login/${slug}`); }}
+                  className="flex items-center justify-center gap-2">
+              <input name="slug" type="text" placeholder="tenant-slug" className="input w-40 text-sm" />
+              <button type="submit" className="btn btn-secondary text-sm px-3 py-1.5">Go</button>
+            </form>
+          </div>
+        )}
       </div>
     </div>
   );

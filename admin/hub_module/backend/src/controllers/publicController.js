@@ -73,6 +73,38 @@ export async function getStats(req, res, next) {
 }
 
 /**
+ * Get spotlighted communities (top active, public, non-support)
+ */
+export async function getSpotlightedCommunities(req, res, next) {
+  try {
+    const result = await query(`
+      SELECT id, name, display_name, description, platform,
+             community_type, member_count, config, created_at
+      FROM communities
+      WHERE is_active = true AND is_public = true
+        AND (community_type IS NULL OR community_type != 'support')
+      ORDER BY member_count DESC, created_at DESC
+      LIMIT 5
+    `);
+
+    const communities = result.rows.map(row => ({
+      id: row.id,
+      name: row.name,
+      displayName: row.display_name || row.name,
+      description: row.description,
+      logoUrl: row.config?.logo_url || null,
+      platform: row.platform,
+      communityType: row.community_type || 'creator',
+      memberCount: row.member_count || 0,
+    }));
+
+    res.json({ success: true, communities });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * List public communities
  */
 export async function getCommunities(req, res, next) {
@@ -457,6 +489,27 @@ export async function getMarketplaceCategories(req, res, next) {
     res.json({
       success: true,
       categories,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Get global announcement banner settings (public, no auth required)
+ */
+export async function getBanner(req, res, next) {
+  try {
+    const result = await query(
+      `SELECT setting_key, setting_value FROM hub_settings
+       WHERE setting_key IN ('banner_enabled', 'banner_text', 'banner_bg_color', 'banner_text_color')`
+    );
+    const map = Object.fromEntries(result.rows.map(r => [r.setting_key, r.setting_value]));
+    res.json({
+      enabled: map.banner_enabled === 'true',
+      text: map.banner_text || '',
+      bgColor: map.banner_bg_color || '#F5C518',
+      textColor: map.banner_text_color || '#000000',
     });
   } catch (err) {
     next(err);

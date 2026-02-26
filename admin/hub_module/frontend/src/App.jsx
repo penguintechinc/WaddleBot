@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 
 // Layouts
@@ -85,6 +85,12 @@ import AdminRconServers from './pages/admin/AdminRconServers';
 import AdminCommunityTokens from './pages/admin/AdminCommunityTokens';
 import AdminCommands from './pages/admin/AdminCommands';
 import AdminPlatformSettings from './pages/admin/AdminPlatformSettings';
+import AdminLfgConfig from './pages/admin/AdminLfgConfig';
+import AdminClipConfig from './pages/admin/AdminClipConfig';
+import AdminAliasConfig from './pages/admin/AdminAliasConfig';
+import AdminMemoriesConfig from './pages/admin/AdminMemoriesConfig';
+import AdminServerStatusConfig from './pages/admin/AdminServerStatusConfig';
+import AdminServerManagerConfig from './pages/admin/AdminServerManagerConfig';
 import MyChannels from './pages/dashboard/MyChannels';
 import SupportSubmitTicket from './pages/community/SupportSubmitTicket';
 import SupportMyTickets from './pages/community/SupportMyTickets';
@@ -92,6 +98,8 @@ import InventoryBrowse from './pages/community/InventoryBrowse';
 import GameServers from './pages/community/GameServers';
 import InventoryMyItems from './pages/community/InventoryMyItems';
 import PersonalAccessToken from './pages/dashboard/PersonalAccessToken';
+import CommunityInteraction from './pages/community/CommunityInteraction';
+import AdminInteractionChannels from './pages/admin/AdminInteractionChannels';
 
 // Vendor pages
 import VendorSubmissionForm from './pages/vendor/VendorSubmissionForm';
@@ -117,6 +125,22 @@ import SuperAdminServiceDiscovery from './pages/superadmin/SuperAdminServiceDisc
 import SuperAdminVendorRequests from './pages/superadmin/SuperAdminVendorRequests';
 import SuperAdminUsers from './pages/superadmin/SuperAdminUsers';
 import SuperAdminAnalytics from './pages/superadmin/SuperAdminAnalytics';
+import SuperAdminTenants from './pages/superadmin/SuperAdminTenants';
+
+// Tenant admin pages
+import TenantDashboard from './pages/tenant/TenantDashboard';
+import TenantModules from './pages/tenant/TenantModules';
+import TenantAdmins from './pages/tenant/TenantAdmins';
+import TenantCommunities from './pages/tenant/TenantCommunities';
+
+// Admin pages (new)
+import AdminCommunityRoles from './pages/admin/AdminCommunityRoles';
+
+// Marketplace redirect helper
+function MarketplaceRedirect() {
+  const { communityId } = useParams();
+  return <Navigate to={`/admin/${communityId}/modules`} replace />;
+}
 
 // Loading spinner
 function LoadingSpinner() {
@@ -171,6 +195,7 @@ function App() {
         <Route path="/live" element={<LiveStreamsPage />} />
         <Route path="/users/:userId" element={<UserPublicProfile />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/login/:tenantSlug" element={<LoginPage />} />
         <Route path="/auth/callback" element={<OAuthCallback />} />
         <Route path="/cookie-policy" element={<CookiePolicy />} />
 
@@ -208,6 +233,8 @@ function App() {
         <Route path="/community/:communityId/inventory" element={<InventoryBrowse />} />
         <Route path="/community/:communityId/inventory/my-items" element={<InventoryMyItems />} />
         <Route path="/community/:communityId/game-servers" element={<GameServers />} />
+        <Route path="/community/:communityId/interact" element={<CommunityInteraction />} />
+        <Route path="/community/:communityId/interact/:channelId" element={<CommunityInteraction />} />
 
         {/* Personal Access Token */}
         <Route path="/account/tokens" element={<PersonalAccessToken />} />
@@ -237,7 +264,13 @@ function App() {
         <Route path="/admin/:communityId/members" element={<AdminMembers />} />
         <Route path="/admin/:communityId/workflows" element={<AdminWorkflows />} />
         <Route path="/admin/:communityId/modules" element={<AdminModules />} />
-        <Route path="/admin/:communityId/marketplace" element={<AdminMarketplace />} />
+        <Route path="/admin/:communityId/modules/lfg/config" element={<AdminLfgConfig />} />
+        <Route path="/admin/:communityId/modules/clip/config" element={<AdminClipConfig />} />
+        <Route path="/admin/:communityId/modules/alias/config" element={<AdminAliasConfig />} />
+        <Route path="/admin/:communityId/modules/memories/config" element={<AdminMemoriesConfig />} />
+        <Route path="/admin/:communityId/modules/server-status/config" element={<AdminServerStatusConfig />} />
+        <Route path="/admin/:communityId/modules/server-manager/config" element={<AdminServerManagerConfig />} />
+        <Route path="/admin/:communityId/marketplace" element={<MarketplaceRedirect />} />
         <Route path="/admin/:communityId/stream-overlays" element={<AdminStreamOverlays />} />
         <Route path="/admin/:communityId/domains" element={<AdminDomains />} />
         <Route path="/admin/:communityId/servers" element={<AdminServers />} />
@@ -279,6 +312,8 @@ function App() {
         <Route path="/admin/:communityId/tokens" element={<AdminCommunityTokens />} />
         <Route path="/admin/:communityId/commands" element={<AdminCommands />} />
         <Route path="/admin/:communityId/platform-settings" element={<AdminPlatformSettings />} />
+        <Route path="/admin/:communityId/interaction-channels" element={<AdminInteractionChannels />} />
+        <Route path="/admin/:communityId/roles" element={<AdminCommunityRoles />} />
       </Route>
 
       {/* Platform admin routes */}
@@ -315,6 +350,21 @@ function App() {
         <Route path="/superadmin/software-discovery" element={<SuperAdminSoftwareDiscovery />} />
         <Route path="/superadmin/services" element={<SuperAdminServiceDiscovery />} />
         <Route path="/superadmin/analytics" element={<SuperAdminAnalytics />} />
+        <Route path="/superadmin/tenants" element={<SuperAdminTenants />} />
+      </Route>
+
+      {/* Tenant admin routes */}
+      <Route
+        element={
+          <ProtectedRoute>
+            <DashboardLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route path="/tenant/:tenantSlug" element={<TenantDashboard />} />
+        <Route path="/tenant/:tenantSlug/modules" element={<TenantModules />} />
+        <Route path="/tenant/:tenantSlug/admins" element={<TenantAdmins />} />
+        <Route path="/tenant/:tenantSlug/communities" element={<TenantCommunities />} />
       </Route>
 
       {/* Catch all - redirect to home */}

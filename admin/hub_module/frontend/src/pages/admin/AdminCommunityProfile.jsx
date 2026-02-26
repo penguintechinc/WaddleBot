@@ -16,6 +16,12 @@ const VISIBILITY_OPTIONS = [
   { value: 'members_only', label: 'Members Only', description: 'Only community members can view' },
 ];
 
+const JOIN_MODE_OPTIONS = [
+  { value: 'open', label: 'Open', description: 'Anyone can join immediately' },
+  { value: 'approval', label: 'Requires Approval', description: 'New members require admin review before joining' },
+  { value: 'invite', label: 'Invite Only', description: 'Members can only join via direct invite by an admin' },
+];
+
 const SOCIAL_PLATFORMS = [
   { key: 'twitter', label: 'Twitter/X', placeholder: 'https://twitter.com/...' },
   { key: 'youtube', label: 'YouTube', placeholder: 'https://youtube.com/...' },
@@ -36,6 +42,7 @@ function AdminCommunityProfile() {
     discordInviteUrl: '',
     socialLinks: {},
     visibility: 'public',
+    join_mode: 'open',
   });
   const [logoPreview, setLogoPreview] = useState(null);
   const [bannerPreview, setBannerPreview] = useState(null);
@@ -63,6 +70,7 @@ function AdminCommunityProfile() {
           discordInviteUrl: c.discordInviteUrl || '',
           socialLinks: c.socialLinks || {},
           visibility: c.visibility || 'public',
+          join_mode: c.join_mode || 'open',
         });
         setLogoPreview(c.logoUrl);
         setBannerPreview(c.bannerUrl);
@@ -478,6 +486,50 @@ function AdminCommunityProfile() {
                   <div className="text-sm text-navy-400">{option.description}</div>
                 </div>
                 {profile.visibility === option.value && (
+                  <div className="w-5 h-5 bg-sky-500 rounded-full flex items-center justify-center">
+                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path
+                        fillRule="evenodd"
+                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </div>
+                )}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Member Joining Section */}
+        <div className="card p-6">
+          <h2 className="text-lg font-semibold text-sky-100 mb-4 flex items-center gap-2">
+            <EyeIcon className="w-5 h-5" />
+            Member Joining
+          </h2>
+          <div className="space-y-2">
+            {JOIN_MODE_OPTIONS.map((option) => (
+              <label
+                key={option.value}
+                className={`flex items-center p-4 rounded-lg cursor-pointer transition-colors ${
+                  (profile.join_mode || 'open') === option.value
+                    ? 'bg-sky-500/20 border border-sky-500/30'
+                    : 'bg-navy-800 border border-navy-700 hover:border-navy-600'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="join_mode"
+                  value={option.value}
+                  checked={(profile.join_mode || 'open') === option.value}
+                  onChange={(e) => updateField('join_mode', e.target.value)}
+                  className="sr-only"
+                />
+                <div className="flex-1">
+                  <div className="font-medium text-sky-100">{option.label}</div>
+                  <div className="text-sm text-navy-400">{option.description}</div>
+                </div>
+                {(profile.join_mode || 'open') === option.value && (
                   <div className="w-5 h-5 bg-sky-500 rounded-full flex items-center justify-center">
                     <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
                       <path

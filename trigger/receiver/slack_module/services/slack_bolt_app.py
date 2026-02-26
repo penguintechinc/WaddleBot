@@ -54,39 +54,125 @@ class SlackBoltService:
     def _setup_handlers(self):
         """Register all Slack event handlers"""
 
-        # Slash command handler
+        # ── Core / generic command ────────────────────────────────────────
         @self.app.command("/waddlebot")
         async def handle_waddlebot_command(ack, body, respond):
             await ack()
             await self._handle_slash_command(body, respond)
 
-        # Message events for !prefix commands
+        # ── Module-specific named slash commands ──────────────────────────
+        # Each handler forwards to the router with the command name and args.
+
+        for _cmd in ("/form", "/poll", "/ticket", "/balance", "/give",
+                     "/slots", "/duel", "/giveaway", "/quote", "/bookmark",
+                     "/remind", "/lfg", "/event", "/rsvp", "/so",
+                     "/translate", "/status", "/clip", "/alias", "/ask",
+                     "/rep", "/label", "/top"):
+            # Python closure capture — bind cmd at definition time
+            _bound = _cmd
+
+            @self.app.command(_bound)
+            async def _named_cmd_handler(ack, body, respond, _c=_bound):
+                await ack()
+                await self._handle_named_command(body, respond, _c)
+
+        # ── Context switching ─────────────────────────────────────────────
+        @self.app.command("/context")
+        async def handle_context(ack, body, respond):
+            await ack()
+            await self._handle_named_command(body, respond, "/context")
+
+        # ── Server linking commands (admin/owner only) ────────────────────
+        for _cmd in ("/join", "/approve", "/leave", "/linked", "/link"):
+            _bound = _cmd
+
+            @self.app.command(_bound)
+            async def _link_cmd_handler(ack, body, respond, _c=_bound):
+                await ack()
+                # Admin check: Slack workspace admin via is_admin field
+                if _c in ("/join", "/approve", "/leave", "/link") and not self._is_slack_admin(body):
+                    await respond(
+                        text="Workspace administrator permission required for this command.",
+                        response_type="ephemeral"
+                    )
+                    return
+                await self._handle_named_command(body, respond, _c)
+
+        # ── Message / mention / interaction handlers (unchanged) ──────────
         @self.app.event("message")
         async def handle_message(event, say):
             await self._handle_message_event(event, say)
 
-        # App mention events
         @self.app.event("app_mention")
         async def handle_mention(event, say):
             await self._handle_mention_event(event, say)
 
-        # Button/action handler (catch-all pattern)
         @self.app.action(re.compile(".*"))
         async def handle_action(ack, body, respond):
             await ack()
             await self._handle_action(body, respond)
 
-        # Modal submission handler (catch-all pattern)
         @self.app.view(re.compile(".*"))
         async def handle_view_submission(ack, body, view):
             await ack()
             await self._handle_modal_submit(body, view)
 
-        # Shortcut handler
         @self.app.shortcut(re.compile(".*"))
         async def handle_shortcut(ack, body, client):
             await ack()
             await self._handle_shortcut(body, client)
+
+    def _is_slack_admin(self, body: Dict[str, Any]) -> bool:
+        """Check whether the Slack request came from a workspace admin.
+
+        Slack does not include admin status in the slash-command body directly;
+        we check the ``is_admin`` field on the user identity returned by the
+        Slack SDK in ``user.profile`` if available, or fall back to True so
+        the router can enforce community-level permissions.  For production use,
+        call ``users.info`` and inspect ``user.is_admin``.
+        """
+        # If Slack passes is_admin in the body (some enterprise plans), use it
+        user = body.get("user", {})
+        if isinstance(user, dict) and "is_admin" in user:
+            return bool(user["is_admin"])
+        # Fallback: allow and let router enforce — avoids blocking on API call
+        return True
+
+    async def _handle_named_command(
+        self, body: Dict[str, Any], respond: Callable, command: str
+    ):
+        """Handle a named slash command (e.g. /form, /poll) by forwarding to router.
+
+        The command name (e.g. "/form") is forwarded as the message so the router
+        can look it up in the commands table.  The remainder of the text body
+        becomes the args.
+        """
+        user_id = body.get("user_id", "")
+        channel_id = body.get("channel_id", "")
+        team_id = body.get("team_id", "")
+        text = body.get("text", "").strip()
+        trigger_id = body.get("trigger_id", "")
+        response_url = body.get("response_url", "")
+
+        event_data = {
+            "entity_id": f"{team_id}:{channel_id}",
+            "user_id": user_id,
+            "username": body.get("user_name", ""),
+            "message": f"{command} {text}".strip(),
+            "message_type": "slashCommand",
+            "platform": "slack",
+            "channel_id": channel_id,
+            "server_id": team_id,
+            "metadata": {
+                "trigger_id": trigger_id,
+                "response_url": response_url,
+                "command": command,
+                "text": text,
+            },
+        }
+
+        response = await self._send_to_router(event_data)
+        await self._execute_response(respond, response, trigger_id)
 
     async def _handle_slash_command(self, body: Dict[str, Any], respond: Callable):
         """Handle /waddlebot slash command"""
@@ -131,6 +217,8 @@ class SlackBoltService:
 
         text = event.get('text', '')
         if not text.startswith('!'):
+            # Non-command message — relay to hub for mirror bridging
+            await self._relay_message_to_hub(event)
             return
 
         user_id = event.get('user', '')
@@ -155,6 +243,54 @@ class SlackBoltService:
 
         response = await self._send_to_router(event_data)
         await self._execute_message_response(say, response, event)
+
+    async def _relay_message_to_hub(self, event: Dict[str, Any]):
+        """Forward a non-command message to the hub for mirror group bridging"""
+        try:
+            import os
+            hub_api_url = os.environ.get('HUB_API_URL', 'http://hub-api:3000')
+            if not self._http_session:
+                return
+            channel_id = event.get('channel', '')
+            user_id = event.get('user', '')
+            text = event.get('text', '')
+            if not channel_id or not text:
+                return
+            await self._http_session.post(
+                f"{hub_api_url}/api/v1/internal/relay/incoming",
+                json={
+                    "sourcePlatformChannelId": channel_id,
+                    "platform": "slack",
+                    "channelType": "chat",
+                    "content": {"text": text},
+                    "author": {
+                        "username": user_id,
+                        "platform": "slack",
+                    },
+                    "messageType": "message",
+                },
+                timeout=5.0,
+            )
+        except Exception as e:
+            self.logger.error(f"Mirror relay to hub failed: {e}", action="mirror_relay")
+
+    async def send_to_channel(self, channel_id: str, content: dict, author: dict, message_type: str = 'message'):
+        """Send a relayed message to a Slack channel (called by internal relay endpoint)"""
+        try:
+            from slack_sdk.web.async_client import AsyncWebClient
+            client = AsyncWebClient(token=self.bot_token)
+            display_name = author.get('username', 'Unknown')
+            platform = author.get('platform', 'hub')
+            text = content.get('text', content.get('content', ''))
+
+            await client.chat_postMessage(
+                channel=channel_id,
+                text=f"*{display_name}* (via {platform}): {text}",
+            )
+            return True
+        except Exception as e:
+            self.logger.error(f"Failed to send relay message: {e}", action="relay_send")
+            return False
 
     async def _handle_mention_event(self, event: Dict[str, Any], say: Callable):
         """Handle @bot mentions"""

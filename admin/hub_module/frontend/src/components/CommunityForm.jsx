@@ -7,6 +7,8 @@ const communityTypes = [
   { value: 'gaming', label: 'Gaming', icon: '🎮', description: 'Gaming communities, esports teams' },
   { value: 'shared_interest_group', label: 'Shared Interest', icon: '👥', description: 'Hobby groups, fan communities' },
   { value: 'corporate', label: 'Corporate', icon: '🏢', description: 'Business, professional organizations' },
+  { value: 'workforce', label: 'Workforce', icon: '🏗️', description: 'Teams, departments, organizational groups' },
+  { value: 'support', label: 'Support Portal', icon: '🎫', description: 'Help desk, customer support, ticket management' },
   { value: 'other', label: 'Other', icon: '📌', description: 'Other community types' },
 ];
 

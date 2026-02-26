@@ -46,6 +46,13 @@ resources:
   - interactive/lfg.yaml
   - interactive/server-status.yaml
   - interactive/clip.yaml
+  - interactive/server-manager.yaml
+
+  # Core modules - analytics, security, workflow, credential-manager
+  - core/analytics.yaml
+  - core/security.yaml
+  - core/workflow.yaml
+  - core/credential-manager.yaml
 
   # Pushing/Action modules
   - pushing/discord-action.yaml

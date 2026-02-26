@@ -733,6 +733,69 @@ If you have questions about our cookie policy, please contact us at privacy@wadd
       logger.system('Default cookie policy created');
     }
 
+    // Add 'support' to community_type enum if not exists
+    await query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = 'support' AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'community_type')) THEN
+          ALTER TYPE community_type ADD VALUE IF NOT EXISTS 'support';
+        END IF;
+      END $$
+    `);
+
+    // Support ticket system tables
+    await query(`
+      CREATE TABLE IF NOT EXISTS support_ticket_categories (
+        id SERIAL PRIMARY KEY,
+        community_id INTEGER NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        sort_order INTEGER DEFAULT 0,
+        is_active BOOLEAN DEFAULT true,
+        form_fields JSONB DEFAULT '[]',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await query(`
+      CREATE TABLE IF NOT EXISTS support_tickets (
+        id SERIAL PRIMARY KEY,
+        community_id INTEGER NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+        category_id INTEGER REFERENCES support_ticket_categories(id),
+        ticket_number VARCHAR(20) NOT NULL,
+        subject VARCHAR(500) NOT NULL,
+        description TEXT,
+        status VARCHAR(20) NOT NULL DEFAULT 'open',
+        priority VARCHAR(20) NOT NULL DEFAULT 'medium',
+        reporter_user_id INTEGER,
+        reporter_name VARCHAR(255),
+        reporter_email VARCHAR(255),
+        assignee_user_id INTEGER,
+        custom_fields JSONB DEFAULT '{}',
+        resolved_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await query(`
+      CREATE TABLE IF NOT EXISTS support_ticket_comments (
+        id SERIAL PRIMARY KEY,
+        ticket_id INTEGER NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
+        author_user_id INTEGER,
+        author_name VARCHAR(255),
+        content TEXT NOT NULL,
+        is_internal BOOLEAN DEFAULT false,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await query('CREATE INDEX IF NOT EXISTS idx_support_tickets_community ON support_tickets(community_id)');
+    await query('CREATE INDEX IF NOT EXISTS idx_support_tickets_status ON support_tickets(status)');
+    await query('CREATE INDEX IF NOT EXISTS idx_support_tickets_assignee ON support_tickets(assignee_user_id)');
+    await query('CREATE INDEX IF NOT EXISTS idx_support_tickets_reporter ON support_tickets(reporter_user_id)');
+    await query('CREATE INDEX IF NOT EXISTS idx_support_ticket_comments_ticket ON support_ticket_comments(ticket_id)');
+
     logger.system('Database initialized successfully');
   } catch (err) {
     logger.error('Database initialization failed', { error: err.message });

@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import GlobalBanner from '../components/GlobalBanner';
@@ -30,6 +31,15 @@ import {
   HashtagIcon,
   AdjustmentsHorizontalIcon,
   SignalIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  MusicalNoteIcon,
+  VideoCameraIcon,
+  HeartIcon,
+  CubeIcon,
+  InboxStackIcon,
+  ClipboardDocumentListIcon,
+  UserPlusIcon,
 } from '@heroicons/react/24/outline';
 
 function AdminLayout() {
@@ -37,36 +47,138 @@ function AdminLayout() {
   const location = useLocation();
   const { communityId } = useParams();
 
-  // Community admin nav
-  const communityAdminNav = communityId
+  // Collapsible section state
+  const [expandedSections, setExpandedSections] = useState({});
+
+  const toggleSection = (key) => {
+    setExpandedSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  // Section definitions for community admin
+  const communitySections = communityId
     ? [
-        { to: `/admin/${communityId}`, icon: HomeIcon, label: 'Overview', exact: true },
-        { to: `/admin/${communityId}/members`, icon: UserGroupIcon, label: 'Members' },
-        { to: `/admin/${communityId}/announcements`, icon: MegaphoneIcon, label: 'Announcements' },
-        { to: `/admin/${communityId}/workflows`, icon: CommandLineIcon, label: 'Workflows', premium: true },
-        { to: `/admin/${communityId}/analytics`, icon: ChartBarIcon, label: 'Analytics' },
-        { to: `/admin/${communityId}/security`, icon: FireIcon, label: 'Security' },
-        { to: `/admin/${communityId}/servers`, icon: ServerStackIcon, label: 'Linked Servers' },
-        { to: `/admin/${communityId}/rcon`, icon: SignalIcon, label: 'Game Servers', premium: true },
-        { to: `/admin/${communityId}/platform-settings`, icon: AdjustmentsHorizontalIcon, label: 'Platform Settings' },
-        { to: `/admin/${communityId}/commands`, icon: HashtagIcon, label: 'Commands' },
-        { to: `/admin/${communityId}/connected-platforms`, icon: RectangleGroupIcon, label: 'Connected Platforms' },
-        { to: `/admin/${communityId}/mirror-groups`, icon: ArrowsRightLeftIcon, label: 'Chat Mirroring' },
-        { to: `/admin/${communityId}/leaderboard`, icon: TrophyIcon, label: 'Leaderboards' },
-        { to: `/admin/${communityId}/reputation`, icon: ScaleIcon, label: 'Reputation' },
-        { to: `/admin/${communityId}/ai-insights`, icon: SparklesIcon, label: 'AI Insights' },
-        { to: `/admin/${communityId}/ai-config`, icon: Cog6ToothIcon, label: 'AI Config' },
-        { to: `/admin/${communityId}/bot-detection`, icon: ShieldCheckIcon, label: 'Bot Detection' },
-        { to: `/admin/${communityId}/modules`, icon: PuzzlePieceIcon, label: 'Modules' },
-        { to: `/admin/${communityId}/stream-overlays`, icon: WindowIcon, label: 'Stream Overlays' },
-        { to: `/admin/${communityId}/domains`, icon: GlobeAltIcon, label: 'Custom Domains' },
-        { to: `/admin/${communityId}/shoutouts`, icon: SpeakerWaveIcon, label: 'Shoutouts' },
-        { to: `/admin/${communityId}/translation`, icon: LanguageIcon, label: 'Translation & Captions' },
-        { to: `/admin/${communityId}/calendar/events`, icon: CalendarDaysIcon, label: 'Calendar Events' },
-        { to: `/admin/${communityId}/support`, icon: TicketIcon, label: 'Support Tickets' },
-        { to: `/admin/${communityId}/loyalty`, icon: CurrencyDollarIcon, label: 'Loyalty System' },
+        {
+          key: 'community',
+          label: 'Community',
+          icon: HomeIcon,
+          items: [
+            { to: `/admin/${communityId}`, icon: HomeIcon, label: 'Overview', exact: true },
+            { to: `/admin/${communityId}/profile`, icon: UserGroupIcon, label: 'Profile' },
+            { to: `/admin/${communityId}/members`, icon: UserGroupIcon, label: 'Members' },
+            { to: `/admin/${communityId}/join-requests`, icon: UserPlusIcon, label: 'Join Requests' },
+            { to: `/admin/${communityId}/announcements`, icon: MegaphoneIcon, label: 'Announcements' },
+            { to: `/admin/${communityId}/interaction-channels`, icon: HashtagIcon, label: 'Channels' },
+            { to: `/admin/${communityId}/roles`, icon: ShieldCheckIcon, label: 'Roles' },
+          ],
+        },
+        {
+          key: 'engagement',
+          label: 'Engagement',
+          icon: HeartIcon,
+          items: [
+            { to: `/admin/${communityId}/polls`, icon: ClipboardDocumentListIcon, label: 'Polls' },
+            { to: `/admin/${communityId}/forms`, icon: DocumentTextIcon, label: 'Forms' },
+            { to: `/admin/${communityId}/shoutouts`, icon: SpeakerWaveIcon, label: 'Shoutouts' },
+            { to: `/admin/${communityId}/leaderboard`, icon: TrophyIcon, label: 'Leaderboards' },
+            { to: `/admin/${communityId}/calendar/events`, icon: CalendarDaysIcon, label: 'Calendar Events' },
+          ],
+        },
+        {
+          key: 'media',
+          label: 'Media',
+          icon: VideoCameraIcon,
+          items: [
+            { to: `/admin/${communityId}/music`, icon: MusicalNoteIcon, label: 'Music' },
+            { to: `/admin/${communityId}/live-streaming`, icon: VideoCameraIcon, label: 'Live Streaming' },
+            { to: `/admin/${communityId}/stream-overlays`, icon: WindowIcon, label: 'Stream Overlays' },
+            { to: `/admin/${communityId}/calls`, icon: SpeakerWaveIcon, label: 'Community Calls' },
+          ],
+        },
+        {
+          key: 'modules',
+          label: 'Modules',
+          icon: PuzzlePieceIcon,
+          items: [
+            { to: `/admin/${communityId}/modules`, icon: PuzzlePieceIcon, label: 'Modules & Marketplace' },
+          ],
+        },
+        {
+          key: 'loyalty',
+          label: 'Loyalty',
+          icon: CurrencyDollarIcon,
+          items: [
+            { to: `/admin/${communityId}/loyalty`, icon: CurrencyDollarIcon, label: 'Settings' },
+            { to: `/admin/${communityId}/loyalty/leaderboard`, icon: TrophyIcon, label: 'Leaderboard' },
+            { to: `/admin/${communityId}/loyalty/giveaways`, icon: HeartIcon, label: 'Giveaways' },
+            { to: `/admin/${communityId}/loyalty/games`, icon: CubeIcon, label: 'Games' },
+            { to: `/admin/${communityId}/loyalty/gear`, icon: InboxStackIcon, label: 'Gear' },
+          ],
+        },
+        {
+          key: 'moderation',
+          label: 'Moderation',
+          icon: ShieldCheckIcon,
+          items: [
+            { to: `/admin/${communityId}/security`, icon: FireIcon, label: 'Security' },
+            { to: `/admin/${communityId}/bot-detection`, icon: ShieldCheckIcon, label: 'Bot Detection' },
+            { to: `/admin/${communityId}/reputation`, icon: ScaleIcon, label: 'Reputation' },
+            { to: `/admin/${communityId}/commands`, icon: HashtagIcon, label: 'Commands' },
+          ],
+        },
+        {
+          key: 'ai',
+          label: 'AI',
+          icon: SparklesIcon,
+          items: [
+            { to: `/admin/${communityId}/ai-insights`, icon: SparklesIcon, label: 'AI Insights' },
+            { to: `/admin/${communityId}/ai-config`, icon: Cog6ToothIcon, label: 'AI Config' },
+          ],
+        },
+        {
+          key: 'platform',
+          label: 'Platform',
+          icon: RectangleGroupIcon,
+          items: [
+            { to: `/admin/${communityId}/connected-platforms`, icon: RectangleGroupIcon, label: 'Connected Platforms' },
+            { to: `/admin/${communityId}/servers`, icon: ServerStackIcon, label: 'Linked Servers' },
+            { to: `/admin/${communityId}/rcon`, icon: SignalIcon, label: 'Game Servers', premium: true },
+            { to: `/admin/${communityId}/mirror-groups`, icon: ArrowsRightLeftIcon, label: 'Chat Mirroring' },
+            { to: `/admin/${communityId}/platform-settings`, icon: AdjustmentsHorizontalIcon, label: 'Platform Settings' },
+          ],
+        },
+        {
+          key: 'settings',
+          label: 'Settings',
+          icon: Cog6ToothIcon,
+          items: [
+            { to: `/admin/${communityId}/analytics`, icon: ChartBarIcon, label: 'Analytics' },
+            { to: `/admin/${communityId}/workflows`, icon: CommandLineIcon, label: 'Workflows', premium: true },
+            { to: `/admin/${communityId}/domains`, icon: GlobeAltIcon, label: 'Custom Domains' },
+            { to: `/admin/${communityId}/translation`, icon: LanguageIcon, label: 'Translation' },
+            { to: `/admin/${communityId}/support`, icon: TicketIcon, label: 'Support Tickets' },
+            { to: `/admin/${communityId}/tokens`, icon: Cog6ToothIcon, label: 'Tokens' },
+            { to: `/admin/${communityId}/inventory`, icon: InboxStackIcon, label: 'Inventory' },
+          ],
+        },
       ]
     : [];
+
+  // Auto-expand section containing active route
+  useEffect(() => {
+    if (!communityId) return;
+    const newExpanded = {};
+    for (const section of communitySections) {
+      const hasActive = section.items.some((item) =>
+        item.exact
+          ? location.pathname === item.to
+          : location.pathname.startsWith(item.to)
+      );
+      if (hasActive) {
+        newExpanded[section.key] = true;
+      }
+    }
+    setExpandedSections((prev) => ({ ...prev, ...newExpanded }));
+  }, [location.pathname, communityId]);
 
   // Platform admin nav
   const platformAdminNav = [
@@ -82,6 +194,7 @@ function AdminLayout() {
     { to: '/superadmin/modules', icon: BuildingStorefrontIcon, label: 'Module Registry' },
     { to: '/superadmin/analytics', icon: ChartBarIcon, label: 'Analytics' },
     { to: '/superadmin/platform-config', icon: Cog6ToothIcon, label: 'Platform Config' },
+    { to: '/superadmin/tenants', icon: ServerStackIcon, label: 'Tenants' },
   ];
 
   const isActive = (to, exact = false) => {
@@ -89,10 +202,9 @@ function AdminLayout() {
     return location.pathname.startsWith(to);
   };
 
-  // Determine which nav to show based on the path
   const isSuperAdminPath = location.pathname.startsWith('/superadmin');
-  const navItems = communityId
-    ? communityAdminNav
+  const flatNavItems = communityId
+    ? null
     : isSuperAdminPath
       ? superAdminNav
       : platformAdminNav;
@@ -101,6 +213,28 @@ function AdminLayout() {
     : isSuperAdminPath
       ? 'Super Admin'
       : 'Platform Admin';
+
+  const renderNavLink = (item) => (
+    <Link
+      key={item.to}
+      to={item.to}
+      className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors ${
+        isActive(item.to, item.exact)
+          ? 'bg-gold-500/20 text-gold-400 border border-gold-500/30'
+          : 'text-navy-300 hover:bg-navy-800 hover:text-sky-300'
+      }`}
+    >
+      <div className="flex items-center space-x-3">
+        <item.icon className="w-5 h-5" />
+        <span className="text-sm font-medium">{item.label}</span>
+      </div>
+      {item.premium && (
+        <span className="text-[10px] px-1.5 py-0.5 rounded bg-gold-500 text-navy-900 font-bold">
+          PRO
+        </span>
+      )}
+    </Link>
+  );
 
   return (
     <div className="min-h-screen bg-navy-950">
@@ -156,28 +290,34 @@ function AdminLayout() {
 
       <div className="flex">
         {/* Sidebar */}
-        <aside className="w-64 bg-navy-900 border-r border-navy-700 min-h-[calc(100vh-4rem)] sticky top-16">
+        <aside className="w-64 bg-navy-900 border-r border-navy-700 min-h-[calc(100vh-4rem)] sticky top-16 overflow-y-auto">
           <nav className="p-4 space-y-1">
-            {navItems.map((item) => (
-              <Link
-                key={item.to}
-                to={item.to}
-                className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors ${
-                  isActive(item.to, item.exact)
-                    ? 'bg-gold-500/20 text-gold-400 border border-gold-500/30'
-                    : 'text-navy-300 hover:bg-navy-800 hover:text-sky-300'
-                }`}
-              >
-                <div className="flex items-center space-x-3">
-                  <item.icon className="w-5 h-5" />
-                  <span className="text-sm font-medium">{item.label}</span>
-                </div>
-                {item.premium && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-gold-500 text-navy-900 font-bold">
-                    PRO
-                  </span>
+            {/* Flat nav for platform/superadmin */}
+            {flatNavItems && flatNavItems.map(renderNavLink)}
+
+            {/* Collapsible sections for community admin */}
+            {communityId && communitySections.map((section) => (
+              <div key={section.key}>
+                <button
+                  onClick={() => toggleSection(section.key)}
+                  className="flex items-center justify-between w-full px-3 py-2 rounded-lg text-navy-400 hover:bg-navy-800 hover:text-sky-300 transition-colors"
+                >
+                  <div className="flex items-center space-x-3">
+                    <section.icon className="w-5 h-5" />
+                    <span className="text-xs font-semibold uppercase tracking-wider">{section.label}</span>
+                  </div>
+                  {expandedSections[section.key] ? (
+                    <ChevronDownIcon className="w-4 h-4" />
+                  ) : (
+                    <ChevronRightIcon className="w-4 h-4" />
+                  )}
+                </button>
+                {expandedSections[section.key] && (
+                  <div className="ml-2 space-y-0.5 mt-0.5">
+                    {section.items.map(renderNavLink)}
+                  </div>
                 )}
-              </Link>
+              </div>
             ))}
 
             {communityId && (

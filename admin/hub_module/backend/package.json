@@ -27,7 +27,8 @@
     "pg": "^8.13.1",
     "socket.io": "^4.8.1",
     "uuid": "^11.0.3",
-    "xss": "^1.0.15"
+    "xss": "^1.0.15",
+    "@simplewebauthn/server": "^13.0.0"
   },
   "devDependencies": {
     "eslint": "^8.56.0"

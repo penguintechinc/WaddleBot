@@ -30,7 +30,7 @@ spec:
       {{- include "waddlebot.dbMigrateInitContainer" . | nindent 8 }}
       containers:
         - name: slack-collector
-          image: "{{ .Values.global.imageRegistry }}/{{ .Values.modules.collectors.slack.image }}:{{ .Values.modules.collectors.slack.tag | default "latest" }}"
+          image: "{{ .Values.global.imageRegistry }}/{{ .Values.modules.collectors.slack.image }}:{{ .Values.modules.collectors.slack.imageTag | default .Values.global.imageTag }}"
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
           ports:
             - name: http

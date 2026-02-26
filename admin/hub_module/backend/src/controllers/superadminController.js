@@ -51,7 +51,8 @@ export async function listCommunities(req, res, next) {
 
     const result = await query(
       `SELECT id, name, display_name, description, platform, platform_server_id,
-              owner_id, owner_name, member_count, is_active, is_public, community_type, created_at, updated_at
+              owner_id, owner_name, member_count, is_active, is_public, community_type,
+              is_premium, seat_limit, created_at, updated_at
        FROM communities
        ${whereClause}
        ORDER BY created_at DESC
@@ -72,6 +73,8 @@ export async function listCommunities(req, res, next) {
       isActive: row.is_active,
       isPublic: row.is_public,
       communityType: row.community_type || 'creator',
+      isPremium: row.is_premium || false,
+      seatLimit: row.seat_limit ?? null,
       createdAt: row.created_at?.toISOString(),
       updatedAt: row.updated_at?.toISOString(),
     }));
@@ -236,7 +239,7 @@ export async function createCommunity(req, res, next) {
 export async function updateCommunity(req, res, next) {
   try {
     const communityId = parseInt(req.params.id, 10);
-    const { displayName, description, ownerId, ownerName, isActive, isPublic, platform, platformServerId, communityType } = req.body;
+    const { displayName, description, ownerId, ownerName, isActive, isPublic, platform, platformServerId, communityType, isPremium, seatLimit } = req.body;
 
     // Check community exists
     const existingResult = await query(
@@ -292,6 +295,14 @@ export async function updateCommunity(req, res, next) {
     if (communityType !== undefined) {
       updates.push(`community_type = $${paramIndex++}`);
       params.push(communityType);
+    }
+    if (isPremium !== undefined) {
+      updates.push(`is_premium = $${paramIndex++}`);
+      params.push(isPremium);
+    }
+    if (seatLimit !== undefined) {
+      updates.push(`seat_limit = $${paramIndex++}`);
+      params.push(seatLimit === '' || seatLimit === null ? null : parseInt(seatLimit, 10));
     }
 
     if (updates.length === 0) {
@@ -915,6 +926,158 @@ export async function deactivateModuleDbAccount(req, res, next) {
     });
 
     res.json({ success: true, message: outcome.message });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ── Tenant Management ────────────────────────────────────────────────
+
+/**
+ * List all tenants with pagination
+ */
+export async function listTenants(req, res, next) {
+  try {
+    const page = Math.max(1, parseInt(req.query.page || '1', 10));
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '25', 10)));
+    const offset = (page - 1) * limit;
+    const search = req.query.search || '';
+
+    let whereClause = 'WHERE 1=1';
+    const params = [];
+    let paramIndex = 1;
+
+    if (search) {
+      whereClause += ` AND (slug ILIKE $${paramIndex} OR display_name ILIKE $${paramIndex})`;
+      params.push(`%${search}%`);
+      paramIndex++;
+    }
+
+    const countResult = await query(`SELECT COUNT(*) as count FROM tenants ${whereClause}`, params);
+    const total = parseInt(countResult.rows[0]?.count || 0, 10);
+
+    const result = await query(
+      `SELECT id, slug, display_name, description, logo_url, is_global, is_active,
+              allowed_module_ids, seat_limit, created_at, updated_at
+       FROM tenants ${whereClause}
+       ORDER BY is_global DESC, created_at DESC
+       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+      [...params, limit, offset]
+    );
+
+    const tenants = result.rows.map(row => ({
+      id: row.id,
+      slug: row.slug,
+      displayName: row.display_name,
+      description: row.description,
+      logoUrl: row.logo_url,
+      isGlobal: row.is_global,
+      isActive: row.is_active,
+      allowedModuleIds: row.allowed_module_ids,
+      seatLimit: row.seat_limit,
+      createdAt: row.created_at?.toISOString(),
+      updatedAt: row.updated_at?.toISOString(),
+    }));
+
+    res.json({
+      success: true,
+      tenants,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Create a new tenant
+ */
+export async function createTenant(req, res, next) {
+  try {
+    const { slug, displayName, description, logoUrl, seatLimit, allowedModuleIds } = req.body;
+
+    if (!slug || !slug.trim()) return next(errors.badRequest('Tenant slug is required'));
+    if (!displayName || !displayName.trim()) return next(errors.badRequest('Display name is required'));
+
+    // Validate slug format (URL-safe)
+    if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(slug)) {
+      return next(errors.badRequest('Slug must be lowercase alphanumeric with hyphens, no leading/trailing hyphens'));
+    }
+
+    const result = await query(
+      `INSERT INTO tenants (slug, display_name, description, logo_url, seat_limit, allowed_module_ids)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, slug, display_name, created_at`,
+      [slug.trim(), displayName.trim(), description || '', logoUrl || null,
+       seatLimit || null, allowedModuleIds || null]
+    );
+
+    logger.audit('Tenant created', { adminId: req.user.id, tenantId: result.rows[0].id, slug });
+
+    res.status(201).json({
+      success: true,
+      tenant: {
+        id: result.rows[0].id,
+        slug: result.rows[0].slug,
+        displayName: result.rows[0].display_name,
+        createdAt: result.rows[0].created_at?.toISOString(),
+      },
+    });
+  } catch (err) {
+    if (err.code === '23505') return next(errors.conflict('A tenant with that slug already exists'));
+    next(err);
+  }
+}
+
+/**
+ * Update a tenant
+ */
+export async function updateTenant(req, res, next) {
+  try {
+    const tenantId = parseInt(req.params.id, 10);
+    const { displayName, description, logoUrl, isActive, seatLimit, allowedModuleIds, config } = req.body;
+
+    const updates = [];
+    const params = [tenantId];
+    let idx = 2;
+
+    if (displayName !== undefined) { updates.push(`display_name = $${idx++}`); params.push(displayName); }
+    if (description !== undefined) { updates.push(`description = $${idx++}`); params.push(description); }
+    if (logoUrl !== undefined) { updates.push(`logo_url = $${idx++}`); params.push(logoUrl); }
+    if (isActive !== undefined) { updates.push(`is_active = $${idx++}`); params.push(isActive); }
+    if (seatLimit !== undefined) { updates.push(`seat_limit = $${idx++}`); params.push(seatLimit === null ? null : parseInt(seatLimit, 10)); }
+    if (allowedModuleIds !== undefined) { updates.push(`allowed_module_ids = $${idx++}`); params.push(allowedModuleIds); }
+    if (config !== undefined) { updates.push(`config = $${idx++}::jsonb`); params.push(JSON.stringify(config)); }
+
+    if (!updates.length) return next(errors.badRequest('No updates provided'));
+    updates.push('updated_at = NOW()');
+
+    const result = await query(`UPDATE tenants SET ${updates.join(', ')} WHERE id = $1 RETURNING slug`, params);
+    if (!result.rows.length) return next(errors.notFound('Tenant not found'));
+
+    logger.audit('Tenant updated', { adminId: req.user.id, tenantId, updates: Object.keys(req.body) });
+    res.json({ success: true, message: 'Tenant updated' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Delete (deactivate) a tenant
+ */
+export async function deleteTenant(req, res, next) {
+  try {
+    const tenantId = parseInt(req.params.id, 10);
+
+    // Cannot delete global tenant
+    const globalCheck = await query('SELECT is_global FROM tenants WHERE id = $1', [tenantId]);
+    if (!globalCheck.rows.length) return next(errors.notFound('Tenant not found'));
+    if (globalCheck.rows[0].is_global) return next(errors.forbidden('Cannot delete the global tenant'));
+
+    await query('UPDATE tenants SET is_active = false, updated_at = NOW() WHERE id = $1', [tenantId]);
+
+    logger.audit('Tenant deleted (deactivated)', { adminId: req.user.id, tenantId });
+    res.json({ success: true, message: 'Tenant deactivated' });
   } catch (err) {
     next(err);
   }

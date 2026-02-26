@@ -175,10 +175,17 @@ export async function updateMemberRole(req, res, next) {
       return next(errors.forbidden('Only owners can promote to admin'));
     }
 
+    // Look up community_role_id for the new role
+    const roleResult = await query(
+      'SELECT id FROM community_roles WHERE community_id = $1 AND name = $2',
+      [communityId, role]
+    );
+    const communityRoleId = roleResult.rows[0]?.id || null;
+
     await query(
-      `UPDATE community_members SET role = $1, updated_at = NOW()
-       WHERE community_id = $2 AND user_id = $3`,
-      [role, communityId, userId]
+      `UPDATE community_members SET role = $1, community_role_id = $2, claims_cache = NULL, updated_at = NOW()
+       WHERE community_id = $3 AND user_id = $4`,
+      [role, communityRoleId, communityId, userId]
     );
 
     logger.audit('Member role updated', {
@@ -379,6 +386,19 @@ export async function updateModuleConfig(req, res, next) {
     const communityId = parseInt(req.params.communityId, 10);
     const moduleId = parseInt(req.params.moduleId, 10);
     const { config: moduleConfig, isEnabled } = req.body;
+
+    // Prevent disabling truly non-disableable core modules (identity, workflow)
+    if (isEnabled === false) {
+      const coreCheck = await query(
+        'SELECT is_core FROM hub_modules WHERE id = $1',
+        [moduleId]
+      );
+      if (coreCheck.rows[0]?.is_core === true) {
+        return res.status(403).json({
+          error: 'Cannot disable a core module. This module is required for WaddleBot to function correctly.',
+        });
+      }
+    }
 
     const updates = [];
     const params = [communityId, moduleId];
@@ -786,6 +806,18 @@ export async function approveJoinRequest(req, res, next) {
       [communityId, userId]
     );
 
+    // Set community_role_id for the default 'member' role
+    const defaultRole = await query(
+      'SELECT id FROM community_roles WHERE community_id = $1 AND name = $2',
+      [communityId, 'member']
+    );
+    if (defaultRole.rows.length) {
+      await query(
+        'UPDATE community_members SET community_role_id = $1 WHERE community_id = $2 AND user_id = $3',
+        [defaultRole.rows[0].id, communityId, userId]
+      );
+    }
+
     // Update member count
     await query(
       `UPDATE communities SET member_count = member_count + 1 WHERE id = $1`,
@@ -1042,6 +1074,73 @@ export async function getLinkedServers(req, res, next) {
 }
 
 /**
+ * Create a server link request from the community side
+ * Called when a community admin wants to initiate a link to a platform server
+ */
+export async function createServerLinkRequest(req, res, next) {
+  try {
+    const communityId = parseInt(req.params.communityId, 10);
+    const { platform, platformServerId, platformServerName, linkType } = req.body;
+
+    if (!platform || !platformServerId) {
+      return next(errors.badRequest('platform and platformServerId are required'));
+    }
+
+    const validPlatforms = ['discord', 'slack', 'twitch', 'kick', 'youtube'];
+    if (!validPlatforms.includes(platform)) {
+      return next(errors.badRequest(`platform must be one of: ${validPlatforms.join(', ')}`));
+    }
+
+    const validLinkTypes = ['standard', 'read_only', 'announcement_only'];
+    const resolvedLinkType = validLinkTypes.includes(linkType) ? linkType : 'standard';
+
+    // Check for existing approved link
+    const existingLink = await query(
+      `SELECT id FROM community_servers
+       WHERE community_id = $1 AND platform = $2 AND platform_server_id = $3`,
+      [communityId, platform, platformServerId]
+    );
+    if (existingLink.rows.length > 0) {
+      return res.status(409).json({ error: 'This server is already linked to this community' });
+    }
+
+    // Check for existing pending request
+    const existingRequest = await query(
+      `SELECT id FROM server_link_requests
+       WHERE community_id = $1 AND platform = $2 AND platform_server_id = $3 AND status = 'pending'`,
+      [communityId, platform, platformServerId]
+    );
+    if (existingRequest.rows.length > 0) {
+      return res.status(409).json({ error: 'A pending request for this server already exists' });
+    }
+
+    const result = await query(
+      `INSERT INTO server_link_requests
+         (community_id, platform, platform_server_id, platform_server_name,
+          requested_by, status, initiated_by, link_type)
+       VALUES ($1, $2, $3, $4, $5, 'pending', 'community', $6)
+       RETURNING id`,
+      [communityId, platform, platformServerId, platformServerName || null, req.user.id, resolvedLinkType]
+    );
+
+    logger.audit('Server link request created (community-initiated)', {
+      adminId: req.user.id,
+      communityId,
+      platform,
+      platformServerId,
+      linkType: resolvedLinkType,
+    });
+
+    res.status(201).json({ success: true, requestId: result.rows[0].id });
+  } catch (err) {
+    if (isSchemaError(err)) {
+      return res.status(503).json({ error: 'Server link requests are not yet available' });
+    }
+    next(err);
+  }
+}
+
+/**
  * Get pending server link requests for community
  */
 export async function getServerLinkRequests(req, res, next) {
@@ -1052,6 +1151,8 @@ export async function getServerLinkRequests(req, res, next) {
     const result = await query(
       `SELECT slr.id, slr.platform, slr.platform_server_id, slr.platform_server_name,
               slr.status, slr.review_note, slr.created_at, slr.reviewed_at,
+              slr.initiated_by, slr.link_type,
+              slr.initiator_platform_username,
               u1.username as requested_by_username, u1.email as requested_by_email,
               u2.username as reviewed_by_username
        FROM server_link_requests slr
@@ -1069,6 +1170,9 @@ export async function getServerLinkRequests(req, res, next) {
       platformServerName: row.platform_server_name,
       status: row.status,
       reviewNote: row.review_note,
+      initiatedBy: row.initiated_by || 'community',
+      linkType: row.link_type || 'standard',
+      initiatorPlatformUsername: row.initiator_platform_username,
       requestedBy: row.requested_by_username,
       requestedByEmail: row.requested_by_email,
       reviewedBy: row.reviewed_by_username,
@@ -1273,6 +1377,48 @@ export async function updateServer(req, res, next) {
     });
 
     res.json({ success: true, message: 'Server settings updated' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ===== Commands Endpoint =====
+
+/**
+ * Get all platform commands for a community, with module-level enabled/disabled status
+ */
+export async function getCommands(req, res, next) {
+  try {
+    const communityId = parseInt(req.params.communityId, 10);
+    if (!Number.isFinite(communityId)) {
+      return next(errors.badRequest('Invalid community ID'));
+    }
+
+    // Join commands with hub_module_installations to get enabled status per community.
+    // community_id = NULL rows are global defaults (applies to all communities).
+    // A command is considered enabled if the module is installed and enabled for this community,
+    // or if no installation record exists (module not installed → default to enabled).
+    const result = await query(
+      `SELECT
+         c.id,
+         c.command,
+         c.module_name,
+         c.description,
+         c.category,
+         c.permission_level,
+         c.platforms,
+         COALESCE(hmi.is_enabled, true) AS is_enabled
+       FROM commands c
+       LEFT JOIN hub_module_installations hmi
+         ON hmi.community_id = $1
+         AND hmi.module_name = c.module_name
+       WHERE c.community_id = $1
+          OR c.community_id IS NULL
+       ORDER BY c.module_name, c.command`,
+      [communityId]
+    );
+
+    res.json({ commands: result.rows });
   } catch (err) {
     next(err);
   }

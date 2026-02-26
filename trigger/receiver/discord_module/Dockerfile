@@ -4,11 +4,13 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Copy shared library
+# Copy shared libraries
 COPY libs/flask_core /app/libs/flask_core
+COPY libs/platform_receiver /app/libs/platform_receiver
 
-# Install shared library
-RUN cd /app/libs/flask_core && pip install --no-cache-dir .
+# Install shared libraries
+RUN cd /app/libs/flask_core && pip install --no-cache-dir . && \
+    cd /app/libs/platform_receiver && pip install --no-cache-dir .
 
 # Copy module files
 COPY trigger/receiver/discord_module/requirements.txt /app/

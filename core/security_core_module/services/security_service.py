@@ -265,6 +265,15 @@ class SecurityService:
                     platform_user_id, reputation_impact, action_type
                 )
 
+            # Sync to game servers (RCON, Mumble, TeamSpeak) if requested
+            game_server_platforms = {'rcon', 'mumble', 'teamspeak'}
+            game_targets = [p for p in sync_to_platforms if p in game_server_platforms]
+            if game_targets and action_type in ('ban', 'kick'):
+                await self._sync_to_game_servers(
+                    community_id, platform_user_id, action_type,
+                    action_reason, game_targets
+                )
+
             self.logger.audit(
                 "Moderation action synced",
                 community_id=community_id,
@@ -325,3 +334,66 @@ class SecurityService:
             )
         except Exception as e:
             self.logger.error(f"Failed to apply reputation impact: {e}")
+
+    async def _sync_to_game_servers(
+        self,
+        community_id: int,
+        platform_user_id: str,
+        action_type: str,
+        reason: Optional[str],
+        target_types: List[str],
+    ):
+        """Sync ban/kick to game servers (RCON, Mumble, TeamSpeak).
+
+        Queries active server_status_configs for the community and forwards
+        the moderation action to the server_manager module.
+        """
+        import os
+        import httpx
+
+        server_manager_url = os.getenv(
+            'SERVER_MANAGER_URL', 'http://server-manager-service:8098'
+        )
+
+        try:
+            type_filter = ', '.join(f"'{t}'" for t in target_types)
+            servers = self.dal.executesql(
+                f"""SELECT id, server_type FROM server_status_configs
+                    WHERE community_id = %s
+                      AND server_type IN ({type_filter})
+                      AND is_active = TRUE
+                      AND deleted_at IS NULL""",
+                [community_id]
+            )
+
+            if not servers:
+                return
+
+            endpoint = 'kick' if action_type == 'kick' else 'ban'
+            async with httpx.AsyncClient(timeout=10) as client:
+                for server_id, server_type in servers:
+                    url = (
+                        f"{server_manager_url}/api/v1/server-manager"
+                        f"/{community_id}/servers/{server_id}/{endpoint}"
+                    )
+                    try:
+                        await client.post(url, json={
+                            'player': platform_user_id,
+                            'reason': reason or f'Cross-platform {action_type}',
+                        })
+                        self.logger.audit(
+                            f"Game server {endpoint} synced",
+                            community_id=community_id,
+                            server_id=server_id,
+                            server_type=server_type,
+                            player=platform_user_id,
+                            action="sync_to_game_server",
+                            result="SUCCESS",
+                        )
+                    except Exception as exc:
+                        self.logger.error(
+                            f"Failed to sync {endpoint} to server {server_id}: {exc}"
+                        )
+
+        except Exception as e:
+            self.logger.error(f"Failed to sync to game servers: {e}")

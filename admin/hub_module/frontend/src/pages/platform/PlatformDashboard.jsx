@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { platformApi } from '../../services/api';
 import { UserGroupIcon, HomeIcon, ServerIcon, ChartBarIcon } from '@heroicons/react/24/outline';
+import { getAllPlatformOptions } from '../../utils/platformConfig';
 
 function PlatformDashboard() {
   const [stats, setStats] = useState(null);
@@ -90,34 +91,21 @@ function PlatformDashboard() {
           <h2 className="font-semibold">Users by Platform</h2>
         </div>
         <div className="p-6">
-          <div className="grid sm:grid-cols-3 gap-6">
-            <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 rounded-lg bg-[#5865F2]/10 flex items-center justify-center">
-                <span className="text-xl">💬</span>
+          <div className="grid sm:grid-cols-3 lg:grid-cols-5 gap-6">
+            {getAllPlatformOptions().map((p) => (
+              <div key={p.id} className="flex items-center space-x-4">
+                <div
+                  className="w-12 h-12 rounded-lg flex items-center justify-center"
+                  style={{ backgroundColor: `${p.hex}15` }}
+                >
+                  <span className="text-xl">{p.icon}</span>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold">{stats?.platforms?.[p.id] || 0}</div>
+                  <div className="text-slate-600">{p.label}</div>
+                </div>
               </div>
-              <div>
-                <div className="text-2xl font-bold">{stats?.platforms?.discord || 0}</div>
-                <div className="text-slate-600">Discord</div>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 rounded-lg bg-[#9146FF]/10 flex items-center justify-center">
-                <span className="text-xl">📺</span>
-              </div>
-              <div>
-                <div className="text-2xl font-bold">{stats?.platforms?.twitch || 0}</div>
-                <div className="text-slate-600">Twitch</div>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 rounded-lg bg-[#4A154B]/10 flex items-center justify-center">
-                <span className="text-xl">💼</span>
-              </div>
-              <div>
-                <div className="text-2xl font-bold">{stats?.platforms?.slack || 0}</div>
-                <div className="text-slate-600">Slack</div>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       </div>

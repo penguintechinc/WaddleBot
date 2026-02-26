@@ -32,6 +32,26 @@ async function getHubSettingsMap() {
 }
 
 /**
+ * Validate CAPTCHA token against the configured provider
+ */
+async function validateCaptcha(provider, secretKey, token, remoteIp) {
+  try {
+    const url = provider === 'turnstile'
+      ? 'https://challenges.cloudflare.com/turnstile/v0/siteverify'
+      : 'https://www.google.com/recaptcha/api/siteverify';
+    const params = new URLSearchParams({ secret: secretKey, response: token });
+    if (remoteIp) params.append('remoteip', remoteIp);
+    const res = await axios.post(url, params.toString(), {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    });
+    return res.data?.success === true;
+  } catch (err) {
+    logger.warn('CAPTCHA validation request failed', { err: err.message });
+    return false;
+  }
+}
+
+/**
  * Register new user with local credentials
  */
 export async function register(req, res, next) {
@@ -54,6 +74,20 @@ export async function register(req, res, next) {
     // Check if signup is enabled
     if (!signupEnabled || !emailConfigured) {
       return next(errors.forbidden('Registration is currently disabled'));
+    }
+
+    // Check CAPTCHA if configured
+    const captchaProvider = settings.captcha_provider || 'none';
+    const captchaSecretKey = settings.captcha_secret_key || '';
+    if (captchaProvider !== 'none' && captchaSecretKey) {
+      const captchaToken = req.body.captcha_token;
+      if (!captchaToken) {
+        return next(errors.badRequest('CAPTCHA verification required'));
+      }
+      const captchaValid = await validateCaptcha(captchaProvider, captchaSecretKey, captchaToken, req.ip);
+      if (!captchaValid) {
+        return next(errors.badRequest('CAPTCHA verification failed'));
+      }
     }
 
     // Check domain restriction
@@ -274,6 +308,11 @@ export async function login(req, res, next) {
       return next(errors.badRequest('Email and password required'));
     }
 
+    // Resolve tenant context
+    const tenantSlug = req.body.tenantSlug || 'global';
+    const tenantResult = await query('SELECT id, slug FROM tenants WHERE slug = $1 AND is_active = true', [tenantSlug]);
+    const tenantId = tenantResult.rows[0]?.id || null;
+
     // Find user
     const result = await query(
       `SELECT u.id, u.email, u.username, u.password_hash, u.avatar_url, u.is_active, u.is_super_admin, u.is_vendor, u.email_verified,
@@ -328,6 +367,8 @@ export async function login(req, res, next) {
       avatarUrl: user.avatar_url,
       isSuperAdmin: user.is_super_admin,
       isVendor: user.is_vendor,
+      tenantId,
+      tenantSlug,
     });
 
     logger.auth('Login successful', { userId: user.id, email: user.email });
@@ -433,12 +474,13 @@ export async function startOAuth(req, res, next) {
 
     const state = uuidv4();
     const redirectUri = `${config.identity.callbackBaseUrl}/api/v1/auth/oauth/${platform}/callback`;
+    const tenantSlug = req.query.tenantSlug || 'global';
 
-    // Store state with mode for callback
+    // Store state with mode and tenant context for callback
     await query(
-      `INSERT INTO hub_oauth_states (state, mode, platform, expires_at)
-       VALUES ($1, $2, $3, NOW() + INTERVAL '10 minutes')`,
-      [state, mode || 'login', platform]
+      `INSERT INTO hub_oauth_states (state, mode, platform, metadata, expires_at)
+       VALUES ($1, $2, $3, $4, NOW() + INTERVAL '10 minutes')`,
+      [state, mode || 'login', platform, JSON.stringify({ tenantSlug })]
     );
 
     // Get OAuth URL from Identity Core or direct platform config
@@ -481,7 +523,7 @@ export async function oauthCallback(req, res, next) {
 
     // Verify state
     const stateResult = await query(
-      `SELECT mode FROM hub_oauth_states
+      `SELECT mode, metadata FROM hub_oauth_states
        WHERE state = $1 AND platform = $2 AND expires_at > NOW()`,
       [state, platform]
     );
@@ -491,7 +533,8 @@ export async function oauthCallback(req, res, next) {
       return res.redirect(`${config.cors.origin}/login?error=invalid_state`);
     }
 
-    const { mode } = stateResult.rows[0];
+    const { mode, metadata: stateMetadata } = stateResult.rows[0];
+    const oauthTenantSlug = stateMetadata?.tenantSlug || 'global';
 
     // Clean up state
     await query('DELETE FROM hub_oauth_states WHERE state = $1', [state]);
@@ -514,6 +557,10 @@ export async function oauthCallback(req, res, next) {
     // Find or create user
     const user = await findOrCreateUserFromOAuth(platform, userData, mode);
 
+    // Resolve tenant context from state metadata
+    const oauthTenantResult = await query('SELECT id FROM tenants WHERE slug = $1 AND is_active = true', [oauthTenantSlug]);
+    const oauthTenantId = oauthTenantResult.rows[0]?.id || null;
+
     // Create session
     const sessionToken = await createSession({
       userId: user.id,
@@ -522,6 +569,8 @@ export async function oauthCallback(req, res, next) {
       avatarUrl: user.avatar_url,
       isSuperAdmin: user.is_super_admin,
       isVendor: user.is_vendor,
+      tenantId: oauthTenantId,
+      tenantSlug: oauthTenantSlug,
     });
 
     logger.auth('OAuth login successful', { platform, userId: user.id });
@@ -1050,13 +1099,26 @@ export async function setPassword(req, res, next) {
 /**
  * Create session and JWT token
  */
-async function createSession({ userId, username, email, avatarUrl, isSuperAdmin, isVendor, requiresOAuthLink, communityId }) {
+async function createSession({ userId, username, email, avatarUrl, isSuperAdmin, isVendor, requiresOAuthLink, communityId, tenantId, tenantSlug }) {
   // Build roles array
   const roles = [];
   if (isSuperAdmin) roles.push('admin', 'super_admin');
   if (isVendor) roles.push('vendor');
 
-  // Create JWT payload
+  // Resolve tenant scopes
+  const tenantScopes = [];
+  if (tenantId) {
+    const taResult = await query(
+      'SELECT role FROM tenant_admins WHERE tenant_id = $1 AND user_id = $2',
+      [tenantId, userId]
+    );
+    if (taResult.rows.length > 0) {
+      const role = taResult.rows[0].role;
+      if (role === 'tenant-owner') tenantScopes.push('tenant:manage', 'tenant:manage_modules', 'tenant:manage_billing', 'tenant:manage_admins');
+      else if (role === 'tenant-admin') tenantScopes.push('tenant:manage', 'tenant:manage_modules');
+    }
+  }
+
   const payload = {
     userId,
     username,
@@ -1067,6 +1129,9 @@ async function createSession({ userId, username, email, avatarUrl, isSuperAdmin,
     isSuperAdmin: isSuperAdmin || false,
     isVendor: isVendor || false,
     roles,
+    tenantId: tenantId || null,
+    tenantSlug: tenantSlug || 'global',
+    tenantScopes,
   };
 
   // Generate token
@@ -1308,6 +1373,53 @@ async function exchangeOAuthCode(platform, code, redirectUri) {
     }
     default:
       throw new Error(`OAuth exchange not implemented for ${platform}`);
+  }
+}
+
+/**
+ * Get tenant login info (public endpoint)
+ */
+export async function getTenantLoginInfo(req, res, next) {
+  try {
+    const { slug } = req.params;
+    const result = await query(
+      `SELECT t.slug, t.display_name, t.logo_url, t.is_global, t.is_active, t.config
+       FROM tenants t WHERE t.slug = $1`,
+      [slug]
+    );
+
+    if (!result.rows.length) {
+      return next(errors.notFound('Tenant not found'));
+    }
+
+    const tenant = result.rows[0];
+    if (!tenant.is_active) {
+      return next(errors.forbidden('This tenant is currently inactive'));
+    }
+
+    // Get enabled auth methods for this tenant
+    const pcResult = await query(
+      `SELECT platform, enabled FROM platform_configs WHERE tenant_id = (SELECT id FROM tenants WHERE slug = $1) AND enabled = true`,
+      [slug]
+    );
+    const enabledPlatforms = pcResult.rows.map(r => r.platform);
+
+    res.json({
+      success: true,
+      tenant: {
+        slug: tenant.slug,
+        displayName: tenant.display_name,
+        logoUrl: tenant.logo_url,
+        isGlobal: tenant.is_global,
+        enabledPlatforms,
+        config: {
+          theme: tenant.config?.theme || null,
+          welcomeMessage: tenant.config?.welcomeMessage || null,
+        },
+      },
+    });
+  } catch (err) {
+    next(err);
   }
 }
 

@@ -29,14 +29,14 @@ RUN useradd -m -u 1000 waddlebot && \
 USER waddlebot
 
 # Expose port
-EXPOSE 8070
+EXPOSE 8090
 
 # Copy standard healthcheck script
 COPY scripts/healthcheck.py /usr/local/bin/healthcheck.py
 
 # Health check (using /health for consistency with other modules)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python3 /usr/local/bin/healthcheck.py http://localhost:8070/health
+    CMD python3 /usr/local/bin/healthcheck.py http://localhost:${MODULE_PORT:-8090}/health
 
-# Run with Hypercorn
-CMD ["hypercorn", "app:app", "--bind", "0.0.0.0:8070", "--workers", "4"]
+# Run with Hypercorn (shell form so MODULE_PORT env var is substituted)
+CMD hypercorn app:app --bind "0.0.0.0:${MODULE_PORT:-8090}" --workers 4

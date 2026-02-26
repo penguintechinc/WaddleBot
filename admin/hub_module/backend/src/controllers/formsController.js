@@ -62,6 +62,7 @@ export async function createForm(req, res) {
       fields,
       view_visibility,
       submit_visibility,
+      results_visibility,
       allow_anonymous,
       submit_once_per_user
     } = req.body;
@@ -73,6 +74,7 @@ export async function createForm(req, res) {
       fields,
       view_visibility: view_visibility || 'community',
       submit_visibility: submit_visibility || 'community',
+      results_visibility: results_visibility || 'submitter_and_admins',
       allow_anonymous: allow_anonymous || false,
       submit_once_per_user: submit_once_per_user !== false
     }, {

@@ -4,6 +4,7 @@
  */
 import { query } from '../config/database.js';
 import { logger } from '../utils/logger.js';
+import { relayMessage } from '../services/mirrorRelayService.js';
 
 // Track active channels per socket
 const activeChannels = new Map();
@@ -210,6 +211,33 @@ export function handleChatEvents(io, socket) {
 
       // Record activity for leaderboards (fire-and-forget)
       recordHubChatActivity(communityId, socket.userId, socket.username);
+
+      // Relay to mirror group members (fire-and-forget)
+      if (channelName && channelName.startsWith('hub-channel-')) {
+        const hubChannelId = parseInt(channelName.replace('hub-channel-', ''), 10);
+        if (hubChannelId) {
+          query(
+            `SELECT community_server_channel_id FROM hub_channels WHERE id = $1 AND community_id = $2`,
+            [hubChannelId, communityId]
+          ).then(result => {
+            if (result.rows[0]?.community_server_channel_id) {
+              relayMessage({
+                sourceMemberChannelId: result.rows[0].community_server_channel_id,
+                platform: 'hub',
+                channelType: 'chat',
+                content: { text: content },
+                author: {
+                  username: socket.username,
+                  avatarUrl: socket.avatarUrl,
+                  platform: 'hub',
+                },
+                messageType: 'message',
+                io,
+              }).catch(err => logger.error('Chat relay failed', { error: err.message }));
+            }
+          }).catch(err => logger.error('Hub channel lookup failed', { error: err.message }));
+        }
+      }
 
       logger.audit('Chat message sent', {
         messageId: message.id,

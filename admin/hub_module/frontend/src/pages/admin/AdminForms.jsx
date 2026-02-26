@@ -30,6 +30,13 @@ const VISIBILITY_OPTIONS = [
   { value: 'admins', label: 'Admins Only' },
 ];
 
+const RESULTS_VISIBILITY_OPTIONS = [
+  { value: 'community', label: 'All Community Members' },
+  { value: 'registered', label: 'All Registered Users' },
+  { value: 'submitter_and_admins', label: 'Submitter + Mods/Admins' },
+  { value: 'admins', label: 'Mods/Admins Only' },
+];
+
 /**
  * Parse field definitions from multiline format.
  * Format: type|label|placeholder|required (one per line)
@@ -99,6 +106,7 @@ function AdminForms() {
         fields: parsedFields,
         view_visibility: data.view_visibility,
         submit_visibility: data.submit_visibility,
+        results_visibility: data.results_visibility || 'submitter_and_admins',
         allow_anonymous: data.allow_anonymous || false,
         submit_once_per_user: data.submit_once_per_user !== false,
       });
@@ -193,6 +201,13 @@ function AdminForms() {
       options: VISIBILITY_OPTIONS,
     },
     {
+      name: 'results_visibility',
+      type: 'select',
+      label: 'Who can see results',
+      defaultValue: 'submitter_and_admins',
+      options: RESULTS_VISIBILITY_OPTIONS,
+    },
+    {
       name: 'allow_anonymous',
       type: 'checkbox',
       label: 'Allow anonymous submissions',
@@ -269,6 +284,7 @@ function AdminForms() {
                         <EyeIcon className="h-3 w-3" />
                         {form.view_visibility}
                       </span>
+                      <span>{form.results_visibility || 'submitter_and_admins'}</span>
                       <span>{form.fields?.length || 0} fields</span>
                     </div>
                   </div>

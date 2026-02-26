@@ -2,6 +2,7 @@
 Discord Bot Service - py-cord integration with slash and prefix commands
 """
 import asyncio
+import os
 import discord
 from discord.ext import commands
 import httpx
@@ -71,6 +72,11 @@ class DiscordBotService:
             # Handle !prefix commands
             if message.content.startswith('!'):
                 await self._handle_prefix_command(message)
+                return
+
+            # Mirror relay: forward non-command messages to hub for bridging
+            if message.guild and message.channel and message.content:
+                await self._relay_message_to_hub(message)
 
         @self.bot.event
         async def on_application_command_error(ctx, error):
@@ -149,6 +155,303 @@ class DiscordBotService:
             modal = FeedbackModal(self)
             await ctx.send_modal(modal)
 
+        # Register all module slash command groups
+        self._register_module_commands()
+        self._register_context_commands()
+        self._register_linking_commands()
+
+    def _register_module_commands(self):
+        """Register per-module SlashCommandGroups for all interactive modules."""
+
+        # ── Forms ───────────────────────────────────────────────────────
+        form = self.bot.create_group("form", "Community forms")
+
+        @form.command(name="list", description="List available forms")
+        async def form_list(ctx: discord.ApplicationContext):
+            await self._handle_slash_command(ctx, "/form", {"args": "list"})
+
+        @form.command(name="submit", description="Submit a community form")
+        async def form_submit(ctx: discord.ApplicationContext,
+                              name: discord.Option(str, "Form name")):
+            await self._handle_slash_command(ctx, "/form", {"args": f"submit {name}"})
+
+        # ── Polls ────────────────────────────────────────────────────────
+        poll = self.bot.create_group("poll", "Community polls")
+
+        @poll.command(name="list", description="List active polls")
+        async def poll_list(ctx: discord.ApplicationContext):
+            await self._handle_slash_command(ctx, "/poll", {"args": "list"})
+
+        @poll.command(name="vote", description="Vote on a poll")
+        async def poll_vote(ctx: discord.ApplicationContext,
+                            name: discord.Option(str, "Poll name")):
+            await self._handle_slash_command(ctx, "/poll", {"args": f"vote {name}"})
+
+        # ── Tickets / Support ────────────────────────────────────────────
+        ticket = self.bot.create_group("ticket", "Support tickets")
+
+        @ticket.command(name="new", description="Open a new support ticket")
+        async def ticket_new(ctx: discord.ApplicationContext,
+                             category: discord.Option(str, "Category", required=False, default="")):
+            await self._handle_slash_command(ctx, "/ticket", {"args": f"new {category}".strip()})
+
+        @ticket.command(name="status", description="Check your ticket status")
+        async def ticket_status(ctx: discord.ApplicationContext):
+            await self._handle_slash_command(ctx, "/ticket", {"args": "status"})
+
+        # ── Loyalty ──────────────────────────────────────────────────────
+        @self.bot.slash_command(name="balance", description="Check your loyalty balance")
+        async def balance(ctx: discord.ApplicationContext):
+            await self._handle_slash_command(ctx, "/balance", {})
+
+        @self.bot.slash_command(name="give", description="Give loyalty points to another user")
+        async def give(ctx: discord.ApplicationContext,
+                       user: discord.Option(discord.Member, "User to give points to"),
+                       amount: discord.Option(int, "Amount to give")):
+            await self._handle_slash_command(ctx, "/give", {"args": f"{user.id} {amount}"})
+
+        @self.bot.slash_command(name="slots", description="Play the loyalty slots minigame")
+        async def slots(ctx: discord.ApplicationContext,
+                        bet: discord.Option(int, "Bet amount", required=False, default=0)):
+            await self._handle_slash_command(ctx, "/slots", {"args": str(bet) if bet else ""})
+
+        @self.bot.slash_command(name="duel", description="Challenge a user to a loyalty duel")
+        async def duel(ctx: discord.ApplicationContext,
+                       user: discord.Option(discord.Member, "User to duel"),
+                       bet: discord.Option(int, "Bet amount")):
+            await self._handle_slash_command(ctx, "/duel", {"args": f"{user.id} {bet}"})
+
+        @self.bot.slash_command(name="giveaway", description="Start or enter a giveaway")
+        async def giveaway(ctx: discord.ApplicationContext,
+                           action: discord.Option(str, "start or enter", required=False, default="enter")):
+            await self._handle_slash_command(ctx, "/giveaway", {"args": action})
+
+        # ── Memories / Quotes ────────────────────────────────────────────
+        quote = self.bot.create_group("quote", "Community quotes")
+
+        @quote.command(name="add", description="Add a quote")
+        async def quote_add(ctx: discord.ApplicationContext,
+                            text: discord.Option(str, "Quote text")):
+            await self._handle_slash_command(ctx, "/quote", {"args": f"add {text}"})
+
+        @quote.command(name="random", description="Get a random quote")
+        async def quote_random(ctx: discord.ApplicationContext):
+            await self._handle_slash_command(ctx, "/quote", {"args": "random"})
+
+        @quote.command(name="search", description="Search quotes")
+        async def quote_search(ctx: discord.ApplicationContext,
+                               term: discord.Option(str, "Search term")):
+            await self._handle_slash_command(ctx, "/quote", {"args": f"search {term}"})
+
+        @self.bot.slash_command(name="bookmark", description="Save a URL bookmark")
+        async def bookmark(ctx: discord.ApplicationContext,
+                           url: discord.Option(str, "URL to bookmark"),
+                           tags: discord.Option(str, "Tags", required=False, default="")):
+            await self._handle_slash_command(ctx, "/bookmark", {"args": f"{url} {tags}".strip()})
+
+        @self.bot.slash_command(name="remind", description="Set a personal reminder")
+        async def remind(ctx: discord.ApplicationContext,
+                         time: discord.Option(str, "When (e.g. 30m, 2h)"),
+                         message: discord.Option(str, "Reminder message")):
+            await self._handle_slash_command(ctx, "/remind", {"args": f"{time} {message}"})
+
+        # ── LFG ──────────────────────────────────────────────────────────
+        lfg = self.bot.create_group("lfg", "Looking for group")
+
+        @lfg.command(name="create", description="Create a new LFG post")
+        async def lfg_create(ctx: discord.ApplicationContext,
+                             game: discord.Option(str, "Game name"),
+                             players: discord.Option(int, "Players needed", required=False, default=4)):
+            await self._handle_slash_command(ctx, "/lfg", {"args": f"create {game} {players}"})
+
+        @lfg.command(name="list", description="List active LFG posts")
+        async def lfg_list(ctx: discord.ApplicationContext,
+                           game: discord.Option(str, "Filter by game", required=False, default="")):
+            await self._handle_slash_command(ctx, "/lfg", {"args": f"list {game}".strip()})
+
+        @lfg.command(name="join", description="Join an LFG group")
+        async def lfg_join(ctx: discord.ApplicationContext,
+                           id: discord.Option(str, "LFG post ID")):
+            await self._handle_slash_command(ctx, "/lfg", {"args": f"join {id}"})
+
+        @lfg.command(name="leave", description="Leave your current LFG group")
+        async def lfg_leave(ctx: discord.ApplicationContext):
+            await self._handle_slash_command(ctx, "/lfg", {"args": "leave"})
+
+        # ── Calendar / Events ────────────────────────────────────────────
+        event = self.bot.create_group("event", "Community events")
+
+        @event.command(name="list", description="List upcoming events")
+        async def event_list(ctx: discord.ApplicationContext):
+            await self._handle_slash_command(ctx, "/event", {"args": "list"})
+
+        @event.command(name="view", description="View event details")
+        async def event_view(ctx: discord.ApplicationContext,
+                             id: discord.Option(str, "Event ID")):
+            await self._handle_slash_command(ctx, "/event", {"args": f"view {id}"})
+
+        @self.bot.slash_command(name="rsvp", description="RSVP to a community event")
+        async def rsvp(ctx: discord.ApplicationContext,
+                       event_id: discord.Option(str, "Event ID")):
+            await self._handle_slash_command(ctx, "/rsvp", {"args": event_id})
+
+        # ── Shoutout ─────────────────────────────────────────────────────
+        @self.bot.slash_command(name="so", description="Give a shoutout to a user")
+        async def shoutout(ctx: discord.ApplicationContext,
+                           user: discord.Option(discord.Member, "User to shoutout")):
+            await self._handle_slash_command(ctx, "/so", {"args": str(user.id)})
+
+        # ── Translate ────────────────────────────────────────────────────
+        @self.bot.slash_command(name="translate", description="Translate text to a language")
+        async def translate(ctx: discord.ApplicationContext,
+                            lang: discord.Option(str, "Target language code (e.g. es, fr)"),
+                            text: discord.Option(str, "Text to translate")):
+            await self._handle_slash_command(ctx, "/translate", {"args": f"{lang} {text}"})
+
+        # ── Clip ─────────────────────────────────────────────────────────
+        clip = self.bot.create_group("clip", "Stream clips")
+
+        @clip.command(name="bookmark", description="Bookmark a clip URL")
+        async def clip_bookmark(ctx: discord.ApplicationContext,
+                                url: discord.Option(str, "Clip URL")):
+            await self._handle_slash_command(ctx, "/clip", {"args": f"bookmark {url}"})
+
+        @clip.command(name="list", description="List saved clips")
+        async def clip_list(ctx: discord.ApplicationContext):
+            await self._handle_slash_command(ctx, "/clip", {"args": "list"})
+
+        # ── Alias ────────────────────────────────────────────────────────
+        alias = self.bot.create_group("alias", "Command aliases")
+
+        @alias.command(name="create", description="Create a command alias")
+        async def alias_create(ctx: discord.ApplicationContext,
+                               name: discord.Option(str, "Alias name"),
+                               command: discord.Option(str, "Command to run")):
+            await self._handle_slash_command(ctx, "/alias", {"args": f"create {name} {command}"})
+
+        @alias.command(name="list", description="List your aliases")
+        async def alias_list(ctx: discord.ApplicationContext):
+            await self._handle_slash_command(ctx, "/alias", {"args": "list"})
+
+        @alias.command(name="delete", description="Delete an alias")
+        async def alias_delete(ctx: discord.ApplicationContext,
+                               name: discord.Option(str, "Alias name")):
+            await self._handle_slash_command(ctx, "/alias", {"args": f"delete {name}"})
+
+        # ── AI ───────────────────────────────────────────────────────────
+        @self.bot.slash_command(name="ask", description="Ask the AI a question")
+        async def ask(ctx: discord.ApplicationContext,
+                      question: discord.Option(str, "Your question")):
+            await self._handle_slash_command(ctx, "/ask", {"args": question})
+
+        # ── Reputation ───────────────────────────────────────────────────
+        @self.bot.slash_command(name="rep", description="View a user's reputation score")
+        async def rep(ctx: discord.ApplicationContext,
+                      user: discord.Option(discord.Member, "User to check", required=False)):
+            await self._handle_slash_command(ctx, "/rep",
+                                             {"args": str(user.id) if user else ""})
+
+        # ── Labels ───────────────────────────────────────────────────────
+        label = self.bot.create_group("label", "User labels (mod only)")
+
+        @label.command(name="add", description="Add a label to a user")
+        async def label_add(ctx: discord.ApplicationContext,
+                            user: discord.Option(discord.Member, "User"),
+                            label_name: discord.Option(str, "Label to add")):
+            await self._handle_slash_command(ctx, "/label",
+                                             {"args": f"add {user.id} {label_name}"})
+
+        @label.command(name="list", description="List a user's labels")
+        async def label_list(ctx: discord.ApplicationContext,
+                             user: discord.Option(discord.Member, "User")):
+            await self._handle_slash_command(ctx, "/label",
+                                             {"args": f"list {user.id}"})
+
+        # ── Leaderboard ──────────────────────────────────────────────────
+        @self.bot.slash_command(name="top", description="View community leaderboard")
+        async def top(ctx: discord.ApplicationContext,
+                      category: discord.Option(str, "Category (messages, loyalty, reputation...)",
+                                               required=False, default="")):
+            await self._handle_slash_command(ctx, "/top", {"args": category})
+
+    def _register_context_commands(self):
+        """Register /context SlashCommandGroup for community context switching."""
+        context_grp = self.bot.create_group("context", "Manage your community context")
+
+        @context_grp.command(name="show", description="Show your current community context")
+        async def context_show(ctx: discord.ApplicationContext):
+            await self._handle_slash_command(ctx, "/context", {"args": "show"})
+
+        @context_grp.command(name="switch", description="Switch to a different linked community")
+        async def context_switch(ctx: discord.ApplicationContext,
+                                 community: discord.Option(str, "Community name or slug")):
+            await self._handle_slash_command(ctx, "/context", {"args": f"switch {community}"})
+
+        @context_grp.command(name="reset", description="Reset to the channel's default community")
+        async def context_reset(ctx: discord.ApplicationContext):
+            await self._handle_slash_command(ctx, "/context", {"args": "reset"})
+
+        @context_grp.command(name="default", description="Set default community for this channel (admin only)")
+        async def context_default(ctx: discord.ApplicationContext,
+                                  community: discord.Option(str, "Community name or slug")):
+            # Require server administrator permission
+            if not ctx.author.guild_permissions.administrator:
+                await ctx.respond("Server administrator permission required.", ephemeral=True)
+                return
+            await self._handle_slash_command(ctx, "/context", {"args": f"default {community}"})
+
+    def _register_linking_commands(self):
+        """Register server linking commands (/join, /approve, /leave, /linked, /link)."""
+
+        def _require_admin(ctx: discord.ApplicationContext) -> bool:
+            return ctx.author.guild_permissions.administrator
+
+        @self.bot.slash_command(name="join",
+                                description="Request to link this server to a community")
+        async def join_cmd(ctx: discord.ApplicationContext,
+                           community: discord.Option(str, "Community name or slug")):
+            if not _require_admin(ctx):
+                await ctx.respond("Server administrator permission required.", ephemeral=True)
+                return
+            await self._handle_slash_command(ctx, "/join", {"args": community})
+
+        @self.bot.slash_command(name="approve",
+                                description="Approve a pending community link request")
+        async def approve_cmd(ctx: discord.ApplicationContext,
+                              community: discord.Option(str, "Community name to approve")):
+            if not _require_admin(ctx):
+                await ctx.respond("Server administrator permission required.", ephemeral=True)
+                return
+            await self._handle_slash_command(ctx, "/approve", {"args": community})
+
+        @self.bot.slash_command(name="leave",
+                                description="Remove this server's link to a community")
+        async def leave_cmd(ctx: discord.ApplicationContext,
+                            community: discord.Option(str, "Community name")):
+            if not _require_admin(ctx):
+                await ctx.respond("Server administrator permission required.", ephemeral=True)
+                return
+            await self._handle_slash_command(ctx, "/leave", {"args": community})
+
+        @self.bot.slash_command(name="linked",
+                                description="List communities linked to this server")
+        async def linked_cmd(ctx: discord.ApplicationContext):
+            await self._handle_slash_command(ctx, "/linked", {})
+
+        link_grp = self.bot.create_group("link", "Manage server community links")
+
+        @link_grp.command(name="status", description="Show link status for this server")
+        async def link_status(ctx: discord.ApplicationContext):
+            await self._handle_slash_command(ctx, "/link", {"args": "status"})
+
+        @link_grp.command(name="default", description="Set the default community (admin only)")
+        async def link_default(ctx: discord.ApplicationContext,
+                               community: discord.Option(str, "Community name or slug")):
+            if not _require_admin(ctx):
+                await ctx.respond("Server administrator permission required.", ephemeral=True)
+                return
+            await self._handle_slash_command(ctx, "/link", {"args": f"default {community}"})
+
     async def _command_autocomplete(
         self,
         ctx: discord.AutocompleteContext
@@ -201,6 +504,58 @@ class DiscordBotService:
 
         response = await self._send_to_router(event_data)
         await self._execute_response(ctx, response)
+
+    async def _relay_message_to_hub(self, message: discord.Message):
+        """Forward a non-command message to the hub for mirror group bridging"""
+        try:
+            hub_api_url = os.environ.get('HUB_API_URL', 'http://hub-api:3000')
+            if not self._http_session:
+                return
+            await self._http_session.post(
+                f"{hub_api_url}/api/v1/internal/relay/incoming",
+                json={
+                    "sourcePlatformChannelId": str(message.channel.id),
+                    "platform": "discord",
+                    "channelType": "chat",
+                    "content": {"text": message.content},
+                    "author": {
+                        "username": message.author.display_name,
+                        "avatarUrl": str(message.author.avatar.url) if message.author.avatar else None,
+                        "platform": "discord",
+                    },
+                    "messageType": "message",
+                },
+                timeout=5.0,
+            )
+        except Exception as e:
+            self.logger.error(f"Mirror relay to hub failed: {e}", action="mirror_relay")
+
+    async def send_to_channel(self, channel_id: str, content: dict, author: dict, message_type: str = 'message'):
+        """Send a relayed message to a Discord channel (called by internal relay endpoint)"""
+        try:
+            channel = self.bot.get_channel(int(channel_id))
+            if not channel:
+                self.logger.error(f"Channel {channel_id} not found", action="relay_send")
+                return False
+
+            display_name = author.get('username', 'Unknown')
+            platform = author.get('platform', 'hub')
+            text = content.get('text', content.get('content', ''))
+
+            if message_type == 'forum_post' and hasattr(channel, 'create_thread'):
+                title = content.get('title', 'New Post')
+                body = content.get('body', '')
+                thread = await channel.create_thread(
+                    name=title,
+                    content=f"**{display_name}** (via {platform}):\n{body}",
+                )
+                return True
+
+            await channel.send(f"**{display_name}** (via {platform}): {text}")
+            return True
+        except Exception as e:
+            self.logger.error(f"Failed to send relay message: {e}", action="relay_send")
+            return False
 
     async def _handle_prefix_command(self, message: discord.Message):
         """Handle !prefix commands from chat"""

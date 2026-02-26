@@ -330,6 +330,12 @@ function CommunityDashboard() {
             </div>
             <div className="p-2">
               <Link
+                to={`/community/${id}/interact`}
+                className="block px-4 py-2 text-sm text-navy-300 hover:bg-navy-800 hover:text-sky-300 rounded-lg transition-colors"
+              >
+                Chat & Forums
+              </Link>
+              <Link
                 to={`/dashboard/community/${id}/settings`}
                 className="block px-4 py-2 text-sm text-navy-300 hover:bg-navy-800 hover:text-sky-300 rounded-lg transition-colors"
               >

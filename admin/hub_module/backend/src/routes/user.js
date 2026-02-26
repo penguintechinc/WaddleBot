@@ -5,6 +5,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import * as identityController from '../controllers/identityController.js';
 import * as profileController from '../controllers/profileController.js';
+import PlatformConfigController from '../controllers/platformConfigController.js';
 import { requireAuth } from '../middleware/auth.js';
 import { validators, validateRequest } from '../middleware/validation.js';
 
@@ -32,6 +33,13 @@ router.put('/profile',
 router.post('/profile/avatar', upload.single('avatar'), profileController.uploadAvatar);
 router.delete('/profile/avatar', profileController.deleteAvatar);
 router.get('/linked-platforms', profileController.getMyLinkedPlatforms);
+
+// User OAuth credential management (authenticated user, own credentials only)
+router.get('/oauth/credentials', PlatformConfigController.getMyCredentials);
+router.post('/oauth/credentials', PlatformConfigController.createMyCredential);
+router.put('/oauth/credentials/:id', PlatformConfigController.updateMyCredential);
+router.delete('/oauth/credentials/:id', PlatformConfigController.deleteMyCredential);
+router.post('/oauth/credentials/:id/test', PlatformConfigController.testCredential);
 
 // Identity linking routes
 router.get('/identities', identityController.getLinkedIdentities);

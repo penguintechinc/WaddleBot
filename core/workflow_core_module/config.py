@@ -30,10 +30,14 @@ class Config:
         'postgresql://waddlebot:password@postgres:5433/waddlebot'
     ).split(',')
 
-    # Redis Configuration
-    REDIS_URL = os.getenv(
-        'REDIS_URL',
-        'redis://redis:6379/0'
+    # Redis Configuration — build URL from parts so password comes from secret
+    _redis_host = os.getenv('REDIS_HOST', 'redis')
+    _redis_port = os.getenv('REDIS_PORT', '6379')
+    _redis_password = os.getenv('REDIS_WORKFLOW_PASSWORD') or os.getenv('REDIS_PASSWORD', '')
+    REDIS_URL = os.getenv('REDIS_URL') or (
+        f"redis://:{_redis_password}@{_redis_host}:{_redis_port}/0"
+        if _redis_password
+        else f"redis://{_redis_host}:{_redis_port}/0"
     )
 
     # Credential state management

@@ -191,4 +191,10 @@ router.post('/users/:userId/verify-email',
 );
 router.post('/users/:userId/password-reset', userManagementController.generatePasswordReset);
 
+// Tenant management
+router.get('/tenants', superadminController.listTenants);
+router.post('/tenants', superadminController.createTenant);
+router.put('/tenants/:id', superadminController.updateTenant);
+router.delete('/tenants/:id', superadminController.deleteTenant);
+
 export default router;

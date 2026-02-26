@@ -30,18 +30,18 @@ declare -A SERVICES=(
     [core-video-proxy]="${PROJECT_ROOT}/core/video_proxy_module/Dockerfile"
     [core-engagement]="${PROJECT_ROOT}/core/engagement_module/Dockerfile"
     [core-module-rtc]="${PROJECT_ROOT}/core/module_rtc/Dockerfile"
-    [core-router]="${PROJECT_ROOT}/processing/router_module/Dockerfile"
+    [router]="${PROJECT_ROOT}/processing/router_module/Dockerfile"
     [core-identity]="${PROJECT_ROOT}/core/identity_core_module/Dockerfile"
     [core-labels]="${PROJECT_ROOT}/core/labels_core_module/Dockerfile"
     [core-browser-source]="${PROJECT_ROOT}/core/browser_source_core_module/Dockerfile"
     [core-reputation]="${PROJECT_ROOT}/core/reputation_module/Dockerfile"
     [core-community]="${PROJECT_ROOT}/core/community_module/Dockerfile"
-    [core-ai-researcher]="${PROJECT_ROOT}/core/ai_researcher_module/Dockerfile"
-    [collector-twitch]="${PROJECT_ROOT}/trigger/receiver/twitch_module/Dockerfile"
-    [collector-discord]="${PROJECT_ROOT}/trigger/receiver/discord_module/Dockerfile"
-    [collector-slack]="${PROJECT_ROOT}/trigger/receiver/slack_module/Dockerfile"
-    [collector-youtube-live]="${PROJECT_ROOT}/trigger/receiver/youtube_live_module/Dockerfile"
-    [collector-kick]="${PROJECT_ROOT}/trigger/receiver/kick_module_flask/Dockerfile"
+    [ai-researcher]="${PROJECT_ROOT}/core/ai_researcher_module/Dockerfile"
+    [trigger-twitch]="${PROJECT_ROOT}/trigger/receiver/twitch_module/Dockerfile"
+    [trigger-discord]="${PROJECT_ROOT}/trigger/receiver/discord_module/Dockerfile"
+    [trigger-slack]="${PROJECT_ROOT}/trigger/receiver/slack_module/Dockerfile"
+    [trigger-youtube]="${PROJECT_ROOT}/trigger/receiver/youtube_live_module/Dockerfile"
+    [trigger-kick]="${PROJECT_ROOT}/trigger/receiver/kick_module_flask/Dockerfile"
     [interactive-ai]="${PROJECT_ROOT}/action/interactive/ai_interaction_module/Dockerfile"
     [interactive-alias]="${PROJECT_ROOT}/action/interactive/alias_interaction_module/Dockerfile"
     [interactive-shoutout]="${PROJECT_ROOT}/action/interactive/shoutout_interaction_module/Dockerfile"
@@ -52,10 +52,18 @@ declare -A SERVICES=(
     [interactive-spotify]="${PROJECT_ROOT}/action/interactive/spotify_interaction_module/Dockerfile"
     [interactive-loyalty]="${PROJECT_ROOT}/action/interactive/loyalty_interaction_module/Dockerfile"
     [interactive-translate]="${PROJECT_ROOT}/action/interactive/translate_interaction_module/Dockerfile"
+    [interactive-lfg]="${PROJECT_ROOT}/action/interactive/lfg_interaction_module/Dockerfile"
+    [interactive-clip]="${PROJECT_ROOT}/action/interactive/clip_interaction_module/Dockerfile"
+    [interactive-server-status]="${PROJECT_ROOT}/action/interactive/server_status_interaction_module/Dockerfile"
+    [interactive-server-manager]="${PROJECT_ROOT}/action/interactive/server_manager_interaction_module/Dockerfile"
     [action-discord]="${PROJECT_ROOT}/action/pushing/discord_action_module/Dockerfile"
     [action-slack]="${PROJECT_ROOT}/action/pushing/slack_action_module/Dockerfile"
     [action-twitch]="${PROJECT_ROOT}/action/pushing/twitch_action_module/Dockerfile"
     [action-youtube]="${PROJECT_ROOT}/action/pushing/youtube_action_module/Dockerfile"
+    [core-analytics]="${PROJECT_ROOT}/core/analytics_core_module/Dockerfile"
+    [core-security]="${PROJECT_ROOT}/core/security_core_module/Dockerfile"
+    [core-workflow]="${PROJECT_ROOT}/core/workflow_core_module/Dockerfile"
+    [core-credential-manager]="${PROJECT_ROOT}/core/credential_manager_module/Dockerfile"
     [waddlebot-migrations]="${PROJECT_ROOT}/migrations/Dockerfile"
 )
 
@@ -68,6 +76,7 @@ TAG="${TAG:-beta-$(date +%s)}"
 DEPLOY_METHOD="helm"
 SERVICES_TO_BUILD=()
 SKIP_BUILD=false
+BUILD_PARALLEL=6
 DRY_RUN=false
 DO_ROLLBACK=false
 SHOW_HELP=false
@@ -111,6 +120,7 @@ OPTIONS:
   --tag TAG              Image tag to build and deploy (default: beta-<epoch>)
   --method METHOD        Deployment method: helm or kustomize (default: helm)
   --service SERVICE      Build and deploy specific service (can be used multiple times)
+  --parallel N           Max parallel builds (default: 6, set to 1 for sequential)
   --skip-build           Skip building images, only deploy (requires pre-built images)
   --dry-run              Show what would be done without making changes
   --rollback             Rollback to previous deployment
@@ -118,14 +128,18 @@ OPTIONS:
 
 SERVICES:
   hub-api, hub-webui
+  router, ai-researcher
   core-video-proxy, core-engagement, core-module-rtc
-  core-router, core-identity, core-labels, core-browser-source
-  core-reputation, core-community, core-ai-researcher
-  collector-twitch, collector-discord, collector-slack
-  collector-youtube-live, collector-kick
+  core-identity, core-labels, core-browser-source
+  core-reputation, core-community
+  core-analytics, core-security, core-workflow, core-credential-manager
+  trigger-twitch, trigger-discord, trigger-slack
+  trigger-youtube, trigger-kick
   interactive-ai, interactive-alias, interactive-shoutout
   interactive-inventory, interactive-calendar, interactive-memories
-  interactive-youtube-music, interactive-spotify, interactive-loyalty, interactive-translate
+  interactive-youtube-music, interactive-spotify, interactive-loyalty
+  interactive-translate, interactive-lfg, interactive-clip
+  interactive-server-status, interactive-server-manager
   action-discord, action-slack, action-twitch, action-youtube
 
 EXAMPLES:
@@ -170,6 +184,10 @@ while [[ $# -gt 0 ]]; do
             SERVICES_TO_BUILD+=("$2")
             shift 2
             ;;
+        --parallel)
+            BUILD_PARALLEL="$2"
+            shift 2
+            ;;
         --skip-build)
             SKIP_BUILD=true
             shift
@@ -195,6 +213,12 @@ done
 # If no specific services selected, build all
 if [ ${#SERVICES_TO_BUILD[@]} -eq 0 ] && [ "$SKIP_BUILD" = false ]; then
     SERVICES_TO_BUILD=("${!SERVICES[@]}")
+elif [ ${#SERVICES_TO_BUILD[@]} -gt 0 ] && [ "$SKIP_BUILD" = false ]; then
+    # Partial builds: always include waddlebot-migrations since it's an init container
+    # shared by all pods. Without it, pods with the new global.imageTag can't start.
+    if [[ ! " ${SERVICES_TO_BUILD[*]} " =~ " waddlebot-migrations " ]]; then
+        SERVICES_TO_BUILD+=("waddlebot-migrations")
+    fi
 fi
 
 # Check prerequisites
@@ -258,7 +282,41 @@ check_prerequisites() {
     log_success "NPM_TOKEN configured"
 }
 
-# Build and push images
+# Build and push a single image — runs in a subshell for parallel execution.
+# Logs to a per-service temp file; prints atomically when done.
+_build_and_push_one() {
+    local service="$1"
+    local dockerfile="$2"
+    local log_file="$3"
+
+    {
+        echo "[START] ${service}"
+
+        # Build locally (never use buildx --push against beta registry)
+        if ! docker build \
+            -f "${dockerfile}" \
+            --build-arg NPM_TOKEN="${NPM_TOKEN}" \
+            -t "waddlebot-${service}:latest" \
+            "${PROJECT_ROOT}" 2>&1; then
+            echo "[FAIL] ${service}: docker build failed"
+            exit 1
+        fi
+        echo "[BUILT] ${service}"
+
+        # Tag for registry
+        docker tag "waddlebot-${service}:latest" "${REGISTRY}/${service}:${TAG}" 2>&1
+        echo "[TAGGED] ${service} → ${REGISTRY}/${service}:${TAG}"
+
+        # Push (separate step — never use buildx --push)
+        if ! docker push "${REGISTRY}/${service}:${TAG}" 2>&1; then
+            echo "[FAIL] ${service}: docker push failed"
+            exit 1
+        fi
+        echo "[DONE] ${service}"
+    } > "${log_file}" 2>&1
+}
+
+# Build and push images — parallel with MAX_PARALLEL concurrency limit
 build_and_push_images() {
     if [ "$SKIP_BUILD" = true ]; then
         log_section "Skipping Image Build (--skip-build flag set)"
@@ -267,47 +325,106 @@ build_and_push_images() {
 
     log_section "Building and Pushing Docker Images"
 
+    # Validate all requested services first
     for service in "${SERVICES_TO_BUILD[@]}"; do
         if [ ! -v "SERVICES[$service]" ]; then
             log_error "Unknown service: $service"
             exit 1
         fi
+    done
 
-        dockerfile="${SERVICES[$service]}"
-        image_name="${service}"
+    if [ "$DRY_RUN" = true ]; then
+        for service in "${SERVICES_TO_BUILD[@]}"; do
+            log_info "[DRY-RUN] build+push ${service} → ${REGISTRY}/${service}:${TAG}"
+        done
+        return 0
+    fi
 
-        log_info "Building ${image_name}..."
+    local MAX_PARALLEL="${BUILD_PARALLEL:-6}"
+    local tmp_dir
+    tmp_dir="$(mktemp -d)"
+    local -a pids=()
+    local -a pid_services=()
+    local failed_services=()
+    local active=0
 
-        if [ "$DRY_RUN" = true ]; then
-            log_info "[DRY-RUN] docker build -f ${dockerfile} --build-arg NPM_TOKEN=*** -t waddlebot-${image_name}:latest ${PROJECT_ROOT}"
-            log_info "[DRY-RUN] docker tag waddlebot-${image_name}:latest ${REGISTRY}/${image_name}:${TAG}"
-            log_info "[DRY-RUN] docker push ${REGISTRY}/${image_name}:${TAG}"
-        else
-            # Build locally first (never use buildx --push against beta registry)
-            if ! docker build \
-                -f "${dockerfile}" \
-                --build-arg NPM_TOKEN="${NPM_TOKEN}" \
-                -t "waddlebot-${image_name}:latest" \
-                "${PROJECT_ROOT}"; then
-                log_error "Failed to build ${image_name} image"
-                exit 1
+    log_info "Building ${#SERVICES_TO_BUILD[@]} services (up to ${MAX_PARALLEL} in parallel)..."
+    echo ""
+
+    # Process queue — launch up to MAX_PARALLEL jobs at once
+    local i=0
+    local total="${#SERVICES_TO_BUILD[@]}"
+
+    while [ $i -lt $total ] || [ ${#pids[@]} -gt 0 ]; do
+        # Launch new jobs while under the concurrency limit and queue remains
+        while [ $i -lt $total ] && [ ${#pids[@]} -lt $MAX_PARALLEL ]; do
+            local service="${SERVICES_TO_BUILD[$i]}"
+            local dockerfile="${SERVICES[$service]}"
+            local log_file="${tmp_dir}/${service}.log"
+
+            log_info "Queuing ${service}..."
+            _build_and_push_one "${service}" "${dockerfile}" "${log_file}" &
+            pids+=("$!")
+            pid_services+=("${service}")
+            (( i++ )) || true
+        done
+
+        # Wait for any one job to finish
+        if [ ${#pids[@]} -gt 0 ]; then
+            local finished_pid finished_idx finished_service
+            # Poll for completed jobs
+            finished_idx=-1
+            for idx in "${!pids[@]}"; do
+                if ! kill -0 "${pids[$idx]}" 2>/dev/null; then
+                    finished_idx=$idx
+                    break
+                fi
+            done
+
+            if [ $finished_idx -ge 0 ]; then
+                finished_pid="${pids[$finished_idx]}"
+                finished_service="${pid_services[$finished_idx]}"
+                local log_file="${tmp_dir}/${finished_service}.log"
+
+                # Collect exit code
+                wait "${finished_pid}" 2>/dev/null
+                local exit_code=$?
+
+                # Print the buffered log atomically
+                echo "--- ${finished_service} ---"
+                cat "${log_file}" 2>/dev/null || true
+                echo ""
+
+                if [ $exit_code -ne 0 ]; then
+                    log_error "${finished_service} FAILED (exit ${exit_code})"
+                    failed_services+=("${finished_service}")
+                else
+                    log_success "${finished_service} pushed successfully"
+                fi
+
+                # Remove from active arrays
+                unset 'pids[$finished_idx]'
+                unset 'pid_services[$finished_idx]'
+                pids=("${pids[@]}")
+                pid_services=("${pid_services[@]}")
+            else
+                # No job finished yet — short sleep to avoid busy-wait
+                sleep 1
             fi
-            log_success "${image_name} image built successfully"
-
-            # Tag for beta registry (separate step per skill)
-            log_info "Tagging ${image_name} for beta registry..."
-            docker tag "waddlebot-${image_name}:latest" "${REGISTRY}/${image_name}:${TAG}"
-            log_success "${image_name} tagged as ${REGISTRY}/${image_name}:${TAG}"
-
-            # Push to beta registry (separate step — never use buildx --push)
-            log_info "Pushing ${image_name} image to registry..."
-            if ! docker push "${REGISTRY}/${image_name}:${TAG}"; then
-                log_error "Failed to push ${image_name} image"
-                exit 1
-            fi
-            log_success "${image_name} image pushed successfully"
         fi
     done
+
+    rm -rf "${tmp_dir}"
+
+    if [ ${#failed_services[@]} -gt 0 ]; then
+        log_error "The following services failed to build/push:"
+        for svc in "${failed_services[@]}"; do
+            log_error "  - ${svc}"
+        done
+        exit 1
+    fi
+
+    log_success "All ${total} services built and pushed successfully"
 }
 
 # Deploy via Helm

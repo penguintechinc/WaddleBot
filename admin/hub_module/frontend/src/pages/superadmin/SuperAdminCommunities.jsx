@@ -143,6 +143,7 @@ function SuperAdminCommunities() {
               <th>Platform</th>
               <th>Owner</th>
               <th>Members</th>
+              <th>Plan</th>
               <th>Status</th>
               <th>Created</th>
               <th className="text-right">Actions</th>
@@ -151,13 +152,13 @@ function SuperAdminCommunities() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7} className="p-8 text-center">
+                <td colSpan={8} className="p-8 text-center">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gold-400 mx-auto"></div>
                 </td>
               </tr>
             ) : communities.length === 0 ? (
               <tr>
-                <td colSpan={7} className="p-8 text-center text-navy-400">
+                <td colSpan={8} className="p-8 text-center text-navy-400">
                   No communities found
                 </td>
               </tr>
@@ -177,6 +178,17 @@ function SuperAdminCommunities() {
                     {community.ownerName || <span className="text-navy-500">Unassigned</span>}
                   </td>
                   <td>{community.memberCount}</td>
+                  <td>
+                    {community.isPremium ? (
+                      <span className="badge badge-gold border border-gold-500/40 text-gold-300">
+                        ⭐ Premium
+                      </span>
+                    ) : (
+                      <span className="badge badge-gray text-navy-400">
+                        Standard
+                      </span>
+                    )}
+                  </td>
                   <td>
                     <span className={`badge ${
                       community.isActive ? 'badge-green' : 'badge-red'
@@ -277,6 +289,8 @@ function EditCommunityModal({ community, onClose, onSave }) {
     description: community.description || '',
     isActive: community.isActive,
     isPublic: community.isPublic,
+    isPremium: community.isPremium || false,
+    seatLimit: community.seatLimit ?? '',
   });
   const [saving, setSaving] = useState(false);
 
@@ -313,7 +327,7 @@ function EditCommunityModal({ community, onClose, onSave }) {
                 rows={3}
               />
             </div>
-            <div className="flex gap-4">
+            <div className="flex gap-4 flex-wrap">
               <label className="flex items-center gap-2 text-sky-200">
                 <input
                   type="checkbox"
@@ -332,6 +346,26 @@ function EditCommunityModal({ community, onClose, onSave }) {
                 />
                 <span className="text-sm">Public</span>
               </label>
+              <label className="flex items-center gap-2 text-gold-300">
+                <input
+                  type="checkbox"
+                  checked={form.isPremium}
+                  onChange={(e) => setForm({ ...form, isPremium: e.target.checked })}
+                  className="w-4 h-4 rounded bg-navy-800 border-navy-600"
+                />
+                <span className="text-sm">⭐ Premium Community</span>
+              </label>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-sky-200 mb-1">Seat Limit</label>
+              <input
+                type="number"
+                value={form.seatLimit}
+                onChange={(e) => setForm({ ...form, seatLimit: e.target.value })}
+                className="input w-full"
+                placeholder="Leave blank for unlimited"
+                min="1"
+              />
             </div>
           </div>
           <div className="p-6 border-t border-navy-700 flex justify-end gap-3">

@@ -130,6 +130,11 @@ export const adminApi = {
   updateModuleConfig: (communityId, moduleId, data) =>
     api.put(`/api/v1/admin/${communityId}/modules/${moduleId}/config`, data),
   getConnectedPlatforms: (communityId) => api.get(`/api/v1/admin/${communityId}/connected-platforms`),
+  getCommunityOAuthCredentials: (communityId) => api.get(`/api/v1/admin/${communityId}/oauth/credentials`),
+  createCommunityOAuthCredential: (communityId, data) => api.post(`/api/v1/admin/${communityId}/oauth/credentials`, data),
+  updateCommunityOAuthCredential: (communityId, id, data) => api.put(`/api/v1/admin/${communityId}/oauth/credentials/${id}`, data),
+  deleteCommunityOAuthCredential: (communityId, id) => api.delete(`/api/v1/admin/${communityId}/oauth/credentials/${id}`),
+  testCommunityOAuthCredential: (communityId, id) => api.post(`/api/v1/admin/${communityId}/oauth/credentials/${id}/test`),
   getBrowserSources: (communityId) => api.get(`/api/v1/admin/${communityId}/browser-sources`),
   regenerateBrowserSources: (communityId, sourceType) =>
     api.post(`/api/v1/admin/${communityId}/browser-sources/regenerate`, { sourceType }),
@@ -905,6 +910,14 @@ export const joinRequestApi = {
 };
 
 // ─── Passkey API ─────────────────────────────────────────────────────────────
+export const userOAuthApi = {
+  getCredentials: () => api.get('/api/v1/user/oauth/credentials'),
+  createCredential: (data) => api.post('/api/v1/user/oauth/credentials', data),
+  updateCredential: (id, data) => api.put(`/api/v1/user/oauth/credentials/${id}`, data),
+  deleteCredential: (id) => api.delete(`/api/v1/user/oauth/credentials/${id}`),
+  testCredential: (id) => api.post(`/api/v1/user/oauth/credentials/${id}/test`),
+};
+
 export const passkeyApi = {
   startRegistration: () => api.post('/user/passkey/register/start'),
   finishRegistration: (data) => api.post('/user/passkey/register/finish', data),
@@ -912,6 +925,49 @@ export const passkeyApi = {
   removeCredential: (id) => api.delete(`/user/passkey/credentials/${id}`),
   startLogin: (data) => api.post('/auth/passkey/login/start', data),
   finishLogin: (data) => api.post('/auth/passkey/login/finish', data),
+};
+
+// ─── Interaction (Hub Channels, Forums, Voice) API ──────────────────────────
+export const interactionApi = {
+  // Admin — channel CRUD
+  getChannels: (communityId) =>
+    api.get(`/api/v1/admin/${communityId}/interaction/channels`),
+  createChannel: (communityId, data) =>
+    api.post(`/api/v1/admin/${communityId}/interaction/channels`, data),
+  updateChannel: (communityId, channelId, data) =>
+    api.put(`/api/v1/admin/${communityId}/interaction/channels/${channelId}`, data),
+  deleteChannel: (communityId, channelId) =>
+    api.delete(`/api/v1/admin/${communityId}/interaction/channels/${channelId}`),
+
+  // Member — channels list (community route)
+  getMemberChannels: (communityId) =>
+    api.get(`/api/v1/community/${communityId}/interact/channels`),
+
+  // Forum
+  getForumPosts: (communityId, channelId, params) =>
+    api.get(`/api/v1/community/${communityId}/interact/forum/${channelId}/posts`, { params }),
+  getForumPost: (communityId, channelId, postId) =>
+    api.get(`/api/v1/community/${communityId}/interact/forum/${channelId}/posts/${postId}`),
+  createForumPost: (communityId, channelId, data) =>
+    api.post(`/api/v1/community/${communityId}/interact/forum/${channelId}/posts`, data),
+  createForumReply: (communityId, postId, data) =>
+    api.post(`/api/v1/community/${communityId}/interact/forum/posts/${postId}/replies`, data),
+
+  // Admin — forum moderation
+  moderatePost: (communityId, postId, data) =>
+    api.put(`/api/v1/admin/${communityId}/interaction/forum/posts/${postId}`, data),
+  deleteReply: (communityId, replyId) =>
+    api.delete(`/api/v1/admin/${communityId}/interaction/forum/replies/${replyId}`),
+
+  // Voice rooms (proxied to module_rtc via calls controller)
+  getVoiceRooms: (communityId) =>
+    api.get(`/api/v1/community/${communityId}/interact/voice/rooms`),
+  joinVoiceRoom: (communityId, roomName) =>
+    api.post(`/api/v1/community/${communityId}/interact/voice/rooms/${encodeURIComponent(roomName)}/join`),
+  leaveVoiceRoom: (communityId, roomName) =>
+    api.post(`/api/v1/community/${communityId}/interact/voice/rooms/${encodeURIComponent(roomName)}/leave`),
+  createAdHocVoiceRoom: (communityId, data) =>
+    api.post(`/api/v1/community/${communityId}/interact/voice/rooms`, data),
 };
 
 // ─── Server Manager (RCON / Voice) API ──────────────────────────────────────
@@ -957,4 +1013,41 @@ export const rconApi = {
     api.get(`/api/v1/admin/${communityId}/rcon/info/${serverId}/status`),
   getPlayerList: (communityId, serverId) =>
     api.get(`/api/v1/admin/${communityId}/rcon/info/${serverId}/players`),
+};
+
+// ── Tenant API ─────────────────────────────────────────────────────
+export const tenantApi = {
+  getLoginInfo: (slug) => api.get(`/api/v1/auth/tenant/${slug}`),
+  getTenant: (slug) => api.get(`/api/v1/tenant/${slug}`),
+  updateTenant: (slug, data) => api.put(`/api/v1/tenant/${slug}`, data),
+  getSettings: (slug) => api.get(`/api/v1/tenant/${slug}/settings`),
+  updateSettings: (slug, settings) => api.put(`/api/v1/tenant/${slug}/settings`, { settings }),
+  getCommunities: (slug, params) => api.get(`/api/v1/tenant/${slug}/communities`, { params }),
+  getModules: (slug) => api.get(`/api/v1/tenant/${slug}/modules`),
+  updateModules: (slug, allowedModuleIds) => api.put(`/api/v1/tenant/${slug}/modules`, { allowedModuleIds }),
+  getAdmins: (slug) => api.get(`/api/v1/tenant/${slug}/admins`),
+  addAdmin: (slug, userId, role) => api.post(`/api/v1/tenant/${slug}/admins`, { userId, role }),
+  removeAdmin: (slug, userId) => api.delete(`/api/v1/tenant/${slug}/admins/${userId}`),
+};
+
+// ── Community Roles API ────────────────────────────────────────────
+export const rolesApi = {
+  list: (communityId) => api.get(`/api/v1/admin/${communityId}/interaction/roles`),
+  create: (communityId, data) => api.post(`/api/v1/admin/${communityId}/interaction/roles`, data),
+  update: (communityId, roleId, data) => api.put(`/api/v1/admin/${communityId}/interaction/roles/${roleId}`, data),
+  delete: (communityId, roleId) => api.delete(`/api/v1/admin/${communityId}/interaction/roles/${roleId}`),
+};
+
+// ── Channel Permissions API ────────────────────────────────────────
+export const channelPermissionsApi = {
+  getOverrides: (communityId, channelId) => api.get(`/api/v1/admin/${communityId}/interaction/channels/${channelId}/permissions`),
+  updateOverrides: (communityId, channelId, overrides) => api.put(`/api/v1/admin/${communityId}/interaction/channels/${channelId}/permissions`, { overrides }),
+};
+
+// ── Superadmin Tenant API ──────────────────────────────────────────
+export const superadminTenantApi = {
+  list: (params) => api.get('/api/v1/superadmin/tenants', { params }),
+  create: (data) => api.post('/api/v1/superadmin/tenants', data),
+  update: (id, data) => api.put(`/api/v1/superadmin/tenants/${id}`, data),
+  delete: (id) => api.delete(`/api/v1/superadmin/tenants/${id}`),
 };

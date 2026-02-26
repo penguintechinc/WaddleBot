@@ -71,10 +71,41 @@ class TwitchBotService(commands.Bot):
             # Could also forward non-command messages if needed for AI/context
             pass
 
+    # Commands that require broadcaster (channel owner) permission on Twitch.
+    # The router enforces permission_level='owner' from the commands table,
+    # but we also enforce it here for a fast fail before the network round-trip.
+    _BROADCASTER_ONLY_COMMANDS = frozenset({
+        "!join", "!approve", "!leave", "!link",
+    })
+
+    def _is_broadcaster(self, author, channel) -> bool:
+        """Return True if the message author is the channel broadcaster."""
+        if hasattr(author, 'is_broadcaster') and author.is_broadcaster:
+            return True
+        # Fallback: compare username to channel name (broadcaster owns the channel)
+        return author.name.lower() == channel.name.lower()
+
     async def _handle_command(self, message):
-        """Handle !prefix command and forward to router"""
+        """Handle !prefix command and forward to router.
+
+        All commands are forwarded generically — the router looks them up in
+        the commands table and dispatches to the correct module.  Broadcaster-
+        only commands are short-circuited here before the network call.
+        """
         author = message.author
         channel = message.channel
+        content = message.content.strip()
+
+        # Extract the bare command token (e.g. "!join" from "!join CommunityXYZ")
+        cmd_token = content.split()[0].lower() if content else ""
+
+        # Enforce broadcaster-only commands locally for fast feedback
+        if cmd_token in self._BROADCASTER_ONLY_COMMANDS:
+            if not self._is_broadcaster(author, channel):
+                await channel.send(
+                    f"@{author.name} Only the channel broadcaster can use {cmd_token}."
+                )
+                return
 
         # Get community ID for this channel
         community_id = self.channel_community_map.get(
@@ -87,7 +118,7 @@ class TwitchBotService(commands.Bot):
             "user_id": str(author.id) if author.id else author.name,
             "username": author.name,
             "display_name": author.display_name or author.name,
-            "message": message.content,
+            "message": content,
             "message_type": "chatMessage",
             "platform": "twitch",
             "channel_id": channel.name,
@@ -95,13 +126,13 @@ class TwitchBotService(commands.Bot):
             "metadata": {
                 "is_mod": author.is_mod,
                 "is_subscriber": author.is_subscriber,
-                "is_broadcaster": author.is_broadcaster if hasattr(author, 'is_broadcaster') else False,
+                "is_broadcaster": self._is_broadcaster(author, channel),
                 "is_vip": author.is_vip if hasattr(author, 'is_vip') else False,
                 "badges": self._get_badges(author),
                 "message_id": message.id if hasattr(message, 'id') else None,
                 "community_id": community_id,
-                "color": author.color if hasattr(author, 'color') else None
-            }
+                "color": author.color if hasattr(author, 'color') else None,
+            },
         }
 
         response = await self._send_to_router(event_data)

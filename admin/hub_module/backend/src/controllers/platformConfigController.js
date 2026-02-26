@@ -113,7 +113,37 @@ class PlatformConfigController {
   }
 
   /**
-   * Get user OAuth tokens
+   * Get user OAuth tokens (scoped to authenticated user — no userId param needed)
+   */
+  static async getMyCredentials(req, res) {
+    try {
+      const userId = req.user.id;
+
+      const result = await query(
+        `SELECT * FROM platform_integrations
+         WHERE user_id = $1
+         AND integration_type = 'user_oauth'
+         AND is_active = TRUE
+         ORDER BY platform`,
+        [userId]
+      );
+
+      return res.json({
+        success: true,
+        data: result.rows.map(row => formatCredential(row)),
+        count: result.rows.length,
+      });
+    } catch (error) {
+      logger.error('Error fetching user credentials:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to fetch user credentials',
+      });
+    }
+  }
+
+  /**
+   * Get user OAuth tokens (superadmin — accepts userId param)
    */
   static async getUserCredentials(req, res) {
     try {
@@ -323,6 +353,121 @@ class PlatformConfigController {
         success: false,
         error: 'Failed to delete platform configuration',
       });
+    }
+  }
+
+  /**
+   * Update a credential owned by the authenticated user (user OAuth only)
+   */
+  static async updateMyCredential(req, res) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+
+      // Verify ownership before update
+      const check = await query(
+        `SELECT id FROM platform_integrations
+         WHERE id = $1 AND user_id = $2 AND integration_type = 'user_oauth' AND is_active = TRUE`,
+        [id, userId]
+      );
+      if (check.rows.length === 0) {
+        return res.status(404).json({ success: false, error: 'Credential not found' });
+      }
+
+      return PlatformConfigController.updatePlatformConfig(req, res);
+    } catch (error) {
+      logger.error('Error updating user credential:', error);
+      return res.status(500).json({ success: false, error: 'Failed to update credential' });
+    }
+  }
+
+  /**
+   * Delete (deactivate) a credential owned by the authenticated user
+   */
+  static async deleteMyCredential(req, res) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+
+      const check = await query(
+        `SELECT id FROM platform_integrations
+         WHERE id = $1 AND user_id = $2 AND integration_type = 'user_oauth' AND is_active = TRUE`,
+        [id, userId]
+      );
+      if (check.rows.length === 0) {
+        return res.status(404).json({ success: false, error: 'Credential not found' });
+      }
+
+      return PlatformConfigController.deletePlatformConfig(req, res);
+    } catch (error) {
+      logger.error('Error deleting user credential:', error);
+      return res.status(500).json({ success: false, error: 'Failed to delete credential' });
+    }
+  }
+
+  /**
+   * Create a user OAuth credential (enforces userId from authenticated session)
+   */
+  static async createMyCredential(req, res) {
+    req.body.userId = req.user.id;
+    req.body.integrationType = 'user_oauth';
+    req.body.communityId = undefined;
+    return PlatformConfigController.createPlatformConfig(req, res);
+  }
+
+  /**
+   * Create a community OAuth credential (enforces communityId from route param)
+   */
+  static async createCommunityCredential(req, res) {
+    req.body.communityId = req.params.communityId;
+    req.body.integrationType = 'community_oauth';
+    req.body.userId = undefined;
+    return PlatformConfigController.createPlatformConfig(req, res);
+  }
+
+  /**
+   * Update a community OAuth credential (verifies community ownership)
+   */
+  static async updateCommunityCredential(req, res) {
+    try {
+      const { id, communityId } = req.params;
+
+      const check = await query(
+        `SELECT id FROM platform_integrations
+         WHERE id = $1 AND community_id = $2 AND integration_type = 'community_oauth' AND is_active = TRUE`,
+        [id, communityId]
+      );
+      if (check.rows.length === 0) {
+        return res.status(404).json({ success: false, error: 'Credential not found' });
+      }
+
+      return PlatformConfigController.updatePlatformConfig(req, res);
+    } catch (error) {
+      logger.error('Error updating community credential:', error);
+      return res.status(500).json({ success: false, error: 'Failed to update credential' });
+    }
+  }
+
+  /**
+   * Delete (deactivate) a community OAuth credential
+   */
+  static async deleteCommunityCredential(req, res) {
+    try {
+      const { id, communityId } = req.params;
+
+      const check = await query(
+        `SELECT id FROM platform_integrations
+         WHERE id = $1 AND community_id = $2 AND integration_type = 'community_oauth' AND is_active = TRUE`,
+        [id, communityId]
+      );
+      if (check.rows.length === 0) {
+        return res.status(404).json({ success: false, error: 'Credential not found' });
+      }
+
+      return PlatformConfigController.deletePlatformConfig(req, res);
+    } catch (error) {
+      logger.error('Error deleting community credential:', error);
+      return res.status(500).json({ success: false, error: 'Failed to delete credential' });
     }
   }
 

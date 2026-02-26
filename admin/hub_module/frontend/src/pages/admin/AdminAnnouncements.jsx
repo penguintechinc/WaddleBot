@@ -154,6 +154,19 @@ export default function AdminAnnouncements() {
     }
   };
 
+  const handlePublish = async (announcementId) => {
+    try {
+      setActionLoading({ ...actionLoading, [announcementId]: 'publishing' });
+      await adminApi.publishAnnouncement(communityId, announcementId);
+      fetchAnnouncements();
+    } catch (err) {
+      console.error('Failed to publish announcement:', err);
+      setError(err.response?.data?.error?.message || 'Failed to publish announcement');
+    } finally {
+      setActionLoading({ ...actionLoading, [announcementId]: null });
+    }
+  };
+
   const handlePin = async (announcementId) => {
     try {
       setActionLoading({ ...actionLoading, [announcementId]: 'pinning' });
@@ -300,6 +313,7 @@ export default function AdminAnnouncements() {
                       onDelete={handleDelete}
                       onBroadcast={handleBroadcast}
                       onPin={handleUnpin}
+                      onPublish={handlePublish}
                     />
                   ))}
                 </div>
@@ -328,6 +342,7 @@ export default function AdminAnnouncements() {
                       onDelete={handleDelete}
                       onBroadcast={handleBroadcast}
                       onPin={handlePin}
+                      onPublish={handlePublish}
                     />
                   ))}
                 </div>
@@ -400,8 +415,8 @@ function AnnouncementBubble({
   onDelete,
   onBroadcast,
   onPin,
+  onPublish,
 }) {
-  const [showActions, setShowActions] = useState(false);
   const typeColor = typeColors[announcement.announcement_type] || typeColors.general;
   const statusColor = statusColors[announcement.status];
   const createdAt = new Date(announcement.created_at);
@@ -415,7 +430,6 @@ function AnnouncementBubble({
     minute: '2-digit',
   });
 
-  // Content preview (max 150 chars)
   const contentPreview =
     announcement.content.length > 150
       ? announcement.content.substring(0, 150) + '...'
@@ -424,34 +438,20 @@ function AnnouncementBubble({
   const isLoading = actionLoading[announcement.id];
 
   return (
-    <div
-      className={`${typeColor} border rounded-lg p-4 hover:shadow-lg transition-all group relative`}
-      onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => setShowActions(false)}
-    >
+    <div className={`${typeColor} border rounded-lg p-4 hover:shadow-lg transition-all`}>
       {/* Top row: Title and badges */}
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex-1 min-w-0">
           <h3 className="font-bold text-sky-100 break-words">{announcement.title}</h3>
         </div>
-
-        {/* Badges */}
         <div className="flex items-center gap-2 flex-shrink-0">
           {isPinned && (
-            <span className="text-lg" title="Pinned">
-              📌
-            </span>
+            <span className="text-lg" title="Pinned">📌</span>
           )}
-          <span
-            className={`${announcement.announcement_type === 'general' ? 'bg-navy-600 text-sky-200' : 'text-white px-2 py-1'} text-xs font-medium rounded capitalize ${
-              announcement.announcement_type !== 'general' ? 'bg-opacity-40' : ''
-            }`}
-          >
+          <span className="bg-navy-600 text-sky-200 text-xs font-medium px-2 py-1 rounded capitalize">
             {announcement.announcement_type}
           </span>
-          <span
-            className={`${statusColor.bg} ${statusColor.text} text-xs font-medium px-2 py-1 rounded`}
-          >
+          <span className={`${statusColor.bg} ${statusColor.text} text-xs font-medium px-2 py-1 rounded`}>
             {statusColor.label}
           </span>
         </div>
@@ -462,65 +462,65 @@ function AnnouncementBubble({
         {contentPreview}
       </p>
 
-      {/* Meta information */}
-      <div className="flex items-center justify-between text-xs text-navy-300 mb-3">
-        <div className="flex gap-3">
-          <span>by {announcement.author_name || 'Unknown'}</span>
-          <span>{formattedDate}</span>
-          <span>{formattedTime}</span>
-        </div>
+      {/* Meta */}
+      <div className="flex items-center text-xs text-navy-300 gap-3 mb-3">
+        <span>by {announcement.author_name || 'Unknown'}</span>
+        <span>{formattedDate}</span>
+        <span>{formattedTime}</span>
       </div>
 
-      {/* Hover actions */}
-      {showActions && (
-        <div className="flex items-center gap-2 border-t border-opacity-30 pt-3">
+      {/* Actions — always visible, explicit type="button" to prevent form submission */}
+      <div className="flex flex-wrap items-center gap-2 border-t border-navy-600/40 pt-3">
+        {announcement.status === 'draft' && onPublish && (
           <button
-            onClick={() => onEdit(announcement)}
-            disabled={isLoading}
-            className="flex items-center gap-1 px-3 py-1 bg-sky-600 hover:bg-sky-700 text-white text-sm rounded transition-colors disabled:opacity-50 font-medium"
-            title="Edit"
+            type="button"
+            onClick={() => onPublish(announcement.id)}
+            disabled={!!isLoading}
+            className="flex items-center gap-1 px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors disabled:opacity-50 font-medium"
           >
-            <PencilIcon className="w-4 h-4" />
-            Edit
+            Publish
           </button>
-
-          <button
-            onClick={() => onBroadcast(announcement)}
-            disabled={isLoading}
-            className="flex items-center gap-1 px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded transition-colors disabled:opacity-50 font-medium"
-            title="Broadcast"
-          >
-            <MegaphoneIcon className="w-4 h-4" />
-            Broadcast
-          </button>
-
-          <button
-            onClick={() => (isPinned ? onPin(announcement.id) : onPin(announcement.id))}
-            disabled={isLoading}
-            className="flex items-center gap-1 px-3 py-1 bg-gold-500 hover:bg-gold-600 text-navy-900 text-sm rounded transition-colors disabled:opacity-50 font-medium"
-            title={isPinned ? 'Unpin' : 'Pin'}
-          >
-            <MapPinIcon className="w-4 h-4" />
-            {isPinned ? 'Unpin' : 'Pin'}
-          </button>
-
-          <button
-            onClick={() => onDelete(announcement.id)}
-            disabled={isLoading}
-            className="flex items-center gap-1 px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors disabled:opacity-50 font-medium"
-            title="Delete"
-          >
-            <TrashIcon className="w-4 h-4" />
-            Delete
-          </button>
-
-          {isLoading && (
-            <span className="text-xs text-navy-300 ml-auto animate-pulse">
-              {isLoading}...
-            </span>
-          )}
-        </div>
-      )}
+        )}
+        <button
+          type="button"
+          onClick={() => onEdit(announcement)}
+          disabled={!!isLoading}
+          className="flex items-center gap-1 px-3 py-1 bg-sky-600 hover:bg-sky-700 text-white text-sm rounded transition-colors disabled:opacity-50 font-medium"
+        >
+          <PencilIcon className="w-4 h-4" />
+          Edit
+        </button>
+        <button
+          type="button"
+          onClick={() => onBroadcast(announcement)}
+          disabled={!!isLoading}
+          className="flex items-center gap-1 px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded transition-colors disabled:opacity-50 font-medium"
+        >
+          <MegaphoneIcon className="w-4 h-4" />
+          Broadcast
+        </button>
+        <button
+          type="button"
+          onClick={() => onPin(announcement.id)}
+          disabled={!!isLoading}
+          className="flex items-center gap-1 px-3 py-1 bg-gold-500 hover:bg-gold-600 text-navy-900 text-sm rounded transition-colors disabled:opacity-50 font-medium"
+        >
+          <MapPinIcon className="w-4 h-4" />
+          {isPinned ? 'Unpin' : 'Pin'}
+        </button>
+        <button
+          type="button"
+          onClick={() => onDelete(announcement.id)}
+          disabled={!!isLoading}
+          className="flex items-center gap-1 px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors disabled:opacity-50 font-medium"
+        >
+          <TrashIcon className="w-4 h-4" />
+          Delete
+        </button>
+        {isLoading && (
+          <span className="text-xs text-navy-300 ml-auto animate-pulse">{isLoading}...</span>
+        )}
+      </div>
     </div>
   );
 }

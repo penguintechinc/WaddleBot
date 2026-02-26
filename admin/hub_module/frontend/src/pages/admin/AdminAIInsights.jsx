@@ -18,6 +18,7 @@ function AdminAIInsights() {
   const [selectedInsight, setSelectedInsight] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [message, setMessage] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const insightsPerPage = 10;
 
   useEffect(() => {
@@ -71,8 +72,20 @@ function AdminAIInsights() {
     });
   }
 
-  function handleViewDetails(insight) {
-    setSelectedInsight(insight);
+  async function handleViewDetails(insight) {
+    setSelectedInsight(insight); // show modal immediately with list data
+    setDetailLoading(true);
+    try {
+      const res = await adminApi.getAIInsight(communityId, insight.id);
+      if (res.data?.insight) {
+        setSelectedInsight(res.data.insight);
+      }
+    } catch (err) {
+      console.error('Failed to fetch insight detail:', err);
+      // keep showing list data if detail fetch fails
+    } finally {
+      setDetailLoading(false);
+    }
   }
 
   function closeModal() {
@@ -310,6 +323,13 @@ function AdminAIInsights() {
             </div>
 
             <div className="p-6">
+              {detailLoading && (
+                <div className="flex items-center gap-2 text-navy-400 text-sm mb-4">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gold-400" />
+                  Loading full detail...
+                </div>
+              )}
+
               {/* Content */}
               <div className="mb-6">
                 <h3 className="text-lg font-semibold text-sky-100 mb-3">Content</h3>

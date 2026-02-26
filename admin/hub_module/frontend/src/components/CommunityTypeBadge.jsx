@@ -37,6 +37,20 @@ const communityTypeConfig = {
     borderColor: 'border-orange-500/30',
     textColor: 'text-orange-300',
   },
+  workforce: {
+    icon: '🏗️',
+    label: 'Workforce',
+    bgColor: 'bg-cyan-500/20',
+    borderColor: 'border-cyan-500/30',
+    textColor: 'text-cyan-300',
+  },
+  support: {
+    icon: '🎧',
+    label: 'Support',
+    bgColor: 'bg-indigo-500/20',
+    borderColor: 'border-indigo-500/30',
+    textColor: 'text-indigo-300',
+  },
 };
 
 /**
@@ -73,7 +87,7 @@ function CommunityTypeBadge({ type, size = 'sm', showLabel = true, className = '
 }
 
 CommunityTypeBadge.propTypes = {
-  type: PropTypes.oneOf(['creator', 'gaming', 'shared_interest_group', 'corporate', 'other']),
+  type: PropTypes.oneOf(['creator', 'gaming', 'shared_interest_group', 'corporate', 'other', 'workforce', 'support']),
   size: PropTypes.oneOf(['sm', 'md', 'lg']),
   showLabel: PropTypes.bool,
   className: PropTypes.string,
