@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { marketplaceApi } from '../../services/api';
+import { marketplaceApi, unifiedMarketplaceApi } from '../../services/api';
 import { Search, Star, Package, Check, Download, Settings, Filter } from 'lucide-react';
 
 export default function AdminMarketplace() {
@@ -33,7 +33,8 @@ export default function AdminMarketplace() {
   const loadModules = async () => {
     try {
       setLoading(true);
-      const response = await marketplaceApi.browseModules(communityId, {
+      const response = await unifiedMarketplaceApi.getCatalog({
+        communityId,
         search,
         category,
         page,
@@ -48,10 +49,11 @@ export default function AdminMarketplace() {
     }
   };
 
-  const handleInstall = async (moduleId) => {
+  const handleInstall = async (module) => {
+    const moduleId = module.sourceId || module.id;
     try {
       setActionLoading({ ...actionLoading, [moduleId]: 'installing' });
-      await marketplaceApi.installModule(communityId, moduleId);
+      await unifiedMarketplaceApi.installModule(communityId, { source: module.source, moduleId });
       loadModules();
     } catch (err) {
       setError(err.response?.data?.error?.message || 'Failed to install module');
@@ -60,12 +62,13 @@ export default function AdminMarketplace() {
     }
   };
 
-  const handleUninstall = async (moduleId) => {
+  const handleUninstall = async (module) => {
     if (!confirm('Are you sure you want to uninstall this module?')) return;
 
+    const moduleId = module.sourceId || module.id;
     try {
       setActionLoading({ ...actionLoading, [moduleId]: 'uninstalling' });
-      await marketplaceApi.uninstallModule(communityId, moduleId);
+      await unifiedMarketplaceApi.uninstallModule(communityId, moduleId, module.source);
       loadModules();
     } catch (err) {
       setError(err.response?.data?.error?.message || 'Failed to uninstall module');
@@ -184,10 +187,29 @@ export default function AdminMarketplace() {
               </div>
 
               {/* Module Details */}
-              <div className="flex items-center gap-2 text-xs text-gray-500 mb-4">
+              <div className="flex items-center gap-2 text-xs text-gray-500 mb-3">
                 <span className="bg-navy-700 px-2 py-1 rounded">{module.category}</span>
                 <span>v{module.version}</span>
                 <span>by {module.author}</span>
+              </div>
+
+              {/* Pricing Badge */}
+              <div className="mb-4">
+                {module.pricingType === 'paid' && (
+                  <span className="inline-block bg-yellow-900/40 border border-yellow-600 text-yellow-400 text-xs px-2 py-1 rounded">
+                    Paid
+                  </span>
+                )}
+                {module.pricingType === 'subscription' && (
+                  <span className="inline-block bg-purple-900/40 border border-purple-600 text-purple-400 text-xs px-2 py-1 rounded">
+                    Subscription
+                  </span>
+                )}
+                {(!module.pricingType || module.pricingType === 'free') && (
+                  <span className="inline-block bg-green-900/40 border border-green-600 text-green-400 text-xs px-2 py-1 rounded">
+                    Free
+                  </span>
+                )}
               </div>
 
               {/* Actions */}
@@ -195,38 +217,46 @@ export default function AdminMarketplace() {
                 {module.isInstalled ? (
                   <>
                     <button
-                      onClick={() => handleToggleEnabled(module.id, module.isEnabled)}
-                      disabled={actionLoading[module.id]}
+                      onClick={() => handleToggleEnabled(module.sourceId || module.id, module.isEnabled)}
+                      disabled={actionLoading[module.sourceId || module.id]}
                       className={`flex-1 px-4 py-2 rounded-lg font-semibold transition-colors ${
                         module.isEnabled
                           ? 'bg-gold-500 hover:bg-gold-600 text-navy-900'
                           : 'bg-navy-700 hover:bg-navy-600 text-white'
                       } disabled:opacity-50`}
                     >
-                      {actionLoading[module.id] === 'toggling' ? '...' : module.isEnabled ? 'Enabled' : 'Disabled'}
+                      {actionLoading[module.sourceId || module.id] === 'toggling' ? '...' : module.isEnabled ? 'Enabled' : 'Disabled'}
                     </button>
                     <button
-                      onClick={() => navigate(`/admin/${communityId}/marketplace/${module.id}`)}
+                      onClick={() => navigate(`/admin/${communityId}/marketplace/${module.source}/${module.sourceId || module.id}`)}
                       className="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-lg transition-colors"
                     >
                       <Settings size={18} />
                     </button>
                     <button
-                      onClick={() => handleUninstall(module.id)}
-                      disabled={actionLoading[module.id]}
+                      onClick={() => handleUninstall(module)}
+                      disabled={actionLoading[module.sourceId || module.id]}
                       className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
                     >
-                      {actionLoading[module.id] === 'uninstalling' ? '...' : 'Remove'}
+                      {actionLoading[module.sourceId || module.id] === 'uninstalling' ? '...' : 'Remove'}
                     </button>
                   </>
                 ) : (
-                  <button
-                    onClick={() => handleInstall(module.id)}
-                    disabled={actionLoading[module.id]}
-                    className="w-full px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-lg font-semibold transition-colors disabled:opacity-50"
-                  >
-                    {actionLoading[module.id] === 'installing' ? 'Installing...' : 'Install'}
-                  </button>
+                  <>
+                    <button
+                      onClick={() => handleInstall(module)}
+                      disabled={actionLoading[module.sourceId || module.id]}
+                      className="flex-1 px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-lg font-semibold transition-colors disabled:opacity-50"
+                    >
+                      {actionLoading[module.sourceId || module.id] === 'installing' ? 'Installing...' : 'Install'}
+                    </button>
+                    <button
+                      onClick={() => navigate(`/admin/${communityId}/marketplace/${module.source}/${module.sourceId || module.id}`)}
+                      className="px-4 py-2 bg-navy-700 hover:bg-navy-600 text-white rounded-lg transition-colors"
+                    >
+                      Details
+                    </button>
+                  </>
                 )}
               </div>
             </div>

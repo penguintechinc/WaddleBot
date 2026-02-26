@@ -57,6 +57,9 @@ export default function VendorSubmissionForm() {
     webhookUrl: '',
     webhookSecret: '',
     webhookPerCommunity: false,
+    communicationModel: 'webhook_push',
+    integrationType: 'command_handler',
+    apiBaseUrl: '',
 
     // Scopes
     scopes: [],
@@ -159,6 +162,9 @@ export default function VendorSubmissionForm() {
       const submitData = {
         ...formData,
         paymentDetails: relevantPaymentDetails,
+        communicationModel: formData.communicationModel,
+        integrationType: formData.integrationType,
+        apiBaseUrl: formData.communicationModel === 'rest_pull' ? formData.apiBaseUrl : undefined,
       };
 
       const response = await fetch('/api/v1/vendor/submit', {
@@ -429,6 +435,57 @@ export default function VendorSubmissionForm() {
                 If unchecked, you receive all events through a single webhook.
               </small>
             </div>
+
+            {/* Communication Model */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">
+                Communication Model
+              </label>
+              <select
+                name="communicationModel"
+                value={formData.communicationModel || 'webhook_push'}
+                onChange={handleBasicChange}
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
+              >
+                <option value="webhook_push">Webhook Push (WaddleBot calls your webhook)</option>
+                <option value="rest_pull">REST Pull (WaddleBot pulls from your API)</option>
+              </select>
+            </div>
+
+            {/* Integration Type */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">
+                Integration Type
+              </label>
+              <select
+                name="integrationType"
+                value={formData.integrationType || 'command_handler'}
+                onChange={handleBasicChange}
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
+              >
+                <option value="command_handler">Command Handler (responds to # commands)</option>
+                <option value="action">Action (triggered by events)</option>
+                <option value="trigger">Trigger (initiates workflows)</option>
+                <option value="interaction">Interaction (UI component)</option>
+              </select>
+            </div>
+
+            {/* API Base URL (shown when rest_pull selected) */}
+            {formData.communicationModel === 'rest_pull' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  API Base URL
+                </label>
+                <input
+                  type="url"
+                  name="apiBaseUrl"
+                  value={formData.apiBaseUrl || ''}
+                  onChange={handleBasicChange}
+                  placeholder="https://your-api.example.com/v1"
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
+                />
+              </div>
+            )}
           </section>
 
           {/* Section 4: Permissions/Scopes */}

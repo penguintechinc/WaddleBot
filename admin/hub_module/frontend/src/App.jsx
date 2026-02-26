@@ -42,6 +42,9 @@ import AdminHome from './pages/admin/AdminHome';
 import AdminMembers from './pages/admin/AdminMembers';
 import AdminModules from './pages/admin/AdminModules';
 import AdminMarketplace from './pages/admin/AdminMarketplace';
+import AdminMarketplaceModuleDetail from './pages/admin/AdminMarketplaceModuleDetail.jsx';
+import AdminCommunityPremium from './pages/admin/AdminCommunityPremium.jsx';
+import SuperAdminMarketplaceSettings from './pages/superadmin/SuperAdminMarketplaceSettings.jsx';
 import AdminStreamOverlays from './pages/admin/AdminStreamOverlays';
 import AdminDomains from './pages/admin/AdminDomains';
 import AdminServers from './pages/admin/AdminServers';
@@ -270,7 +273,9 @@ function App() {
         <Route path="/admin/:communityId/modules/memories/config" element={<AdminMemoriesConfig />} />
         <Route path="/admin/:communityId/modules/server-status/config" element={<AdminServerStatusConfig />} />
         <Route path="/admin/:communityId/modules/server-manager/config" element={<AdminServerManagerConfig />} />
-        <Route path="/admin/:communityId/marketplace" element={<MarketplaceRedirect />} />
+        <Route path="/admin/:communityId/marketplace" element={<AdminMarketplace />} />
+        <Route path="/admin/:communityId/marketplace/:source/:id" element={<AdminMarketplaceModuleDetail />} />
+        <Route path="/admin/:communityId/premium" element={<AdminCommunityPremium />} />
         <Route path="/admin/:communityId/stream-overlays" element={<AdminStreamOverlays />} />
         <Route path="/admin/:communityId/domains" element={<AdminDomains />} />
         <Route path="/admin/:communityId/servers" element={<AdminServers />} />
@@ -351,6 +356,7 @@ function App() {
         <Route path="/superadmin/services" element={<SuperAdminServiceDiscovery />} />
         <Route path="/superadmin/analytics" element={<SuperAdminAnalytics />} />
         <Route path="/superadmin/tenants" element={<SuperAdminTenants />} />
+        <Route path="/superadmin/marketplace-settings" element={<SuperAdminMarketplaceSettings />} />
       </Route>
 
       {/* Tenant admin routes */}

@@ -845,6 +845,24 @@ modules:
         GRPC_PORT: "50037"
         LOG_LEVEL: "INFO"
 
+  # Marketplace Module
+  marketplace:
+    enabled: true
+    name: marketplace
+    image: waddlebot-marketplace
+    imageTag: ""
+    port: 8100
+    replicas: 2
+    resourcePreset: medium
+    service:
+      type: ClusterIP
+      port: 8100
+    env:
+      MODULE_NAME: "marketplace_module"
+      MODULE_VERSION: "1.0.0"
+      PORT: "8100"
+      LOG_LEVEL: "INFO"
+
   # Action Modules - Pushing (disabled for now)
   pushing:
     discordAction:
@@ -1042,6 +1060,10 @@ ingress:
           pathType: Prefix
           service: slack-collector
           port: 8004
+        - path: /api/v1/marketplace
+          pathType: Prefix
+          service: marketplace
+          port: 8100
   tls:
     - secretName: waddlebot-tls
       hosts:

@@ -55,12 +55,21 @@ async def startup():
     await rate_limiter.connect()  # Connect to Redis on startup
     session_manager = SessionManager()
     command_registry = CommandRegistry(dal, cache_manager)
+    await command_registry.initialize()  # Load initial commands from database
     command_processor = CommandProcessor(dal, cache_manager, rate_limiter, session_manager, command_registry)
 
     app.config['command_processor'] = command_processor
     app.config['cache_manager'] = cache_manager
     app.config['rate_limiter'] = rate_limiter
     app.config['session_manager'] = session_manager
+
+    # Start command reload listener (background task for marketplace module updates)
+    task = asyncio.create_task(_command_reload_listener(
+        command_registry,
+        Config.REDIS_URL
+    ))
+    stream_consumers_tasks.append(task)
+    logger.system("Started command reload listener", action="command_reload_listener_start")
 
     # Initialize StreamPipeline if enabled
     if Config.STREAM_PIPELINE_ENABLED:
@@ -148,6 +157,61 @@ async def _stream_consumer_worker(
         except Exception as e:
             logger.error(f"Error in stream consumer {consumer_name}: {e}")
             await asyncio.sleep(1)  # Brief delay before retry
+
+
+async def _command_reload_listener(command_registry, redis_url):
+    """Listen for command:reload events from marketplace module updates.
+
+    Subscribes to Redis pub/sub channel 'command:reload' and refreshes the
+    command registry cache when marketplace modules are added, updated, or removed.
+    """
+    # Try to use redis.asyncio (newer), fall back to aioredis (legacy)
+    aioredis_lib = None
+    try:
+        import redis.asyncio as aioredis_lib
+    except ImportError:
+        try:
+            import aioredis as aioredis_lib
+        except ImportError:
+            logger.warning("No async Redis library available for command:reload listener")
+            return
+
+    try:
+        redis = await aioredis_lib.from_url(redis_url or 'redis://redis:6379')
+        pubsub = redis.pubsub()
+        await pubsub.subscribe('command:reload')
+        logger.system("Subscribed to command:reload Redis channel", action="pubsub_subscribe")
+
+        async for message in pubsub.listen():
+            if message['type'] == 'message':
+                try:
+                    import json
+                    data = json.loads(message['data']) if isinstance(message['data'], str) else message['data']
+                    logger.info(
+                        f"Command reload event received from marketplace",
+                        data=data
+                    )
+
+                    # Reload commands from database to pick up marketplace module changes
+                    await command_registry.reload_commands()
+                    logger.system(
+                        "Command registry reloaded in response to marketplace event",
+                        action="command_registry_reload",
+                        data=data
+                    )
+                except json.JSONDecodeError:
+                    logger.error(f"Invalid JSON in command:reload event: {message['data']}")
+                except Exception as e:
+                    logger.error(f"Error processing command:reload event: {e}")
+    except asyncio.CancelledError:
+        logger.system("Command reload listener shutting down", action="command_reload_listener_stop")
+        try:
+            await pubsub.unsubscribe('command:reload')
+            await redis.close()
+        except Exception:
+            pass
+    except Exception as e:
+        logger.error(f"Command reload listener error: {e}")
 
 
 @app.after_serving

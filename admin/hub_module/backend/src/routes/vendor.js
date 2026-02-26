@@ -8,6 +8,14 @@ import { requireAuth, requireSuperAdmin } from '../middleware/auth.js';
 
 const router = Router();
 
+// Deprecation notice — functionality moved to marketplace module
+router.use((req, res, next) => {
+  res.set('Deprecation', 'true');
+  res.set('Sunset', 'Sat, 31 Dec 2026 23:59:59 GMT');
+  res.set('Link', '</api/v1/marketplace/catalog>; rel="successor-version"');
+  next();
+});
+
 /**
  * Public Vendor Routes (no authentication required for initial submission)
  */

@@ -657,6 +657,49 @@ export const marketplaceApi = {
   addReview: (communityId, moduleId, data) => api.post(`/api/v1/admin/${communityId}/marketplace/modules/${moduleId}/review`, data),
 };
 
+// New unified marketplace API (routes through marketplace module via Kong)
+export const unifiedMarketplaceApi = {
+  // Catalog
+  getCatalog: (params) => api.get('/api/v1/marketplace/catalog', { params }),
+  getCatalogEntry: (source, id, params) => api.get(`/api/v1/marketplace/catalog/${source}/${id}`, { params }),
+  getCategories: () => api.get('/api/v1/marketplace/catalog/categories'),
+  getFeatured: (params) => api.get('/api/v1/marketplace/catalog/featured', { params }),
+
+  // Community installations
+  getInstalled: (communityId) => api.get(`/api/v1/marketplace/communities/${communityId}/installed`),
+  installModule: (communityId, data) => api.post(`/api/v1/marketplace/communities/${communityId}/install`, data),
+  uninstallModule: (communityId, moduleId, source) => api.delete(`/api/v1/marketplace/communities/${communityId}/install/${moduleId}`, { params: { source } }),
+  toggleModule: (communityId, moduleId, data) => api.put(`/api/v1/marketplace/communities/${communityId}/install/${moduleId}`, data),
+
+  // Premium
+  getPricing: (params) => api.get('/api/v1/marketplace/premium/pricing', { params }),
+  getPremiumStatus: (communityId) => api.get(`/api/v1/marketplace/premium/status/${communityId}`),
+  subscribePremium: (data) => api.post('/api/v1/marketplace/premium/subscribe', data),
+  cancelPremium: (data) => api.post('/api/v1/marketplace/premium/cancel', data),
+};
+
+export const vendorApi = {
+  getProfile: () => api.get('/api/v1/marketplace/vendor/profile'),
+  createProfile: (data) => api.post('/api/v1/marketplace/vendor/profile', data),
+  getModules: (params) => api.get('/api/v1/marketplace/vendor/modules', { params }),
+  createModule: (data) => api.post('/api/v1/marketplace/vendor/modules', data),
+  updateModule: (id, data) => api.put(`/api/v1/marketplace/vendor/modules/${id}`, data),
+  submitForReview: (id, data) => api.post(`/api/v1/marketplace/vendor/modules/${id}/submit`, data),
+  getRequest: () => api.get('/api/v1/marketplace/vendor/request'),
+  createRequest: (data) => api.post('/api/v1/marketplace/vendor/request', data),
+};
+
+export const marketplaceAdminApi = {
+  getVendorRequests: (params) => api.get('/api/v1/marketplace/admin/marketplace/vendor-requests', { params }),
+  approveVendorRequest: (id, data) => api.post(`/api/v1/marketplace/admin/marketplace/vendor-requests/${id}/approve`, data),
+  rejectVendorRequest: (id, data) => api.post(`/api/v1/marketplace/admin/marketplace/vendor-requests/${id}/reject`, data),
+  getSubmissions: (params) => api.get('/api/v1/marketplace/admin/marketplace/submissions', { params }),
+  approveSubmission: (id, data) => api.post(`/api/v1/marketplace/admin/marketplace/submissions/${id}/approve`, data),
+  rejectSubmission: (id, data) => api.post(`/api/v1/marketplace/admin/marketplace/submissions/${id}/reject`, data),
+  getSettings: () => api.get('/api/v1/marketplace/admin/marketplace/settings'),
+  updateSettings: (data) => api.put('/api/v1/marketplace/admin/marketplace/settings', data),
+};
+
 // User Identity & Profile API
 export const userApi = {
   // Identity management

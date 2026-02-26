@@ -157,6 +157,11 @@ modules:
     image: core-credential-manager
     replicas: 1
 
+  # Marketplace Module
+  marketplace:
+    image: marketplace
+    replicas: 1
+
   # Platform Action Modules
   platformActions:
     discord:

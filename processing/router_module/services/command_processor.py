@@ -552,6 +552,10 @@ class CommandProcessor:
         if not community_id:
             return True  # No community context, allow by default
 
+        # For marketplace modules, check subscription and module status first
+        if module_name.startswith('marketplace:'):
+            return await self._is_marketplace_module_enabled(module_name, community_id)
+
         cache_key = f"module_enabled:{community_id}:{module_name}"
 
         # Check Redis cache first
@@ -585,6 +589,66 @@ class CommandProcessor:
         except Exception as e:
             logger.error(f"Failed to check module status: {e}")
             return True  # Default to enabled on error
+
+    async def _is_marketplace_module_enabled(self, module_name: str, community_id: int) -> bool:
+        """Check if a marketplace module subscription is active for this community.
+
+        Marketplace modules require:
+        1. Community subscription to the marketplace module
+        2. Subscription status = 'active'
+        3. is_enabled = true
+        4. Marketplace module itself must be approved and not deleted
+        """
+        if not module_name.startswith('marketplace:'):
+            return True
+
+        cache_key = f"marketplace_enabled:{community_id}:{module_name}"
+
+        # Check Redis cache first
+        try:
+            cached = await self.cache.get(cache_key)
+            if cached is not None:
+                return cached == b'1'
+        except Exception as e:
+            logger.warning(f"Redis cache check failed for marketplace module: {e}")
+
+        try:
+            # Extract module ID from module_name format: 'marketplace:{moduleId}'
+            module_id = int(module_name.split(':', 1)[1])
+        except (ValueError, IndexError):
+            logger.error(f"Invalid marketplace module name format: {module_name}")
+            return False
+
+        try:
+            # Check marketplace_subscriptions status and module approval status
+            result = self.dal.executesql(
+                """SELECT ms.status
+                   FROM marketplace_subscriptions ms
+                   JOIN marketplace_modules mm ON mm.id = ms.module_id
+                   WHERE ms.community_id = %s
+                   AND ms.module_id = %s
+                   AND ms.is_enabled = true
+                   AND mm.status = 'approved'
+                   AND mm.deleted_at IS NULL""",
+                [community_id, module_id]
+            )
+
+            is_enabled = result[0][0] == 'active' if result and result[0] else False
+
+            # Cache result for 5 minutes
+            try:
+                await self.cache.set(
+                    cache_key,
+                    b'1' if is_enabled else b'0',
+                    ttl=300
+                )
+            except Exception:
+                pass
+
+            return is_enabled
+        except Exception as e:
+            logger.warning(f"Failed to check marketplace module status: {e}")
+            return True  # Fail open (don't block commands if check fails)
 
     async def execute_command(
         self,

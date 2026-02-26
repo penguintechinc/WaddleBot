@@ -426,6 +426,130 @@ services:
           - spotify
           - jwt-auth
 
+  # Marketplace Module Service
+  - name: marketplace-service
+    url: http://marketplace:8100
+    connect_timeout: 5000
+    read_timeout: 30000
+    write_timeout: 30000
+    tags:
+      - waddlebot
+      - marketplace
+    routes:
+      - name: marketplace-catalog
+        paths:
+          - /api/v1/marketplace/catalog
+        strip_path: false
+        protocols:
+          - http
+          - https
+        tags:
+          - marketplace
+          - no-auth
+
+      - name: marketplace-communities
+        paths:
+          - /api/v1/marketplace/communities
+        methods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+        strip_path: false
+        protocols:
+          - http
+          - https
+        tags:
+          - marketplace
+          - jwt-auth
+
+      - name: marketplace-vendor
+        paths:
+          - /api/v1/marketplace/vendor
+        methods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+        strip_path: false
+        protocols:
+          - http
+          - https
+        tags:
+          - marketplace
+          - jwt-auth
+
+      - name: marketplace-admin
+        paths:
+          - /api/v1/marketplace/admin
+        methods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+        strip_path: false
+        protocols:
+          - http
+          - https
+        tags:
+          - marketplace
+          - jwt-auth
+
+      - name: marketplace-premium
+        paths:
+          - /api/v1/marketplace/premium
+        methods:
+          - GET
+          - POST
+        strip_path: false
+        protocols:
+          - http
+          - https
+        tags:
+          - marketplace
+          - jwt-auth
+
+      - name: marketplace-payments
+        paths:
+          - /api/v1/marketplace/payments
+        methods:
+          - GET
+          - POST
+        strip_path: false
+        protocols:
+          - http
+          - https
+        tags:
+          - marketplace
+          - jwt-auth
+
+      - name: marketplace-webhooks
+        paths:
+          - /api/v1/marketplace/webhooks
+        methods:
+          - POST
+        strip_path: false
+        protocols:
+          - http
+          - https
+        tags:
+          - marketplace
+          - no-auth
+
+      - name: marketplace-internal
+        paths:
+          - /api/v1/marketplace/internal
+        methods:
+          - GET
+          - POST
+        strip_path: false
+        protocols:
+          - http
+          - https
+        tags:
+          - marketplace
+          - api-key-auth
+
 # =============================================================================
 # CONSUMERS - API Consumers for Auth & Rate Limiting
 # =============================================================================
