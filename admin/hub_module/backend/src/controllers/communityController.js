@@ -1024,8 +1024,8 @@ export async function createCommunity(req, res, next) {
       const communityResult = await client.query(
         `INSERT INTO communities
          (name, display_name, description, platform, platform_server_id,
-          owner_id, owner_name, is_public, community_type, member_count, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 1, $6)
+          owner_id, owner_name, is_public, community_type, member_count, created_by, tenant_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 1, $6, $10)
          RETURNING id, name, display_name, platform, community_type, created_at`,
         [
           normalizedName,
@@ -1037,17 +1037,27 @@ export async function createCommunity(req, res, next) {
           req.user.username || null,
           isPublic !== false,
           validatedCommunityType,
+          req.user.tenantId || 1,
         ]
       );
 
       const newCommunity = communityResult.rows[0];
 
+      // Seed system roles for the new community
+      await client.query('SELECT seed_community_system_roles($1)', [newCommunity.id]);
+
       // Add creator as community-owner member (reputation starts at 600)
+      const ownerRoleResult = await client.query(
+        `SELECT id FROM community_roles WHERE community_id = $1 AND name = 'community-owner'`,
+        [newCommunity.id]
+      );
+      const ownerRoleId = ownerRoleResult.rows[0]?.id || null;
+
       await client.query(
         `INSERT INTO community_members
-         (community_id, user_id, role, reputation, is_active, joined_at)
-         VALUES ($1, $2, 'community-owner', 600, true, NOW())`,
-        [newCommunity.id, req.user.id]
+         (community_id, user_id, role, community_role_id, reputation, is_active, joined_at)
+         VALUES ($1, $2, 'community-owner', $3, 600, true, NOW())`,
+        [newCommunity.id, req.user.id, ownerRoleId]
       );
 
       return newCommunity;
