@@ -1,0 +1,104 @@
+{{- if .Values.modules.interactive.serverStatus.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "waddlebot.fullname" . }}-server-status-interaction
+  labels:
+    {{- include "waddlebot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: server-status-interaction
+spec:
+  replicas: {{ .Values.modules.interactive.serverStatus.replicas }}
+  selector:
+    matchLabels:
+      {{- include "waddlebot.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: server-status-interaction
+  template:
+    metadata:
+      labels:
+        {{- include "waddlebot.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: server-status-interaction
+    spec:
+      serviceAccountName: {{ include "waddlebot.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+      {{- include "waddlebot.dbMigrateInitContainer" . | nindent 6 }}
+      containers:
+      - name: server-status-interaction
+        image: "{{ .Values.global.imageRegistry }}/interactive-server-status:{{ .Values.modules.interactive.serverStatus.imageTag | default .Values.global.imageTag }}"
+        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 10 }}
+        ports:
+        - name: rest
+          containerPort: 8097
+          protocol: TCP
+        - name: grpc
+          containerPort: 50035
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: {{ include "waddlebot.fullname" . }}-config
+        - configMapRef:
+            name: {{ include "waddlebot.fullname" . }}-server-status-interaction-config
+            optional: true
+        - secretRef:
+            name: {{ include "waddlebot.fullname" . }}-secrets
+        - secretRef:
+            name: {{ include "waddlebot.fullname" . }}-server-status-interaction-secret
+            optional: true
+        env:
+        - name: MODULE_NAME
+          value: "interactive-server-status"
+        - name: MODULE_PORT
+          value: "8097"
+        - name: GRPC_PORT
+          value: "50035"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: rest
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: rest
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          {{- toYaml .Values.modules.interactive.serverStatus.resources | nindent 10 }}
+        volumeMounts:
+        - name: logs
+          mountPath: /var/log/waddlebotlog
+      volumes:
+      - name: logs
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "waddlebot.fullname" . }}-server-status-interaction
+  labels:
+    {{- include "waddlebot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: server-status-interaction
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8097
+    targetPort: rest
+    protocol: TCP
+    name: rest
+  - port: 50035
+    targetPort: grpc
+    protocol: TCP
+    name: grpc
+  selector:
+    {{- include "waddlebot.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: server-status-interaction
+{{- end }}
