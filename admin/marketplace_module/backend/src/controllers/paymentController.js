@@ -1,4 +1,4 @@
-const paymentService = require('../services/paymentService');
+import paymentService from '../services/paymentService.js';
 
 /**
  * Payment Controller
@@ -461,4 +461,4 @@ class PaymentController {
   }
 }
 
-module.exports = new PaymentController();
+export default new PaymentController();

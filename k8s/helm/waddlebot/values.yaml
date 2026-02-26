@@ -1228,10 +1228,21 @@ kong:
 
   admin:
     enabled: true
+    type: ClusterIP
     http:
       enabled: true
       servicePort: 8001
       containerPort: 8001
+    tls:
+      enabled: false
+
+  manager:
+    enabled: true
+    type: ClusterIP
+    http:
+      enabled: true
+      servicePort: 8002
+      containerPort: 8002
     tls:
       enabled: false
 

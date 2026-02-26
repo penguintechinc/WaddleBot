@@ -11,7 +11,7 @@ _format_version: "3.0"
 services:
   # Hub Module - Main API (user, community, admin, auth)
   - name: hub-service
-    url: http://hub:8060
+    url: http://waddlebot-hub-api.waddlebot.svc.cluster.local:8060
     connect_timeout: 10000
     read_timeout: 60000
     write_timeout: 60000
@@ -111,6 +111,26 @@ services:
         tags:
           - superadmin
           - jwt-auth
+      - name: hub-cookie
+        paths:
+          - /api/v1/cookie
+        strip_path: false
+        protocols:
+          - http
+          - https
+        tags:
+          - cookie
+          - no-auth
+      - name: hub-signup-settings
+        paths:
+          - /api/v1/signup-settings
+        strip_path: false
+        protocols:
+          - http
+          - https
+        tags:
+          - signup
+          - no-auth
       - name: hub-internal
         paths:
           - /api/v1/internal
@@ -124,7 +144,7 @@ services:
 
   # Router Module - Internal Event Bus
   - name: router-service
-    url: http://router:8000
+    url: http://waddlebot-router.waddlebot.svc.cluster.local:8000
     connect_timeout: 5000
     read_timeout: 30000
     retries: 2
@@ -146,7 +166,7 @@ services:
 
   # Core Modules
   - name: identity-service
-    url: http://identity-core:8050
+    url: http://waddlebot-identity-core.waddlebot.svc.cluster.local:8050
     connect_timeout: 5000
     read_timeout: 30000
     tags:
@@ -166,7 +186,7 @@ services:
           - jwt-auth
 
   - name: labels-service
-    url: http://labels-core:8023
+    url: http://waddlebot-labels-core.waddlebot.svc.cluster.local:8023
     connect_timeout: 5000
     read_timeout: 30000
     tags:
@@ -186,7 +206,7 @@ services:
           - jwt-auth
 
   - name: reputation-service
-    url: http://reputation:8021
+    url: http://waddlebot-reputation.waddlebot.svc.cluster.local:8021
     connect_timeout: 5000
     read_timeout: 30000
     tags:
@@ -206,7 +226,7 @@ services:
           - jwt-auth
 
   - name: community-service
-    url: http://community:8020
+    url: http://waddlebot-community.waddlebot.svc.cluster.local:8020
     connect_timeout: 5000
     read_timeout: 30000
     tags:
@@ -227,7 +247,7 @@ services:
 
   # Interactive Modules
   - name: ai-service
-    url: http://ai-interaction:8005
+    url: http://waddlebot-ai-interaction.waddlebot.svc.cluster.local:8005
     connect_timeout: 10000
     read_timeout: 120000
     tags:
@@ -247,7 +267,7 @@ services:
           - jwt-auth
 
   - name: ai-researcher-service
-    url: http://ai-researcher:8070
+    url: http://waddlebot-ai-researcher.waddlebot.svc.cluster.local:8070
     connect_timeout: 10000
     read_timeout: 120000
     tags:
@@ -267,7 +287,7 @@ services:
           - jwt-auth
 
   - name: alias-service
-    url: http://alias-interaction:8010
+    url: http://waddlebot-alias-interaction.waddlebot.svc.cluster.local:8010
     connect_timeout: 5000
     read_timeout: 30000
     tags:
@@ -287,7 +307,7 @@ services:
           - api-key-auth
 
   - name: shoutout-service
-    url: http://shoutout-interaction:8011
+    url: http://waddlebot-shoutout-interaction.waddlebot.svc.cluster.local:8011
     connect_timeout: 5000
     read_timeout: 30000
     tags:
@@ -307,7 +327,7 @@ services:
           - api-key-auth
 
   - name: inventory-service
-    url: http://inventory-interaction:8024
+    url: http://waddlebot-inventory-interaction.waddlebot.svc.cluster.local:8024
     connect_timeout: 5000
     read_timeout: 30000
     tags:
@@ -327,7 +347,7 @@ services:
           - jwt-auth
 
   - name: calendar-service
-    url: http://calendar-interaction:8030
+    url: http://waddlebot-calendar-interaction.waddlebot.svc.cluster.local:8030
     connect_timeout: 5000
     read_timeout: 30000
     tags:
@@ -347,7 +367,7 @@ services:
           - jwt-auth
 
   - name: memories-service
-    url: http://memories-interaction:8031
+    url: http://waddlebot-memories-interaction.waddlebot.svc.cluster.local:8031
     connect_timeout: 5000
     read_timeout: 30000
     tags:
@@ -367,7 +387,7 @@ services:
           - jwt-auth
 
   - name: loyalty-service
-    url: http://loyalty-interaction:8032
+    url: http://waddlebot-loyalty-interaction.waddlebot.svc.cluster.local:8032
     connect_timeout: 5000
     read_timeout: 30000
     tags:
@@ -387,7 +407,7 @@ services:
           - jwt-auth
 
   - name: youtube-music-service
-    url: http://youtube-music:8025
+    url: http://waddlebot-youtube-music.waddlebot.svc.cluster.local:8025
     connect_timeout: 5000
     read_timeout: 30000
     tags:
@@ -407,7 +427,7 @@ services:
           - jwt-auth
 
   - name: spotify-service
-    url: http://spotify-interaction:8026
+    url: http://waddlebot-spotify-interaction.waddlebot.svc.cluster.local:8026
     connect_timeout: 5000
     read_timeout: 30000
     tags:
@@ -428,7 +448,7 @@ services:
 
   # Marketplace Module Service
   - name: marketplace-service
-    url: http://marketplace:8100
+    url: http://waddlebot-marketplace.waddlebot.svc.cluster.local:8100
     connect_timeout: 5000
     read_timeout: 30000
     write_timeout: 30000

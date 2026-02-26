@@ -1,6 +1,5 @@
-const express = require('express');
-const router = express.Router();
-const paymentController = require('../controllers/paymentController');
+import { Router } from 'express';
+import paymentController from '../controllers/paymentController.js';
 
 /**
  * Webhook Routes
@@ -9,11 +8,12 @@ const paymentController = require('../controllers/paymentController');
  * IMPORTANT: Stripe webhooks require raw body, PayPal webhooks use JSON
  * Configure middleware accordingly in server.js
  */
+const router = Router();
 
 // Stripe webhook - requires raw body
-router.post('/stripe', paymentController.handleStripeWebhook);
+router.post('/stripe', paymentController.handleStripeWebhook.bind(paymentController));
 
 // PayPal webhook - uses parsed JSON
-router.post('/paypal', paymentController.handlePayPalWebhook);
+router.post('/paypal', paymentController.handlePayPalWebhook.bind(paymentController));
 
-module.exports = router;
+export default router;

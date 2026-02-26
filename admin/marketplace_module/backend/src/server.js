@@ -1,12 +1,12 @@
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
-const morgan = require('morgan');
-
-const paymentRoutes = require('./routes/payments');
-const webhookRoutes = require('./routes/webhooks');
+import 'dotenv/config';
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import morgan from 'morgan';
+import paymentRoutes from './routes/payments.js';
+import webhookRoutes from './routes/webhooks.js';
+import paymentService from './services/paymentService.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -101,8 +101,6 @@ const server = app.listen(PORT, () => {
   `);
 
   // Validate payment provider configurations on startup
-  const paymentService = require('./services/paymentService');
-
   console.log('\nValidating payment provider configurations...\n');
 
   const providers = paymentService.getSupportedProviders();
@@ -150,4 +148,4 @@ process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });
 
-module.exports = app; // For testing
+export default app; // For testing

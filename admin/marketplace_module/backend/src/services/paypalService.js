@@ -1,4 +1,4 @@
-const checkoutNodeJssdk = require('@paypal/checkout-server-sdk');
+import checkoutNodeJssdk from '@paypal/checkout-server-sdk';
 
 /**
  * PayPal Payment Service
@@ -6,8 +6,18 @@ const checkoutNodeJssdk = require('@paypal/checkout-server-sdk');
  */
 class PayPalService {
   constructor() {
-    this.environment = this.createEnvironment();
-    this.client = new checkoutNodeJssdk.core.PayPalHttpClient(this.environment);
+    this._client = null;
+  }
+
+  /**
+   * Get or create the PayPal HTTP client (lazy initialization)
+   * @returns {Object} PayPal HTTP client
+   */
+  getClient() {
+    if (!this._client) {
+      this._client = new checkoutNodeJssdk.core.PayPalHttpClient(this.createEnvironment());
+    }
+    return this._client;
   }
 
   /**
@@ -89,7 +99,7 @@ class PayPalService {
         },
       });
 
-      const response = await this.client.execute(request);
+      const response = await this.getClient().execute(request);
 
       // Find the approval URL
       const approvalUrl = response.result.links.find(
@@ -119,7 +129,7 @@ class PayPalService {
       const request = new checkoutNodeJssdk.orders.OrdersCaptureRequest(orderId);
       request.prefer('return=representation');
 
-      const response = await this.client.execute(request);
+      const response = await this.getClient().execute(request);
 
       const captureId = response.result.purchase_units[0]?.payments?.captures[0]?.id;
 
@@ -145,7 +155,7 @@ class PayPalService {
   async getOrder(orderId) {
     try {
       const request = new checkoutNodeJssdk.orders.OrdersGetRequest(orderId);
-      const response = await this.client.execute(request);
+      const response = await this.getClient().execute(request);
 
       return {
         success: true,
@@ -469,7 +479,7 @@ class PayPalService {
 
       request.requestBody(refundData);
 
-      const response = await this.client.execute(request);
+      const response = await this.getClient().execute(request);
 
       return {
         success: true,
@@ -492,7 +502,7 @@ class PayPalService {
   async getRefund(refundId) {
     try {
       const request = new checkoutNodeJssdk.payments.RefundsGetRequest(refundId);
-      const response = await this.client.execute(request);
+      const response = await this.getClient().execute(request);
 
       return {
         success: true,
@@ -512,7 +522,7 @@ class PayPalService {
   async getCapture(captureId) {
     try {
       const request = new checkoutNodeJssdk.payments.CapturesGetRequest(captureId);
-      const response = await this.client.execute(request);
+      const response = await this.getClient().execute(request);
 
       return {
         success: true,
@@ -626,4 +636,4 @@ class PayPalService {
   }
 }
 
-module.exports = new PayPalService();
+export default new PayPalService();

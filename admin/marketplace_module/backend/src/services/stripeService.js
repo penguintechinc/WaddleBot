@@ -1,4 +1,5 @@
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+import Stripe from 'stripe';
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 /**
  * Stripe Payment Service
@@ -626,4 +627,4 @@ class StripeService {
   }
 }
 
-module.exports = new StripeService();
+export default new StripeService();

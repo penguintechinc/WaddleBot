@@ -12,11 +12,8 @@ import adminReviewRoutes from './adminReview.js';
 import premiumRoutes from './premium.js';
 import internalRoutes from './internal.js';
 
-// payments and webhooks use CommonJS require (legacy files)
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-const paymentRoutes = require('./payments.js');
-const webhookRoutes = require('./webhooks.js');
+import paymentRoutes from './payments.js';
+import webhookRoutes from './webhooks.js';
 
 const router = Router();
 

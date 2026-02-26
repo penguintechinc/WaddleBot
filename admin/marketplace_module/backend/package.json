@@ -2,7 +2,8 @@
   "name": "waddlebot-marketplace-backend",
   "version": "1.0.0",
   "description": "WaddleBot Marketplace Backend with Payment Integration",
-  "main": "src/server.js",
+  "main": "src/index.js",
+  "type": "module",
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
@@ -32,7 +33,10 @@
     "express-validator": "^7.0.1",
     "pg": "^8.11.3",
     "pg-hstore": "^2.3.4",
-    "cookie-parser": "^1.4.6"
+    "cookie-parser": "^1.4.6",
+    "jsonwebtoken": "^9.0.2",
+    "redis": "^4.6.12",
+    "xss": "^1.0.15"
   },
   "devDependencies": {
     "nodemon": "^3.0.2",

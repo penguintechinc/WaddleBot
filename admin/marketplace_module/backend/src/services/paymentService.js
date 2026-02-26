@@ -1,5 +1,5 @@
-const stripeService = require('./stripeService');
-const paypalService = require('./paypalService');
+import stripeService from './stripeService.js';
+import paypalService from './paypalService.js';
 
 /**
  * Unified Payment Service
@@ -555,4 +555,4 @@ class PaymentService {
   }
 }
 
-module.exports = new PaymentService();
+export default new PaymentService();
