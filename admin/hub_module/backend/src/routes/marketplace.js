@@ -7,14 +7,6 @@ import * as marketplaceController from '../controllers/marketplaceController.js'
 
 const router = Router();
 
-// Deprecation notice — functionality moved to marketplace module
-router.use((req, res, next) => {
-  res.set('Deprecation', 'true');
-  res.set('Sunset', 'Sat, 31 Dec 2026 23:59:59 GMT');
-  res.set('Link', '</api/v1/marketplace/catalog>; rel="successor-version"');
-  next();
-});
-
 // All marketplace routes require authentication and community admin role
 router.use(requireAuth);
 
