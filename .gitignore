@@ -1,6 +1,7 @@
 .PLAN*
 *.tmp
 *.temp
+.worktrees/
 
 # Playwright
 tests/e2e/.auth-state.json
