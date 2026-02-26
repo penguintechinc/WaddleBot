@@ -459,6 +459,8 @@ plugins:
         - "https://hub.waddlebot.io"
         - "https://waddlebot.io"
         - "https://api.waddlebot.io"
+        - "https://waddles.penguintech.cloud"
+        - "https://waddlebot.penguintech.cloud"
         - "http://localhost:3000"
         - "http://localhost:8060"
       methods:

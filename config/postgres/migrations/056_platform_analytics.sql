@@ -5,6 +5,7 @@
 -- View: platform_user_reputation
 -- Joins community_members (where community is_global = TRUE) with hub_users
 -- to expose platform-level reputation without moving data
+-- NOTE: cm.user_id is VARCHAR, hu.id is INTEGER — cast required
 CREATE OR REPLACE VIEW platform_user_reputation AS
 SELECT
     hu.id AS hub_user_id,
@@ -12,10 +13,10 @@ SELECT
     hu.email,
     COALESCE(cm.reputation, 600) AS platform_reputation,
     cm.joined_at,
-    hu.last_active_at,
+    hu.last_login AS last_active_at,
     hu.created_at
 FROM hub_users hu
-LEFT JOIN community_members cm ON cm.hub_user_id = hu.id
+LEFT JOIN community_members cm ON cm.user_id = hu.id::text
 LEFT JOIN communities c ON c.id = cm.community_id AND c.is_global = TRUE
 WHERE hu.is_active = TRUE;
 
@@ -41,6 +42,6 @@ CREATE INDEX IF NOT EXISTS idx_analytics_snapshots_metric
 CREATE INDEX IF NOT EXISTS idx_hub_users_created_at
     ON hub_users(created_at);
 
--- Index on hub_users.last_active_at for activity breakdown queries
-CREATE INDEX IF NOT EXISTS idx_hub_users_last_active_at
-    ON hub_users(last_active_at);
+-- Index on hub_users.last_login for activity breakdown queries
+CREATE INDEX IF NOT EXISTS idx_hub_users_last_login
+    ON hub_users(last_login);

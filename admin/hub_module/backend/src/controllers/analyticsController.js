@@ -17,7 +17,7 @@ export async function getPlatformOverview(req, res, next) {
       SELECT
         (SELECT COUNT(*) FROM hub_users WHERE is_active = TRUE) AS total_users,
         (SELECT COUNT(*) FROM hub_users WHERE is_active = TRUE
-           AND last_active_at >= NOW() - INTERVAL '30 days') AS active_users_30d,
+           AND last_login >= NOW() - INTERVAL '30 days') AS active_users_30d,
         (SELECT COUNT(*) FROM communities WHERE is_active = TRUE AND is_global = FALSE) AS total_communities,
         (SELECT ROUND(AVG(platform_reputation)::numeric, 1)
            FROM platform_user_reputation) AS avg_platform_reputation
@@ -200,15 +200,15 @@ export async function getActivityBreakdown(req, res, next) {
   try {
     const result = await query(`
       SELECT
-        COUNT(*) FILTER (WHERE last_active_at >= NOW() - INTERVAL '24 hours') AS active_24h,
-        COUNT(*) FILTER (WHERE last_active_at >= NOW() - INTERVAL '7 days'
-                           AND last_active_at < NOW() - INTERVAL '24 hours') AS active_7d,
-        COUNT(*) FILTER (WHERE last_active_at >= NOW() - INTERVAL '30 days'
-                           AND last_active_at < NOW() - INTERVAL '7 days') AS active_30d,
-        COUNT(*) FILTER (WHERE last_active_at >= NOW() - INTERVAL '90 days'
-                           AND last_active_at < NOW() - INTERVAL '30 days') AS active_90d,
-        COUNT(*) FILTER (WHERE last_active_at < NOW() - INTERVAL '90 days'
-                           OR last_active_at IS NULL) AS inactive,
+        COUNT(*) FILTER (WHERE last_login >= NOW() - INTERVAL '24 hours') AS active_24h,
+        COUNT(*) FILTER (WHERE last_login >= NOW() - INTERVAL '7 days'
+                           AND last_login < NOW() - INTERVAL '24 hours') AS active_7d,
+        COUNT(*) FILTER (WHERE last_login >= NOW() - INTERVAL '30 days'
+                           AND last_login < NOW() - INTERVAL '7 days') AS active_30d,
+        COUNT(*) FILTER (WHERE last_login >= NOW() - INTERVAL '90 days'
+                           AND last_login < NOW() - INTERVAL '30 days') AS active_90d,
+        COUNT(*) FILTER (WHERE last_login < NOW() - INTERVAL '90 days'
+                           OR last_login IS NULL) AS inactive,
         COUNT(*) AS total
       FROM hub_users
       WHERE is_active = TRUE

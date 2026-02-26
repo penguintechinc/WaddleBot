@@ -1186,9 +1186,16 @@ kong:
     preUpgrade: true
     postUpgrade: true
 
-  # Admin API only — no proxy (WaddleBot uses nginx ingress directly)
+  # Kong proxy — API gateway for all /api/* traffic
   proxy:
-    enabled: false
+    enabled: true
+    type: ClusterIP
+    http:
+      enabled: true
+      servicePort: 8080
+      containerPort: 8080
+    tls:
+      enabled: false
 
   admin:
     enabled: true
