@@ -230,7 +230,7 @@ modules:
     enabled: true
     name: router
     image: waddlebot-router
-    tag: latest
+    imageTag: ""
     port: 8000
     service:
       type: ClusterIP
@@ -268,7 +268,7 @@ modules:
     enabled: true
     name: hub-api
     image: waddlebot-hub-api
-    tag: latest
+    imageTag: ""
     port: 8060
     replicas: 2
     resourcePreset: large
@@ -286,7 +286,7 @@ modules:
     enabled: true
     name: hub-webui
     image: waddlebot-hub-webui
-    tag: latest
+    imageTag: ""
     port: 80
     replicas: 2
     resourcePreset: medium
@@ -306,7 +306,7 @@ modules:
     enabled: true
     name: identity-core
     image: waddlebot-identity-core
-    tag: latest
+    imageTag: ""
     port: 8050
     service:
       type: ClusterIP
@@ -323,7 +323,7 @@ modules:
     enabled: true
     name: labels-core
     image: waddlebot-labels-core
-    tag: latest
+    imageTag: ""
     port: 8023
     service:
       type: ClusterIP
@@ -340,7 +340,7 @@ modules:
     enabled: true
     name: browser-source
     image: waddlebot-browser-source
-    tag: latest
+    imageTag: ""
     port: 8027
     replicas: 2
     resourcePreset: medium
@@ -357,7 +357,7 @@ modules:
     enabled: true
     name: reputation
     image: waddlebot-reputation
-    tag: latest
+    imageTag: ""
     port: 8021
     service:
       type: ClusterIP
@@ -374,7 +374,7 @@ modules:
     enabled: true
     name: community
     image: waddlebot-community
-    tag: latest
+    imageTag: ""
     port: 8020
     service:
       type: ClusterIP
@@ -391,7 +391,7 @@ modules:
     enabled: true
     name: ai-researcher
     image: waddlebot-ai-researcher
-    tag: latest
+    imageTag: ""
     port: 8070
     service:
       type: ClusterIP
@@ -409,7 +409,7 @@ modules:
     enabled: true
     name: video-proxy
     image: waddlebot-video-proxy
-    tag: latest
+    imageTag: ""
     port: 8092
     grpcPort: 50065
     service:
@@ -436,7 +436,7 @@ modules:
     enabled: true
     name: engagement
     image: waddlebot-engagement
-    tag: latest
+    imageTag: ""
     port: 8091
     grpcPort: 50066
     service:
@@ -463,7 +463,7 @@ modules:
     enabled: true
     name: module-rtc
     image: waddlebot-module-rtc
-    tag: latest
+    imageTag: ""
     port: 8093
     grpcPort: 50067
     service:
@@ -490,6 +490,79 @@ modules:
       GRPC_PORT: "50067"
       LOG_LEVEL: "INFO"
 
+  # Analytics Core Module
+  analytics:
+    enabled: true
+    name: analytics-core
+    image: waddlebot-analytics-core
+    imageTag: ""
+    port: 8040
+    service:
+      type: ClusterIP
+      port: 8040
+    replicas: 1
+    resourcePreset: small
+    env:
+      MODULE_NAME: "analytics_core_module"
+      MODULE_VERSION: "1.0.0"
+      PORT: "8040"
+      LOG_LEVEL: "INFO"
+
+  # Security Core Module
+  security:
+    enabled: true
+    name: security-core
+    image: waddlebot-security-core
+    imageTag: ""
+    port: 8041
+    service:
+      type: ClusterIP
+      port: 8041
+    replicas: 1
+    resourcePreset: small
+    env:
+      MODULE_NAME: "security_core_module"
+      MODULE_VERSION: "1.0.0"
+      PORT: "8041"
+      LOG_LEVEL: "INFO"
+
+  # Workflow Core Module
+  workflow:
+    enabled: true
+    name: workflow-core
+    image: waddlebot-workflow-core
+    imageTag: ""
+    port: 8090
+    service:
+      type: ClusterIP
+      port: 8090
+    replicas: 1
+    resourcePreset: small
+    env:
+      MODULE_NAME: "workflow_core_module"
+      MODULE_VERSION: "1.0.0"
+      PORT: "8090"
+      LOG_LEVEL: "INFO"
+
+  # Credential Manager Module
+  credentialManager:
+    enabled: true
+    name: credential-manager
+    image: waddlebot-credential-manager
+    imageTag: ""
+    port: 8095
+    service:
+      type: ClusterIP
+      port: 8095
+    replicas: 1
+    resourcePreset: small
+    env:
+      MODULE_NAME: "credential_manager_module"
+      MODULE_VERSION: "1.0.0"
+      PORT: "8095"
+      LOG_LEVEL: "INFO"
+      SECRETS_BACKEND: "kubernetes"
+
 # Trigger Modules - Receivers
   # Trigger/Collector Modules
   collectors:
@@ -497,7 +570,7 @@ modules:
       enabled: true
       name: twitch-collector
       image: waddlebot-twitch-collector
-      tag: latest
+      imageTag: ""
       port: 8002
       replicas: 2
       resourcePreset: large
@@ -512,7 +585,7 @@ modules:
       enabled: true
       name: discord-collector
       image: waddlebot-discord-collector
-      tag: latest
+      imageTag: ""
       port: 8003
       replicas: 2
       resourcePreset: medium
@@ -527,7 +600,7 @@ modules:
       enabled: true
       name: slack-collector
       image: waddlebot-slack-collector
-      tag: latest
+      imageTag: ""
       port: 8004
       replicas: 2
       resourcePreset: medium
@@ -542,7 +615,7 @@ modules:
       enabled: true
       name: youtube-live-collector
       image: waddlebot-youtube-live-collector
-      tag: latest
+      imageTag: ""
       port: 8006
       replicas: 1
       resourcePreset: medium
@@ -557,7 +630,7 @@ modules:
       enabled: true
       name: kick-collector
       image: waddlebot-kick-collector
-      tag: latest
+      imageTag: ""
       port: 8007
       replicas: 1
       resourcePreset: medium
@@ -574,7 +647,7 @@ modules:
       enabled: true
       name: ai-interaction
       image: waddlebot-ai-interaction
-      tag: latest
+      imageTag: ""
       port: 8005
       replicas: 2
       resourcePreset: large
@@ -589,7 +662,7 @@ modules:
       enabled: true
       name: alias-interaction
       image: waddlebot-alias-interaction
-      tag: latest
+      imageTag: ""
       port: 8010
       replicas: 2
       resourcePreset: small
@@ -603,7 +676,7 @@ modules:
       enabled: true
       name: shoutout-interaction
       image: waddlebot-shoutout-interaction
-      tag: latest
+      imageTag: ""
       port: 8011
       replicas: 2
       resourcePreset: medium
@@ -617,7 +690,7 @@ modules:
       enabled: true
       name: inventory-interaction
       image: waddlebot-inventory-interaction
-      tag: latest
+      imageTag: ""
       port: 8024
       replicas: 2
       resourcePreset: medium
@@ -631,7 +704,7 @@ modules:
       enabled: true
       name: calendar-interaction
       image: waddlebot-calendar-interaction
-      tag: latest
+      imageTag: ""
       port: 8030
       replicas: 2
       resourcePreset: medium
@@ -645,7 +718,7 @@ modules:
       enabled: true
       name: memories-interaction
       image: waddlebot-memories-interaction
-      tag: latest
+      imageTag: ""
       port: 8031
       replicas: 2
       resourcePreset: medium
@@ -659,7 +732,7 @@ modules:
       enabled: true
       name: youtube-music
       image: waddlebot-youtube-music
-      tag: latest
+      imageTag: ""
       port: 8025
       replicas: 1
       resourcePreset: medium
@@ -673,7 +746,7 @@ modules:
       enabled: true
       name: spotify-interaction
       image: waddlebot-spotify-interaction
-      tag: latest
+      imageTag: ""
       port: 8026
       replicas: 1
       resourcePreset: medium
@@ -687,7 +760,7 @@ modules:
       enabled: true
       name: loyalty-interaction
       image: waddlebot-loyalty-interaction
-      tag: latest
+      imageTag: ""
       port: 8032
       replicas: 2
       resourcePreset: medium
@@ -708,6 +781,70 @@ modules:
           cpu: "500m"
           memory: "512Mi"
 
+    lfg:
+      enabled: true
+      name: lfg-interaction
+      image: waddlebot-lfg-interaction
+      imageTag: ""
+      port: 8096
+      grpcPort: 50034
+      replicas: 2
+      resourcePreset: small
+      env:
+        MODULE_NAME: "lfg_interaction_module"
+        MODULE_VERSION: "1.0.0"
+        PORT: "8096"
+        GRPC_PORT: "50034"
+        LOG_LEVEL: "INFO"
+
+    clip:
+      enabled: true
+      name: clip-interaction
+      image: waddlebot-clip-interaction
+      imageTag: ""
+      port: 8098
+      grpcPort: 50036
+      replicas: 2
+      resourcePreset: small
+      env:
+        MODULE_NAME: "clip_interaction_module"
+        MODULE_VERSION: "1.0.0"
+        PORT: "8098"
+        GRPC_PORT: "50036"
+        LOG_LEVEL: "INFO"
+
+    serverStatus:
+      enabled: true
+      name: server-status-interaction
+      image: waddlebot-server-status-interaction
+      imageTag: ""
+      port: 8097
+      grpcPort: 50035
+      replicas: 1
+      resourcePreset: small
+      env:
+        MODULE_NAME: "server_status_interaction_module"
+        MODULE_VERSION: "1.0.0"
+        PORT: "8097"
+        GRPC_PORT: "50035"
+        LOG_LEVEL: "INFO"
+
+    serverManager:
+      enabled: true
+      name: server-manager-interaction
+      image: waddlebot-server-manager-interaction
+      imageTag: ""
+      port: 8099
+      grpcPort: 50037
+      replicas: 1
+      resourcePreset: small
+      env:
+        MODULE_NAME: "server_manager_interaction_module"
+        MODULE_VERSION: "1.0.0"
+        PORT: "8099"
+        GRPC_PORT: "50037"
+        LOG_LEVEL: "INFO"
+
   # Action Modules - Pushing (disabled for now)
   pushing:
     discordAction:
@@ -725,7 +862,7 @@ modules:
       enabled: true
       name: discord-action
       image: waddlebot-discord-action
-      tag: latest
+      imageTag: ""
       httpPort: 8070
       grpcPort: 50051
       replicas: 2
@@ -742,7 +879,7 @@ modules:
       enabled: true
       name: slack-action
       image: waddlebot-slack-action
-      tag: latest
+      imageTag: ""
       httpPort: 8071
       grpcPort: 50052
       replicas: 2
@@ -759,7 +896,7 @@ modules:
       enabled: true
       name: twitch-action
       image: waddlebot-twitch-action
-      tag: latest
+      imageTag: ""
       httpPort: 8072
       grpcPort: 50053
       replicas: 2
@@ -776,7 +913,7 @@ modules:
       enabled: true
       name: youtube-action
       image: waddlebot-youtube-action
-      tag: latest
+      imageTag: ""
       httpPort: 8073
       grpcPort: 50054
       replicas: 1
@@ -1009,12 +1146,12 @@ monitoring:
     dashboards:
       enabled: false
 
-# Network Policies
+# Network Policies — namespace-level ingress isolation
+# When enabled, denies all cross-namespace ingress and allows only
+# same-namespace traffic + ingress controller traffic.
 networkPolicy:
   enabled: false
-  policyTypes:
-    - Ingress
-    - Egress
+  ingressNamespace: ingress-nginx
 
 # Kong API Gateway subchart configuration
 # https://github.com/Kong/charts/tree/main/charts/kong

@@ -80,7 +80,7 @@ modules:
     replicas: 1
     autoscaling:
       minReplicas: 1
-      maxReplicas: 2
+      maxReplicas: 1
 
   # Collectors/Triggers
   collectors:
@@ -130,6 +130,32 @@ modules:
       name: translate-interaction
       image: interactive-translate
       replicas: 1
+    lfg:
+      image: interactive-lfg
+      replicas: 1
+    clip:
+      image: interactive-clip
+      replicas: 1
+    serverStatus:
+      image: interactive-server-status
+      replicas: 1
+    serverManager:
+      image: interactive-server-manager
+      replicas: 1
+
+  # Core - missing modules
+  analytics:
+    image: core-analytics
+    replicas: 1
+  security:
+    image: core-security
+    replicas: 1
+  workflow:
+    image: core-workflow
+    replicas: 1
+  credentialManager:
+    image: core-credential-manager
+    replicas: 1
 
   # Platform Action Modules
   platformActions:
@@ -255,6 +281,14 @@ ingress:
         - waddlebot.penguintech.cloud
         - waddles.penguintech.cloud
 
+# Network Policies — enabled in beta for namespace isolation
+networkPolicy:
+  enabled: true
+
 # Kong API Gateway - explicitly enabled in beta
 kong:
   enabled: true
+  # Mirror kong:3.9 to private registry — cluster nodes cannot reach Docker Hub
+  image:
+    repository: registry-dal2.penguintech.io/waddlebot/kong
+    tag: "3.9"
