@@ -854,6 +854,13 @@ modules:
     port: 8100
     replicas: 2
     resourcePreset: medium
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "256Mi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
     service:
       type: ClusterIP
       port: 8100

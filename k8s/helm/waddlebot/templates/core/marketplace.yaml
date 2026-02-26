@@ -67,7 +67,7 @@ spec:
           timeoutSeconds: 3
           failureThreshold: 3
         resources:
-          {{- include "waddlebot.resourcesFromPreset" .Values.modules.marketplace.resourcePreset | nindent 10 }}
+          {{- toYaml .Values.modules.marketplace.resources | nindent 10 }}
         volumeMounts:
         - name: logs
           mountPath: /var/log/waddlebotlog
