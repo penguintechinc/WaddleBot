@@ -7,6 +7,7 @@ global:
   imageRegistry: "registry-dal2.penguintech.io/waddlebot"
   imageTag: "latest"
   imagePullPolicy: Always
+  corsOrigin: "https://hub.waddlebot.io,https://waddlebot.io,https://waddles.penguintech.cloud,https://waddlebot.penguintech.cloud,http://localhost:3000,http://localhost:5173"
 
 # Infrastructure - Enable core services in beta
 infrastructure:
@@ -183,7 +184,8 @@ sharedEnv:
   MINIO_ENDPOINT: "infra-minio:9000"
   QDRANT_HOST: "infra-qdrant"
   ROUTER_URL: "http://waddlebot-router:8000"
-  HUB_URL: "http://waddlebot-hub:8060"
+  HUB_URL: "http://waddlebot-hub-api:8060"
+  OAUTH_CALLBACK_BASE_URL: "https://waddles.penguintech.cloud"
 
 # Ingress - using Cloudflare wildcard certificate
 ingress:
@@ -197,19 +199,178 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
   hosts:
     - host: waddlebot.penguintech.cloud
-      paths:
+      paths: &api-paths
+        # WebSocket
         - path: /socket.io
           pathType: Prefix
           service: hub-api
           port: 8060
-        - path: /api
+
+        # Hub API routes
+        - path: /api/v1/public
           pathType: Prefix
-          rawService: kong-proxy
-          port: 8080
-        - path: /
+          service: hub-api
+          port: 8060
+        - path: /api/v1/auth
           pathType: Prefix
-          service: hub-webui
-          port: 80
+          service: hub-api
+          port: 8060
+        - path: /api/v1/user
+          pathType: Prefix
+          service: hub-api
+          port: 8060
+        - path: /api/v1/community
+          pathType: Prefix
+          service: hub-api
+          port: 8060
+        - path: /api/v1/communities
+          pathType: Prefix
+          service: hub-api
+          port: 8060
+        - path: /api/v1/admin
+          pathType: Prefix
+          service: hub-api
+          port: 8060
+        - path: /api/v1/platform
+          pathType: Prefix
+          service: hub-api
+          port: 8060
+        - path: /api/v1/superadmin
+          pathType: Prefix
+          service: hub-api
+          port: 8060
+        - path: /api/v1/cookie
+          pathType: Prefix
+          service: hub-api
+          port: 8060
+        - path: /api/v1/signup-settings
+          pathType: Prefix
+          service: hub-api
+          port: 8060
+        - path: /api/v1/internal
+          pathType: Prefix
+          service: hub-api
+          port: 8060
+
+        # Router
+        - path: /api/v1/router
+          pathType: Prefix
+          service: router
+          port: 8000
+
+        # Core modules
+        - path: /api/v1/identity
+          pathType: Prefix
+          service: identity-core
+          port: 8050
+        - path: /api/v1/labels
+          pathType: Prefix
+          service: labels-core
+          port: 8023
+        - path: /api/v1/reputation
+          pathType: Prefix
+          service: reputation
+          port: 8021
+        - path: /api/v1/community-core
+          pathType: Prefix
+          service: community
+          port: 8020
+
+        # Interactive modules
+        - path: /api/v1/ai
+          pathType: Prefix
+          service: ai-interaction
+          port: 8005
+        - path: /api/v1/ai-researcher
+          pathType: Prefix
+          service: ai-researcher
+          port: 8070
+        - path: /api/v1/alias
+          pathType: Prefix
+          service: alias-interaction
+          port: 8010
+        - path: /api/v1/shoutout
+          pathType: Prefix
+          service: shoutout-interaction
+          port: 8011
+        - path: /api/v1/inventory
+          pathType: Prefix
+          service: inventory-interaction
+          port: 8024
+        - path: /api/v1/calendar
+          pathType: Prefix
+          service: calendar-interaction
+          port: 8030
+        - path: /api/v1/memories
+          pathType: Prefix
+          service: memories-interaction
+          port: 8031
+        - path: /api/v1/loyalty
+          pathType: Prefix
+          service: loyalty-interaction
+          port: 8032
+        - path: /api/v1/youtube-music
+          pathType: Prefix
+          service: youtube-music
+          port: 8025
+        - path: /api/v1/spotify
+          pathType: Prefix
+          service: spotify-interaction
+          port: 8026
+
+        # Marketplace standalone service (specific paths before hub-api catch-all)
+        - path: /api/v1/marketplace/catalog
+          pathType: Prefix
+          service: marketplace
+          port: 8100
+        - path: /api/v1/marketplace/communities
+          pathType: Prefix
+          service: marketplace
+          port: 8100
+        - path: /api/v1/marketplace/vendor
+          pathType: Prefix
+          service: marketplace
+          port: 8100
+        - path: /api/v1/marketplace/admin
+          pathType: Prefix
+          service: marketplace
+          port: 8100
+        - path: /api/v1/marketplace/premium
+          pathType: Prefix
+          service: marketplace
+          port: 8100
+        - path: /api/v1/marketplace/payments
+          pathType: Prefix
+          service: marketplace
+          port: 8100
+        - path: /api/v1/marketplace/webhooks
+          pathType: Prefix
+          service: marketplace
+          port: 8100
+        - path: /api/v1/marketplace/internal
+          pathType: Prefix
+          service: marketplace
+          port: 8100
+        - path: /api/v1/marketplace
+          pathType: Prefix
+          service: hub-api
+          port: 8060
+
+        # Platform webhook receivers
+        - path: /api/messages
+          pathType: Prefix
+          service: teams-collector
+          port: 8008
+        - path: /api/v1/mattermost/webhook
+          pathType: Prefix
+          service: mattermost-collector
+          port: 8009
+        - path: /api/v1/googlechat/webhook
+          pathType: Prefix
+          service: googlechat-collector
+          port: 8012
+
+        # Existing webhook receivers
         - path: /webhooks/twitch
           pathType: Prefix
           service: twitch-collector
@@ -222,32 +383,15 @@ ingress:
           pathType: Prefix
           service: slack-collector
           port: 8004
+
+        # Frontend catch-all (must be last)
+        - path: /
+          pathType: Prefix
+          service: hub-webui
+          port: 80
+
     - host: waddles.penguintech.cloud
-      paths:
-        - path: /socket.io
-          pathType: Prefix
-          service: hub-api
-          port: 8060
-        - path: /api
-          pathType: Prefix
-          rawService: kong-proxy
-          port: 8080
-        - path: /
-          pathType: Prefix
-          service: hub-webui
-          port: 80
-        - path: /webhooks/twitch
-          pathType: Prefix
-          service: twitch-collector
-          port: 8002
-        - path: /webhooks/discord
-          pathType: Prefix
-          service: discord-collector
-          port: 8003
-        - path: /webhooks/slack
-          pathType: Prefix
-          service: slack-collector
-          port: 8004
+      paths: *api-paths
   tls:
     - secretName: penguintech-cloud-wildcard-tls
       hosts:
@@ -257,20 +401,3 @@ ingress:
 # Network Policies — enabled in beta for namespace isolation
 networkPolicy:
   enabled: true
-
-# Kong API Gateway - explicitly enabled in beta
-kong:
-  enabled: true
-  # Mirror kong:3.9 to private registry — cluster nodes cannot reach Docker Hub
-  image:
-    repository: registry-dal2.penguintech.io/waddlebot/kong
-    tag: "3.9"
-  proxy:
-    enabled: true
-    type: ClusterIP
-    http:
-      enabled: true
-      servicePort: 8080
-      containerPort: 8080
-    tls:
-      enabled: false

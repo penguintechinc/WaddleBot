@@ -78,7 +78,47 @@ export async function getHubChannels(req, res, next) {
       createdAt: r.created_at,
     }));
 
-    res.json({ success: true, channels });
+    // Compute canCreateChannel for member routes (req.params.id present)
+    let canCreateChannel = false;
+    if (req.params.id && req.user) {
+      // Admin-level users always can
+      if (req.user.isSuperAdmin || req.isTenantAdmin || req.user.roles?.includes('platform-admin')) {
+        canCreateChannel = true;
+      } else {
+        const policyResult = await query(
+          `SELECT c.config,
+                  cr.base_claims, cm.claims_cache
+           FROM communities c
+           LEFT JOIN community_members cm ON cm.community_id = c.id
+             AND cm.user_id = $2 AND cm.is_active = true
+           LEFT JOIN community_roles cr ON cr.id = cm.community_role_id
+           WHERE c.id = $1`,
+          [communityId, req.user.id]
+        );
+        if (policyResult.rows.length && (policyResult.rows[0].base_claims || policyResult.rows[0].claims_cache)) {
+          const pRow = policyResult.rows[0];
+          let scopes;
+          if (pRow.claims_cache) {
+            scopes = Array.isArray(pRow.claims_cache)
+              ? pRow.claims_cache : (pRow.claims_cache.scopes || []);
+          } else {
+            const claims = typeof pRow.base_claims === 'string'
+              ? JSON.parse(pRow.base_claims) : pRow.base_claims;
+            scopes = (claims || {}).scopes || [];
+          }
+          const policy = (pRow.config || {}).channel_creation_policy || 'admin_only';
+          if (policy === 'all_members') {
+            canCreateChannel = true;
+          } else if (policy === 'communicator') {
+            canCreateChannel = scopes.includes('channels:create') || scopes.includes('community:manage_channels');
+          } else {
+            canCreateChannel = scopes.includes('community:manage_channels') || scopes.includes('community:manage_members');
+          }
+        }
+      }
+    }
+
+    res.json({ success: true, channels, canCreateChannel });
   } catch (err) {
     logger.error('Failed to get hub channels', { error: err.message });
     return next(errors.internal('Failed to get hub channels'));
@@ -87,7 +127,7 @@ export async function getHubChannels(req, res, next) {
 
 export async function createHubChannel(req, res, next) {
   try {
-    const communityId = parseInt(req.params.communityId, 10);
+    const communityId = parseInt(req.params.communityId || req.params.id, 10);
     const { name, description, channel_type = 'chat', sort_order = 0, allow_ad_hoc_voice = false,
             has_chat, has_voice, has_video, is_temporary, temp_duration_minutes, is_broadcast } = req.body;
 

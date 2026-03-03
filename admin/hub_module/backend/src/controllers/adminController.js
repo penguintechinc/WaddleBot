@@ -899,6 +899,7 @@ export async function getCommunitySettings(req, res, next) {
         platform: row.platform,
         isPublic: row.is_public,
         joinMode: row.join_mode || 'open',
+        channelCreationPolicy: (row.config || {}).channel_creation_policy || 'admin_only',
         config: row.config || {},
       },
     });
@@ -913,7 +914,7 @@ export async function getCommunitySettings(req, res, next) {
 export async function updateCommunitySettings(req, res, next) {
   try {
     const communityId = parseInt(req.params.communityId, 10);
-    const { displayName, description, isPublic, joinMode, config } = req.body;
+    const { displayName, description, isPublic, joinMode, channelCreationPolicy, config } = req.body;
 
     const updates = [];
     const params = [];
@@ -947,8 +948,18 @@ export async function updateCommunitySettings(req, res, next) {
       paramIndex++;
     }
 
+    if (channelCreationPolicy !== undefined) {
+      const validPolicies = ['admin_only', 'communicator', 'all_members'];
+      if (!validPolicies.includes(channelCreationPolicy)) {
+        return next(errors.badRequest('Invalid channel creation policy'));
+      }
+      updates.push(`config = COALESCE(config, '{}')::jsonb || $${paramIndex}::jsonb`);
+      params.push(JSON.stringify({ channel_creation_policy: channelCreationPolicy }));
+      paramIndex++;
+    }
+
     if (config !== undefined) {
-      updates.push(`config = $${paramIndex}`);
+      updates.push(`config = COALESCE(config, '{}')::jsonb || $${paramIndex}::jsonb`);
       params.push(JSON.stringify(config));
       paramIndex++;
     }

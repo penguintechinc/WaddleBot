@@ -10,6 +10,9 @@ import axios from 'axios';
 
 const DISCORD_BOT_RELAY_URL = process.env.DISCORD_BOT_RELAY_URL || 'http://discord-bot-service:8080/internal/relay';
 const SLACK_BOT_RELAY_URL = process.env.SLACK_BOT_RELAY_URL || 'http://slack-bot-service:8081/internal/relay';
+const TEAMS_BOT_RELAY_URL = process.env.TEAMS_BOT_RELAY_URL || 'http://waddlebot-teams-collector:8008/internal/relay';
+const MATTERMOST_BOT_RELAY_URL = process.env.MATTERMOST_BOT_RELAY_URL || 'http://waddlebot-mattermost-collector:8009/internal/relay';
+const GOOGLECHAT_BOT_RELAY_URL = process.env.GOOGLECHAT_BOT_RELAY_URL || 'http://waddlebot-googlechat-collector:8012/internal/relay';
 
 // Relay timeout — don't let slow bots block the sender
 const RELAY_TIMEOUT_MS = 5000;
@@ -108,6 +111,12 @@ async function dispatchToTarget(target, content, author, messageType, io) {
         return dispatchToPlatformBot(DISCORD_BOT_RELAY_URL, target, content, author, messageType);
       case 'slack':
         return dispatchToPlatformBot(SLACK_BOT_RELAY_URL, target, content, author, messageType);
+      case 'teams':
+        return dispatchToPlatformBot(TEAMS_BOT_RELAY_URL, target, content, author, messageType);
+      case 'mattermost':
+        return dispatchToPlatformBot(MATTERMOST_BOT_RELAY_URL, target, content, author, messageType);
+      case 'googlechat':
+        return dispatchToPlatformBot(GOOGLECHAT_BOT_RELAY_URL, target, content, author, messageType);
       default:
         logger.warn('Unknown target platform for relay', { platform: target.target_platform });
     }

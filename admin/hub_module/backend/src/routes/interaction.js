@@ -2,7 +2,7 @@
  * Interaction Routes — Hub channels, forums, and internal relay
  */
 import { Router } from 'express';
-import { requireAuth, requireCommunityAdmin, requireScope } from '../middleware/auth.js';
+import { requireAuth, requireCommunityAdmin, requireChannelCreation, requireScope } from '../middleware/auth.js';
 import * as ctrl from '../controllers/interactionController.js';
 
 const router = Router({ mergeParams: true });
@@ -60,6 +60,12 @@ communityInteractionRouter.get(
   '/:id/interact/channels',
   requireAuth,
   ctrl.getHubChannels
+);
+communityInteractionRouter.post(
+  '/:id/interact/channels',
+  requireAuth,
+  requireChannelCreation,
+  ctrl.createHubChannel
 );
 communityInteractionRouter.get(
   '/:id/interact/forum/:channelId/posts',

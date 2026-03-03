@@ -11,7 +11,7 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
 } from '@heroicons/react/24/outline';
-import { interactionApi, channelPermissionsApi, rolesApi } from '../../services/api';
+import { interactionApi, channelPermissionsApi, rolesApi, adminApi } from '../../services/api';
 
 const CHANNEL_TYPES = [
   { value: 'chat', label: 'Chat' },
@@ -438,6 +438,92 @@ function DeleteConfirm({ channel, onConfirm, onCancel, deleting }) {
   );
 }
 
+const POLICY_OPTIONS = [
+  { value: 'admin_only', label: 'Admin Only', desc: 'Only moderators and admins can create channels (default).' },
+  { value: 'communicator', label: 'Communicator Role+', desc: 'Members with the Communicator role or higher can create channels.' },
+  { value: 'all_members', label: 'All Members', desc: 'Any community member can create channels.' },
+];
+
+function ChannelCreationPolicy({ communityId }) {
+  const [policy, setPolicy] = useState('admin_only');
+  const [loadingPolicy, setLoadingPolicy] = useState(true);
+  const [savingPolicy, setSavingPolicy] = useState(false);
+  const [policyError, setPolicyError] = useState(null);
+  const [policySaved, setPolicySaved] = useState(false);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await adminApi.getSettings(communityId);
+        setPolicy(res.data?.settings?.channelCreationPolicy || 'admin_only');
+      } catch {
+        setPolicyError('Failed to load policy setting.');
+      } finally {
+        setLoadingPolicy(false);
+      }
+    }
+    load();
+  }, [communityId]);
+
+  async function handleSave() {
+    setSavingPolicy(true);
+    setPolicyError(null);
+    setPolicySaved(false);
+    try {
+      await adminApi.updateSettings(communityId, { channelCreationPolicy: policy });
+      setPolicySaved(true);
+      setTimeout(() => setPolicySaved(false), 3000);
+    } catch (err) {
+      setPolicyError(err?.response?.data?.message ?? 'Failed to save policy.');
+    } finally {
+      setSavingPolicy(false);
+    }
+  }
+
+  const selectedOption = POLICY_OPTIONS.find((o) => o.value === policy);
+
+  return (
+    <div className="bg-navy-800 border border-navy-700 rounded-lg p-4 mb-6">
+      <h2 className="text-sm font-semibold text-navy-400 uppercase tracking-wider mb-3">
+        Channel Creation Policy
+      </h2>
+      {loadingPolicy ? (
+        <div className="text-navy-400 text-sm">Loading…</div>
+      ) : (
+        <div className="flex items-start gap-4">
+          <div className="flex-1 max-w-xs">
+            <select
+              value={policy}
+              onChange={(e) => setPolicy(e.target.value)}
+              className="w-full bg-navy-900 border border-navy-600 text-sky-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-sky-500"
+            >
+              {POLICY_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+            {selectedOption && (
+              <p className="text-navy-400 text-xs mt-1.5">{selectedOption.desc}</p>
+            )}
+          </div>
+          <button
+            onClick={handleSave}
+            disabled={savingPolicy}
+            className="bg-gold-500 text-navy-900 hover:bg-gold-400 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50 transition-colors"
+          >
+            {savingPolicy ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      )}
+      {policyError && (
+        <div className="text-red-400 text-xs mt-2">{policyError}</div>
+      )}
+      {policySaved && (
+        <div className="text-green-400 text-xs mt-2">Policy saved.</div>
+      )}
+    </div>
+  );
+}
+
 export default function AdminInteractionChannels() {
   const { communityId } = useParams();
 
@@ -544,6 +630,9 @@ export default function AdminInteractionChannels() {
           Create Channel
         </button>
       </div>
+
+      {/* Channel creation policy */}
+      <ChannelCreationPolicy communityId={communityId} />
 
       {/* Inline form */}
       {showCreate && (

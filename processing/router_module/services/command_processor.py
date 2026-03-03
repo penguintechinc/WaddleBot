@@ -73,6 +73,11 @@ class CommandProcessor:
                     event_data, entity_id, user_id, session_id, metadata
                 )
 
+            # Handle presence updates (forward to presence service)
+            if message_type == 'presence_update':
+                asyncio.create_task(self._forward_presence_update(event_data))
+                return {"success": True, "session_id": session_id, "processed": True}
+
             # Handle stream events (no command response, just activity tracking)
             if message_type in ('stream_online', 'stream_offline', 'subscription',
                                 'gift_subscription', 'follow', 'raid', 'cheer'):
@@ -295,6 +300,29 @@ class CommandProcessor:
             "interaction_token": metadata.get('interaction_token'),
             "platform": platform,
         }
+
+    async def _forward_presence_update(self, event_data: Dict[str, Any]):
+        """Forward presence update events to the presence service."""
+        try:
+            session = await self._get_http_session()
+            presence_url = getattr(Config, 'PRESENCE_API_URL', None)
+            if not presence_url:
+                logger.debug("PRESENCE_API_URL not configured, skipping presence update")
+                return
+
+            async with session.post(
+                f"{presence_url}/api/v1/presence/update",
+                json=event_data,
+                timeout=aiohttp.ClientTimeout(total=5)
+            ) as resp:
+                if resp.status != 200:
+                    logger.warning(
+                        "Presence update forward failed: HTTP %d",
+                        resp.status,
+                        extra={"event": event_data.get("user_id")}
+                    )
+        except Exception as exc:
+            logger.warning("Failed to forward presence update: %s", exc)
 
     async def _record_stream_activity(self, event_data: Dict[str, Any]):
         """Record stream events (subs, follows, raids, etc.) for activity tracking"""

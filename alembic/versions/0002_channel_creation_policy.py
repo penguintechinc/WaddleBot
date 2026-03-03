@@ -1,0 +1,118 @@
+"""Add communicator role + channel_creation_policy config.
+
+Migrated from legacy SQL: config/postgres/migrations/062_channel_creation_policy.sql
+
+Adds a "communicator" system role (priority 15) between member (10) and
+speaker (20) with the channels:create scope.  Also documents the
+communities.config JSONB key "channel_creation_policy"
+(admin_only | communicator | all_members).
+
+Revision ID: 0002_channel_creation
+Revises: 0001_baseline
+Create Date: 2026-03-02
+"""
+from alembic import op
+import sqlalchemy as sa
+
+revision = '0002_channel_creation'
+down_revision = '0001_baseline'
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    conn = op.get_bind()
+
+    # Re-create the seed function with the new communicator role.
+    # Uses CREATE OR REPLACE + ON CONFLICT DO NOTHING so this is fully
+    # idempotent — safe to run even if 062 was already applied via psql.
+    conn.execute(sa.text("""
+        CREATE OR REPLACE FUNCTION seed_community_system_roles(p_community_id INTEGER)
+        RETURNS VOID AS $$
+        BEGIN
+          -- member (priority 10)
+          INSERT INTO community_roles (community_id, name, display_name, is_system, priority, base_claims)
+            VALUES (
+              p_community_id,
+              'member',
+              'Member',
+              TRUE,
+              10,
+              '{"scopes":["community:read","channels:read","channels:send_chat","channels:speak","channels:share_video","channels:screenshare"]}'
+            )
+            ON CONFLICT (community_id, name) DO NOTHING;
+
+          -- communicator (priority 15) — member scopes + channels:create
+          INSERT INTO community_roles (community_id, name, display_name, is_system, priority, base_claims)
+            VALUES (
+              p_community_id,
+              'communicator',
+              'Communicator',
+              TRUE,
+              15,
+              '{"scopes":["community:read","channels:read","channels:send_chat","channels:speak","channels:share_video","channels:screenshare","channels:create"]}'
+            )
+            ON CONFLICT (community_id, name) DO NOTHING;
+
+          -- speaker (priority 20)
+          INSERT INTO community_roles (community_id, name, display_name, is_system, priority, base_claims)
+            VALUES (
+              p_community_id,
+              'speaker',
+              'Speaker',
+              TRUE,
+              20,
+              '{"scopes":["community:read","channels:read","channels:send_chat","channels:speak","channels:share_video","channels:screenshare"]}'
+            )
+            ON CONFLICT (community_id, name) DO NOTHING;
+
+          -- moderator (priority 30)
+          INSERT INTO community_roles (community_id, name, display_name, is_system, priority, base_claims)
+            VALUES (
+              p_community_id,
+              'moderator',
+              'Moderator',
+              TRUE,
+              30,
+              '{"scopes":["community:read","channels:read","channels:send_chat","channels:speak","channels:share_video","channels:screenshare","community:manage_channels","channels:moderate","channels:override_screenshare"]}'
+            )
+            ON CONFLICT (community_id, name) DO NOTHING;
+
+          -- community-admin (priority 40)
+          INSERT INTO community_roles (community_id, name, display_name, is_system, priority, base_claims)
+            VALUES (
+              p_community_id,
+              'community-admin',
+              'Admin',
+              TRUE,
+              40,
+              '{"scopes":["community:read","channels:read","channels:send_chat","channels:speak","channels:share_video","channels:screenshare","community:manage_channels","channels:moderate","channels:override_screenshare","community:manage_members","community:manage_roles"]}'
+            )
+            ON CONFLICT (community_id, name) DO NOTHING;
+
+          -- community-owner (priority 50)
+          INSERT INTO community_roles (community_id, name, display_name, is_system, priority, base_claims)
+            VALUES (
+              p_community_id,
+              'community-owner',
+              'Owner',
+              TRUE,
+              50,
+              '{"scopes":["community:read","community:manage_channels","community:manage_members","community:manage_roles","channels:read","channels:send_chat","channels:speak","channels:share_video","channels:screenshare","channels:moderate","channels:override_screenshare","resource:delete_any","resource:pin","resource:moderate"]}'
+            )
+            ON CONFLICT (community_id, name) DO NOTHING;
+        END;
+        $$ LANGUAGE plpgsql;
+    """))
+
+    # Backfill: add communicator role to all existing communities
+    conn.execute(sa.text(
+        "SELECT seed_community_system_roles(id) FROM communities;"
+    ))
+
+
+def downgrade() -> None:
+    op.execute(
+        "DELETE FROM community_roles "
+        "WHERE name = 'communicator' AND is_system = true;"
+    )

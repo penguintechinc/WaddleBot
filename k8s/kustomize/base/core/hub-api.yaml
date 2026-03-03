@@ -49,6 +49,8 @@ spec:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: false
         envFrom:
+        - configMapRef:
+            name: waddlebot-config
         - secretRef:
             name: waddlebot-secrets
             optional: true

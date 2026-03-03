@@ -657,7 +657,7 @@ export const marketplaceApi = {
   addReview: (communityId, moduleId, data) => api.post(`/api/v1/admin/${communityId}/marketplace/modules/${moduleId}/review`, data),
 };
 
-// New unified marketplace API (routes through marketplace module via Kong)
+// New unified marketplace API (routes through marketplace module)
 export const unifiedMarketplaceApi = {
   // Catalog
   getCatalog: (params) => api.get('/api/v1/marketplace/catalog', { params }),
@@ -732,72 +732,6 @@ export const streamApi = {
   getFeaturedStreams: (communityId) => api.get(`/api/v1/communities/${communityId}/streams/featured`),
   getStreamDetails: (communityId, entityId) =>
     api.get(`/api/v1/communities/${communityId}/streams/${entityId}`),
-};
-
-// Kong Gateway API
-export const kongApi = {
-  // Health check
-  getKongHealth: () => api.get('/api/v1/superadmin/kong/health'),
-
-  // Status
-  getKongStatus: () => api.get('/api/v1/superadmin/kong/status'),
-
-  // Services
-  getKongServices: (params) => api.get('/api/v1/superadmin/kong/services', { params }),
-  getKongService: (id) => api.get(`/api/v1/superadmin/kong/services/${id}`),
-  createKongService: (data) => api.post('/api/v1/superadmin/kong/services', data),
-  updateKongService: (id, data) => api.patch(`/api/v1/superadmin/kong/services/${id}`, data),
-  deleteKongService: (id) => api.delete(`/api/v1/superadmin/kong/services/${id}`),
-
-  // Routes
-  getKongRoutes: (params) => api.get('/api/v1/superadmin/kong/routes', { params }),
-  getKongRoute: (id) => api.get(`/api/v1/superadmin/kong/routes/${id}`),
-  getKongServiceRoutes: (serviceId) => api.get(`/api/v1/superadmin/kong/services/${serviceId}/routes`),
-  createKongRoute: (serviceId, data) => api.post(`/api/v1/superadmin/kong/services/${serviceId}/routes`, data),
-  updateKongRoute: (id, data) => api.patch(`/api/v1/superadmin/kong/routes/${id}`, data),
-  deleteKongRoute: (id) => api.delete(`/api/v1/superadmin/kong/routes/${id}`),
-
-  // Plugins
-  getKongPlugins: (params) => api.get('/api/v1/superadmin/kong/plugins', { params }),
-  getKongPlugin: (id) => api.get(`/api/v1/superadmin/kong/plugins/${id}`),
-  createKongPlugin: (data) => api.post('/api/v1/superadmin/kong/plugins', data),
-  updateKongPlugin: (id, data) => api.patch(`/api/v1/superadmin/kong/plugins/${id}`, data),
-  deleteKongPlugin: (id) => api.delete(`/api/v1/superadmin/kong/plugins/${id}`),
-
-  // Consumers
-  getKongConsumers: (params) => api.get('/api/v1/superadmin/kong/consumers', { params }),
-  getKongConsumer: (id) => api.get(`/api/v1/superadmin/kong/consumers/${id}`),
-  createKongConsumer: (data) => api.post('/api/v1/superadmin/kong/consumers', data),
-  deleteKongConsumer: (id) => api.delete(`/api/v1/superadmin/kong/consumers/${id}`),
-
-  // Upstreams
-  getKongUpstreams: (params) => api.get('/api/v1/superadmin/kong/upstreams', { params }),
-  getKongUpstream: (id) => api.get(`/api/v1/superadmin/kong/upstreams/${id}`),
-  createKongUpstream: (data) => api.post('/api/v1/superadmin/kong/upstreams', data),
-  updateKongUpstream: (id, data) => api.patch(`/api/v1/superadmin/kong/upstreams/${id}`, data),
-  deleteKongUpstream: (id) => api.delete(`/api/v1/superadmin/kong/upstreams/${id}`),
-
-  // Targets
-  getKongTargets: (upstreamId, params) => api.get(`/api/v1/superadmin/kong/upstreams/${upstreamId}/targets`, { params }),
-  createKongTarget: (upstreamId, data) => api.post(`/api/v1/superadmin/kong/upstreams/${upstreamId}/targets`, data),
-  deleteKongTarget: (upstreamId, targetId) => api.delete(`/api/v1/superadmin/kong/upstreams/${upstreamId}/targets/${targetId}`),
-
-  // Certificates
-  getKongCertificates: (params) => api.get('/api/v1/superadmin/kong/certificates', { params }),
-  getKongCertificate: (id) => api.get(`/api/v1/superadmin/kong/certificates/${id}`),
-  createKongCertificate: (data) => api.post('/api/v1/superadmin/kong/certificates', data),
-  deleteKongCertificate: (id) => api.delete(`/api/v1/superadmin/kong/certificates/${id}`),
-
-  // Certificate Generation
-  generateSelfSignedCertificate: (data) => api.post('/api/v1/superadmin/kong/certificates/generate/self-signed', data),
-  generateCertbotCertificate: (data) => api.post('/api/v1/superadmin/kong/certificates/generate/certbot', data),
-  renewCertbotCertificate: (domain) => api.post(`/api/v1/superadmin/kong/certificates/renew/${domain}`),
-  listCertbotCertificates: () => api.get('/api/v1/superadmin/kong/certificates/certbot/list'),
-
-  // SNIs
-  getKongSNIs: (params) => api.get('/api/v1/superadmin/kong/snis', { params }),
-  createKongSNI: (data) => api.post('/api/v1/superadmin/kong/snis', data),
-  deleteKongSNI: (id) => api.delete(`/api/v1/superadmin/kong/snis/${id}`),
 };
 
 // Workflow API
@@ -962,12 +896,12 @@ export const userOAuthApi = {
 };
 
 export const passkeyApi = {
-  startRegistration: () => api.post('/user/passkey/register/start'),
-  finishRegistration: (data) => api.post('/user/passkey/register/finish', data),
-  listCredentials: () => api.get('/user/passkey/credentials'),
-  removeCredential: (id) => api.delete(`/user/passkey/credentials/${id}`),
-  startLogin: (data) => api.post('/auth/passkey/login/start', data),
-  finishLogin: (data) => api.post('/auth/passkey/login/finish', data),
+  startRegistration: () => api.post('/api/v1/user/passkey/register/start'),
+  finishRegistration: (data) => api.post('/api/v1/user/passkey/register/finish', data),
+  listCredentials: () => api.get('/api/v1/user/passkey/credentials'),
+  removeCredential: (id) => api.delete(`/api/v1/user/passkey/credentials/${id}`),
+  startLogin: (data) => api.post('/api/v1/auth/passkey/login/start', data),
+  finishLogin: (data) => api.post('/api/v1/auth/passkey/login/finish', data),
 };
 
 // ─── Interaction (Hub Channels, Forums, Voice) API ──────────────────────────
@@ -985,6 +919,8 @@ export const interactionApi = {
   // Member — channels list (community route)
   getMemberChannels: (communityId) =>
     api.get(`/api/v1/community/${communityId}/interact/channels`),
+  createMemberChannel: (communityId, data) =>
+    api.post(`/api/v1/community/${communityId}/interact/channels`, data),
 
   // Forum
   getForumPosts: (communityId, channelId, params) =>

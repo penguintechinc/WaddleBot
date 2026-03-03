@@ -75,7 +75,6 @@ jobs:
           - router_module
           - marketplace_module
           - portal_module
-          - kong_admin_broker
           - twitch_module
           - discord_module
           - slack_module
@@ -185,7 +184,7 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
       - name: Upload APK artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: android-apks
           path: |
@@ -193,7 +192,7 @@ jobs:
             Premium/Android/app/build/outputs/apk/release/*.apk
 
       - name: Upload test results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: android-test-results
@@ -268,7 +267,7 @@ jobs:
         shell: bash
 
       - name: Upload test results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: test-results-${{ matrix.os }}
@@ -307,7 +306,7 @@ jobs:
         shell: bash
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: desktop-bridge-${{ matrix.os }}
           path: Premium/Desktop/build/
@@ -332,7 +331,7 @@ jobs:
         working-directory: Premium/Desktop
 
       - name: Upload benchmark results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: benchmark-results
           path: Premium/Desktop/benchmark-results.txt

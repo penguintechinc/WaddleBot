@@ -86,7 +86,7 @@ function SuperAdminCommunities() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold gradient-text">Manage Communities</h1>
-        <Link to="/superadmin/communities/new" className="btn btn-primary">
+        <Link to="/communities/create" className="btn btn-primary">
           + Create Community
         </Link>
       </div>

@@ -111,7 +111,6 @@ section "Core Infrastructure"
 
 test_docker_health "PostgreSQL" "waddlebot-postgres"
 test_docker_health "Redis" "waddlebot-redis"
-test_health "Kong Gateway" "http://localhost:8001/status"
 test_health "MinIO" "http://localhost:9001"
 
 # ============================================

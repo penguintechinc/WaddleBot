@@ -1,0 +1,138 @@
+{{- if .Values.modules.platformActions.mattermost.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "waddlebot.fullname" . }}-mattermost-action
+  labels:
+    {{- include "waddlebot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mattermost-action
+spec:
+  replicas: {{ .Values.modules.platformActions.mattermost.replicas }}
+  selector:
+    matchLabels:
+      {{- include "waddlebot.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: mattermost-action
+  template:
+    metadata:
+      labels:
+        {{- include "waddlebot.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: mattermost-action
+    spec:
+      serviceAccountName: {{ include "waddlebot.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+      {{- include "waddlebot.dbMigrateInitContainer" . | nindent 6 }}
+      containers:
+      - name: mattermost-action
+        image: "{{ .Values.global.imageRegistry }}/{{ .Values.modules.platformActions.mattermost.image }}:{{ .Values.modules.platformActions.mattermost.imageTag | default .Values.global.imageTag }}"
+        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 10 }}
+        ports:
+        - name: rest
+          containerPort: 8075
+          protocol: TCP
+        - name: grpc
+          containerPort: 50058
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: {{ include "waddlebot.fullname" . }}-config
+        - configMapRef:
+            name: {{ include "waddlebot.fullname" . }}-mattermost-action-config
+            optional: true
+        - secretRef:
+            name: {{ include "waddlebot.fullname" . }}-secrets
+        - secretRef:
+            name: {{ include "waddlebot.fullname" . }}-mattermost-action-secret
+            optional: true
+        env:
+        - name: MODULE_NAME
+          value: "mattermost-action"
+        - name: MODULE_PORT
+          value: "8075"
+        - name: GRPC_PORT
+          value: "50058"
+        - name: MATTERMOST_URL
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "waddlebot.fullname" . }}-mattermost-action-secret
+              key: mattermost-url
+              optional: true
+        - name: MATTERMOST_BOT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "waddlebot.fullname" . }}-mattermost-action-secret
+              key: mattermost-bot-token
+              optional: true
+        - name: MATTERMOST_WEBHOOK_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "waddlebot.fullname" . }}-mattermost-action-secret
+              key: mattermost-webhook-secret
+              optional: true
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: rest
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: rest
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          {{- toYaml .Values.modules.platformActions.mattermost.resources | nindent 10 }}
+        volumeMounts:
+        - name: logs
+          mountPath: /var/log/waddlebotlog
+      volumes:
+      - name: logs
+        emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "waddlebot.fullname" . }}-mattermost-action
+  labels:
+    {{- include "waddlebot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mattermost-action
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8075
+    targetPort: rest
+    protocol: TCP
+    name: rest
+  - port: 50058
+    targetPort: grpc
+    protocol: TCP
+    name: grpc
+  selector:
+    {{- include "waddlebot.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: mattermost-action
+{{- end }}

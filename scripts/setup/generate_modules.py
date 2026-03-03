@@ -30,7 +30,6 @@ MODULES = {
     'slack_module_flask': {'port': 8004, 'desc': 'Slack collector'},
 
     # Supporting
-    'kong_admin_broker_flask': {'port': 8100, 'desc': 'Kong admin broker'},
     'community_module_flask': {'port': 8020, 'desc': 'Community management'},
     'reputation_module_flask': {'port': 8021, 'desc': 'Reputation tracking'},
 }

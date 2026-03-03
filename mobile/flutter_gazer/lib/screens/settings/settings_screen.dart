@@ -83,7 +83,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _handleAccountSettingsEdit() async {
-    final formBuilder = FormConfigs.getUserProfileFormConfig();
+    final formBuilder = FormConfigs.getUserProfileFormConfig(
+      onSubmit: (_) async {},
+    );
     // Pre-populate form with current user data
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -100,6 +102,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final formBuilder = FormConfigs.getAudioSettingsFormConfig(
       isPremium: isPremium,
       availableMicrophones: availableMicrophones,
+      onSubmit: (_) async {},
     );
 
     if (mounted) {
@@ -110,7 +113,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _handleNotificationPreferences() async {
-    final formBuilder = FormConfigs.getNotificationPreferencesFormConfig();
+    final formBuilder = FormConfigs.getNotificationPreferencesFormConfig(
+      onSubmit: (_) async {},
+    );
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

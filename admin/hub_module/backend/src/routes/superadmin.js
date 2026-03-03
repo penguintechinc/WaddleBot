@@ -5,7 +5,6 @@ import { Router } from 'express';
 import * as superadminController from '../controllers/superadminController.js';
 import * as analyticsController from '../controllers/analyticsController.js';
 import PlatformConfigController from '../controllers/platformConfigController.js';
-import * as kongController from '../controllers/kongController.js';
 import * as userManagementController from '../controllers/userManagementController.js';
 import { requireAuth, requireSuperAdmin } from '../middleware/auth.js';
 import { validators, validationRules, validateRequest } from '../middleware/validation.js';
@@ -95,68 +94,6 @@ router.put('/settings',
   validateRequest,
   PlatformConfigController.updateHubSettings
 );
-
-// Kong Gateway management
-router.get('/kong/health', kongController.getHealth);
-router.get('/kong/status', kongController.getStatus);
-
-// Services
-router.get('/kong/services', kongController.getServices);
-router.get('/kong/services/:id', kongController.getService);
-router.post('/kong/services', kongController.createService);
-router.patch('/kong/services/:id', kongController.updateService);
-router.delete('/kong/services/:id', kongController.deleteService);
-
-// Routes
-router.get('/kong/routes', kongController.getRoutes);
-router.get('/kong/routes/:id', kongController.getRoute);
-router.get('/kong/services/:serviceId/routes', kongController.getServiceRoutes);
-router.post('/kong/services/:serviceId/routes', kongController.createRoute);
-router.patch('/kong/routes/:id', kongController.updateRoute);
-router.delete('/kong/routes/:id', kongController.deleteRoute);
-
-// Plugins
-router.get('/kong/plugins', kongController.getPlugins);
-router.get('/kong/plugins/:id', kongController.getPlugin);
-router.post('/kong/plugins', kongController.createPlugin);
-router.patch('/kong/plugins/:id', kongController.updatePlugin);
-router.delete('/kong/plugins/:id', kongController.deletePlugin);
-
-// Consumers
-router.get('/kong/consumers', kongController.getConsumers);
-router.get('/kong/consumers/:id', kongController.getConsumer);
-router.post('/kong/consumers', kongController.createConsumer);
-router.delete('/kong/consumers/:id', kongController.deleteConsumer);
-
-// Upstreams
-router.get('/kong/upstreams', kongController.getUpstreams);
-router.get('/kong/upstreams/:id', kongController.getUpstream);
-router.post('/kong/upstreams', kongController.createUpstream);
-router.patch('/kong/upstreams/:id', kongController.updateUpstream);
-router.delete('/kong/upstreams/:id', kongController.deleteUpstream);
-
-// Targets
-router.get('/kong/upstreams/:upstreamId/targets', kongController.getTargets);
-router.post('/kong/upstreams/:upstreamId/targets', kongController.createTarget);
-router.delete('/kong/upstreams/:upstreamId/targets/:targetId', kongController.deleteTarget);
-
-// Certificates - IMPORTANT: Specific routes must come BEFORE parameterized routes
-// Certificate Generation (specific routes first)
-router.post('/kong/certificates/generate/self-signed', kongController.generateSelfSigned);
-router.post('/kong/certificates/generate/certbot', kongController.generateCertbot);
-router.post('/kong/certificates/renew/:domain', kongController.renewCertbot);
-router.get('/kong/certificates/certbot/list', kongController.listCertbotCertificates);
-
-// Certificate CRUD (parameterized routes last)
-router.get('/kong/certificates', kongController.getCertificates);
-router.get('/kong/certificates/:id', kongController.getCertificate);
-router.post('/kong/certificates', kongController.createCertificate);
-router.delete('/kong/certificates/:id', kongController.deleteCertificate);
-
-// SNIs
-router.get('/kong/snis', kongController.getSNIs);
-router.post('/kong/snis', kongController.createSNI);
-router.delete('/kong/snis/:id', kongController.deleteSNI);
 
 // User management
 router.get('/users', userManagementController.listUsers);

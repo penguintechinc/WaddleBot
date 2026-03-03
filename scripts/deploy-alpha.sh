@@ -208,19 +208,31 @@ build_and_import() {
 
     local image_name="${IMAGE_PREFIX}/${service}:${tag}"
 
+    # Pass build args if set in environment
+    local build_args=()
+    if [[ -n "${NPM_TOKEN:-}" ]]; then
+        build_args+=(--build-arg "NPM_TOKEN=${NPM_TOKEN}")
+    fi
+
     print_info "Building image: ${image_name}"
     if ! docker build \
         --file "${dockerfile}" \
         --tag "${image_name}" \
         --label "environment=alpha" \
         --label "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-        "${service_path}"; then
+        "${build_args[@]}" \
+        "${PROJECT_ROOT}"; then
         print_error "Failed to build ${service}"
         return 1
     fi
 
     print_info "Importing ${image_name} into MicroK8s..."
-    if ! docker save "${image_name}" | microk8s ctr image import -; then
+    # Use MicroK8s's bundled ctr binary directly against the containerd socket.
+    # This avoids the `microk8s ctr` wrapper which forces sudo even when the
+    # user is already in the microk8s group.
+    local mk8s_ctr="/snap/microk8s/current/bin/ctr"
+    local mk8s_sock="/var/snap/microk8s/common/run/containerd.sock"
+    if ! docker save "${image_name}" | "${mk8s_ctr}" --address "${mk8s_sock}" -n k8s.io images import -; then
         print_error "Failed to import ${image_name} into MicroK8s"
         return 1
     fi
@@ -245,14 +257,47 @@ do_deploy() {
         kctl create namespace "${NAMESPACE}"
     fi
 
+    # Render kustomize and fix env var service references.
+    # Kustomize namePrefix adds "alpha-" to resource names but not to
+    # env var values that reference those services (e.g. DB_HOST, REDIS_HOST).
+    # We post-process the rendered YAML to inject the prefix.
+    local name_prefix
+    name_prefix=$(grep 'namePrefix:' "${PROJECT_ROOT}/${OVERLAY_PATH}/kustomization.yaml" \
+        | awk '{print $2}' | tr -d '"' || echo "")
+
+    local rendered
+    rendered=$(kubectl kustomize "${PROJECT_ROOT}/${OVERLAY_PATH}")
+    if [[ -z "${rendered}" ]]; then
+        print_error "Failed to render kustomize overlay"
+        return 1
+    fi
+
+    if [[ -n "${name_prefix}" ]]; then
+        print_info "Fixing service references for namePrefix: ${name_prefix}"
+        # Kustomize renders unquoted values like: value: infra-postgres
+        rendered=$(echo "${rendered}" | sed \
+            -e "s|value: infra-postgres$|value: ${name_prefix}infra-postgres|g" \
+            -e "s|value: infra-redis$|value: ${name_prefix}infra-redis|g" \
+            -e "s|value: infra-minio|value: ${name_prefix}infra-minio|g" \
+            -e "s|value: infra-qdrant|value: ${name_prefix}infra-qdrant|g" \
+            -e "s|value: ai-ollama|value: ${name_prefix}ai-ollama|g" \
+            -e "s|value: core-router|value: ${name_prefix}core-router|g" \
+            -e "s|value: hub-api|value: ${name_prefix}hub-api|g" \
+            -e "s|value: interactive-translate|value: ${name_prefix}interactive-translate|g" \
+            -e "s|http://infra-|http://${name_prefix}infra-|g" \
+            -e "s|http://interactive-|http://${name_prefix}interactive-|g" \
+            -e "s|http://core-|http://${name_prefix}core-|g" \
+        )
+    fi
+
     # Apply kustomize overlay
     if [[ "${DRY_RUN}" == "true" ]]; then
         print_info "DRY-RUN: Rendering kustomize output..."
-        kctl apply -k "${PROJECT_ROOT}/${OVERLAY_PATH}" --dry-run=client -o yaml
+        echo "${rendered}"
         return 0
     fi
 
-    if ! kctl apply -k "${PROJECT_ROOT}/${OVERLAY_PATH}"; then
+    if ! echo "${rendered}" | kctl apply -f -; then
         print_error "Failed to apply kustomize overlay"
         return 1
     fi

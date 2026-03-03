@@ -71,14 +71,14 @@ jobs:
         working-directory: Premium/Android
 
       - name: Upload lint results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: lint-results
           path: Premium/Android/app/build/reports/lint-results-debug.html
 
       - name: Upload Detekt results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: detekt-results
@@ -127,7 +127,7 @@ jobs:
         working-directory: Premium/Android
 
       - name: Upload test results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: unit-test-results
@@ -209,7 +209,7 @@ jobs:
             ./gradlew connectedAndroidTest
 
       - name: Upload instrumentation test results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: instrumentation-test-results-${{ matrix.api-level }}
@@ -294,7 +294,7 @@ jobs:
             Premium/Android/app/build/outputs/apk/release/app-release-signed.apk
 
       - name: Upload APK
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: apk-${{ matrix.build-type }}
           path: |
@@ -352,7 +352,7 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
       - name: Upload AAB
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: aab-release
           path: Premium/Android/app/build/outputs/bundle/release/*.aab
@@ -398,7 +398,7 @@ jobs:
         continue-on-error: true
 
       - name: Upload security reports
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: security-reports
@@ -444,7 +444,7 @@ jobs:
             ./gradlew connectedBenchmarkAndroidTest
 
       - name: Upload performance results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: performance-results

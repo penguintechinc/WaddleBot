@@ -23,13 +23,21 @@ MESSAGE_TYPES = frozenset({
     "follow",
     "raid",
     "cheer",
+    "presence_update",
 })
 
 # Platforms with native slash-command UIs (can open modals, ephemeral replies, etc.)
-SLASH_COMMAND_PLATFORMS = frozenset({"discord", "slack"})
+# - discord/slack: native slash commands
+# - teams: message extensions + bot commands
+# - mattermost: native slash commands
+# - googlechat: slash command configuration
+SLASH_COMMAND_PLATFORMS = frozenset({"discord", "slack", "teams", "mattermost", "googlechat"})
 
 # Platforms that use ! prefix chat commands (IRC-style)
 PREFIX_COMMAND_PLATFORMS = frozenset({"twitch", "kick", "youtube"})
+
+# Platforms that support presence/status updates
+PRESENCE_PLATFORMS = frozenset({"slack", "discord", "teams", "mattermost", "googlechat"})
 
 
 def build_event(

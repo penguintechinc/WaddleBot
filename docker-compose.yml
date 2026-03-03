@@ -365,62 +365,6 @@ services:
   #   restart: unless-stopped
 
   # =============================================================================
-  # KONG API GATEWAY - Single external entry point for all APIs
-  # Access via api.waddlebot.io - No direct access to internal services
-  # Kong Manager OSS GUI available at http://localhost:8002/manager
-  # Note: Kong is docker-compose only. Kubernetes uses Nginx Ingress Controller.
-  # =============================================================================
-
-  core-kong:
-    image: kong:3.5-ubuntu
-    container_name: core-kong
-    environment:
-      KONG_DATABASE: postgres
-      KONG_PG_HOST: infra-postgres
-      KONG_PG_PORT: 5432
-      KONG_PG_DATABASE: kong
-      KONG_PG_USER: kong
-      KONG_PG_PASSWORD: ${KONG_PG_PASSWORD:-changeme}
-      KONG_PROXY_ACCESS_LOG: /dev/stdout
-      KONG_ADMIN_ACCESS_LOG: /dev/stdout
-      KONG_PROXY_ERROR_LOG: /dev/stderr
-      KONG_ADMIN_ERROR_LOG: /dev/stderr
-      KONG_ADMIN_LISTEN: "0.0.0.0:8012"
-      KONG_PROXY_LISTEN: "0.0.0.0:8080, 0.0.0.0:8443 ssl"
-      # Kong Manager OSS configuration
-      KONG_ADMIN_GUI_PATH: /manager
-      KONG_ADMIN_GUI_URL: http://localhost:8012/manager
-      KONG_ADMIN_GUI_AUTH: basic-auth
-      KONG_ADMIN_GUI_SESSION_CONF: '{"secret":"${KONG_SESSION_SECRET:-changeme_session}","storage":"kong","cookie_secure":false,"cookie_samesite":"Lax"}'
-      KONG_ENFORCE_RBAC: "on"
-      # SSL certificates (mount your own in production)
-      # KONG_SSL_CERT: /etc/kong/ssl/api.waddlebot.io.crt
-      # KONG_SSL_CERT_KEY: /etc/kong/ssl/api.waddlebot.io.key
-    volumes:
-      - ./config/kong/ssl:/etc/kong/ssl:ro
-    ports:
-      - "8080:8080"   # Kong HTTP API (api.waddlebot.io)
-      - "8443:8443"   # Kong HTTPS API
-      - "127.0.0.1:8001:8001"  # Kong Admin API (localhost only for security)
-      - "8012:8012"   # Kong Manager OSS GUI
-    networks:
-      - waddlebot-public
-      - waddlebot-internal
-    depends_on:
-      infra-postgres:
-        condition: service_healthy
-      hub-api:
-        condition: service_started
-      core-router:
-        condition: service_started
-    healthcheck:
-      test: ["CMD", "kong", "health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    restart: unless-stopped
-
-  # =============================================================================
   # CORE MODULES
   # =============================================================================
 
@@ -1102,7 +1046,7 @@ services:
         condition: service_healthy
       infra-searxng:
         condition: service_healthy
-    # Port removed - access via Kong at api.waddlebot.io
+    # Port removed - access via ingress
     # ports:
     #   - "8070:8070"
     healthcheck:

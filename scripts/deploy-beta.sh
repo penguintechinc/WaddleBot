@@ -305,13 +305,18 @@ _build_and_push_one() {
         fi
         echo "[BUILT] ${service}"
 
-        # Tag for registry
+        # Tag for registry — both versioned and latest
         docker tag "waddlebot-${service}:latest" "${REGISTRY}/${service}:${TAG}" 2>&1
-        echo "[TAGGED] ${service} → ${REGISTRY}/${service}:${TAG}"
+        docker tag "waddlebot-${service}:latest" "${REGISTRY}/${service}:latest" 2>&1
+        echo "[TAGGED] ${service} → ${REGISTRY}/${service}:${TAG} + :latest"
 
-        # Push (separate step — never use buildx --push)
+        # Push both tags (separate step — never use buildx --push)
         if ! docker push "${REGISTRY}/${service}:${TAG}" 2>&1; then
             echo "[FAIL] ${service}: docker push failed"
+            exit 1
+        fi
+        if ! docker push "${REGISTRY}/${service}:latest" 2>&1; then
+            echo "[FAIL] ${service}: docker push :latest failed"
             exit 1
         fi
         echo "[DONE] ${service}"
@@ -488,81 +493,6 @@ do_deploy() {
         fi
         log_success "Helm deployment successful"
     fi
-}
-
-# Sync kong.yml to Kong DB via deck gateway sync.
-# Kong is DB-backed — UI changes persist in Postgres. This sync pushes kong.yml
-# declarative config to Kong after each deploy so routes stay in sync with git.
-# Uses the kong-admin Service (not a pod) for a stable port-forward target.
-sync_kong_config() {
-    log_section "Syncing Kong Config"
-
-    local kong_config="${PROJECT_ROOT}/config/kong/kong.yml"
-
-    if [ ! -f "${kong_config}" ]; then
-        log_warning "Kong config not found at ${kong_config}, skipping"
-        return 0
-    fi
-
-    # Locate deck — check PATH, then common install locations
-    local deck_bin=""
-    if command_exists deck; then
-        deck_bin="deck"
-    elif [ -x "/usr/local/bin/deck" ]; then
-        deck_bin="/usr/local/bin/deck"
-    elif [ -x "/tmp/deck" ]; then
-        deck_bin="/tmp/deck"
-    else
-        log_warning "deck not found — skipping Kong sync"
-        log_warning "Install: curl -sL https://github.com/Kong/deck/releases/latest/download/deck_linux_amd64.tar.gz | tar xz -C /usr/local/bin deck"
-        return 0
-    fi
-    log_info "Using deck: ${deck_bin}"
-
-    if [ "$DRY_RUN" = true ]; then
-        log_info "[DRY-RUN] Would run: ${deck_bin} gateway sync ${kong_config} --kong-addr http://localhost:18001"
-        return 0
-    fi
-
-    # Kill any stale process on 18001 before opening a new forward
-    local stale_pid
-    stale_pid=$(lsof -ti:18001 2>/dev/null || true)
-    if [ -n "${stale_pid}" ]; then
-        kill "${stale_pid}" 2>/dev/null || true
-        sleep 1
-    fi
-
-    # Port-forward to the kong-admin SERVICE (stable — survives pod restarts during deploy)
-    kubectl --context "${KUBE_CONTEXT}" port-forward \
-        -n "${NAMESPACE}" svc/kong-admin 18001:8001 &>/tmp/pf-kong-deploy.log &
-    local pf_pid=$!
-
-    # Wait for the port to open (up to 10s)
-    local waited=0
-    until curl -sf http://localhost:18001/ -o /dev/null 2>/dev/null || [ $waited -ge 10 ]; do
-        sleep 1
-        (( waited++ )) || true
-    done
-
-    if ! curl -sf http://localhost:18001/ -o /dev/null 2>/dev/null; then
-        kill "${pf_pid}" 2>/dev/null || true
-        log_warning "Kong admin port-forward failed to connect — skipping sync"
-        log_warning "Run manually: deck gateway sync ${kong_config} --kong-addr http://localhost:8001"
-        return 0
-    fi
-
-    # Run deck sync
-    log_info "Running deck gateway sync..."
-    local sync_exit=0
-    if "${deck_bin}" gateway sync "${kong_config}" --kong-addr "http://localhost:18001" 2>&1; then
-        log_success "Kong config synced successfully"
-    else
-        sync_exit=$?
-        log_warning "deck sync exited ${sync_exit} — routes may be incomplete"
-    fi
-
-    kill "${pf_pid}" 2>/dev/null || true
-    wait "${pf_pid}" 2>/dev/null || true
 }
 
 # Restart deployments to pick up new images
@@ -750,7 +680,6 @@ main() {
             do_deploy_kustomize
         else
             do_deploy
-            sync_kong_config
         fi
         verify_deployment
     fi

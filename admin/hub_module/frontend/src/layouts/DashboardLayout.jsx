@@ -17,6 +17,10 @@ import {
   ChevronRightIcon,
   ShoppingCartIcon,
   LinkIcon,
+  TrophyIcon,
+  InboxStackIcon,
+  ServerStackIcon,
+  TicketIcon,
 } from '@heroicons/react/24/outline';
 import { useState } from 'react';
 import GlobalBanner from '../components/GlobalBanner';
@@ -44,7 +48,6 @@ function DashboardLayout() {
     { to: '/superadmin/vendor-requests', icon: ShoppingCartIcon, label: 'Vendor Requests' },
     { to: '/superadmin/analytics', icon: ChartBarIcon, label: 'Analytics' },
     { to: '/superadmin/platform-config', icon: Cog6ToothIcon, label: 'Platform Config' },
-    { to: '/superadmin/kong', icon: ShieldCheckIcon, label: 'Kong Gateway' },
   ];
 
   // Vendor navigation (standalone - vendors are not admins)
@@ -56,8 +59,13 @@ function DashboardLayout() {
 
   const communityNav = communityId
     ? [
-        { to: `/dashboard/community/${communityId}`, icon: HomeIcon, label: 'Overview' },
+        { to: `/dashboard/community/${communityId}`, icon: HomeIcon, label: 'Overview', exact: true },
         { to: `/dashboard/community/${communityId}/members`, icon: UserGroupIcon, label: 'Members' },
+        { to: `/community/${communityId}/interact`, icon: ChatBubbleLeftRightIcon, label: 'Chat & Forums' },
+        { to: `/dashboard/community/${communityId}/leaderboard`, icon: TrophyIcon, label: 'Leaderboard' },
+        { to: `/community/${communityId}/inventory`, icon: InboxStackIcon, label: 'Inventory' },
+        { to: `/community/${communityId}/game-servers`, icon: ServerStackIcon, label: 'Game Servers' },
+        { to: `/community/${communityId}/support/submit`, icon: TicketIcon, label: 'Support' },
         { to: `/dashboard/community/${communityId}/settings`, icon: Cog6ToothIcon, label: 'Settings' },
       ]
     : [];
@@ -122,20 +130,25 @@ function DashboardLayout() {
                     Community
                   </div>
                 </div>
-                {communityNav.map((item) => (
-                  <Link
-                    key={item.to}
-                    to={item.to}
-                    className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
-                      location.pathname === item.to
-                        ? 'bg-navy-800 text-gold-400'
-                        : 'text-navy-300 hover:bg-navy-800 hover:text-sky-300'
-                    }`}
-                  >
-                    <item.icon className="w-5 h-5" />
-                    <span className="text-sm font-medium">{item.label}</span>
-                  </Link>
-                ))}
+                {communityNav.map((item) => {
+                  const isActive = item.exact
+                    ? location.pathname === item.to
+                    : location.pathname.startsWith(item.to);
+                  return (
+                    <Link
+                      key={item.to}
+                      to={item.to}
+                      className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
+                        isActive
+                          ? 'bg-navy-800 text-gold-400'
+                          : 'text-navy-300 hover:bg-navy-800 hover:text-sky-300'
+                      }`}
+                    >
+                      <item.icon className="w-5 h-5" />
+                      <span className="text-sm font-medium">{item.label}</span>
+                    </Link>
+                  );
+                })}
 
                 {/* Admin link */}
                 <Link

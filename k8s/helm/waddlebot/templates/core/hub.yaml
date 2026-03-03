@@ -50,8 +50,6 @@ spec:
           value: "hub"
         - name: MODULE_PORT
           value: "8060"
-        - name: KONG_ADMIN_URL
-          value: "http://kong-admin:8001"
         livenessProbe:
           httpGet:
             path: /health

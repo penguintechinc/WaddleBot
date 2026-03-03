@@ -60,34 +60,6 @@ services:
       retries: 3
     restart: unless-stopped
 
-  # Kong API Gateway
-  kong:
-    image: kong:3.5
-    container_name: waddlebot-kong
-    environment:
-      KONG_DATABASE: "off"
-      KONG_DECLARATIVE_CONFIG: /opt/kong/kong.yml
-      KONG_PROXY_ACCESS_LOG: /dev/stdout
-      KONG_ADMIN_ACCESS_LOG: /dev/stdout
-      KONG_PROXY_ERROR_LOG: /dev/stderr
-      KONG_ADMIN_ERROR_LOG: /dev/stderr
-      KONG_ADMIN_LISTEN: "0.0.0.0:8001"
-    networks:
-      - waddlebotnet
-    ports:
-      - "8000:8000"  # Proxy port
-      - "8001:8001"  # Admin port
-      - "8443:8443"  # HTTPS proxy port
-      - "8444:8444"  # HTTPS admin port
-    volumes:
-      - ./kong/kong.yml:/opt/kong/kong.yml:ro
-    healthcheck:
-      test: ["CMD", "kong", "health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    restart: unless-stopped
-
   # ===========================
   # Core Services
   # ===========================
@@ -312,54 +284,6 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8027/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    restart: unless-stopped
-
-  # Kong Admin Broker - Kong User Management
-  kong-admin-broker:
-    image: waddlebot-kong-admin-broker:latest
-    container_name: waddlebot-kong-admin-broker
-    build:
-      context: .
-      dockerfile: kong_admin_broker/Dockerfile
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      # Kong Admin API Configuration
-      - KONG_ADMIN_URL=${KONG_ADMIN_URL}
-      - KONG_ADMIN_USERNAME=${KONG_ADMIN_USERNAME}
-      - KONG_ADMIN_PASSWORD=${KONG_ADMIN_PASSWORD}
-      # Broker Security Configuration
-      - BROKER_SECRET_KEY=${BROKER_SECRET_KEY}
-      - BROKER_API_KEY=${BROKER_API_KEY}
-      - SUPER_ADMIN_GROUP=${SUPER_ADMIN_GROUP}
-      - API_KEY_LENGTH=${API_KEY_LENGTH}
-      - REQUIRE_EMAIL_VERIFICATION=${REQUIRE_EMAIL_VERIFICATION}
-      # Email Configuration
-      - SMTP_HOST=${SMTP_HOST}
-      - SMTP_PORT=${SMTP_PORT}
-      - SMTP_USERNAME=${SMTP_USERNAME}
-      - SMTP_PASSWORD=${SMTP_PASSWORD}
-      - SMTP_TLS=${SMTP_TLS}
-      - FROM_EMAIL=${FROM_EMAIL}
-      # Performance Settings
-      - MAX_CONCURRENT_REQUESTS=${MAX_CONCURRENT_REQUESTS}
-      - REQUEST_TIMEOUT=${REQUEST_TIMEOUT}
-      - LOG_LEVEL=${LOG_LEVEL}
-      - MODULE_NAME=${MODULE_NAME_KONG_BROKER}
-      - MODULE_VERSION=${MODULE_VERSION}
-    networks:
-      - waddlebotnet
-    ports:
-      - "8070:8000"
-    depends_on:
-      kong:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3

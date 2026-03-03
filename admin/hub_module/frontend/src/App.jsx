@@ -119,10 +119,8 @@ import PlatformCommunities from './pages/platform/PlatformCommunities';
 // Super admin pages
 import SuperAdminDashboard from './pages/superadmin/SuperAdminDashboard';
 import SuperAdminCommunities from './pages/superadmin/SuperAdminCommunities';
-import SuperAdminCreateCommunity from './pages/superadmin/SuperAdminCreateCommunity';
 import SuperAdminModuleRegistry from './pages/superadmin/SuperAdminModuleRegistry';
 import SuperAdminPlatformConfig from './pages/superadmin/SuperAdminPlatformConfig';
-import SuperAdminKongGateway from './pages/superadmin/SuperAdminKongGateway';
 import SuperAdminSoftwareDiscovery from './pages/superadmin/SuperAdminSoftwareDiscovery';
 import SuperAdminServiceDiscovery from './pages/superadmin/SuperAdminServiceDiscovery';
 import SuperAdminVendorRequests from './pages/superadmin/SuperAdminVendorRequests';
@@ -344,14 +342,12 @@ function App() {
       >
         <Route path="/superadmin" element={<SuperAdminDashboard />} />
         <Route path="/superadmin/communities" element={<SuperAdminCommunities />} />
-        <Route path="/superadmin/communities/new" element={<SuperAdminCreateCommunity />} />
         <Route path="/superadmin/modules" element={<SuperAdminModuleRegistry />} />
         <Route path="/superadmin/vendor-submissions" element={<AdminVendorReview />} />
         <Route path="/superadmin/vendor-submissions/:submissionId" element={<AdminVendorReview />} />
         <Route path="/superadmin/vendor-requests" element={<SuperAdminVendorRequests />} />
         <Route path="/superadmin/users" element={<SuperAdminUsers />} />
         <Route path="/superadmin/platform-config" element={<SuperAdminPlatformConfig />} />
-        <Route path="/superadmin/kong" element={<SuperAdminKongGateway />} />
         <Route path="/superadmin/software-discovery" element={<SuperAdminSoftwareDiscovery />} />
         <Route path="/superadmin/services" element={<SuperAdminServiceDiscovery />} />
         <Route path="/superadmin/analytics" element={<SuperAdminAnalytics />} />

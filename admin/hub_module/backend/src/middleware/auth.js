@@ -386,6 +386,97 @@ export function requireTenantAdmin(req, res, next) {
 }
 
 /**
+ * Require channel creation permission based on community config policy.
+ * Reads communities.config.channel_creation_policy and checks user scopes.
+ * Must be used after requireAuth. Sets req.communityRole, req.communityScopes,
+ * req.communityRolePriority on success.
+ */
+export async function requireChannelCreation(req, res, next) {
+  const communityId = parseInt(req.params.id || req.params.communityId, 10);
+  if (isNaN(communityId)) return next(errors.badRequest('Invalid community ID'));
+
+  // Super admins, tenant admins, platform admins bypass
+  if (req.user?.isSuperAdmin || req.isTenantAdmin) {
+    req.communityRole = req.user?.isSuperAdmin ? 'super-admin' : 'tenant-admin';
+    req.communityScopes = null;
+    req.communityRolePriority = 999;
+    return next();
+  }
+  if (req.user?.roles?.includes('platform-admin')) {
+    req.communityRole = 'platform-admin';
+    req.communityScopes = null;
+    req.communityRolePriority = 999;
+    return next();
+  }
+
+  try {
+    const result = await query(
+      `SELECT c.config,
+              cm.role, cm.community_role_id, cr.name AS role_name,
+              cr.priority, cr.base_claims, cm.claims_cache
+       FROM communities c
+       LEFT JOIN community_members cm ON cm.community_id = c.id
+         AND cm.user_id = $2 AND cm.is_active = true
+       LEFT JOIN community_roles cr ON cr.id = cm.community_role_id
+       WHERE c.id = $1`,
+      [communityId, req.user.id]
+    );
+
+    if (!result.rows.length) return next(errors.notFound('Community not found'));
+
+    const row = result.rows[0];
+    if (!row.role && !row.community_role_id) {
+      return next(errors.forbidden('Community membership required'));
+    }
+
+    // Resolve scopes
+    let scopes;
+    if (row.claims_cache) {
+      scopes = Array.isArray(row.claims_cache)
+        ? row.claims_cache
+        : (row.claims_cache.scopes || []);
+    } else if (row.base_claims) {
+      const claims = typeof row.base_claims === 'string'
+        ? JSON.parse(row.base_claims) : row.base_claims;
+      scopes = claims.scopes || [];
+    } else {
+      scopes = [];
+    }
+
+    req.communityRole = row.role_name || row.role;
+    req.communityScopes = scopes;
+    req.communityRolePriority = row.priority || 0;
+
+    const policy = (row.config || {}).channel_creation_policy || 'admin_only';
+
+    if (policy === 'all_members') {
+      return next();
+    }
+
+    if (policy === 'communicator') {
+      if (scopes.includes('channels:create') || scopes.includes('community:manage_channels')) {
+        return next();
+      }
+      logger.authz('Channel creation denied - missing channels:create scope', {
+        userId: req.user.id, communityId, role: row.role_name, policy,
+      });
+      return next(errors.forbidden('Channel creation requires Communicator role or higher'));
+    }
+
+    // admin_only (default)
+    if (scopes.includes('community:manage_channels') || scopes.includes('community:manage_members')) {
+      return next();
+    }
+    logger.authz('Channel creation denied - admin only policy', {
+      userId: req.user.id, communityId, role: row.role_name, policy,
+    });
+    return next(errors.forbidden('Only admins can create channels'));
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * Require service API key for internal service-to-service calls
  */
 export function requireServiceAuth(req, res, next) {
@@ -414,6 +505,7 @@ export default {
   requirePlatformAdmin,
   requireMember,
   requireCommunityAdmin,
+  requireChannelCreation,
   requireScope,
   requireTenantAdmin,
   requireServiceAuth,

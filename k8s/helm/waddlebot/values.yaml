@@ -68,9 +68,6 @@ infrastructure:
     username: "waddlebot"
     database: "waddlebot"
     password: "changeme"  # Only used for secrets, actual DB already running
-    kongUser: "kong"
-    kongDatabase: "kong"
-    kongPassword: "changeme_kong_pg"
     image: postgres:16
     service:
       name: "infra-postgres"
@@ -641,6 +638,43 @@ modules:
         LOG_LEVEL: "INFO"
         PLATFORM: "kick"
 
+    teams:
+      enabled: false
+      image: waddlebot-teams-collector
+      imageTag: ""
+      replicas: 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 256Mi
+    mattermost:
+      enabled: false
+      image: waddlebot-mattermost-collector
+      imageTag: ""
+      replicas: 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 256Mi
+    googlechat:
+      enabled: false
+      image: waddlebot-googlechat-collector
+      imageTag: ""
+      replicas: 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 256Mi
+
   # Action Modules - Interactive
   interactive:
     ai:
@@ -845,6 +879,19 @@ modules:
         GRPC_PORT: "50037"
         LOG_LEVEL: "INFO"
 
+    presence:
+      enabled: false
+      image: waddlebot-presence
+      imageTag: ""
+      replicas: 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 256Mi
+
   # Marketplace Module
   marketplace:
     enabled: true
@@ -951,6 +998,49 @@ modules:
         LOG_LEVEL: "INFO"
         PLATFORM: "youtube"
 
+    teams:
+      enabled: false
+      image: waddlebot-teams-action
+      imageTag: ""
+      replicas: 1
+      httpPort: 8074
+      grpcPort: 50057
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 256Mi
+    mattermost:
+      enabled: false
+      image: waddlebot-mattermost-action
+      imageTag: ""
+      replicas: 1
+      httpPort: 8075
+      grpcPort: 50058
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 256Mi
+    googlechat:
+      enabled: false
+      image: waddlebot-googlechat-action
+      imageTag: ""
+      replicas: 1
+      httpPort: 8076
+      grpcPort: 50059
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 256Mi
+
 # OAuth Configuration (optional, set via secrets)
 oauth:
   discord:
@@ -979,6 +1069,17 @@ oauth:
     clientId: ""
     clientSecret: ""
     webhookSecret: ""
+  teams:
+    appId: ""
+    appPassword: ""
+    tenantId: ""
+  mattermost:
+    url: ""
+    botToken: ""
+    webhookSecret: ""
+  googlechat:
+    serviceAccountKey: ""
+    projectId: ""
 
 # Cloud Provider Configuration (optional)
 aws:
@@ -1181,80 +1282,3 @@ monitoring:
 networkPolicy:
   enabled: false
   ingressNamespace: ingress-nginx
-
-# Kong API Gateway subchart configuration
-# https://github.com/Kong/charts/tree/main/charts/kong
-kong:
-  enabled: true
-
-  fullnameOverride: kong
-
-  # DB-backed mode using shared infra-postgres
-  env:
-    database: postgres
-    pg_host: infra-postgres
-    pg_port: "5432"
-    pg_database:
-      valueFrom:
-        configMapKeyRef:
-          name: waddlebot-config
-          key: KONG_PG_DATABASE
-    pg_user:
-      valueFrom:
-        configMapKeyRef:
-          name: waddlebot-config
-          key: KONG_PG_USER
-    pg_password:
-      valueFrom:
-        secretKeyRef:
-          name: waddlebot-secrets
-          key: KONG_PG_PASSWORD
-
-  # Run migrations automatically on upgrade
-  migrations:
-    preUpgrade: true
-    postUpgrade: true
-
-  # Kong proxy — API gateway for all /api/* traffic
-  proxy:
-    enabled: true
-    type: ClusterIP
-    http:
-      enabled: true
-      servicePort: 8080
-      containerPort: 8080
-    tls:
-      enabled: false
-
-  admin:
-    enabled: true
-    type: ClusterIP
-    http:
-      enabled: true
-      servicePort: 8001
-      containerPort: 8001
-    tls:
-      enabled: false
-
-  manager:
-    enabled: true
-    type: ClusterIP
-    http:
-      enabled: true
-      servicePort: 8002
-      containerPort: 8002
-    tls:
-      enabled: false
-
-  # Disable Kong Ingress Controller — we use nginx
-  ingressController:
-    enabled: false
-
-  # Minimal resources for beta
-  resources:
-    requests:
-      cpu: 100m
-      memory: 256Mi
-    limits:
-      cpu: 500m
-      memory: 512Mi

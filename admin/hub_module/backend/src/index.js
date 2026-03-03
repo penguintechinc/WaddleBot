@@ -2,6 +2,7 @@
  * Hub Module - Express Application Entry Point
  * Unified Community Portal and Admin Interface
  */
+import crypto from 'crypto';
 import express from 'express';
 import { createServer } from 'http';
 import cors from 'cors';
@@ -839,7 +840,18 @@ app.use(helmet({
 app.use(cors({
   origin: config.cors.origin,
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
+  allowedHeaders: ['Authorization', 'Content-Type', 'X-API-Key', 'X-Request-ID', 'X-Requested-With', 'Accept', 'Origin'],
+  exposedHeaders: ['X-Request-ID'],
 }));
+
+// Correlation ID (replaces Kong correlation-id plugin)
+app.use((req, res, next) => {
+  const requestId = req.headers['x-request-id'] || crypto.randomUUID();
+  req.headers['x-request-id'] = requestId;
+  res.setHeader('X-Request-ID', requestId);
+  next();
+});
 
 // Rate limiting
 const limiter = rateLimit({

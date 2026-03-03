@@ -104,7 +104,6 @@ echo "1. Review and update .env file with your actual configuration values"
 echo "2. Run 'docker-compose -f docker-compose.updated.yml up -d' to start core services"
 echo "3. Check logs with 'docker-compose -f docker-compose.updated.yml logs -f'"
 echo "4. Access services:"
-echo "   - Kong API Gateway: http://localhost:8000"
 echo "   - Portal: http://localhost:8060"
 echo "   - Router Health: http://localhost:8010/health"
 

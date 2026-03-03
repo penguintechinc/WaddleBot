@@ -341,6 +341,18 @@ function CommunityDashboard() {
               >
                 Community Settings
               </Link>
+              <Link
+                to={`/community/${id}/support/submit`}
+                className="block px-4 py-2 text-sm text-navy-300 hover:bg-navy-800 hover:text-sky-300 rounded-lg transition-colors"
+              >
+                Submit Support Ticket
+              </Link>
+              <Link
+                to={`/community/${id}/support/my-tickets`}
+                className="block px-4 py-2 text-sm text-navy-300 hover:bg-navy-800 hover:text-sky-300 rounded-lg transition-colors"
+              >
+                My Support Tickets
+              </Link>
             </div>
           </div>
         </div>

@@ -136,7 +136,7 @@ jobs:
         shell: bash
 
       - name: Upload test results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: test-results-${{ matrix.os }}-go${{ matrix.go-version }}
@@ -190,7 +190,7 @@ jobs:
         shell: bash
 
       - name: Upload integration test results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: integration-test-results-${{ matrix.os }}
@@ -270,7 +270,7 @@ jobs:
         shell: bash
 
       - name: Upload binary
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: binary-${{ matrix.goos }}-${{ matrix.goarch }}
           path: Premium/Desktop/build/${{ matrix.binary_name }}
@@ -356,7 +356,7 @@ jobs:
         working-directory: Premium/Desktop
 
       - name: Upload benchmark results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: benchmark-results
           path: |
@@ -404,7 +404,7 @@ jobs:
         working-directory: Premium/Desktop
 
       - name: Upload documentation
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: documentation
           path: Premium/Desktop/documentation.html

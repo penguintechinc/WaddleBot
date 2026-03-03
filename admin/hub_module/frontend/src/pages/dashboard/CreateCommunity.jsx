@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import { communityApi } from '../../services/api';
 import CommunityForm from '../../components/CommunityForm';
 
 function CreateCommunity() {
   const navigate = useNavigate();
+  const { isSuperAdmin } = useAuth();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
@@ -27,10 +29,20 @@ function CreateCommunity() {
         isPublic: formData.isPublic,
         communityType: formData.communityType,
       };
+
+      if (isSuperAdmin && formData.ownerId) {
+        payload.ownerId = formData.ownerId;
+        payload.ownerName = formData.ownerName;
+      }
+
       const response = await communityApi.create(payload);
       if (response.data.success) {
         const communityId = response.data.community.id;
-        navigate(`/dashboard/community/${communityId}`);
+        if (isSuperAdmin) {
+          navigate('/superadmin/communities');
+        } else {
+          navigate(`/dashboard/community/${communityId}`);
+        }
       }
     } catch (err) {
       const errData = err.response?.data;
@@ -46,8 +58,8 @@ function CreateCommunity() {
       onSubmit={handleSubmit}
       saving={saving}
       error={error}
-      showOwnerFields={false}
-      backLink="/communities"
+      showOwnerFields={isSuperAdmin}
+      backLink={isSuperAdmin ? '/superadmin/communities' : '/communities'}
     />
   );
 }

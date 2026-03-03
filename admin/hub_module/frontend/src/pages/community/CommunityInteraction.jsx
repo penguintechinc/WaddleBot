@@ -12,6 +12,7 @@ function CommunityInteraction() {
   const { communityId, channelId } = useParams();
   const navigate = useNavigate();
   const [channels, setChannels] = useState([]);
+  const [canCreateChannel, setCanCreateChannel] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -30,20 +31,23 @@ function CommunityInteraction() {
   }, [socket]);
 
   // Load channels
-  useEffect(() => {
-    async function load() {
-      try {
-        setLoading(true);
-        const res = await interactionApi.getChannels(communityId);
-        setChannels(res.data?.channels || []);
-      } catch (err) {
-        console.error('Failed to load channels:', err);
-        setError('Failed to load channels');
-      } finally {
-        setLoading(false);
-      }
+  async function loadChannels() {
+    try {
+      setLoading(true);
+      const res = await interactionApi.getMemberChannels(communityId);
+      setChannels(res.data?.channels || []);
+      setCanCreateChannel(res.data?.canCreateChannel || false);
+    } catch (err) {
+      console.error('Failed to load channels:', err);
+      setError('Failed to load channels');
+    } finally {
+      setLoading(false);
     }
-    load();
+  }
+
+  useEffect(() => {
+    loadChannels();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [communityId]);
 
   // Resolve active channel
@@ -54,6 +58,11 @@ function CommunityInteraction() {
   const handleSelectChannel = (ch) => {
     navigate(`/community/${communityId}/interact/${ch.id}`);
   };
+
+  async function handleCreateChannel(data) {
+    await interactionApi.createMemberChannel(communityId, data);
+    await loadChannels();
+  }
 
   // Auto-navigate to first channel when loaded
   useEffect(() => {
@@ -78,7 +87,7 @@ function CommunityInteraction() {
     );
   }
 
-  if (!channels.length) {
+  if (!channels.length && !canCreateChannel) {
     return (
       <div className="text-center py-20">
         <ChatBubbleLeftRightIcon className="w-12 h-12 text-navy-600 mx-auto mb-4" />
@@ -109,6 +118,8 @@ function CommunityInteraction() {
         channels={channels}
         activeChannelId={activeChannel?.id}
         onSelectChannel={handleSelectChannel}
+        canCreateChannel={canCreateChannel}
+        onCreateChannel={handleCreateChannel}
       />
       <div className="flex-1 flex flex-col min-w-0">
         {renderContent()}

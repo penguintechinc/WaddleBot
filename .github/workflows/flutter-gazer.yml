@@ -105,7 +105,7 @@ jobs:
 
       - name: Archive test results
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: test-results
           path: mobile/flutter_gazer/coverage/
@@ -170,7 +170,7 @@ jobs:
         run: flutter build appbundle --release --target-platform android-arm,android-arm64
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: gazer-apk-${{ matrix.build-type }}
           path: mobile/flutter_gazer/build/app/outputs/apk/${{ matrix.build-type }}/app-${{ matrix.build-type }}.apk
@@ -178,7 +178,7 @@ jobs:
 
       - name: Upload AAB artifact
         if: matrix.build-type == 'release'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: gazer-aab-release
           path: mobile/flutter_gazer/build/app/outputs/bundle/release/app-release.aab
@@ -243,7 +243,7 @@ jobs:
           mv build/ios/Release-iphoneos/Runner.ipa build/ios/Release-iphoneos/gazer-ios-${{ github.run_number }}.ipa
 
       - name: Upload iOS artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: gazer-ios-release
           path: mobile/flutter_gazer/build/ios/Release-iphoneos/gazer-ios-*.ipa
@@ -369,7 +369,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload release artifacts to workflow
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: github-release-artifacts
           path: flattened-artifacts/
@@ -394,7 +394,7 @@ jobs:
 
       - name: Run security audit
         working-directory: mobile/flutter_gazer
-        run: flutter pub audit
+        run: dart pub audit
 
       - name: Check for hardcoded secrets
         run: |

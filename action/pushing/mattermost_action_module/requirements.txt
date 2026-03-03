@@ -1,0 +1,9 @@
+quart==0.19.4
+hypercorn==0.15.0
+httpx==0.25.2
+pydal==20231115.1
+PyJWT==2.8.1
+grpcio==1.60.0
+grpcio-tools==1.60.0
+mattermostdriver==7.3.2
+python-dotenv==1.0.0

@@ -170,7 +170,7 @@ export async function getLeaderboard(req, res, next) {
     const result = await query(
       `SELECT cm.user_id, u.username, u.avatar_url, cm.reputation, cm.role
        FROM community_members cm
-       LEFT JOIN hub_users u ON u.id = cm.user_id
+       LEFT JOIN hub_users u ON u.id = cm.user_id::integer
        WHERE cm.community_id = $1 AND cm.is_active = true
        ORDER BY cm.reputation DESC
        LIMIT $2`,
@@ -234,7 +234,7 @@ export async function getCommunityMembers(req, res, next) {
     const countResult = await query(
       `SELECT COUNT(*) as count
        FROM community_members cm
-       LEFT JOIN hub_users u ON u.id = cm.user_id
+       LEFT JOIN hub_users u ON u.id = cm.user_id::integer
        ${whereClause}`,
       params
     );
@@ -245,7 +245,7 @@ export async function getCommunityMembers(req, res, next) {
     const result = await query(
       `SELECT cm.user_id, u.username, u.avatar_url, cm.role, cm.joined_at
        FROM community_members cm
-       LEFT JOIN hub_users u ON u.id = cm.user_id
+       LEFT JOIN hub_users u ON u.id = cm.user_id::integer
        ${whereClause}
        ORDER BY
          CASE cm.role
@@ -983,7 +983,7 @@ export async function cancelServerLinkRequest(req, res, next) {
  */
 export async function createCommunity(req, res, next) {
   try {
-    const { name, displayName, description, platform, platformServerId, isPublic, communityType } = req.body;
+    const { name, displayName, description, platform, platformServerId, isPublic, communityType, ownerId, ownerName } = req.body;
 
     if (!name || !platform) {
       return next(errors.badRequest('Name and platform are required'));
@@ -1033,8 +1033,8 @@ export async function createCommunity(req, res, next) {
           description || '',
           platform,
           platformServerId || null,
-          req.user.id,
-          req.user.username || null,
+          (req.user.isSuperAdmin && ownerId) ? parseInt(ownerId, 10) : req.user.id,
+          (req.user.isSuperAdmin && ownerName) ? ownerName : (req.user.username || null),
           isPublic !== false,
           validatedCommunityType,
           req.user.tenantId || 1,
@@ -1057,7 +1057,7 @@ export async function createCommunity(req, res, next) {
         `INSERT INTO community_members
          (community_id, user_id, role, community_role_id, reputation, is_active, joined_at)
          VALUES ($1, $2, 'community-owner', $3, 600, true, NOW())`,
-        [newCommunity.id, req.user.id, ownerRoleId]
+        [newCommunity.id, (req.user.isSuperAdmin && ownerId) ? parseInt(ownerId, 10) : req.user.id, ownerRoleId]
       );
 
       return newCommunity;

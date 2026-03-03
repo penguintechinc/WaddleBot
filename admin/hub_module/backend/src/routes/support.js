@@ -25,7 +25,7 @@ const router = Router({ mergeParams: true });
 // ── Admin Routes ──────────────────────────────────────────────
 
 // Categories
-router.get('/:communityId/support/categories', requireAuth, requireCommunityAdmin, getCategories);
+router.get('/:communityId/support/categories', requireAuth, getCategories);
 router.post('/:communityId/support/categories', requireAuth, requireCommunityAdmin, createCategory);
 router.put('/:communityId/support/categories/:categoryId', requireAuth, requireCommunityAdmin, updateCategory);
 router.delete('/:communityId/support/categories/:categoryId', requireAuth, requireCommunityAdmin, deleteCategory);

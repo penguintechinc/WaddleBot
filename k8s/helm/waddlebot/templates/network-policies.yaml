@@ -15,8 +15,7 @@ spec:
   policyTypes:
     - Ingress
 ---
-# Allow ingress from same-namespace pods and from the ingress controller to all
-# non-Kong pods. Kong has its own narrower policy below.
+# Allow ingress from same-namespace pods and from the ingress controller.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -27,12 +26,7 @@ metadata:
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
-  # Applies to every pod EXCEPT Kong pods
-  podSelector:
-    matchExpressions:
-      - key: app.kubernetes.io/name
-        operator: NotIn
-        values: ["kong"]
+  podSelector: {}
   policyTypes:
     - Ingress
   ingress:
@@ -46,40 +40,4 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: {{ .Values.networkPolicy.ingressNamespace | default "ingress-nginx" }}
----
-# Kong-specific network policy.
-# Admin API (8001) and Manager (8002) are restricted to intra-namespace only.
-# Only the proxy port (8080) is reachable from the ingress controller.
-{{- if .Values.kong.enabled }}
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-kong-restricted
-  namespace: {{ .Values.namespace }}
-  labels:
-    app.kubernetes.io/name: waddlebot
-    app.kubernetes.io/instance: {{ .Release.Name }}
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
-spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/name: kong
-  policyTypes:
-    - Ingress
-  ingress:
-    # Rule 1: Allow all traffic from within the namespace (hub-api calls Admin API, deck sync, etc.)
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: {{ .Values.namespace }}
-    # Rule 2: Allow ingress controller to reach the PROXY port only (8080).
-    #         Admin (8001) and Manager (8002) are NOT listed here — denied from outside.
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: {{ .Values.networkPolicy.ingressNamespace | default "ingress-nginx" }}
-      ports:
-        - protocol: TCP
-          port: 8080
-{{- end }}
 {{- end }}

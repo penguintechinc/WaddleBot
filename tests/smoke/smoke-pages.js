@@ -65,8 +65,7 @@ const AUTHENTICATED_PAGES = [
   '/superadmin',
   '/superadmin/communities',
   '/superadmin/users',
-  '/superadmin/platform-config',
-  '/superadmin/kong'
+  '/superadmin/platform-config'
 ];
 
 let passed = 0;
