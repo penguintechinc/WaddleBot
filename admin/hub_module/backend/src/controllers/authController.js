@@ -315,7 +315,7 @@ export async function login(req, res, next) {
 
     // Find user
     const result = await query(
-      `SELECT u.id, u.email, u.username, u.password_hash, u.avatar_url, u.is_active, u.is_super_admin, u.is_vendor, u.email_verified,
+      `SELECT u.id, u.email, u.username, u.password_hash, u.avatar_url, u.is_active, u.is_super_admin, u.is_vendor, u.is_analytics_consumer, u.email_verified,
               array_agg(DISTINCT ui.platform) FILTER (WHERE ui.platform IS NOT NULL) as linked_platforms
        FROM hub_users u
        LEFT JOIN hub_user_identities ui ON ui.hub_user_id = u.id
@@ -367,6 +367,7 @@ export async function login(req, res, next) {
       avatarUrl: user.avatar_url,
       isSuperAdmin: user.is_super_admin,
       isVendor: user.is_vendor,
+      isAnalyticsConsumer: user.is_analytics_consumer,
       tenantId,
       tenantSlug,
     });
@@ -383,6 +384,7 @@ export async function login(req, res, next) {
         avatarUrl: user.avatar_url,
         isSuperAdmin: user.is_super_admin,
         isVendor: user.is_vendor,
+        isAnalyticsConsumer: user.is_analytics_consumer,
         linkedPlatforms: user.linked_platforms || [],
       },
     });
@@ -404,7 +406,7 @@ export async function adminLogin(req, res, next) {
 
     // Find user by username or email
     const result = await query(
-      `SELECT id, email, username, password_hash, avatar_url, is_active, is_super_admin
+      `SELECT id, email, username, password_hash, avatar_url, is_active, is_super_admin, is_analytics_consumer
        FROM hub_users
        WHERE (username = $1 OR email = $1) AND is_active = true`,
       [username]
@@ -438,6 +440,7 @@ export async function adminLogin(req, res, next) {
       avatarUrl: user.avatar_url,
       isSuperAdmin: user.is_super_admin,
       isVendor: user.is_vendor,
+      isAnalyticsConsumer: user.is_analytics_consumer,
     });
 
     logger.auth('Admin login successful', { username, isSuperAdmin: user.is_super_admin });
@@ -569,6 +572,7 @@ export async function oauthCallback(req, res, next) {
       avatarUrl: user.avatar_url,
       isSuperAdmin: user.is_super_admin,
       isVendor: user.is_vendor,
+      isAnalyticsConsumer: user.is_analytics_consumer,
       tenantId: oauthTenantId,
       tenantSlug: oauthTenantSlug,
     });
@@ -589,7 +593,7 @@ export async function oauthCallback(req, res, next) {
 async function findOrCreateUserFromOAuth(platform, userData, mode) {
   // Check if this platform identity already exists
   const identityResult = await query(
-    `SELECT ui.hub_user_id, u.id, u.email, u.username, u.avatar_url, u.is_super_admin
+    `SELECT ui.hub_user_id, u.id, u.email, u.username, u.avatar_url, u.is_super_admin, u.is_analytics_consumer
      FROM hub_user_identities ui
      JOIN hub_users u ON u.id = ui.hub_user_id
      WHERE ui.platform = $1 AND ui.platform_user_id = $2`,
@@ -613,7 +617,7 @@ async function findOrCreateUserFromOAuth(platform, userData, mode) {
 
   // Check if email matches existing user
   const existingUser = await query(
-    'SELECT id, email, username, avatar_url, is_super_admin FROM hub_users WHERE email = $1',
+    'SELECT id, email, username, avatar_url, is_super_admin, is_analytics_consumer FROM hub_users WHERE email = $1',
     [email.toLowerCase()]
   );
 
@@ -630,7 +634,7 @@ async function findOrCreateUserFromOAuth(platform, userData, mode) {
     const newUser = await query(
       `INSERT INTO hub_users (email, username, avatar_url, is_active, created_at)
        VALUES ($1, $2, $3, true, NOW())
-       RETURNING id, email, username, avatar_url, is_super_admin`,
+       RETURNING id, email, username, avatar_url, is_super_admin, is_analytics_consumer`,
       [email.toLowerCase(), username, userData.avatar_url]
     );
     user = newUser.rows[0];
@@ -938,6 +942,7 @@ export async function refreshToken(req, res, next) {
       avatarUrl: decoded.avatarUrl,
       isSuperAdmin: decoded.isSuperAdmin,
       isVendor: decoded.isVendor,
+      isAnalyticsConsumer: decoded.isAnalyticsConsumer,
     });
 
     // Invalidate old token
@@ -987,7 +992,7 @@ export async function getCurrentUser(req, res, next) {
 
     // Get user with linked platforms
     const userResult = await query(
-      `SELECT u.id, u.email, u.username, u.avatar_url, u.is_super_admin, u.is_vendor, u.password_hash IS NOT NULL as has_password,
+      `SELECT u.id, u.email, u.username, u.avatar_url, u.is_super_admin, u.is_vendor, u.is_analytics_consumer, u.password_hash IS NOT NULL as has_password,
               COALESCE(json_agg(
                 json_build_object(
                   'platform', ui.platform,
@@ -1033,6 +1038,7 @@ export async function getCurrentUser(req, res, next) {
         avatarUrl: user.avatar_url,
         isSuperAdmin: user.is_super_admin,
         isVendor: user.is_vendor,
+        isAnalyticsConsumer: user.is_analytics_consumer,
         hasPassword: user.has_password,
         linkedPlatforms: user.linked_platforms,
         roles: req.user.roles,
@@ -1099,7 +1105,7 @@ export async function setPassword(req, res, next) {
 /**
  * Create session and JWT token
  */
-async function createSession({ userId, username, email, avatarUrl, isSuperAdmin, isVendor, requiresOAuthLink, communityId, tenantId, tenantSlug }) {
+async function createSession({ userId, username, email, avatarUrl, isSuperAdmin, isVendor, isAnalyticsConsumer, requiresOAuthLink, communityId, tenantId, tenantSlug }) {
   // Build roles array
   const roles = [];
   if (isSuperAdmin) roles.push('admin', 'super_admin');
@@ -1128,6 +1134,7 @@ async function createSession({ userId, username, email, avatarUrl, isSuperAdmin,
     communityId,
     isSuperAdmin: isSuperAdmin || false,
     isVendor: isVendor || false,
+    isAnalyticsConsumer: isAnalyticsConsumer || false,
     roles,
     tenantId: tenantId || null,
     tenantSlug: tenantSlug || 'global',

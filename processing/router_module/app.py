@@ -40,6 +40,7 @@ async def startup():
     from services.rate_limiter import RateLimiter
     from services.session_manager import SessionManager
     from services.command_registry import CommandRegistry
+    from services.ai_chatter_config_cache import AiChatterConfigCache
 
     logger.system("Starting router module", action="startup")
 
@@ -56,7 +57,15 @@ async def startup():
     session_manager = SessionManager()
     command_registry = CommandRegistry(dal, cache_manager)
     await command_registry.initialize()  # Load initial commands from database
-    command_processor = CommandProcessor(dal, cache_manager, rate_limiter, session_manager, command_registry)
+    ai_chatter_config_cache = AiChatterConfigCache(cache_manager.redis, dal)
+    command_processor = CommandProcessor(
+        dal,
+        cache_manager,
+        rate_limiter,
+        session_manager,
+        command_registry,
+        ai_chatter_config_cache=ai_chatter_config_cache,
+    )
 
     app.config['command_processor'] = command_processor
     app.config['cache_manager'] = cache_manager

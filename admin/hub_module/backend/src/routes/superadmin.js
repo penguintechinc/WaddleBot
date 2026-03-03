@@ -127,6 +127,8 @@ router.post('/users/:userId/verify-email',
   userManagementController.setEmailVerification
 );
 router.post('/users/:userId/password-reset', userManagementController.generatePasswordReset);
+router.post('/users/:userId/analytics-consumer-role', userManagementController.assignAnalyticsConsumerRole);
+router.get('/users/:userId/deletion-request', userManagementController.getUserDeletionRequest);
 
 // Tenant management
 router.get('/tenants', superadminController.listTenants);

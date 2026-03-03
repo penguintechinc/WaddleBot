@@ -39,12 +39,34 @@ analytics_service = None
 metrics_service = None
 polling_service = None
 bot_score_service = None
+user_stats_service = None
+platform_stats_service = None
+
+
+@app.before_request
+async def validate_service_key():
+    """
+    Validate X-Service-Key header on all non-health endpoints.
+    Health check (/healthz) is exempt so orchestrators can probe liveness.
+    """
+    if request.path.startswith('/healthz') or request.path == '/':
+        return None
+    service_key = request.headers.get('X-Service-Key', '')
+    if not service_key or service_key != Config.SERVICE_API_KEY:
+        logger.warning(
+            "Unauthorized request: missing or invalid X-Service-Key",
+            path=request.path,
+            method=request.method,
+        )
+        return jsonify(error_response("Unauthorized: invalid service key", 401))
+    return None
 
 
 @app.before_serving
 async def startup():
     """Initialize services on startup."""
     global dal, analytics_service, metrics_service, polling_service
+    global bot_score_service, user_stats_service, platform_stats_service
 
     logger.system("Starting analytics-core module", action="startup")
 
@@ -59,12 +81,22 @@ async def startup():
         from services.metrics_service import MetricsService
         from services.polling_service import PollingService
         from services.bot_score_service import BotScoreService
+        from services.user_stats_service import UserStatsService
+        from services.platform_stats_service import PlatformStatsService
 
         # Initialize services
         analytics_service = AnalyticsService(dal, logger)
         metrics_service = MetricsService(dal, logger)
         polling_service = PollingService(dal, logger)
         bot_score_service = BotScoreService(dal, logger)
+        user_stats_service = UserStatsService(dal, logger)
+        platform_stats_service = PlatformStatsService(dal, logger)
+
+        # Wire services into blueprints
+        from blueprints.user_bp import init_user_blueprint
+        from blueprints.platform_bp import init_platform_blueprint
+        init_user_blueprint(user_stats_service)
+        init_platform_blueprint(platform_stats_service)
 
         logger.system("Analytics core module started", result="SUCCESS")
 
@@ -318,6 +350,12 @@ async def review_suspected_bot(community_id: int, bot_id: int):
 # Register blueprints
 app.register_blueprint(api_bp)
 app.register_blueprint(internal_bp)
+
+# Import and register new analytics blueprints
+from blueprints.user_bp import user_bp
+from blueprints.platform_bp import platform_bp
+app.register_blueprint(user_bp)
+app.register_blueprint(platform_bp)
 
 
 if __name__ == '__main__':

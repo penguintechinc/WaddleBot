@@ -7,6 +7,7 @@ import * as identityController from '../controllers/identityController.js';
 import * as profileController from '../controllers/profileController.js';
 import PlatformConfigController from '../controllers/platformConfigController.js';
 import { requireAuth } from '../middleware/auth.js';
+import * as dataPrivacyController from '../controllers/dataPrivacyController.js';
 import { validators, validateRequest } from '../middleware/validation.js';
 
 const router = Router();
@@ -53,5 +54,8 @@ router.put('/identities/primary',
 router.post('/identities/link/:platform', identityController.startIdentityLink);
 router.get('/identities/link/:platform/callback', identityController.identityLinkCallback);
 router.delete('/identities/:platform', identityController.unlinkIdentity);
+
+// GDPR: data deletion (auth already required at top via router.use(requireAuth))
+router.delete('/me/data', dataPrivacyController.requestDataDeletion);
 
 export default router;

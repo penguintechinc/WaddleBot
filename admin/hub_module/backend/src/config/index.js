@@ -60,6 +60,7 @@ export const config = {
     memories: process.env.MEMORIES_API_URL || 'http://memories:8031',
     browserSource: process.env.BROWSER_SOURCE_API_URL || 'http://browser-source:8027',
     loyalty: process.env.LOYALTY_API_URL || 'http://loyalty-interaction:8032',
+    analyticsCore: process.env.ANALYTICS_CORE_API_URL || 'http://analytics-core:8040',
   },
 
   // Custom Domains

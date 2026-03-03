@@ -59,12 +59,15 @@ logger = setup_aaa_logging(
 # Initialize services
 ai_service = None
 router_service = None
+chatter_config_service = None
+chatter_rate_limiter = None
+proactive_chat_service = None
 
 
 @app.before_serving
 async def startup():
     """Initialize services on startup"""
-    global ai_service, router_service
+    global ai_service, router_service, chatter_config_service, chatter_rate_limiter, proactive_chat_service
 
     logger.system("Starting AI interaction module", action="startup")
 
@@ -85,6 +88,28 @@ async def startup():
             logger.system("AI provider health check passed", result="SUCCESS")
         else:
             logger.error("AI provider health check failed", result="FAILED")
+
+        # Initialize AIChatter services
+        from services.chatter_config_service import ChatterConfigService
+        from services.chatter_rate_limiter import ChatterRateLimiter
+        from services.proactive_chat_service import ProactiveChatService
+
+        # Get Redis client if available
+        redis_client = None
+        try:
+            import redis.asyncio as aioredis
+            redis_url = os.getenv('REDIS_URL', '')
+            if redis_url:
+                redis_client = aioredis.from_url(redis_url)
+        except Exception as redis_err:
+            logger.warning(f"Redis not available for chatter: {redis_err}")
+
+        chatter_config_service = ChatterConfigService(None, redis_client, logger)
+        chatter_rate_limiter = ChatterRateLimiter(redis_client, None)
+        proactive_chat_service = ProactiveChatService(
+            ai_service, chatter_config_service, chatter_rate_limiter, logger
+        )
+        logger.system("Initialized AIChatter services")
 
     except Exception as e:
         logger.error(f"Startup failed: {e}", action="startup", result="ERROR")
@@ -564,6 +589,217 @@ async def test():
 
     except Exception as e:
         logger.error(f"Test endpoint error: {e}")
+        return error_response(str(e), status_code=500)
+
+
+@ai_bp.route('/proactive-chat', methods=['POST'])
+@async_endpoint
+async def proactive_chat():
+    """
+    Proactive chat endpoint -- called by router when community has AIChatter enabled.
+    Checks config, rate limits, probability, then generates response if appropriate.
+
+    Expected JSON:
+    {
+        "session_id": str,
+        "community_id": int,
+        "user_id": str,
+        "platform_user_id": str,
+        "message": str,
+        "platform": str,
+        "channel_id": str
+    }
+    """
+    try:
+        data = await request.get_json()
+        if not data:
+            return error_response("Request body must be valid JSON", status_code=400)
+
+        community_id = data.get('community_id')
+        user_id = data.get('user_id', '')
+        message = data.get('message', '')
+        session_id = data.get('session_id', '')
+
+        if not community_id or not message:
+            return error_response("community_id and message are required", status_code=400)
+
+        community_id = int(community_id)
+
+        # Get community config
+        config = await chatter_config_service.get_community_config(community_id)
+        if not config or not config.get('enabled', False):
+            return success_response({'responded': False, 'reason': 'disabled'})
+
+        # Fire-and-forget: check rate limits, probability, and generate response
+        asyncio.create_task(
+            _handle_proactive_chat(
+                session_id, community_id, user_id, message, config,
+                data.get('platform', 'unknown'), data.get('channel_id', '')
+            )
+        )
+
+        return success_response({'responded': True, 'queued': True})
+
+    except Exception as e:
+        logger.error(f"Proactive chat endpoint error: {e}")
+        return error_response(str(e), status_code=500)
+
+
+async def _handle_proactive_chat(
+    session_id: str,
+    community_id: int,
+    user_id: str,
+    message: str,
+    config: dict,
+    platform: str,
+    channel_id: str,
+):
+    """Fire-and-forget proactive chat handler."""
+    start_time = datetime.utcnow()
+    try:
+        should_respond = await proactive_chat_service.should_respond(
+            community_id=community_id,
+            user_id=user_id,
+            message=message,
+            config=config,
+        )
+
+        if not should_respond:
+            return
+
+        ai_response = await proactive_chat_service.generate_response(
+            message=message,
+            community_id=community_id,
+            user_id=user_id,
+            session_id=session_id,
+        )
+
+        if ai_response:
+            processing_time = int(
+                (datetime.utcnow() - start_time).total_seconds() * 1000
+            )
+            response_data = {
+                'session_id': session_id,
+                'module_name': Config.MODULE_NAME,
+                'success': True,
+                'response_action': 'chat',
+                'response_data': {'message': ai_response},
+                'processing_time_ms': processing_time,
+            }
+            await router_service.submit_response(response_data)
+
+            logger.audit(
+                action="proactive_chat_response",
+                community=str(community_id),
+                user=user_id,
+                result="SUCCESS",
+                execution_time=processing_time,
+            )
+
+    except Exception as e:
+        logger.error(
+            f"Proactive chat handling error: {e}",
+            community_id=community_id,
+            user_id=user_id,
+        )
+
+
+@ai_bp.route('/config/chatter', methods=['GET'])
+@async_endpoint
+async def get_chatter_config():
+    """
+    Get community AIChatter config. Called from hub admin panel.
+    Requires X-Community-ID header or community_id query param.
+    """
+    try:
+        community_id_str = (
+            request.headers.get('X-Community-ID') or
+            request.args.get('community_id')
+        )
+        if not community_id_str:
+            return error_response(
+                "X-Community-ID header or community_id param required",
+                status_code=400
+            )
+        community_id = int(community_id_str)
+        config = await chatter_config_service.get_community_config(community_id)
+        if config is None:
+            # Return defaults if no config exists
+            config = {
+                'enabled': False,
+                'max_responses_per_window': 10,
+                'window_seconds': 600,
+                'max_per_user_per_window': 2,
+                'response_probability': 0.30,
+                'min_message_length': 10,
+            }
+        return success_response(config)
+    except Exception as e:
+        logger.error(f"Get chatter config error: {e}")
+        return error_response(str(e), status_code=500)
+
+
+@ai_bp.route('/config/chatter', methods=['POST'])
+@async_endpoint
+async def update_chatter_config():
+    """
+    Update community AIChatter config. Called from hub admin panel.
+    Validates all fields before saving.
+    """
+    try:
+        data = await request.get_json()
+        if not data:
+            return error_response("Request body must be valid JSON", status_code=400)
+
+        community_id_str = data.get('community_id') or request.headers.get('X-Community-ID')
+        if not community_id_str:
+            return error_response("community_id required", status_code=400)
+        community_id = int(community_id_str)
+
+        # Validate and collect settings
+        settings = {}
+        if 'enabled' in data:
+            settings['enabled'] = bool(data['enabled'])
+        if 'max_responses_per_window' in data:
+            v = int(data['max_responses_per_window'])
+            if not 1 <= v <= 100:
+                return error_response(
+                    "max_responses_per_window must be 1-100", status_code=400
+                )
+            settings['max_responses_per_window'] = v
+        if 'window_seconds' in data:
+            v = int(data['window_seconds'])
+            if not 60 <= v <= 3600:
+                return error_response(
+                    "window_seconds must be 60-3600", status_code=400
+                )
+            settings['window_seconds'] = v
+        if 'max_per_user_per_window' in data:
+            v = int(data['max_per_user_per_window'])
+            if not 1 <= v <= 20:
+                return error_response(
+                    "max_per_user_per_window must be 1-20", status_code=400
+                )
+            settings['max_per_user_per_window'] = v
+        if 'response_probability' in data:
+            v = float(data['response_probability'])
+            if not 0.05 <= v <= 1.0:
+                return error_response(
+                    "response_probability must be 0.05-1.0", status_code=400
+                )
+            settings['response_probability'] = v
+        if 'min_message_length' in data:
+            v = int(data['min_message_length'])
+            if v < 0:
+                return error_response(
+                    "min_message_length must be >= 0", status_code=400
+                )
+            settings['min_message_length'] = v
+
+        updated = await chatter_config_service.update_community_config(community_id, settings)
+        return success_response(updated)
+    except Exception as e:
+        logger.error(f"Update chatter config error: {e}")
         return error_response(str(e), status_code=500)
 
 

@@ -510,6 +510,79 @@ export async function setEmailVerification(req, res, next) {
 }
 
 /**
+ * POST /api/v1/superadmin/users/:userId/analytics-consumer-role
+ * Toggle analytics consumer role for a user.
+ */
+export async function assignAnalyticsConsumerRole(req, res, next) {
+  try {
+    const userId = parseInt(req.params.userId, 10);
+    const { enabled } = req.body;
+
+    if (typeof enabled !== 'boolean') {
+      return next(errors.badRequest('enabled (boolean) is required'));
+    }
+
+    const result = await query(
+      'UPDATE hub_users SET is_analytics_consumer = $1, updated_at = NOW() WHERE id = $2 RETURNING id, email, username, is_analytics_consumer',
+      [enabled, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return next(errors.notFound('User not found'));
+    }
+
+    logger.audit('Toggle analytics consumer role', {
+      community: 'platform',
+      user: req.user.id,
+      action: 'assign_analytics_consumer_role',
+      result: 'success',
+      targetUser: userId,
+      enabled,
+    });
+
+    res.json({
+      success: true,
+      user: {
+        id: result.rows[0].id,
+        email: result.rows[0].email,
+        username: result.rows[0].username,
+        isAnalyticsConsumer: result.rows[0].is_analytics_consumer,
+      },
+    });
+  } catch (err) {
+    logger.error('Failed to toggle analytics consumer role', err);
+    next(err);
+  }
+}
+
+/**
+ * GET /api/v1/superadmin/users/:userId/deletion-request
+ * Read-only view of a user's data deletion status (for support).
+ */
+export async function getUserDeletionRequest(req, res, next) {
+  try {
+    const userId = parseInt(req.params.userId, 10);
+
+    const result = await query(
+      `SELECT requested_at, completed_at, status
+       FROM data_deletion_requests
+       WHERE hub_user_id = $1
+       ORDER BY requested_at DESC
+       LIMIT 1`,
+      [userId]
+    );
+
+    res.json({
+      success: true,
+      deletion_request: result.rows[0] || null,
+    });
+  } catch (err) {
+    logger.error('Failed to fetch deletion request', err);
+    next(err);
+  }
+}
+
+/**
  * Generate password reset token
  */
 export async function generatePasswordReset(req, res, next) {
