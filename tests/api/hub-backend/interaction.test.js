@@ -1018,4 +1018,59 @@ describe('Interaction API', () => {
       expect(response.body).toHaveProperty('post');
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // Regression: Issue #108 — channel creation 500/409 cycle (Bugs A + B)
+  // ---------------------------------------------------------------------------
+
+  describe('POST /api/v1/community/:id/interact/channels - channel creation regression', () => {
+    it('returns 201 (not 500) for an authenticated member creating a channel', async () => {
+      const channelName = `regression-member-${Date.now()}`;
+      const res = await request(API_BASE_URL)
+        .post(`/api/v1/community/${COMMUNITY_ID}/interact/channels`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ name: channelName, channel_type: 'chat' });
+
+      // Must not be a 500 (type mismatch / server error) — regression for Bug A
+      expect(res.status).not.toBe(500);
+
+      // Clean up if channel was created
+      if (res.status === 201 && res.body.channel?.id) {
+        await request(API_BASE_URL)
+          .delete(`/api/v1/community/${COMMUNITY_ID}/interact/channels/${res.body.channel.id}`)
+          .set('Authorization', `Bearer ${authToken}`);
+      }
+    });
+
+    it('returns a clean 409 (not 500) on duplicate channel name — no 500→409 cycle', async () => {
+      const channelName = `regression-dup-${Date.now()}`;
+
+      // First creation should succeed
+      const first = await request(API_BASE_URL)
+        .post(`/api/v1/community/${COMMUNITY_ID}/interact/channels`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ name: channelName, channel_type: 'chat' });
+
+      if (first.status !== 201) return; // Can't test dedup without first creation
+
+      // Second creation with the same name should be a clean conflict, not a server error
+      const second = await request(API_BASE_URL)
+        .post(`/api/v1/community/${COMMUNITY_ID}/interact/channels`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ name: channelName, channel_type: 'chat' });
+
+      // Regression for Bug B: without a transaction the first attempt orphans a
+      // record, causing a 500 on the second attempt (unique constraint on an
+      // incomplete row). With the transaction fix, duplicates return a clean 409.
+      expect(second.status).toBe(409);
+      expect(second.status).not.toBe(500);
+
+      // Clean up
+      if (first.body.channel?.id) {
+        await request(API_BASE_URL)
+          .delete(`/api/v1/community/${COMMUNITY_ID}/interact/channels/${first.body.channel.id}`)
+          .set('Authorization', `Bearer ${authToken}`);
+      }
+    });
+  });
 });

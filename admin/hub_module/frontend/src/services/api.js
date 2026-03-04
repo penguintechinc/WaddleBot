@@ -49,6 +49,9 @@ api.interceptors.response.use(
         if (response.data.success) {
           localStorage.setItem('token', response.data.token);
           originalRequest.headers.Authorization = `Bearer ${response.data.token}`;
+          // Notify any socket connections that the token has changed so they
+          // can update their auth and reconnect with the new token.
+          window.dispatchEvent(new CustomEvent('token-refreshed', { detail: { token: response.data.token } }));
           return api(originalRequest);
         }
       } catch (refreshError) {

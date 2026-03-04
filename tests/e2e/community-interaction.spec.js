@@ -1184,3 +1184,59 @@ test.describe('G. Navigation & State', () => {
     expect(sidebarVisible || emptyVisible).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Regression: Issue #108 — socket auth failure + channel creation 500/409 cycle
+// ---------------------------------------------------------------------------
+
+test.describe('Issue #108 regression — socket auth + channel creation', () => {
+  test.beforeEach(async ({ page }) => {
+    await loginAndNavigate(page);
+  });
+
+  test('socket connects without "Authentication failed" error on page load', async ({ page }) => {
+    const socketErrors = [];
+    page.on('console', (msg) => {
+      if (msg.type() === 'error' && msg.text().includes('Authentication failed')) {
+        socketErrors.push(msg.text());
+      }
+    });
+
+    await gotoInteractPage(page, COMMUNITY_ID);
+    // Give the socket handshake time to complete (or fail)
+    await page.waitForTimeout(3000);
+
+    // Regression for Bug C: stale token on useMemo caused "Authentication failed"
+    // on every socket connect/reconnect attempt
+    expect(socketErrors).toHaveLength(0);
+  });
+
+  test('channel creation from sidebar does not produce an error toast', async ({ page }) => {
+    await gotoInteractPage(page, COMMUNITY_ID);
+
+    const addChannelBtn = page.locator('[data-testid="add-channel-btn"]').first();
+    const canCreate = await addChannelBtn.isVisible({ timeout: 5000 }).catch(() => false);
+    if (!canCreate) {
+      test.skip();
+      return;
+    }
+
+    await addChannelBtn.click();
+
+    const nameInput = page.locator('[data-testid="channel-name-input"]');
+    await nameInput.waitFor({ timeout: 5000 });
+    await nameInput.fill(`e2e-regression-${Date.now()}`);
+
+    const typeSelect = page.locator('[data-testid="channel-type-select"]');
+    if (await typeSelect.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await typeSelect.selectOption('chat');
+    }
+
+    await page.locator('[data-testid="create-channel-submit"]').click();
+
+    // Regression for Bug A + B: a 500 from the server would surface as an error toast
+    const errorToast = page.locator('.toast-error, [data-testid="error-toast"], .Toastify__toast--error');
+    const toastVisible = await errorToast.isVisible({ timeout: 4000 }).catch(() => false);
+    expect(toastVisible).toBe(false);
+  });
+});

@@ -2,7 +2,7 @@
  * Interaction Controller
  * Hub channel CRUD (chat, forum, voice) + forum post/reply management.
  */
-import { query } from '../config/database.js';
+import { query, transaction } from '../config/database.js';
 import { logger } from '../utils/logger.js';
 import { errors } from '../middleware/errorHandler.js';
 import { relayMessage } from '../services/mirrorRelayService.js';
@@ -15,15 +15,15 @@ function safeJsonParse(val, fallback = []) {
 
 // ── Hub Server Auto-Provision ──────────────────────────────────────────
 
-async function ensureHubServer(communityId) {
-  const existing = await query(
+async function ensureHubServer(communityId, queryFn = query) {
+  const existing = await queryFn(
     `SELECT id FROM community_servers
      WHERE community_id = $1 AND platform = 'hub' LIMIT 1`,
     [communityId]
   );
   if (existing.rows.length) return existing.rows[0].id;
 
-  const result = await query(
+  const result = await queryFn(
     `INSERT INTO community_servers (community_id, platform, platform_server_id, name, status)
      VALUES ($1, 'hub', $2, 'Hub', 'approved')
      RETURNING id`,
@@ -32,8 +32,8 @@ async function ensureHubServer(communityId) {
   return result.rows[0].id;
 }
 
-async function createServerChannel(hubServerId, hubChannelId, channelName, channelType) {
-  const result = await query(
+async function createServerChannel(hubServerId, hubChannelId, channelName, channelType, queryFn = query) {
+  const result = await queryFn(
     `INSERT INTO community_server_channels
      (community_server_id, platform_channel_id, platform_channel_name, channel_type)
      VALUES ($1, $2, $3, $4)
@@ -147,40 +147,48 @@ export async function createHubChannel(req, res, next) {
     const resolvedIsTemporary = is_temporary !== undefined ? is_temporary : false;
     const resolvedIsBroadcast = is_broadcast !== undefined ? is_broadcast : false;
 
-    // Create the hub channel first (without server channel link)
-    const chResult = await query(
-      `INSERT INTO hub_channels
-       (community_id, name, description, channel_type, sort_order, allow_ad_hoc_voice, has_chat, has_voice, has_video, is_temporary, temp_duration_minutes, is_broadcast, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-       RETURNING id, name, description, channel_type, sort_order, allow_ad_hoc_voice, has_chat, has_voice, has_video, is_temporary, temp_duration_minutes, is_broadcast, created_at`,
-      [communityId, name.trim(), description || '', channel_type, sort_order, allow_ad_hoc_voice,
-       resolvedHasChat, resolvedHasVoice, resolvedHasVideo, resolvedIsTemporary,
-       temp_duration_minutes || null, resolvedIsBroadcast, req.user?.id]
-    );
+    // Wrap all channel creation steps in a transaction so that any failure
+    // at steps 2–4 rolls back the hub_channels INSERT, preventing orphaned
+    // records that would cause a 409 on retry (Bug B fix).
+    const { hubChannel, cscId } = await transaction(async (client) => {
+      const qfn = client.query.bind(client);
 
-    const hubChannel = chResult.rows[0];
+      // Step 1: Create the hub channel (without server channel link yet)
+      const chResult = await qfn(
+        `INSERT INTO hub_channels
+         (community_id, name, description, channel_type, sort_order, allow_ad_hoc_voice, has_chat, has_voice, has_video, is_temporary, temp_duration_minutes, is_broadcast, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+         RETURNING id, name, description, channel_type, sort_order, allow_ad_hoc_voice, has_chat, has_voice, has_video, is_temporary, temp_duration_minutes, is_broadcast, created_at`,
+        [communityId, name.trim(), description || '', channel_type, sort_order, allow_ad_hoc_voice,
+         resolvedHasChat, resolvedHasVoice, resolvedHasVideo, resolvedIsTemporary,
+         temp_duration_minutes || null, resolvedIsBroadcast, req.user?.id]
+      );
+      const ch = chResult.rows[0];
 
-    // Auto-provision hub server + server channel entry
-    const hubServerId = await ensureHubServer(communityId);
-    const cscId = await createServerChannel(hubServerId, hubChannel.id, name.trim(), channel_type);
+      // Step 2+3: Auto-provision hub server + server channel entry
+      const hubServerId = await ensureHubServer(communityId, qfn);
+      const serverChannelId = await createServerChannel(hubServerId, ch.id, name.trim(), channel_type, qfn);
 
-    // Link the hub channel to the server channel
-    await query(
-      `UPDATE hub_channels SET community_server_channel_id = $1 WHERE id = $2`,
-      [cscId, hubChannel.id]
-    );
+      // Step 4: Link the hub channel to the server channel
+      await qfn(
+        `UPDATE hub_channels SET community_server_channel_id = $1 WHERE id = $2`,
+        [serverChannelId, ch.id]
+      );
 
-    // Auto-insert deny overrides for 'member' role on broadcast channels
-    if (resolvedIsBroadcast) {
-      const memberRole = await query('SELECT id FROM community_roles WHERE community_id = $1 AND name = $2', [communityId, 'member']);
-      if (memberRole.rows.length) {
-        await query(
-          `INSERT INTO hub_channel_permission_overrides (hub_channel_id, community_role_id, deny_scopes)
-           VALUES ($1, $2, $3::jsonb)`,
-          [hubChannel.id, memberRole.rows[0].id, JSON.stringify(['channels:send_chat', 'channels:speak'])]
-        );
+      // Auto-insert deny overrides for 'member' role on broadcast channels
+      if (resolvedIsBroadcast) {
+        const memberRole = await qfn('SELECT id FROM community_roles WHERE community_id = $1 AND name = $2', [communityId, 'member']);
+        if (memberRole.rows.length) {
+          await qfn(
+            `INSERT INTO hub_channel_permission_overrides (hub_channel_id, community_role_id, deny_scopes)
+             VALUES ($1, $2, $3::jsonb)`,
+            [ch.id, memberRole.rows[0].id, JSON.stringify(['channels:send_chat', 'channels:speak'])]
+          );
+        }
       }
-    }
+
+      return { hubChannel: ch, cscId: serverChannelId };
+    });
 
     logger.audit('Hub channel created', {
       channelId: hubChannel.id,

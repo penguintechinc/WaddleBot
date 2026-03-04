@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import { interactionApi } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 import ChannelSidebar from '../../components/interaction/ChannelSidebar';
 import ChatView from '../../components/interaction/ChatView';
 import ForumView from '../../components/interaction/ForumView';
@@ -11,20 +12,53 @@ import { ArrowPathIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/24/outl
 function CommunityInteraction() {
   const { communityId, channelId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [channels, setChannels] = useState([]);
   const [canCreateChannel, setCanCreateChannel] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Socket.IO connection — shared across chat channels
-  const socket = useMemo(() => {
-    const token = localStorage.getItem('token');
-    return io(import.meta.env.VITE_API_URL || window.location.origin, {
-      auth: { token },
-      transports: ['websocket', 'polling'],
-      autoConnect: true,
-    });
+  // Track the auth token reactively so the socket can reconnect when it changes.
+  // Two sources of change:
+  //   1. user state changes (login / logout / user refresh) — covered by the
+  //      first useEffect below
+  //   2. Silent token refresh by the API interceptor — covered by the
+  //      'token-refreshed' CustomEvent dispatched from services/api.js
+  const [authToken, setAuthToken] = useState(() => localStorage.getItem('token'));
+
+  useEffect(() => {
+    setAuthToken(localStorage.getItem('token'));
+  }, [user]);
+
+  useEffect(() => {
+    const handler = (e) => setAuthToken(e.detail?.token || localStorage.getItem('token'));
+    window.addEventListener('token-refreshed', handler);
+    return () => window.removeEventListener('token-refreshed', handler);
   }, []);
+
+  // Socket.IO connection — created once; auth is updated and socket reconnects
+  // when authToken changes (fixes stale-token-after-refresh bug).
+  const socket = useMemo(() => {
+    return io(import.meta.env.VITE_API_URL || window.location.origin, {
+      auth: { token: authToken },
+      transports: ['websocket', 'polling'],
+      autoConnect: false,
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // socket instance created once — auth updates happen via useEffect below
+
+  useEffect(() => {
+    if (!authToken) {
+      socket.disconnect();
+      return;
+    }
+    socket.auth = { token: authToken };
+    if (socket.connected) {
+      socket.disconnect().connect();
+    } else {
+      socket.connect();
+    }
+  }, [authToken, socket]);
 
   useEffect(() => {
     return () => { socket.disconnect(); };

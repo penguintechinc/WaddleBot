@@ -427,7 +427,7 @@ export async function requireChannelCreation(req, res, next) {
               cr.priority, cr.base_claims, cm.claims_cache
        FROM communities c
        LEFT JOIN community_members cm ON cm.community_id = c.id
-         AND cm.user_id = $2 AND cm.is_active = true
+         AND cm.user_id = $2::text AND cm.is_active = true
        LEFT JOIN community_roles cr ON cr.id = cm.community_role_id
        WHERE c.id = $1`,
       [communityId, req.user.id]
