@@ -181,7 +181,7 @@ class _StreamingPreviewScreenState extends State<StreamingPreviewScreen> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(
+                              const Icon(
                                 Icons.devices,
                                 size: 64,
                                 color: ElderColors.slate700,
@@ -353,7 +353,8 @@ class _StreamingPreviewScreenState extends State<StreamingPreviewScreen> {
                 children: [
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: _overlaySettings.enabled ? _toggleOverlay : null,
+                      onPressed:
+                          _overlaySettings.enabled ? _toggleOverlay : null,
                       icon: const Icon(Icons.settings),
                       label: const Text('Overlay'),
                       style: ElevatedButton.styleFrom(
@@ -389,7 +390,8 @@ class _StreamingPreviewScreenState extends State<StreamingPreviewScreen> {
                 onPressed: isConnecting
                     ? null
                     : (isStreaming ? _stopStreaming : _startStreaming),
-                icon: Icon(isStreaming ? Icons.stop_circle : Icons.play_circle_fill),
+                icon: Icon(
+                    isStreaming ? Icons.stop_circle : Icons.play_circle_fill),
                 label: Text(isStreaming ? 'Stop Streaming' : 'Go Live'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: isStreaming
@@ -421,7 +423,8 @@ class _MetricRow extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(color: ElderColors.slate300, fontSize: 14)),
+        Text(label,
+            style: const TextStyle(color: ElderColors.slate300, fontSize: 14)),
         Text(
           value,
           style: TextStyle(

@@ -73,7 +73,8 @@ class WaddleBotAuthService {
       final userJson = await _secureStorage.read(key: _keyCurrentUser);
 
       if (userJson != null && _accessToken != null) {
-        _currentUser = User.fromJson(jsonDecode(userJson) as Map<String, dynamic>);
+        _currentUser =
+            User.fromJson(jsonDecode(userJson) as Map<String, dynamic>);
         await _apiClient.setAuthToken(_accessToken!);
         return true;
       }
@@ -101,7 +102,8 @@ class WaddleBotAuthService {
           'email': email,
           'password': password,
         },
-        fromJson: (json) => TokenResponse.fromJson(json as Map<String, dynamic>),
+        fromJson: (json) =>
+            TokenResponse.fromJson(json as Map<String, dynamic>),
       );
 
       _tokenResponse = response;
@@ -130,7 +132,7 @@ class WaddleBotAuthService {
         try {
           // Extract license key from JWT claims or user data
           // This allows license validation tied to the authenticated user
-          unawaited(_licenseService!.initialize());
+          unawaited(_licenseService.initialize());
         } catch (e) {
           print('Warning: License validation failed: $e');
           // Continue despite license check failure — feature gating handles this
@@ -164,7 +166,8 @@ class WaddleBotAuthService {
         data: {
           'refresh_token': _refreshToken,
         },
-        fromJson: (json) => TokenResponse.fromJson(json as Map<String, dynamic>),
+        fromJson: (json) =>
+            TokenResponse.fromJson(json as Map<String, dynamic>),
       );
 
       _tokenResponse = response;
@@ -259,7 +262,7 @@ class WaddleBotAuthService {
 
       // Clear license data
       if (_licenseService != null) {
-        await _licenseService!.clearLicense();
+        await _licenseService.clearLicense();
       }
     } catch (e) {
       print('Error during logout: $e');
@@ -273,7 +276,9 @@ class WaddleBotAuthService {
   bool isTokenExpired({int bufferSeconds = 60}) {
     if (_tokenResponse == null) return true;
     final expirationTime = _tokenResponse!.expirationDateTime;
-    return DateTime.now().add(Duration(seconds: bufferSeconds)).isAfter(expirationTime);
+    return DateTime.now()
+        .add(Duration(seconds: bufferSeconds))
+        .isAfter(expirationTime);
   }
 
   /// Auto-refresh token if expired, then retry failed request.

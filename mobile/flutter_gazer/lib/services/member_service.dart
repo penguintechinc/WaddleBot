@@ -1,6 +1,7 @@
 /// Member Service for REST API operations
 /// Handles all member-related API interactions with role-based access control
 /// Uses ApiClient singleton for HTTP calls and supports pagination and search
+library;
 
 import 'api_client.dart';
 import '../models/member.dart';
@@ -154,8 +155,7 @@ class MemberService {
         data: data,
         fromJson: (responseData) => ApiResponse.fromJson(
           responseData as Map<String, dynamic>,
-          dataFactory: (item) =>
-              Member.fromJson(item as Map<String, dynamic>),
+          dataFactory: (item) => Member.fromJson(item as Map<String, dynamic>),
         ),
       );
 
@@ -201,8 +201,7 @@ class MemberService {
         data: data,
         fromJson: (responseData) => ApiResponse.fromJson(
           responseData as Map<String, dynamic>,
-          dataFactory: (item) =>
-              Member.fromJson(item as Map<String, dynamic>),
+          dataFactory: (item) => Member.fromJson(item as Map<String, dynamic>),
         ),
       );
 
@@ -347,8 +346,7 @@ class MemberService {
         'member_ids': memberIds,
       };
 
-      final response =
-          await _apiClient.post<ApiResponse<Map<String, bool>>>(
+      final response = await _apiClient.post<ApiResponse<Map<String, bool>>>(
         '$_basePath/$communityId/members/online-status',
         data: data,
         fromJson: (responseData) {

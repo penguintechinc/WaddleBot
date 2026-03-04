@@ -95,7 +95,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _handleAudioSettings() async {
-    const availableMicrophones = ['Default Microphone', 'Built-in Mic', 'External USB Mic'];
+    const availableMicrophones = [
+      'Default Microphone',
+      'Built-in Mic',
+      'External USB Mic'
+    ];
     final isPremium = widget.licenseService
         .isFeatureAvailable(AppConstants.featureAdvancedSettings);
 
@@ -107,7 +111,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Audio settings functionality coming soon')),
+        const SnackBar(
+            content: Text('Audio settings functionality coming soon')),
       );
     }
   }
@@ -187,7 +192,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 setState(() => _isLoading = false);
               }
             },
-            child: const Text('Change Domain', style: TextStyle(color: Colors.orange)),
+            child: const Text('Change Domain',
+                style: TextStyle(color: Colors.orange)),
           ),
         ],
       ),
@@ -468,7 +474,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ListTile(
                         leading: const Icon(Icons.videocam, size: 20),
                         title: const Text('Quality Presets'),
-                        subtitle: const Text('Manage streaming quality settings'),
+                        subtitle:
+                            const Text('Manage streaming quality settings'),
                         trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                         dense: true,
                         onTap: _handleStreamQualityNavigation,
@@ -494,14 +501,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         dense: true,
                         onTap: _handleAudioSettings,
                       ),
-                      if (widget.licenseService
-                          .isFeatureAvailable(AppConstants.featureAdvancedSettings))
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
+                      if (widget.licenseService.isFeatureAvailable(
+                          AppConstants.featureAdvancedSettings))
+                        const Padding(
+                          padding: EdgeInsets.only(top: 8),
                           child: ListTile(
-                            leading: const Icon(Icons.auto_awesome, size: 20),
-                            title: const Text('Advanced Audio Processing'),
-                            subtitle: const Text(
+                            leading: Icon(Icons.auto_awesome, size: 20),
+                            title: Text('Advanced Audio Processing'),
+                            subtitle: Text(
                               'Noise suppression and echo cancellation available',
                             ),
                             dense: true,
@@ -519,9 +526,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onTap: _handleNotificationPreferences,
                     children: [
                       ListTile(
-                        leading: const Icon(Icons.notifications_active, size: 20),
+                        leading:
+                            const Icon(Icons.notifications_active, size: 20),
                         title: const Text('Push Notifications'),
-                        subtitle: const Text('Configure when to receive alerts'),
+                        subtitle:
+                            const Text('Configure when to receive alerts'),
                         trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                         dense: true,
                         onTap: _handleNotificationPreferences,
@@ -574,7 +583,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               child: Icon(icon, color: ElderColors.amber500, size: 24),
             ),
-            title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+            title: Text(title,
+                style: const TextStyle(fontWeight: FontWeight.bold)),
             subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
           ),
           Padding(
@@ -731,11 +741,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 12),
                   if (isExpired)
-                    Row(
+                    const Row(
                       children: [
-                        const Icon(Icons.error, color: ElderColors.red500, size: 18),
-                        const SizedBox(width: 8),
-                        const Expanded(
+                        Icon(Icons.error, color: ElderColors.red500, size: 18),
+                        SizedBox(width: 8),
+                        Expanded(
                           child: Text(
                             'License expired',
                             style: TextStyle(color: ElderColors.red500),
@@ -778,12 +788,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             feature
                                 .replaceAll('_', ' ')
                                 .split(' ')
-                                .map((w) =>
-                                    w.isEmpty ? '' : w[0].toUpperCase() + w.substring(1))
+                                .map((w) => w.isEmpty
+                                    ? ''
+                                    : w[0].toUpperCase() + w.substring(1))
                                 .join(' '),
                             style: const TextStyle(fontSize: 11),
                           ),
-                          backgroundColor: ElderColors.amber500.withOpacity(0.2),
+                          backgroundColor:
+                              ElderColors.amber500.withOpacity(0.2),
                           labelStyle: const TextStyle(
                             color: ElderColors.amber500,
                             fontSize: 11,
@@ -909,7 +921,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               dense: true,
               onTap: () {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Security settings coming soon')),
+                  const SnackBar(
+                      content: Text('Security settings coming soon')),
                 );
               },
             ),
@@ -987,38 +1000,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 color: ElderColors.slate900,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Column(
+              child: const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('App Version'),
+                      Text('App Version'),
                       Text(
                         AppConstants.appVersion,
-                        style: const TextStyle(fontWeight: FontWeight.w500),
+                        style: TextStyle(fontWeight: FontWeight.w500),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  SizedBox(height: 12),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Build Number'),
+                      Text('Build Number'),
                       Text(
                         '2024.1.0',
-                        style: const TextStyle(fontWeight: FontWeight.w500),
+                        style: TextStyle(fontWeight: FontWeight.w500),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  SizedBox(height: 12),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Product'),
+                      Text('Product'),
                       Text(
                         AppConstants.productName,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.w500,
                           fontSize: 11,
                         ),
@@ -1029,7 +1042,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            Center(
+            const Center(
               child: Text(
                 '© 2024 Penguin Tech Inc.\nGazer Mobile Stream Studio',
                 textAlign: TextAlign.center,

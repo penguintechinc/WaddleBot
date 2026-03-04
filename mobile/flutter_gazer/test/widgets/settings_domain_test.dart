@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:matcher/matcher.dart';
-import 'package:mockito/mockito.dart';
 import 'package:gazer_waddlebot/models/domain_config.dart';
 import 'package:gazer_waddlebot/models/stream_config.dart';
 import 'package:gazer_waddlebot/models/overlay_settings.dart';
@@ -17,7 +15,8 @@ class MockSettingsService implements SettingsService {
   }
 
   @override
-  Future<WaddleBotDomain> loadApiDomain() async => _domainToReturn ?? WaddleBotDomain.production;
+  Future<WaddleBotDomain> loadApiDomain() async =>
+      _domainToReturn ?? WaddleBotDomain.production;
 
   @override
   Future<void> saveApiDomain(WaddleBotDomain domain) async {
@@ -414,8 +413,8 @@ class _DomainSelectionTestState extends State<DomainSelectionTest> {
                 setState(() => _isLoading = false);
               }
             },
-            child:
-                const Text('Change Domain', style: TextStyle(color: Colors.orange)),
+            child: const Text('Change Domain',
+                style: TextStyle(color: Colors.orange)),
           ),
         ],
       ),

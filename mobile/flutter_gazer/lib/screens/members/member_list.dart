@@ -582,9 +582,8 @@ class _MemberListScreenState extends State<MemberListScreen> {
       );
     }
 
-    final displayMembers = _searchController.text.isNotEmpty
-        ? _filteredMembers
-        : _members;
+    final displayMembers =
+        _searchController.text.isNotEmpty ? _filteredMembers : _members;
 
     if (displayMembers.isEmpty) {
       return Center(
@@ -622,14 +621,14 @@ class _MemberListScreenState extends State<MemberListScreen> {
         itemCount: displayMembers.length + (_isLoading ? 1 : 0),
         itemBuilder: (context, index) {
           if (index == displayMembers.length) {
-            return Padding(
-              padding: const EdgeInsets.all(16),
+            return const Padding(
+              padding: EdgeInsets.all(16),
               child: Center(
                 child: SizedBox(
                   width: 30,
                   height: 30,
                   child: CircularProgressIndicator(
-                    valueColor: const AlwaysStoppedAnimation<Color>(
+                    valueColor: AlwaysStoppedAnimation<Color>(
                       ElderColors.amber500,
                     ),
                     strokeWidth: 2,

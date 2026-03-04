@@ -107,15 +107,15 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
 
   /// Build loading state
   Widget _buildLoadingState() {
-    return Center(
+    return const Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const CircularProgressIndicator(
+          CircularProgressIndicator(
             valueColor: AlwaysStoppedAnimation<Color>(ElderColors.amber500),
           ),
-          const SizedBox(height: 16),
-          const Text(
+          SizedBox(height: 16),
+          Text(
             'Loading community details...',
             style: TextStyle(
               color: ElderColors.slate400,

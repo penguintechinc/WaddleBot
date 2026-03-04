@@ -91,8 +91,8 @@ class ApiClient {
     _dio = Dio(
       BaseOptions(
         baseUrl: _baseUrl,
-        connectTimeout: Duration(milliseconds: _connectTimeout),
-        receiveTimeout: Duration(milliseconds: _receiveTimeout),
+        connectTimeout: const Duration(milliseconds: _connectTimeout),
+        receiveTimeout: const Duration(milliseconds: _receiveTimeout),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -268,7 +268,7 @@ class ApiClient {
     if (statusCode != null) {
       switch (statusCode) {
         case 400:
-          message = 'Invalid request: ${message}';
+          message = 'Invalid request: $message';
           break;
         case 401:
           message = 'Authentication required. Please log in again.';
@@ -280,7 +280,7 @@ class ApiClient {
           message = 'Resource not found.';
           break;
         case 409:
-          message = 'Conflict: ${message}';
+          message = 'Conflict: $message';
           break;
         case 429:
           message = 'Too many requests. Please try again later.';
@@ -325,7 +325,8 @@ class AuthInterceptor extends Interceptor {
   }
 
   @override
-  Future<void> onError(DioException err, ErrorInterceptorHandler handler) async {
+  Future<void> onError(
+      DioException err, ErrorInterceptorHandler handler) async {
     // Handle 401 Unauthorized - token might be expired
     if (err.response?.statusCode == 401) {
       final authService = apiClient._authService;
@@ -335,7 +336,6 @@ class AuthInterceptor extends Interceptor {
           !_isRefreshing &&
           !err.requestOptions.path.contains('/auth/refresh') &&
           err.requestOptions.extra['_retry_count'] != 1) {
-
         // Prevent concurrent refresh attempts
         _isRefreshing = true;
 
@@ -551,23 +551,22 @@ class LicenseInterceptor extends Interceptor {
     }
 
     // Extract error message
-    parsed['error_message'] =
-      responseData['message'] ??
-      responseData['error'] ??
-      'This feature requires a premium license';
+    parsed['error_message'] = responseData['message'] ??
+        responseData['error'] ??
+        'This feature requires a premium license';
 
     // Extract feature name (required)
     parsed['feature'] = responseData['feature'] ??
-      responseData['feature_name'] ??
-      'premium feature';
+        responseData['feature_name'] ??
+        'premium feature';
 
     // Extract tier required
     parsed['tier_required'] = responseData['tier_required'] ?? 'premium';
 
     // Extract upgrade URL
     parsed['upgrade_url'] = responseData['upgrade_url'] ??
-      responseData['pricing_url'] ??
-      'https://waddlebot.io/pricing';
+        responseData['pricing_url'] ??
+        'https://waddlebot.io/pricing';
 
     return parsed;
   }
@@ -598,14 +597,16 @@ class LicenseInterceptor extends Interceptor {
     final context = navigatorKey!.currentContext!;
 
     try {
-      final requiredTier = _parseTierFromString(licenseData['tier_required'] ?? 'premium');
+      final requiredTier =
+          _parseTierFromString(licenseData['tier_required'] ?? 'premium');
 
       await PremiumGateDialog.show(
         context,
         featureName: licenseData['feature'] ?? 'Premium Feature',
         currentTier: LicenseTier.free,
         requiredTier: requiredTier,
-        pricingUrl: licenseData['upgrade_url'] ?? 'https://waddlebot.io/pricing',
+        pricingUrl:
+            licenseData['upgrade_url'] ?? 'https://waddlebot.io/pricing',
         upgradeBenefits: const [
           'Access to advanced streaming features',
           'Higher quality and bitrate options',

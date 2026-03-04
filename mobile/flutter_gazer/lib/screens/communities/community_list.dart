@@ -228,15 +228,15 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
 
   /// Build loading state
   Widget _buildLoadingState() {
-    return Center(
+    return const Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const CircularProgressIndicator(
+          CircularProgressIndicator(
             valueColor: AlwaysStoppedAnimation<Color>(ElderColors.amber500),
           ),
-          const SizedBox(height: 16),
-          const Text(
+          SizedBox(height: 16),
+          Text(
             'Loading communities...',
             style: TextStyle(
               color: ElderColors.slate400,
@@ -290,9 +290,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            _searchController.text.isEmpty
-                ? Icons.groups_2
-                : Icons.search_off,
+            _searchController.text.isEmpty ? Icons.groups_2 : Icons.search_off,
             color: ElderColors.slate600,
             size: 48,
           ),

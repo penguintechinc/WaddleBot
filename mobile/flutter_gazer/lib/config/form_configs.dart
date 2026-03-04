@@ -17,8 +17,8 @@ class FormConfigs {
     return FormModalBuilder(
       title: 'Edit Profile',
       onSubmit: onSubmit,
-      fields: [
-        const FormFieldConfig(
+      fields: const [
+        FormFieldConfig(
           name: 'name',
           label: 'Display Name',
           type: FormFieldType.text,
@@ -28,7 +28,7 @@ class FormConfigs {
           placeholder: 'Enter your display name',
           helpText: 'Used in stream chat and user mentions',
         ),
-        const FormFieldConfig(
+        FormFieldConfig(
           name: 'email',
           label: 'Email Address',
           type: FormFieldType.email,
@@ -37,7 +37,7 @@ class FormConfigs {
           placeholder: 'your.email@example.com',
           helpText: 'Used for account recovery and notifications',
         ),
-        const FormFieldConfig(
+        FormFieldConfig(
           name: 'avatar',
           label: 'Avatar URL',
           type: FormFieldType.url,
@@ -46,14 +46,15 @@ class FormConfigs {
           placeholder: 'https://example.com/avatar.jpg',
           helpText: 'Custom avatar image URL (JPG, PNG, max 5MB)',
         ),
-        const FormFieldConfig(
+        FormFieldConfig(
           name: 'bio',
           label: 'Bio',
           type: FormFieldType.textarea,
           required: false,
           max: 500,
           placeholder: 'Tell your viewers about yourself...',
-          helpText: 'Personal description displayed on your profile (max 500 chars)',
+          helpText:
+              'Personal description displayed on your profile (max 500 chars)',
         ),
       ],
       submitLabel: 'Save Profile',
@@ -87,9 +88,11 @@ class FormConfigs {
             const FormFieldOption(label: '720p (HD)', value: '720p'),
             const FormFieldOption(label: '1080p (Full HD)', value: '1080p'),
             if (isPremium)
-              const FormFieldOption(label: '1440p (2K) - Premium', value: '1440p'),
+              const FormFieldOption(
+                  label: '1440p (2K) - Premium', value: '1440p'),
             if (isPremium)
-              const FormFieldOption(label: '4K (Ultra HD) - Premium', value: '4k'),
+              const FormFieldOption(
+                  label: '4K (Ultra HD) - Premium', value: '4k'),
           ],
           defaultValue: '720p',
           helpText: 'Higher quality requires more bandwidth',
@@ -255,7 +258,8 @@ class FormConfigs {
             min: -80,
             max: 0,
             defaultValue: '-40',
-            helpText: 'Mute audio below this level to reduce background noise (Premium)',
+            helpText:
+                'Mute audio below this level to reduce background noise (Premium)',
           ),
         if (isPremium)
           const FormFieldConfig(

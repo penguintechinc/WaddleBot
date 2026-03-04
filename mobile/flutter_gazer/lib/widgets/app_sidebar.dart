@@ -12,12 +12,12 @@ class AppSidebar extends StatefulWidget {
   final Function(String)? onRouteSelected;
 
   const AppSidebar({
-    Key? key,
+    super.key,
     required this.currentUser,
     required this.onNavigate,
     required this.selectedRoute,
     this.onRouteSelected,
-  }) : super(key: key);
+  });
 
   @override
   State<AppSidebar> createState() => _AppSidebarState();
@@ -35,7 +35,8 @@ class _AppSidebarState extends State<AppSidebar> {
   }
 
   Future<void> _initializeLicenseStatus() async {
-    final hasPremium = await _licenseService.checkFeatureEntitlement('streaming');
+    final hasPremium =
+        await _licenseService.checkFeatureEntitlement('streaming');
     setState(() {
       _hasPremiumFeatures = hasPremium;
     });
@@ -324,9 +325,9 @@ class _AppSidebarState extends State<AppSidebar> {
       dividerColor: Colors.grey[800]!,
       borderRadius: 8.0,
       itemPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      selectedItemBorder: Border(
+      selectedItemBorder: const Border(
         left: BorderSide(
-          color: const Color(0xFFD4AF37),
+          color: Color(0xFFD4AF37),
           width: 3,
         ),
       ),
@@ -402,13 +403,13 @@ class SidebarMenu extends StatelessWidget {
   final Widget? footer;
 
   const SidebarMenu({
-    Key? key,
+    super.key,
     required this.items,
     required this.theme,
     this.onItemSelected,
     this.header,
     this.footer,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

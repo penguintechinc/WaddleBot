@@ -47,7 +47,7 @@ class _OverlaySettingsDialogState extends State<OverlaySettingsDialog> {
           ),
           const SizedBox(height: 8),
           DropdownButtonFormField<OverlaySize>(
-            value: _size,
+            initialValue: _size,
             decoration: const InputDecoration(
               labelText: 'Size',
               border: OutlineInputBorder(),
@@ -62,7 +62,7 @@ class _OverlaySettingsDialogState extends State<OverlaySettingsDialog> {
           ),
           const SizedBox(height: 16),
           DropdownButtonFormField<OverlayCorner>(
-            value: _position,
+            initialValue: _position,
             decoration: const InputDecoration(
               labelText: 'Position',
               border: OutlineInputBorder(),
@@ -73,8 +73,7 @@ class _OverlaySettingsDialogState extends State<OverlaySettingsDialog> {
               DropdownMenuItem(
                   value: OverlayCorner.topRight, child: Text('Top Right')),
               DropdownMenuItem(
-                  value: OverlayCorner.bottomLeft,
-                  child: Text('Bottom Left')),
+                  value: OverlayCorner.bottomLeft, child: Text('Bottom Left')),
               DropdownMenuItem(
                   value: OverlayCorner.bottomRight,
                   child: Text('Bottom Right')),

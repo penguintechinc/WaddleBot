@@ -1,5 +1,6 @@
 /// Member models for Flutter Gazer application.
 /// Includes role-based access control (RBAC) and member hierarchy.
+library;
 
 import 'package:equatable/equatable.dart';
 
@@ -254,31 +255,20 @@ class MemberDetail extends Member {
   final DateTime? lastActive;
 
   const MemberDetail({
-    required String id,
-    required String userId,
-    required String communityId,
-    required String username,
-    required String displayName,
-    String? avatarUrl,
-    required MemberRole role,
-    required DateTime joinedAt,
-    required int reputationScore,
-    bool? isOnline,
+    required super.id,
+    required super.userId,
+    required super.communityId,
+    required super.username,
+    required super.displayName,
+    super.avatarUrl,
+    required super.role,
+    required super.joinedAt,
+    required super.reputationScore,
+    super.isOnline,
     required this.permissions,
     required this.badges,
     this.lastActive,
-  }) : super(
-    id: id,
-    userId: userId,
-    communityId: communityId,
-    username: username,
-    displayName: displayName,
-    avatarUrl: avatarUrl,
-    role: role,
-    joinedAt: joinedAt,
-    reputationScore: reputationScore,
-    isOnline: isOnline,
-  );
+  });
 
   /// Create a MemberDetail from JSON.
   factory MemberDetail.fromJson(Map<String, dynamic> json) {
@@ -315,6 +305,7 @@ class MemberDetail extends Member {
   }
 
   /// Create a copy of this member detail with modified fields.
+  @override
   MemberDetail copyWith({
     String? id,
     String? userId,

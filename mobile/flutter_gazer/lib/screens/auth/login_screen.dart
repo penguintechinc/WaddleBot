@@ -3,7 +3,6 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_libs/flutter_libs.dart';
 
 import '../../services/waddlebot_auth_service.dart';
-import '../../config/theme.dart';
 
 /// Gazer Login Screen using LoginPageBuilder
 ///

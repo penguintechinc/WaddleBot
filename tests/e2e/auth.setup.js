@@ -44,8 +44,8 @@ setup('authenticate', async ({ page }) => {
 
   // Suppress overlays
   await page.evaluate(() => {
-    if (!localStorage.getItem('cookieConsent')) {
-      localStorage.setItem('cookieConsent', JSON.stringify({
+    if (!localStorage.getItem('gdpr_consent')) {
+      localStorage.setItem('gdpr_consent', JSON.stringify({
         essential: true, analytics: true, marketing: true, preferences: true,
         timestamp: new Date().toISOString(), policyVersion: '1.0'
       }));

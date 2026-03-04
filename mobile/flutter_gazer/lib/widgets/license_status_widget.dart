@@ -31,7 +31,7 @@ class LicenseStatusWidget extends StatefulWidget {
   final Color? tierTextColor;
 
   const LicenseStatusWidget({
-    Key? key,
+    super.key,
     required this.licenseInfo,
     this.currentWorkflows,
     this.onExpand,
@@ -39,7 +39,7 @@ class LicenseStatusWidget extends StatefulWidget {
     this.compact = false,
     this.backgroundColor,
     this.tierTextColor,
-  }) : super(key: key);
+  });
 
   @override
   State<LicenseStatusWidget> createState() => _LicenseStatusWidgetState();

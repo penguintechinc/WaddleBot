@@ -1,5 +1,6 @@
 /// API response wrapper models for Flutter Gazer application.
 /// Provides generic response handling with success/error states and pagination support.
+library;
 
 import 'package:equatable/equatable.dart';
 
@@ -143,7 +144,8 @@ class ApiResponse<T> extends Equatable {
   }
 
   @override
-  List<Object?> get props => [success, data, error, message, statusCode, timestamp];
+  List<Object?> get props =>
+      [success, data, error, message, statusCode, timestamp];
 }
 
 /// Structured error information for API responses.
@@ -412,7 +414,7 @@ class CommunitiesResponse extends Equatable {
     int? statusCode,
   }) {
     return CommunitiesResponse(
-      communities: [],
+      communities: const [],
       success: false,
       error: error,
       message: message,
@@ -459,7 +461,8 @@ class CommunitiesResponse extends Equatable {
       };
 
   @override
-  List<Object?> get props => [communities, total, success, error, message, statusCode];
+  List<Object?> get props =>
+      [communities, total, success, error, message, statusCode];
 }
 
 /// Members list API response wrapper.
@@ -516,7 +519,7 @@ class MembersResponse extends Equatable {
     int? statusCode,
   }) {
     return MembersResponse(
-      members: [],
+      members: const [],
       success: false,
       error: error,
       message: message,
@@ -563,7 +566,8 @@ class MembersResponse extends Equatable {
       };
 
   @override
-  List<Object?> get props => [members, total, success, error, message, statusCode];
+  List<Object?> get props =>
+      [members, total, success, error, message, statusCode];
 }
 
 /// Messages/Chat history API response wrapper.
@@ -659,5 +663,6 @@ class MessagesResponse extends Equatable {
       };
 
   @override
-  List<Object?> get props => [messageHistory, success, error, message, statusCode];
+  List<Object?> get props =>
+      [messageHistory, success, error, message, statusCode];
 }

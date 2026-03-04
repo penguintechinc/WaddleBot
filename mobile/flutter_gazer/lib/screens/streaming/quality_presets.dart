@@ -36,12 +36,15 @@ class _QualityPresetsCardState extends State<QualityPresetsCard> {
   int _getSelectedPresetIndex() {
     final config = widget.currentConfig;
     if (config.width == 854 && config.height == 480) return 0; // Low
-    if (config.width == 1280 && config.height == 720 && config.fps == 30)
+    if (config.width == 1280 && config.height == 720 && config.fps == 30) {
       return 1; // Medium
-    if (config.width == 1920 && config.height == 1080 && config.fps == 30)
+    }
+    if (config.width == 1920 && config.height == 1080 && config.fps == 30) {
       return 2; // High
-    if (config.width == 1920 && config.height == 1080 && config.fps == 60)
+    }
+    if (config.width == 1920 && config.height == 1080 && config.fps == 60) {
       return 3; // Ultra
+    }
     return -1;
   }
 
@@ -104,7 +107,7 @@ class _QualityPresetsCardState extends State<QualityPresetsCard> {
 
   List<_QualityPreset> _buildPresets(LicenseInfo? license) {
     return [
-      _QualityPreset(
+      const _QualityPreset(
         name: 'Low',
         resolution: '480p',
         fps: 30,
@@ -114,7 +117,7 @@ class _QualityPresetsCardState extends State<QualityPresetsCard> {
         isPremium: false,
         description: '1.5 Mbps',
       ),
-      _QualityPreset(
+      const _QualityPreset(
         name: 'Medium',
         resolution: '720p',
         fps: 30,
@@ -124,7 +127,7 @@ class _QualityPresetsCardState extends State<QualityPresetsCard> {
         isPremium: false,
         description: '3 Mbps',
       ),
-      _QualityPreset(
+      const _QualityPreset(
         name: 'High',
         resolution: '1080p',
         fps: 30,
@@ -134,7 +137,7 @@ class _QualityPresetsCardState extends State<QualityPresetsCard> {
         isPremium: true,
         description: '5 Mbps',
       ),
-      _QualityPreset(
+      const _QualityPreset(
         name: 'Ultra',
         resolution: '1080p',
         fps: 60,
@@ -216,7 +219,8 @@ class _QualityPresetsCardState extends State<QualityPresetsCard> {
                   ),
                   child: Text(
                     'Max: ${(license.getMaxBitrate() / 1000000).toStringAsFixed(1)} Mbps',
-                    style: const TextStyle(fontSize: 12, color: ElderColors.amber500),
+                    style: const TextStyle(
+                        fontSize: 12, color: ElderColors.amber500),
                   ),
                 ),
             ],
@@ -233,8 +237,8 @@ class _QualityPresetsCardState extends State<QualityPresetsCard> {
                 final width = int.parse(widthController.text);
                 final height = int.parse(heightController.text);
                 final fps = int.parse(fpsController.text);
-                final bitrate = (double.parse(bitrateController.text) * 1000000)
-                    .toInt();
+                final bitrate =
+                    (double.parse(bitrateController.text) * 1000000).toInt();
 
                 widget.onPresetSelect(width, height, fps, bitrate, false);
                 if (!mounted) return;
@@ -347,7 +351,8 @@ class _PresetCard extends StatelessWidget {
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.star, size: 10, color: ElderColors.amber500),
+                              Icon(Icons.star,
+                                  size: 10, color: ElderColors.amber500),
                               SizedBox(width: 2),
                               Text(
                                 'PRO',
@@ -420,7 +425,8 @@ class _DetailRow extends StatelessWidget {
   final String label;
   final bool isSelected;
 
-  const _DetailRow({required this.icon, required this.label, required this.isSelected});
+  const _DetailRow(
+      {required this.icon, required this.label, required this.isSelected});
 
   @override
   Widget build(BuildContext context) {

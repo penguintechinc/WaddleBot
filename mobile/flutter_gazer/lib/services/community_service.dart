@@ -1,6 +1,7 @@
 /// Community Service for REST API operations
 /// Handles all community-related API interactions with type-safe responses
 /// Uses ApiClient singleton for HTTP calls and supports pagination
+library;
 
 import 'api_client.dart';
 import '../models/community.dart';

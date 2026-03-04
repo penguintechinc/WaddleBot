@@ -153,7 +153,7 @@ class _ChatScreenState extends State<ChatScreen> {
         title: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('${widget.channel.name}'),
+            Text(widget.channel.name),
             if (_typingUsers.isNotEmpty)
               Text(
                 '${_typingUsers.length} typing...',
@@ -252,10 +252,10 @@ class _ChatScreenState extends State<ChatScreen> {
                         const SizedBox(height: 16),
                         Text(
                           'Failed to load messages',
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(
-                            color: ElderColors.white,
-                          ),
+                          style:
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    color: ElderColors.white,
+                                  ),
                         ),
                       ],
                     ),
@@ -269,7 +269,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(
+                        const Icon(
                           Icons.chat_bubble_outline,
                           size: 48,
                           color: ElderColors.slate600,
@@ -277,18 +277,18 @@ class _ChatScreenState extends State<ChatScreen> {
                         const SizedBox(height: 16),
                         Text(
                           'No messages yet',
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(
-                            color: ElderColors.white,
-                          ),
+                          style:
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    color: ElderColors.white,
+                                  ),
                         ),
                         const SizedBox(height: 8),
                         Text(
                           'Start the conversation!',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                            color: ElderColors.slate400,
-                          ),
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: ElderColors.slate400,
+                                  ),
                         ),
                       ],
                     ),
@@ -309,8 +309,8 @@ class _ChatScreenState extends State<ChatScreen> {
                       itemBuilder: (context, index) {
                         if (index == allMessages.length) {
                           if (!_hasMoreMessages) {
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
+                            return const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 16),
                               child: Center(
                                 child: Text(
                                   'No more messages',
@@ -323,8 +323,8 @@ class _ChatScreenState extends State<ChatScreen> {
                             );
                           }
 
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          return const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 16),
                             child: Center(
                               child: SizedBox(
                                 width: 20,
@@ -340,7 +340,8 @@ class _ChatScreenState extends State<ChatScreen> {
                           );
                         }
 
-                        final message = allMessages[allMessages.length - 1 - index];
+                        final message =
+                            allMessages[allMessages.length - 1 - index];
                         return _MessageBubble(message: message);
                       },
                     ),
@@ -412,7 +413,7 @@ class _MessageBubble extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 _formatTime(message.createdAt),
-                style: TextStyle(
+                style: const TextStyle(
                   color: ElderColors.slate500,
                   fontSize: 11,
                 ),
@@ -524,7 +525,7 @@ class _MessageInputFieldState extends State<_MessageInputField> {
                 textCapitalization: TextCapitalization.sentences,
                 decoration: InputDecoration(
                   hintText: 'Type a message...',
-                  hintStyle: TextStyle(
+                  hintStyle: const TextStyle(
                     color: ElderColors.slate500,
                   ),
                   border: OutlineInputBorder(

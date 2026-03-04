@@ -32,7 +32,7 @@ class _CameraOverlayWidgetState extends State<CameraOverlayWidget> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     final size = MediaQuery.of(context).size;
-    final margin = 20.0;
+    const margin = 20.0;
     final overlayW = size.width * widget.settings.sizeFraction;
     switch (widget.settings.position) {
       case OverlayCorner.topLeft:

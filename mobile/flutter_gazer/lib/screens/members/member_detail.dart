@@ -700,7 +700,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
                   ],
                 ),
               );
-            }).toList(),
+            }),
           ],
         ),
       ),

@@ -162,7 +162,8 @@ void main() {
     });
 
     group('Domain Switching and Route Updates', () {
-      test('Switching from PenguinTech to Waddles updates API routes', () async {
+      test('Switching from PenguinTech to Waddles updates API routes',
+          () async {
         apiClient.setDomain(WaddleBotDomain.penguintech);
         expect(
           apiClient.getCurrentDomain(),
@@ -194,7 +195,8 @@ void main() {
         );
       });
 
-      test('Switching from Production to PenguinTech updates API routes', () async {
+      test('Switching from Production to PenguinTech updates API routes',
+          () async {
         apiClient.setDomain(WaddleBotDomain.production);
         expect(
           apiClient.getCurrentDomain(),
@@ -278,10 +280,9 @@ void main() {
         expect(WaddleBotDomain.waddles.displayName, isNotEmpty);
         expect(WaddleBotDomain.production.displayName, isNotEmpty);
 
-        expect(WaddleBotDomain.penguintech.displayName,
-            contains('PenguinTech'));
         expect(
-            WaddleBotDomain.waddles.displayName, contains('Waddles'));
+            WaddleBotDomain.penguintech.displayName, contains('PenguinTech'));
+        expect(WaddleBotDomain.waddles.displayName, contains('Waddles'));
       });
     });
 
@@ -330,7 +331,7 @@ void main() {
 
     group('Domain Persistence Tests', () {
       test('Save production domain to SharedPreferences', () async {
-        final domain = WaddleBotDomain.production;
+        const domain = WaddleBotDomain.production;
 
         await settingsService.saveApiDomain(domain);
 
@@ -342,7 +343,7 @@ void main() {
       });
 
       test('Save penguintech domain to SharedPreferences', () async {
-        final domain = WaddleBotDomain.penguintech;
+        const domain = WaddleBotDomain.penguintech;
 
         await settingsService.saveApiDomain(domain);
 
@@ -354,7 +355,7 @@ void main() {
       });
 
       test('Save waddles domain to SharedPreferences', () async {
-        final domain = WaddleBotDomain.waddles;
+        const domain = WaddleBotDomain.waddles;
 
         await settingsService.saveApiDomain(domain);
 
@@ -389,13 +390,13 @@ void main() {
 
     group('Default Domain Tests', () {
       test('Production domain is the hardcoded default', () {
-        final domain = WaddleBotDomain.production;
+        const domain = WaddleBotDomain.production;
 
         expect(domain.index, equals(2));
       });
 
       test('Production domain has correct API URL', () {
-        final domain = WaddleBotDomain.production;
+        const domain = WaddleBotDomain.production;
 
         expect(domain.host, equals('app.waddlebot.io'));
         expect(domain.apiUrl, equals('https://app.waddlebot.io/api/v2'));
@@ -410,16 +411,18 @@ void main() {
       });
 
       test('Penguintech domain is valid', () {
-        final domain = WaddleBotDomain.penguintech;
+        const domain = WaddleBotDomain.penguintech;
 
         expect(domain.host, equals('waddlebot.penguintech.io'));
-        expect(domain.apiUrl, equals('https://waddlebot.penguintech.io/api/v2'));
-        expect(domain.wsUrl, equals('wss://waddlebot.penguintech.io/api/v1/ws'));
+        expect(
+            domain.apiUrl, equals('https://waddlebot.penguintech.io/api/v2'));
+        expect(
+            domain.wsUrl, equals('wss://waddlebot.penguintech.io/api/v1/ws'));
         expect(domain.displayName, equals('PenguinTech Dev'));
       });
 
       test('Waddles domain is valid', () {
-        final domain = WaddleBotDomain.waddles;
+        const domain = WaddleBotDomain.waddles;
 
         expect(domain.host, equals('waddles.penguintech.io'));
         expect(domain.apiUrl, equals('https://waddles.penguintech.io/api/v2'));
@@ -428,7 +431,7 @@ void main() {
       });
 
       test('Production domain is valid', () {
-        final domain = WaddleBotDomain.production;
+        const domain = WaddleBotDomain.production;
 
         expect(domain.host, equals('app.waddlebot.io'));
         expect(domain.apiUrl, equals('https://app.waddlebot.io/api/v2'));

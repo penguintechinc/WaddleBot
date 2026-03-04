@@ -124,7 +124,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
+                    const Icon(
                       Icons.chat_bubble_outline,
                       size: 48,
                       color: ElderColors.slate600,
@@ -214,7 +214,7 @@ class _ChannelListTile extends StatelessWidget {
   String _getLastMessagePreview() {
     if (lastMessage == null) return 'No messages yet';
 
-    final maxLength = 40;
+    const maxLength = 40;
     final content = lastMessage!.content;
 
     if (content.length > maxLength) {
@@ -226,7 +226,7 @@ class _ChannelListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         border: Border(
           bottom: BorderSide(
             color: ElderColors.slate800,
@@ -295,7 +295,7 @@ class _ChannelListTile extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               _getLastMessagePreview(),
-              style: TextStyle(
+              style: const TextStyle(
                 color: ElderColors.slate400,
                 fontSize: 12,
               ),
@@ -308,14 +308,14 @@ class _ChannelListTile extends StatelessWidget {
               children: [
                 Text(
                   '${channel.memberCount} members',
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: ElderColors.slate500,
                     fontSize: 11,
                   ),
                 ),
                 Text(
                   _formatLastMessageTime(lastMessage?.createdAt),
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: ElderColors.slate500,
                     fontSize: 11,
                   ),

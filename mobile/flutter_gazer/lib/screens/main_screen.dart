@@ -246,7 +246,7 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     if (!_initialized) {
-      return Scaffold(
+      return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       );
     }
@@ -265,9 +265,7 @@ class _MainScreenState extends State<MainScreen> {
           : Drawer(
               child: _buildSidebarContent(),
             ),
-      body: isSmallScreen
-          ? _buildMobileLayout()
-          : _buildTabletLayout(),
+      body: isSmallScreen ? _buildMobileLayout() : _buildTabletLayout(),
     );
   }
 
@@ -432,7 +430,8 @@ class _MainScreenState extends State<MainScreen> {
           },
           onToggleChat: _licenseService
                   .isFeatureAvailable(AppConstants.featureWaddleBotAi)
-              ? () => setState(() => _isChatOverlayVisible = !_isChatOverlayVisible)
+              ? () =>
+                  setState(() => _isChatOverlayVisible = !_isChatOverlayVisible)
               : null,
         ),
       ],

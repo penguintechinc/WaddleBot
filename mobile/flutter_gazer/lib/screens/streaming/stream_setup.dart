@@ -160,7 +160,8 @@ class _StreamSetupScreenState extends State<StreamSetupScreen> {
     );
   }
 
-  void _applyPreset(int width, int height, int fps, int bitrate, bool isPremium) {
+  void _applyPreset(
+      int width, int height, int fps, int bitrate, bool isPremium) {
     final license = widget.licenseService.currentLicense;
     if (isPremium && license?.tier == LicenseTier.free) {
       _showUpgradeDialog(
@@ -271,7 +272,7 @@ class _StreamSetupScreenState extends State<StreamSetupScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Waddles RTMP Section
-              _SectionTitle(title: 'RTMP Configuration'),
+              const _SectionTitle(title: 'RTMP Configuration'),
               const SizedBox(height: 12),
 
               Container(
@@ -303,7 +304,8 @@ class _StreamSetupScreenState extends State<StreamSetupScreen> {
                           ),
                           decoration: BoxDecoration(
                             color: GazerTheme.connectedGreen.withOpacity(0.2),
-                            border: Border.all(color: GazerTheme.connectedGreen),
+                            border:
+                                Border.all(color: GazerTheme.connectedGreen),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: const Text(
@@ -394,7 +396,9 @@ class _StreamSetupScreenState extends State<StreamSetupScreen> {
                       : Icons.keyboard_arrow_down,
                 ),
                 label: Text(
-                  _showExternalRtmp ? 'Hide External RTMP' : 'Use External RTMP',
+                  _showExternalRtmp
+                      ? 'Hide External RTMP'
+                      : 'Use External RTMP',
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: ElderColors.slate700,
@@ -404,7 +408,7 @@ class _StreamSetupScreenState extends State<StreamSetupScreen> {
               const SizedBox(height: 24),
 
               // Quality Settings Section
-              _SectionTitle(title: 'Quality Settings'),
+              const _SectionTitle(title: 'Quality Settings'),
               const SizedBox(height: 12),
 
               QualityPresetsCard(
@@ -418,7 +422,7 @@ class _StreamSetupScreenState extends State<StreamSetupScreen> {
               const SizedBox(height: 24),
 
               // Current Configuration Display
-              _SectionTitle(title: 'Current Configuration'),
+              const _SectionTitle(title: 'Current Configuration'),
               const SizedBox(height: 12),
 
               Container(
@@ -435,7 +439,8 @@ class _StreamSetupScreenState extends State<StreamSetupScreen> {
                       value: '${_config.width}x${_config.height}',
                     ),
                     const Divider(color: ElderColors.slate700, height: 12),
-                    _ConfigRow(label: 'Frame Rate', value: '${_config.fps} fps'),
+                    _ConfigRow(
+                        label: 'Frame Rate', value: '${_config.fps} fps'),
                     const Divider(color: ElderColors.slate700, height: 12),
                     _ConfigRow(
                       label: 'Video Bitrate',
@@ -448,7 +453,8 @@ class _StreamSetupScreenState extends State<StreamSetupScreen> {
                     const Divider(color: ElderColors.slate700, height: 12),
                     _ConfigRow(
                       label: 'Audio Bitrate',
-                      value: '${(_config.audioBitrate / 1000).toStringAsFixed(0)} Kbps',
+                      value:
+                          '${(_config.audioBitrate / 1000).toStringAsFixed(0)} Kbps',
                     ),
                   ],
                 ),
@@ -570,7 +576,8 @@ class _ConfigRow extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(color: ElderColors.slate400, fontSize: 13)),
+        Text(label,
+            style: const TextStyle(color: ElderColors.slate400, fontSize: 13)),
         Text(
           value,
           style: TextStyle(

@@ -31,7 +31,7 @@ class PremiumBadge extends StatelessWidget {
   final bool interactive;
 
   const PremiumBadge({
-    Key? key,
+    super.key,
     this.size = 'medium',
     this.label = 'PRO',
     this.tooltip,
@@ -40,7 +40,7 @@ class PremiumBadge extends StatelessWidget {
     this.onTap,
     this.showIcon = true,
     this.interactive = false,
-  }) : super(key: key);
+  });
 
   double _getSizeValue() {
     switch (size) {
@@ -271,11 +271,11 @@ class _PremiumBadgeOverlay extends StatelessWidget {
   final Alignment alignment;
 
   const _PremiumBadgeOverlay({
-    Key? key,
+    super.key,
     required this.child,
     required this.badge,
     this.alignment = Alignment.topRight,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -287,14 +287,16 @@ class _PremiumBadgeOverlay extends StatelessWidget {
           top: alignment == Alignment.topRight || alignment == Alignment.topLeft
               ? -6
               : null,
-          bottom:
-              alignment == Alignment.bottomRight || alignment == Alignment.bottomLeft
-                  ? -6
-                  : null,
-          right: alignment == Alignment.topRight || alignment == Alignment.bottomRight
+          bottom: alignment == Alignment.bottomRight ||
+                  alignment == Alignment.bottomLeft
               ? -6
               : null,
-          left: alignment == Alignment.topLeft || alignment == Alignment.bottomLeft
+          right: alignment == Alignment.topRight ||
+                  alignment == Alignment.bottomRight
+              ? -6
+              : null,
+          left: alignment == Alignment.topLeft ||
+                  alignment == Alignment.bottomLeft
               ? -6
               : null,
           child: badge,
@@ -322,13 +324,13 @@ extension PremiumBadgeOverlay on Widget {
     String size = 'medium',
   }) {
     return _PremiumBadgeOverlay(
-      child: this,
       badge: PremiumBadge(
         size: size,
         label: label,
         tooltip: tooltip,
       ),
       alignment: alignment,
+      child: this,
     );
   }
 
@@ -342,7 +344,6 @@ extension PremiumBadgeOverlay on Widget {
     String size = 'medium',
   }) {
     return _PremiumBadgeOverlay(
-      child: this,
       badge: PremiumBadge(
         size: size,
         label: label,
@@ -351,6 +352,7 @@ extension PremiumBadgeOverlay on Widget {
         tooltip: tooltip,
       ),
       alignment: alignment,
+      child: this,
     );
   }
 }
