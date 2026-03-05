@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 export PROJECT_NAME="$(basename "$REPO_ROOT")"
-export NAMESPACE="${PROJECT_NAME}-beta"
+export NAMESPACE="${PROJECT_NAME}"
+K8S_BETA_DIR="$REPO_ROOT/tests/k8s/beta"
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 BLUE='\033[0;34m'
@@ -16,7 +17,7 @@ STEPS=("01-deploy-helm.sh" "02-wait-ready.sh" "03-hardcoded-check.sh" "04-dns-re
 FAILED=0
 for step in "${STEPS[@]}"; do
     log_info "Running $step..."
-    if "$SCRIPT_DIR/$step"; then
+    if "$K8S_BETA_DIR/$step"; then
         log_pass "$step completed"
     else
         log_fail "$step failed"
