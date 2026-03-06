@@ -1,7 +1,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: waddlebot-alpha
+namespace: waddlebot
 namePrefix: alpha-
 
 resources:
@@ -197,6 +197,15 @@ patches:
           - hosts:
               - waddlebot.localhost.local
             secretName: waddlebot-tls
+      - op: replace
+        path: /spec/rules/0/http/paths/1/backend/service/name
+        value: alpha-collector-browser-source
+      - op: replace
+        path: /spec/rules/0/http/paths/2/backend/service/name
+        value: alpha-router
+      - op: replace
+        path: /spec/rules/0/http/paths/3/backend/service/name
+        value: alpha-module-rtc
     target:
       kind: Ingress
       name: waddlebot-ingress

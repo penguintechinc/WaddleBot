@@ -33,7 +33,7 @@ readonly PROJECT_ROOT="$(dirname "${SCRIPT_DIR}")"
 
 readonly APP_NAME="${APP_NAME:-waddlebot}"
 readonly KUBE_CONTEXT="${KUBE_CONTEXT:-local-alpha}"
-readonly NAMESPACE="${NAMESPACE:-waddlebot-alpha}"
+readonly NAMESPACE="${NAMESPACE:-waddlebot}"
 readonly APP_HOST="${APP_HOST:-waddlebot.localhost.local}"
 readonly OVERLAY_PATH="${OVERLAY_PATH:-k8s/kustomize/overlays/alpha}"
 
@@ -230,12 +230,27 @@ build_and_import() {
     # Use MicroK8s's bundled ctr binary directly against the containerd socket.
     # This avoids the `microk8s ctr` wrapper which forces sudo even when the
     # user is already in the microk8s group.
+    #
+    # IMPORTANT: Use file-based import (not pipe). Piping docker save directly
+    # into ctr silently produces a corrupt 276KB text/html manifest instead of
+    # the real OCI image because ctr reads from stdin before the pipe is fully
+    # buffered. Saving to a temp file first ensures all layer data is written
+    # before ctr reads it.
     local mk8s_ctr="/snap/microk8s/current/bin/ctr"
     local mk8s_sock="/var/snap/microk8s/common/run/containerd.sock"
-    if ! docker save "${image_name}" | "${mk8s_ctr}" --address "${mk8s_sock}" -n k8s.io images import -; then
+    local tmp_tar
+    tmp_tar="$(mktemp /tmp/microk8s-import-XXXXXX.tar)"
+    if ! docker save "${image_name}" -o "${tmp_tar}"; then
+        rm -f "${tmp_tar}"
+        print_error "Failed to save ${image_name} to tar"
+        return 1
+    fi
+    if ! "${mk8s_ctr}" --address "${mk8s_sock}" -n k8s.io images import "${tmp_tar}"; then
+        rm -f "${tmp_tar}"
         print_error "Failed to import ${image_name} into MicroK8s"
         return 1
     fi
+    rm -f "${tmp_tar}"
 
     print_success "Built and imported: ${image_name}"
 }
