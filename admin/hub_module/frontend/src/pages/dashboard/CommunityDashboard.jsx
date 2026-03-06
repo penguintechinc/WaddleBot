@@ -353,6 +353,24 @@ function CommunityDashboard() {
               >
                 My Support Tickets
               </Link>
+              <Link
+                to={`/community/${id}/inventory`}
+                className="block px-4 py-2 text-sm text-navy-300 hover:bg-navy-800 hover:text-sky-300 rounded-lg transition-colors"
+              >
+                Inventory
+              </Link>
+              <Link
+                to={`/community/${id}/game-servers`}
+                className="block px-4 py-2 text-sm text-navy-300 hover:bg-navy-800 hover:text-sky-300 rounded-lg transition-colors"
+              >
+                Game Servers
+              </Link>
+              <Link
+                to={`/dashboard/community/${id}/leaderboard`}
+                className="block px-4 py-2 text-sm text-navy-300 hover:bg-navy-800 hover:text-sky-300 rounded-lg transition-colors"
+              >
+                Leaderboard
+              </Link>
             </div>
           </div>
         </div>
