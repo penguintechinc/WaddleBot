@@ -47,7 +47,7 @@ async function suppressOverlays(page) {
   await page.evaluate(() => {
     if (!localStorage.getItem('gdpr_consent')) {
       localStorage.setItem('gdpr_consent', JSON.stringify({
-        essential: true, analytics: true, marketing: true, preferences: true,
+        accepted: true, essential: true, functional: true, analytics: true, marketing: true,
         timestamp: new Date().toISOString(), policyVersion: '1.0',
       }));
     }

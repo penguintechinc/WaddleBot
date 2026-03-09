@@ -113,7 +113,11 @@ function PasskeyButton({ onLogin }) {
       const loginRes = await passkeyApi.finishLogin(encoded);
       onLogin(loginRes.data.token);
     } catch (err) {
-      setError(err?.response?.data?.error || err?.message || 'Passkey login failed.');
+      const apiErr = err?.response?.data?.error;
+      setError(
+        typeof apiErr === 'string' ? apiErr :
+        apiErr?.message || err?.message || 'Passkey login failed.'
+      );
     } finally {
       setLoading(false);
     }
@@ -192,6 +196,11 @@ function LoginPage() {
             githubRepo: 'penguintechinc/waddlebot',
           }}
           onSuccess={handleSuccess}
+          transformErrorMessage={(err) => {
+            if (typeof err === 'string') return err;
+            if (err?.message) return err.message;
+            return 'Login failed. Please try again.';
+          }}
           socialLogins={SOCIAL_PROVIDERS}
           tenantField={{
             show: true,

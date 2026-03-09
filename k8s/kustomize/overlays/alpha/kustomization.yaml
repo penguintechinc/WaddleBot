@@ -186,25 +186,39 @@ patches:
         QDRANT_URL: http://alpha-infra-qdrant:6333
         DATABASE_URL: postgresql://waddlebot:changeme@alpha-infra-postgres:5432/waddlebot
 
-  # Configure ingress for alpha environment
+  # Inject waddlebot-config ConfigMap into main app containers so DATABASE_URL
+  # and other config values reach the Python services.
+  # The base manifests only mount the configmap in init containers (db-migrate);
+  # the main container envFrom only has the secretRef. Without this patch,
+  # DATABASE_URL is absent and PyDAL falls back to localhost:5432.
+  # Excludes hub-webui (nginx) and infra workloads (they don't use this config).
+  - patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/envFrom/-
+        value:
+          configMapRef:
+            name: waddlebot-config
+    target:
+      kind: Deployment
+      labelSelector: "app.kubernetes.io/component notin (hub-webui,storage,ai-runtime,database,vector-db,cache)"
+
+  # Configure ingress for alpha environment.
+  # Note: Kustomize's namePrefix transformer auto-updates ingress backend
+  # service references, so most paths (hub-webui, hub-api, collectors, etc.)
+  # are already prefixed correctly. We only need to set host/TLS and fix
+  # core-module-rtc which the transformer misses (service name differs in base).
   - patch: |-
       - op: replace
         path: /spec/rules/0/host
-        value: waddlebot.localhost.local
+        value: waddles.localhost.local
       - op: replace
         path: /spec/tls
         value:
           - hosts:
-              - waddlebot.localhost.local
+              - waddles.localhost.local
             secretName: waddlebot-tls
       - op: replace
-        path: /spec/rules/0/http/paths/1/backend/service/name
-        value: alpha-collector-browser-source
-      - op: replace
-        path: /spec/rules/0/http/paths/2/backend/service/name
-        value: alpha-router
-      - op: replace
-        path: /spec/rules/0/http/paths/3/backend/service/name
+        path: /spec/rules/0/http/paths/4/backend/service/name
         value: alpha-module-rtc
     target:
       kind: Ingress
