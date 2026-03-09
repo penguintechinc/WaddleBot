@@ -1,11 +1,70 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import PropTypes from 'prop-types';
 import { communityApi, streamApi, adminApi } from '../../services/api';
 import LiveStreamGrid from '../../components/streams/LiveStreamGrid';
 import LeaderboardCard from '../../components/leaderboard/LeaderboardCard';
 import BotScoreBadge from '../../components/BotScoreBadge';
 import BotScoreCard from '../../components/BotScoreCard';
 import { MegaphoneIcon, MapPinIcon } from '@heroicons/react/24/outline';
+
+function CommunityStatsWidget({ community, recentActivity, streams }) {
+  const stats = [
+    { label: 'Members', value: community?.memberCount?.toLocaleString() ?? '—' },
+    { label: 'Live Streams', value: streams?.length ?? 0 },
+    { label: 'Recent Activity', value: recentActivity?.length ?? 0 },
+  ];
+  return (
+    <div className="card">
+      <div className="card-header">
+        <h2 className="font-semibold text-sky-100">Community Stats</h2>
+      </div>
+      <div className="p-4 grid grid-cols-3 gap-4">
+        {stats.map((s) => (
+          <div key={s.label} className="text-center">
+            <div className="text-2xl font-bold text-gold-400">{s.value}</div>
+            <div className="text-xs text-navy-400 mt-1">{s.label}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+CommunityStatsWidget.propTypes = {
+  community: PropTypes.shape({ memberCount: PropTypes.number }),
+  recentActivity: PropTypes.array,
+  streams: PropTypes.array,
+};
+
+function QuickActionsWidget({ id }) {
+  const links = [
+    { label: 'Submit Support Ticket', to: `/community/${id}/support/submit` },
+    { label: 'My Support Tickets', to: `/community/${id}/support/my-tickets` },
+  ];
+  return (
+    <div className="card">
+      <div className="card-header">
+        <h2 className="font-semibold text-sky-100">Quick Actions</h2>
+      </div>
+      <div className="p-2">
+        {links.map((link) => (
+          <Link
+            key={link.to}
+            to={link.to}
+            className="block px-4 py-2 text-sm text-navy-300 hover:bg-navy-800 hover:text-sky-300 rounded-lg transition-colors"
+          >
+            {link.label}
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+QuickActionsWidget.propTypes = {
+  id: PropTypes.string.isRequired,
+};
 
 function CommunityDashboard() {
   const { id } = useParams();
@@ -323,56 +382,15 @@ function CommunityDashboard() {
             </div>
           )}
 
-          {/* Quick Links */}
-          <div className="card">
-            <div className="card-header">
-              <h2 className="font-semibold text-sky-100">Quick Links</h2>
-            </div>
-            <div className="p-2">
-              <Link
-                to={`/community/${id}/interact`}
-                className="block px-4 py-2 text-sm text-navy-300 hover:bg-navy-800 hover:text-sky-300 rounded-lg transition-colors"
-              >
-                Chat & Forums
-              </Link>
-              <Link
-                to={`/dashboard/community/${id}/settings`}
-                className="block px-4 py-2 text-sm text-navy-300 hover:bg-navy-800 hover:text-sky-300 rounded-lg transition-colors"
-              >
-                Community Settings
-              </Link>
-              <Link
-                to={`/community/${id}/support/submit`}
-                className="block px-4 py-2 text-sm text-navy-300 hover:bg-navy-800 hover:text-sky-300 rounded-lg transition-colors"
-              >
-                Submit Support Ticket
-              </Link>
-              <Link
-                to={`/community/${id}/support/my-tickets`}
-                className="block px-4 py-2 text-sm text-navy-300 hover:bg-navy-800 hover:text-sky-300 rounded-lg transition-colors"
-              >
-                My Support Tickets
-              </Link>
-              <Link
-                to={`/community/${id}/inventory`}
-                className="block px-4 py-2 text-sm text-navy-300 hover:bg-navy-800 hover:text-sky-300 rounded-lg transition-colors"
-              >
-                Inventory
-              </Link>
-              <Link
-                to={`/community/${id}/game-servers`}
-                className="block px-4 py-2 text-sm text-navy-300 hover:bg-navy-800 hover:text-sky-300 rounded-lg transition-colors"
-              >
-                Game Servers
-              </Link>
-              <Link
-                to={`/dashboard/community/${id}/leaderboard`}
-                className="block px-4 py-2 text-sm text-navy-300 hover:bg-navy-800 hover:text-sky-300 rounded-lg transition-colors"
-              >
-                Leaderboard
-              </Link>
-            </div>
-          </div>
+          {/* Community Stats */}
+          <CommunityStatsWidget
+            community={data?.community}
+            recentActivity={data?.recentActivity}
+            streams={streams}
+          />
+
+          {/* Quick Actions — curated shortcuts not in sidebar */}
+          <QuickActionsWidget id={id} />
         </div>
       </div>
     </div>
