@@ -6,4 +6,4 @@ grpcio-tools>=1.67.0,<2.0.0
 pydal>=20240906.1,<20250101
 psycopg2-binary>=2.9.9
 aiohttp>=3.10.0,<4.0.0
-pyjwt==2.8.0
+pyjwt==2.12.0
