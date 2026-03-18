@@ -52,4 +52,4 @@ toml==0.10.2
 typing_extensions==4.11.0
 tzdata==2024.1
 urllib3==2.6.3
-Werkzeug==3.0.6
+Werkzeug==3.1.6
