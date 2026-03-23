@@ -440,6 +440,7 @@ jobs:
           build-args: |
             MODULE_NAME=${{ matrix.name }}
             MODULE_PORT=${{ matrix.port }}
+            NPM_TOKEN=${{ secrets.GITHUB_TOKEN }}
 
   # Integration tests
   integration-tests:
