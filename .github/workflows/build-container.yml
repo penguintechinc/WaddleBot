@@ -59,13 +59,18 @@ jobs:
             echo "suffix=" >> $GITHUB_OUTPUT
             echo "is_release=true" >> $GITHUB_OUTPUT
             echo "Building RELEASE: v${VERSION} and latest"
-          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            # Main branch, not a release: -beta suffix
+          elif [[ "${{ github.ref }}" == refs/heads/v* ]]; then
+            # Release branch (v*.x), not a release: -beta suffix
             echo "suffix=-beta" >> $GITHUB_OUTPUT
             echo "is_release=false" >> $GITHUB_OUTPUT
             echo "Building BETA: v${VERSION}-beta"
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            # Main branch, not a release: -gamma suffix
+            echo "suffix=-gamma" >> $GITHUB_OUTPUT
+            echo "is_release=false" >> $GITHUB_OUTPUT
+            echo "Building GAMMA: v${VERSION}-gamma"
           else
-            # Non-main branch: -alpha suffix
+            # Non-main, non-release branch: -alpha suffix
             echo "suffix=-alpha" >> $GITHUB_OUTPUT
             echo "is_release=false" >> $GITHUB_OUTPUT
             echo "Building ALPHA: v${VERSION}-alpha"

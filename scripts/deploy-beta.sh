@@ -18,7 +18,7 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Configuration
-REGISTRY="registry-dal2.penguintech.io/waddlebot"
+REGISTRY="ghcr.io/penguintechinc/waddlebot"
 NAMESPACE="waddlebot"
 HELM_CHART="${PROJECT_ROOT}/k8s/helm/waddlebot"
 KUBE_CONTEXT="dal2-beta"
@@ -273,7 +273,8 @@ check_prerequisites() {
     # Check for NPM_TOKEN
     if [ -z "${NPM_TOKEN:-}" ]; then
         if [ -f "$HOME/code/.gh-token" ]; then
-            export NPM_TOKEN=$(grep -v '^#' "$HOME/code/.gh-token" | grep -v '^$' | head -1)
+            read -r NPM_TOKEN < <(sed -n '2p' "$HOME/code/.gh-token")
+            export NPM_TOKEN
             log_info "Loaded NPM_TOKEN from ~/code/.gh-token"
         else
             log_error "NPM_TOKEN is not set and ~/code/.gh-token not found"
@@ -282,6 +283,19 @@ check_prerequisites() {
         fi
     fi
     log_success "NPM_TOKEN configured"
+
+    # Log in to ghcr.io for image push
+    if [ "$SKIP_BUILD" = false ]; then
+        if [ -f "$HOME/code/.gh-token" ]; then
+            read -r _GHCR_TOKEN < <(sed -n '4p' "$HOME/code/.gh-token")
+            echo "$_GHCR_TOKEN" | docker login ghcr.io -u penguintechinc --password-stdin
+            unset _GHCR_TOKEN
+            log_success "Logged in to ghcr.io"
+        else
+            log_error "~/code/.gh-token not found — cannot authenticate with ghcr.io"
+            exit 1
+        fi
+    fi
 }
 
 # Build and push a single image — runs in a subshell for parallel execution.

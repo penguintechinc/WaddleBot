@@ -2,7 +2,7 @@ name: Container Builds
 
 on:
   push:
-    branches: [ main, develop, 'feature/**', 'bugfix/**' ]
+    branches: [ main, 'v*', develop, 'feature/**', 'bugfix/**' ]
     paths:
       - 'processing/router_module/**'
       - 'trigger/receiver/**'
@@ -11,6 +11,7 @@ on:
       - 'action/security/**'
       - 'core/**'
       - 'admin/hub_module/**'
+      - 'admin/marketplace_module/**'
       - 'libs/flask_core/**'
       - 'docker-compose.yml'
       - '.version'
@@ -64,14 +65,20 @@ jobs:
             echo "suffix=" >> $GITHUB_OUTPUT
             echo "is_release=true" >> $GITHUB_OUTPUT
             echo "Building RELEASE: v${VERSION} and latest"
-          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            # Main branch, not a release: -beta suffix
+          elif [[ "${{ github.ref }}" == refs/heads/v* ]]; then
+            # Release branch (v*.x), not a release: -beta suffix
             SUFFIX="-beta"
             echo "suffix=-beta" >> $GITHUB_OUTPUT
             echo "is_release=false" >> $GITHUB_OUTPUT
             echo "Building BETA: v${VERSION}-beta"
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            # Main branch, not a release: -gamma suffix
+            SUFFIX="-gamma"
+            echo "suffix=-gamma" >> $GITHUB_OUTPUT
+            echo "is_release=false" >> $GITHUB_OUTPUT
+            echo "Building GAMMA: v${VERSION}-gamma"
           else
-            # Non-main branch: -alpha suffix
+            # Non-main, non-release branch: -alpha suffix
             SUFFIX="-alpha"
             echo "suffix=-alpha" >> $GITHUB_OUTPUT
             echo "is_release=false" >> $GITHUB_OUTPUT
@@ -85,7 +92,7 @@ jobs:
     outputs:
       router: ${{ steps.changes.outputs.router }}
       marketplace: ${{ steps.changes.outputs.marketplace }}
-      portal: ${{ steps.changes.outputs.portal }}
+      hub: ${{ steps.changes.outputs.hub }}
       twitch: ${{ steps.changes.outputs.twitch }}
       discord: ${{ steps.changes.outputs.discord }}
       slack: ${{ steps.changes.outputs.slack }}
@@ -105,37 +112,37 @@ jobs:
         with:
           filters: |
             router:
-              - 'router_module/**'
+              - 'processing/router_module/**'
               - 'libs/**'
             marketplace:
-              - 'marketplace_module/**'
+              - 'admin/marketplace_module/**'
               - 'libs/**'
-            portal:
-              - 'portal_module/**'
+            hub:
+              - 'admin/hub_module/**'
               - 'libs/**'
             twitch:
-              - 'twitch_module/**'
+              - 'trigger/receiver/twitch_module/**'
               - 'libs/**'
             discord:
-              - 'discord_module/**'
+              - 'trigger/receiver/discord_module/**'
               - 'libs/**'
             slack:
-              - 'slack_module/**'
+              - 'trigger/receiver/slack_module/**'
               - 'libs/**'
             ai-interaction:
-              - 'ai_interaction_module/**'
+              - 'action/interactive/ai_interaction_module/**'
               - 'libs/**'
             inventory-interaction:
-              - 'inventory_interaction_module/**'
+              - 'action/interactive/inventory_interaction_module/**'
               - 'libs/**'
             labels-core:
-              - 'labels_core_module/**'
+              - 'core/labels_core_module/**'
               - 'libs/**'
             alias-interaction:
-              - 'alias_interaction_module/**'
+              - 'action/interactive/alias_interaction_module/**'
               - 'libs/**'
             shoutout-interaction:
-              - 'shoutout_interaction_module/**'
+              - 'action/interactive/shoutout_interaction_module/**'
               - 'libs/**'
             libs:
               - 'libs/**'
@@ -145,22 +152,18 @@ jobs:
     name: Build Core Modules
     runs-on: ubuntu-latest
     needs: [determine-version, detect-changes]
-    if: needs.detect-changes.outputs.router == 'true' || needs.detect-changes.outputs.marketplace == 'true' || needs.detect-changes.outputs.portal == 'true' || needs.detect-changes.outputs.libs == 'true' || github.event_name == 'workflow_dispatch'
+    if: needs.detect-changes.outputs.router == 'true' || needs.detect-changes.outputs.marketplace == 'true' || needs.detect-changes.outputs.libs == 'true' || github.event_name == 'workflow_dispatch'
     strategy:
       matrix:
         include:
-          - module: router_module
+          - module: processing/router_module
             name: router
             port: 8000
             condition: ${{ needs.detect-changes.outputs.router == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: marketplace_module
+          - module: admin/marketplace_module
             name: marketplace
             port: 8001
             condition: ${{ needs.detect-changes.outputs.marketplace == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: portal_module
-            name: portal
-            port: 8002
-            condition: ${{ needs.detect-changes.outputs.portal == 'true' || needs.detect-changes.outputs.libs == 'true' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -227,15 +230,15 @@ jobs:
     strategy:
       matrix:
         include:
-          - module: twitch_module
+          - module: trigger/receiver/twitch_module
             name: twitch-collector
             port: 8010
             condition: ${{ needs.detect-changes.outputs.twitch == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: discord_module
+          - module: trigger/receiver/discord_module
             name: discord-collector
             port: 8011
             condition: ${{ needs.detect-changes.outputs.discord == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: slack_module
+          - module: trigger/receiver/slack_module
             name: slack-collector
             port: 8012
             condition: ${{ needs.detect-changes.outputs.slack == 'true' || needs.detect-changes.outputs.libs == 'true' }}
@@ -305,23 +308,23 @@ jobs:
     strategy:
       matrix:
         include:
-          - module: ai_interaction_module
+          - module: action/interactive/ai_interaction_module
             name: ai-interaction
             port: 8020
             condition: ${{ needs.detect-changes.outputs.ai-interaction == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: inventory_interaction_module
+          - module: action/interactive/inventory_interaction_module
             name: inventory-interaction
             port: 8024
             condition: ${{ needs.detect-changes.outputs.inventory-interaction == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: labels_core_module
+          - module: core/labels_core_module
             name: labels-core
             port: 8021
             condition: ${{ needs.detect-changes.outputs.labels-core == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: alias_interaction_module
+          - module: action/interactive/alias_interaction_module
             name: alias-interaction
             port: 8022
             condition: ${{ needs.detect-changes.outputs.alias-interaction == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: shoutout_interaction_module
+          - module: action/interactive/shoutout_interaction_module
             name: shoutout-interaction
             port: 8023
             condition: ${{ needs.detect-changes.outputs.shoutout-interaction == 'true' || needs.detect-changes.outputs.libs == 'true' }}
@@ -382,12 +385,68 @@ jobs:
           # Stop container
           docker stop test-${{ matrix.name }}
 
+  # Build admin modules (hub-api, hub-webui)
+  build-admin:
+    name: Build Admin Modules
+    runs-on: ubuntu-latest
+    needs: [determine-version, detect-changes]
+    if: needs.detect-changes.outputs.hub == 'true' || needs.detect-changes.outputs.libs == 'true' || github.event_name == 'workflow_dispatch'
+    strategy:
+      matrix:
+        include:
+          - name: hub-api
+            dockerfile: ./admin/hub_module/Dockerfile
+            port: 3000
+            condition: ${{ needs.detect-changes.outputs.hub == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - name: hub-webui
+            dockerfile: ./admin/hub_module/Dockerfile.webui
+            port: 5173
+            condition: ${{ needs.detect-changes.outputs.hub == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}
+          tags: |
+            type=raw,value=${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}
+            type=raw,value=latest,enable=${{ needs.determine-version.outputs.is_release == 'true' }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        if: matrix.condition == 'true' || github.event_name == 'workflow_dispatch'
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          build-args: |
+            MODULE_NAME=${{ matrix.name }}
+            MODULE_PORT=${{ matrix.port }}
+
   # Integration tests
   integration-tests:
     name: Integration Tests
     runs-on: ubuntu-latest
-    needs: [build-core, build-collectors, build-interactions]
-    if: always() && (needs.build-core.result == 'success' || needs.build-collectors.result == 'success' || needs.build-interactions.result == 'success')
+    needs: [build-core, build-collectors, build-interactions, build-admin]
+    if: always() && (needs.build-core.result == 'success' || needs.build-collectors.result == 'success' || needs.build-interactions.result == 'success' || needs.build-admin.result == 'success')
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -437,14 +496,15 @@ jobs:
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
-    needs: [determine-version, build-core, build-collectors, build-interactions]
-    if: always() && (needs.build-core.result == 'success' || needs.build-collectors.result == 'success' || needs.build-interactions.result == 'success')
+    needs: [determine-version, build-core, build-collectors, build-interactions, build-admin]
+    if: always() && (needs.build-core.result == 'success' || needs.build-collectors.result == 'success' || needs.build-interactions.result == 'success' || needs.build-admin.result == 'success')
     strategy:
       matrix:
         image:
           - router
           - marketplace
-          - portal
+          - hub-api
+          - hub-webui
           - twitch-collector
           - discord-collector
           - slack-collector
@@ -471,7 +531,7 @@ jobs:
   create-release:
     name: Create Pre-Release
     runs-on: ubuntu-latest
-    needs: [determine-version, build-core, build-collectors, build-interactions]
+    needs: [determine-version, build-core, build-collectors, build-interactions, build-admin]
     if: needs.determine-version.outputs.is_release == 'true' && github.ref == 'refs/heads/main'
     permissions:
       contents: write
@@ -521,7 +581,7 @@ jobs:
   notify:
     name: Notify Build Status
     runs-on: ubuntu-latest
-    needs: [determine-version, build-core, build-collectors, build-interactions, integration-tests, security-scan]
+    needs: [determine-version, build-core, build-collectors, build-interactions, build-admin, integration-tests, security-scan]
     if: always()
     steps:
       - name: Build Status Summary
@@ -532,5 +592,6 @@ jobs:
           echo "| Core Modules | ${{ needs.build-core.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Collector Modules | ${{ needs.build-collectors.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Interaction Modules | ${{ needs.build-interactions.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Admin Modules | ${{ needs.build-admin.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Integration Tests | ${{ needs.integration-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Security Scan | ${{ needs.security-scan.result }} |" >> $GITHUB_STEP_SUMMARY
