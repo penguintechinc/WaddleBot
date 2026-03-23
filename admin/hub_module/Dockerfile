@@ -6,14 +6,13 @@ ARG NPM_TOKEN
 
 WORKDIR /build/admin/hub_module/frontend
 
-# Copy frontend package files and registry config
+# Copy frontend package files
 COPY admin/hub_module/frontend/package*.json ./
-COPY admin/hub_module/frontend/.npmrc ./
 
 # Configure GitHub Packages auth and install dependencies
-RUN echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" >> .npmrc && \
+RUN printf '@penguintechinc:registry=https://npm.pkg.github.com\n//npm.pkg.github.com/:_authToken=%s\n' "${NPM_TOKEN}" > .npmrc && \
     npm install && \
-    sed -i '/_authToken/d' .npmrc
+    rm -f .npmrc
 
 # Copy frontend source
 COPY admin/hub_module/frontend/ ./
