@@ -158,6 +158,7 @@ jobs:
     needs: [determine-version, detect-changes]
     if: needs.detect-changes.outputs.router == 'true' || needs.detect-changes.outputs.marketplace == 'true' || needs.detect-changes.outputs.libs == 'true' || github.event_name == 'workflow_dispatch'
     strategy:
+      fail-fast: false
       matrix:
         include:
           - module: processing/router_module
@@ -232,6 +233,7 @@ jobs:
     needs: [determine-version, detect-changes]
     if: needs.detect-changes.outputs.twitch == 'true' || needs.detect-changes.outputs.discord == 'true' || needs.detect-changes.outputs.slack == 'true' || needs.detect-changes.outputs.libs == 'true' || github.event_name == 'workflow_dispatch'
     strategy:
+      fail-fast: false
       matrix:
         include:
           - module: trigger/receiver/twitch_module
@@ -310,6 +312,7 @@ jobs:
     needs: [determine-version, detect-changes]
     if: needs.detect-changes.outputs.ai-interaction == 'true' || needs.detect-changes.outputs.inventory-interaction == 'true' || needs.detect-changes.outputs.labels-core == 'true' || needs.detect-changes.outputs.alias-interaction == 'true' || needs.detect-changes.outputs.shoutout-interaction == 'true' || needs.detect-changes.outputs.libs == 'true' || github.event_name == 'workflow_dispatch'
     strategy:
+      fail-fast: false
       matrix:
         include:
           - module: action/interactive/ai_interaction_module
@@ -396,6 +399,7 @@ jobs:
     needs: [determine-version, detect-changes]
     if: needs.detect-changes.outputs.hub == 'true' || needs.detect-changes.outputs.libs == 'true' || github.event_name == 'workflow_dispatch'
     strategy:
+      fail-fast: false
       matrix:
         include:
           - name: hub-api
