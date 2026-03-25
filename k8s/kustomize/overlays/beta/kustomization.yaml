@@ -12,134 +12,134 @@ components:
 images:
   # Core Services
   - name: hub-api
-    newName: registry-dal2.penguintech.io/waddlebot/hub-api
+    newName: ghcr.io/penguintechinc/waddlebot/hub-api
     newTag: latest
   - name: hub-webui
-    newName: registry-dal2.penguintech.io/waddlebot/hub-webui
+    newName: ghcr.io/penguintechinc/waddlebot/hub-webui
     newTag: latest
   - name: core-router
-    newName: registry-dal2.penguintech.io/waddlebot/core-router
+    newName: ghcr.io/penguintechinc/waddlebot/core-router
     newTag: latest
   - name: core-identity
-    newName: registry-dal2.penguintech.io/waddlebot/core-identity
+    newName: ghcr.io/penguintechinc/waddlebot/core-identity
     newTag: latest
   - name: core-labels
-    newName: registry-dal2.penguintech.io/waddlebot/core-labels
+    newName: ghcr.io/penguintechinc/waddlebot/core-labels
     newTag: latest
   - name: core-browser-source
-    newName: registry-dal2.penguintech.io/waddlebot/core-browser-source
+    newName: ghcr.io/penguintechinc/waddlebot/core-browser-source
     newTag: latest
   - name: core-reputation
-    newName: registry-dal2.penguintech.io/waddlebot/core-reputation
+    newName: ghcr.io/penguintechinc/waddlebot/core-reputation
     newTag: latest
   - name: core-community
-    newName: registry-dal2.penguintech.io/waddlebot/core-community
+    newName: ghcr.io/penguintechinc/waddlebot/core-community
     newTag: latest
   - name: core-ai-researcher
-    newName: registry-dal2.penguintech.io/waddlebot/core-ai-researcher
+    newName: ghcr.io/penguintechinc/waddlebot/core-ai-researcher
     newTag: latest
   - name: core-video-proxy
-    newName: registry-dal2.penguintech.io/waddlebot/core-video-proxy
+    newName: ghcr.io/penguintechinc/waddlebot/core-video-proxy
     newTag: latest
   - name: core-engagement
-    newName: registry-dal2.penguintech.io/waddlebot/core-engagement
+    newName: ghcr.io/penguintechinc/waddlebot/core-engagement
     newTag: latest
   - name: core-module-rtc
-    newName: registry-dal2.penguintech.io/waddlebot/core-module-rtc
+    newName: ghcr.io/penguintechinc/waddlebot/core-module-rtc
     newTag: latest
 
   # Collectors
   - name: collector-twitch
-    newName: registry-dal2.penguintech.io/waddlebot/collector-twitch
+    newName: ghcr.io/penguintechinc/waddlebot/collector-twitch
     newTag: latest
   - name: collector-discord
-    newName: registry-dal2.penguintech.io/waddlebot/collector-discord
+    newName: ghcr.io/penguintechinc/waddlebot/collector-discord
     newTag: latest
   - name: collector-slack
-    newName: registry-dal2.penguintech.io/waddlebot/collector-slack
+    newName: ghcr.io/penguintechinc/waddlebot/collector-slack
     newTag: latest
   - name: collector-youtube-live
-    newName: registry-dal2.penguintech.io/waddlebot/collector-youtube-live
+    newName: ghcr.io/penguintechinc/waddlebot/collector-youtube-live
     newTag: latest
   - name: collector-kick
-    newName: registry-dal2.penguintech.io/waddlebot/collector-kick
+    newName: ghcr.io/penguintechinc/waddlebot/collector-kick
     newTag: latest
 
   # Interactive Modules
   - name: interactive-ai
-    newName: registry-dal2.penguintech.io/waddlebot/interactive-ai
+    newName: ghcr.io/penguintechinc/waddlebot/interactive-ai
     newTag: latest
   - name: interactive-alias
-    newName: registry-dal2.penguintech.io/waddlebot/interactive-alias
+    newName: ghcr.io/penguintechinc/waddlebot/interactive-alias
     newTag: latest
   - name: interactive-shoutout
-    newName: registry-dal2.penguintech.io/waddlebot/interactive-shoutout
+    newName: ghcr.io/penguintechinc/waddlebot/interactive-shoutout
     newTag: latest
   - name: interactive-inventory
-    newName: registry-dal2.penguintech.io/waddlebot/interactive-inventory
+    newName: ghcr.io/penguintechinc/waddlebot/interactive-inventory
     newTag: latest
   - name: interactive-calendar
-    newName: registry-dal2.penguintech.io/waddlebot/interactive-calendar
+    newName: ghcr.io/penguintechinc/waddlebot/interactive-calendar
     newTag: latest
   - name: interactive-memories
-    newName: registry-dal2.penguintech.io/waddlebot/interactive-memories
+    newName: ghcr.io/penguintechinc/waddlebot/interactive-memories
     newTag: latest
   - name: interactive-youtube-music
-    newName: registry-dal2.penguintech.io/waddlebot/interactive-youtube-music
+    newName: ghcr.io/penguintechinc/waddlebot/interactive-youtube-music
     newTag: latest
   - name: interactive-spotify
-    newName: registry-dal2.penguintech.io/waddlebot/interactive-spotify
+    newName: ghcr.io/penguintechinc/waddlebot/interactive-spotify
     newTag: latest
   - name: interactive-loyalty
-    newName: registry-dal2.penguintech.io/waddlebot/interactive-loyalty
+    newName: ghcr.io/penguintechinc/waddlebot/interactive-loyalty
     newTag: latest
   - name: interactive-translate
-    newName: registry-dal2.penguintech.io/waddlebot/interactive-translate
+    newName: ghcr.io/penguintechinc/waddlebot/interactive-translate
     newTag: latest
   - name: ghcr.io/penguintechinc/waddlebot/clip-interaction
-    newName: registry-dal2.penguintech.io/waddlebot/clip-interaction
+    newName: ghcr.io/penguintechinc/waddlebot/clip-interaction
     newTag: latest
   - name: ghcr.io/penguintechinc/waddlebot/lfg-interaction
-    newName: registry-dal2.penguintech.io/waddlebot/lfg-interaction
+    newName: ghcr.io/penguintechinc/waddlebot/lfg-interaction
     newTag: latest
   - name: ghcr.io/penguintechinc/waddlebot/server-status-interaction
-    newName: registry-dal2.penguintech.io/waddlebot/server-status-interaction
+    newName: ghcr.io/penguintechinc/waddlebot/server-status-interaction
     newTag: latest
 
   # Action/Pushing Services
   - name: action-discord
-    newName: registry-dal2.penguintech.io/waddlebot/action-discord
+    newName: ghcr.io/penguintechinc/waddlebot/action-discord
     newTag: latest
   - name: action-slack
-    newName: registry-dal2.penguintech.io/waddlebot/action-slack
+    newName: ghcr.io/penguintechinc/waddlebot/action-slack
     newTag: latest
   - name: action-twitch
-    newName: registry-dal2.penguintech.io/waddlebot/action-twitch
+    newName: ghcr.io/penguintechinc/waddlebot/action-twitch
     newTag: latest
   - name: action-youtube
-    newName: registry-dal2.penguintech.io/waddlebot/action-youtube
+    newName: ghcr.io/penguintechinc/waddlebot/action-youtube
     newTag: latest
 
   # Infrastructure Services
   - name: infra-postgres
-    newName: registry-dal2.penguintech.io/waddlebot/infra-postgres
+    newName: ghcr.io/penguintechinc/waddlebot/infra-postgres
     newTag: latest
   - name: infra-redis
-    newName: registry-dal2.penguintech.io/waddlebot/infra-redis
+    newName: ghcr.io/penguintechinc/waddlebot/infra-redis
     newTag: latest
   - name: infra-minio
-    newName: registry-dal2.penguintech.io/waddlebot/infra-minio
+    newName: ghcr.io/penguintechinc/waddlebot/infra-minio
     newTag: latest
   - name: infra-qdrant
-    newName: registry-dal2.penguintech.io/waddlebot/infra-qdrant
+    newName: ghcr.io/penguintechinc/waddlebot/infra-qdrant
     newTag: latest
   - name: infra-ollama
-    newName: registry-dal2.penguintech.io/waddlebot/infra-ollama
+    newName: ghcr.io/penguintechinc/waddlebot/infra-ollama
     newTag: latest
 
   # Migrations
   - name: waddlebot-migrations
-    newName: registry-dal2.penguintech.io/waddlebot/waddlebot-migrations
+    newName: ghcr.io/penguintechinc/waddlebot/waddlebot-migrations
     newTag: latest
 
 labels:
@@ -162,3 +162,19 @@ patches:
     target:
       kind: Ingress
       name: waddlebot-ingress
+
+  # Raise hub-api rate limit for beta (E2E test burst headroom)
+  - patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: RATE_LIMIT_MAX_REQUESTS
+          value: "300"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: RATE_LIMIT_WINDOW_MS
+          value: "60000"
+    target:
+      kind: Deployment
+      name: hub-api

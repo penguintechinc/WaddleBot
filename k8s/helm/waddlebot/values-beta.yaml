@@ -4,9 +4,11 @@
 
 # Global settings for beta cluster
 global:
-  imageRegistry: "registry-dal2.penguintech.io/waddlebot"
+  imageRegistry: "ghcr.io/penguintechinc/waddlebot"
   imageTag: "latest"
   imagePullPolicy: Always
+  imagePullSecrets:
+    - name: ghcr-pull-secret
   corsOrigin: "https://hub.waddlebot.io,https://waddlebot.io,https://waddles.penguintech.cloud,https://waddlebot.penguintech.cloud,http://localhost:3000,http://localhost:5173"
 
 # Infrastructure - Enable core services in beta
@@ -41,6 +43,9 @@ modules:
   hub:
     image: hub-api
     replicas: 1
+    env:
+      RATE_LIMIT_MAX_REQUESTS: "300"     # 3× default; E2E suite generates bursts
+      RATE_LIMIT_WINDOW_MS: "60000"      # Keep 60s window unchanged
 
   hubWebui:
     image: hub-webui
