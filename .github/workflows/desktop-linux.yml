@@ -42,7 +42,7 @@ jobs:
           args: --timeout=5m
 
       - name: Run gosec
-        uses: securego/gosec@master
+        uses: securego/gosec@5e5517beec77b8228ba43ec8d7cc22d82ed31924
         with:
           args: '-no-fail -fmt sarif -out gosec.sarif ./...'
 
