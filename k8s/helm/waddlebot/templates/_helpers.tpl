@@ -354,7 +354,7 @@ Usage: {{- include "waddlebot.dbMigrateInitContainer" . | nindent 6 }}
 */}}
 {{- define "waddlebot.dbMigrateInitContainer" -}}
 - name: db-migrate
-  image: "{{ .Values.global.imageRegistry }}/waddlebot-migrations:{{ .Values.global.imageTag }}"
+  image: "{{ .Values.global.imageRegistry }}/migrations:{{ .Values.global.imageTag }}"
   imagePullPolicy: {{ .Values.global.imagePullPolicy }}
   env:
   - name: DATABASE_URL
