@@ -370,3 +370,13 @@ Usage: {{- include "waddlebot.dbMigrateInitContainer" . | nindent 6 }}
       cpu: "200m"
       memory: "128Mi"
 {{- end }}
+
+{{/*
+Image pull secrets
+*/}}
+{{- define "waddlebot.imagePullSecrets" -}}
+{{- with .Values.imagePullSecrets }}
+imagePullSecrets:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- end }}
