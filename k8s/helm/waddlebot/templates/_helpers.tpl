@@ -375,7 +375,7 @@ Usage: {{- include "waddlebot.dbMigrateInitContainer" . | nindent 6 }}
 Image pull secrets
 */}}
 {{- define "waddlebot.imagePullSecrets" -}}
-{{- with .Values.imagePullSecrets }}
+{{- with .Values.global.imagePullSecrets }}
 imagePullSecrets:
   {{- toYaml . | nindent 2 }}
 {{- end }}
