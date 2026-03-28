@@ -16,7 +16,7 @@ aiohttp==3.9.3
 
 # Authentication & Security
 pyjwt==2.8.0
-cryptography==42.0.5
+cryptography==46.0.6
 
 # Storage
 minio==7.2.5
