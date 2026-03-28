@@ -307,6 +307,7 @@ function ChannelForm({ initial, onSave, onCancel, saving }) {
         <div>
           <label className="block text-sm font-medium text-navy-300 mb-1">Type</label>
           <select
+            data-testid="channel-type-select"
             value={form.type}
             onChange={(e) => set('type', e.target.value)}
             className="bg-navy-800 border border-navy-600 text-sky-100 rounded-lg px-3 py-2 w-full focus:outline-none focus:border-sky-500"

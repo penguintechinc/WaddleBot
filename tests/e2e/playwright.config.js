@@ -30,14 +30,17 @@ const AUTH_STATE_PATH = path.join(__dirname, '.auth-state.json');
 
 module.exports = defineConfig({
   testDir: './',
-  fullyParallel: false, // Run sequentially to avoid conflicts
+  fullyParallel: false,  // Allow parallel execution within projects
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: 1, // Run one test at a time
+  workers: 1, // Force serial execution to avoid 429 rate-limit cascades on beta
   reporter: 'html',
 
   use: {
     baseURL: process.env.BASE_URL || 'http://localhost:3000',
+    extraHTTPHeaders: process.env.PLAYWRIGHT_HOST_HEADER
+      ? { host: process.env.PLAYWRIGHT_HOST_HEADER }
+      : undefined,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',

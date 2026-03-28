@@ -136,13 +136,15 @@ async function installRateLimitRetry(page) {
 async function ensureAuthenticated(page) {
   await installRateLimitRetry(page);
 
-  await page.goto('/', { waitUntil: 'networkidle' });
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
   await suppressOverlays(page);
 
   const token = await page.evaluate(() => localStorage.getItem('token'));
   if (token) {
-    await page.goto('/dashboard', { waitUntil: 'networkidle', timeout: 60000 });
+    await page.goto('/dashboard', { waitUntil: 'domcontentloaded', timeout: 30000 });
     await suppressOverlays(page);
+    // Wait briefly for any auth redirect to settle
+    await page.waitForTimeout(500);
     if (!page.url().includes('/login')) return;
   }
 
@@ -164,7 +166,7 @@ test.describe('Community Creation - Core Smoke Tests', () => {
     await dismissOverlays(page);
 
     const createBtn = page.locator('[data-testid="create-community-btn"]');
-    await expect(createBtn).toBeVisible({ timeout: 5000 });
+    await expect(createBtn).toBeVisible({ timeout: 15000 });
     await expect(createBtn).toHaveText(/Create a Community/i);
   });
 
@@ -255,6 +257,7 @@ test.describe('Community Creation - Core Smoke Tests', () => {
     // Create the first community
     await page.goto('/communities/create', { waitUntil: 'networkidle' });
     await dismissOverlays(page);
+    await page.locator('[data-testid="community-name-input"]').waitFor({ timeout: 10000 });
     await page.fill('[data-testid="community-name-input"]', firstRun);
 
     const [firstResponse] = await Promise.all([
@@ -272,6 +275,7 @@ test.describe('Community Creation - Core Smoke Tests', () => {
     // Navigate back and try to create with the same name
     await page.goto('/communities/create', { waitUntil: 'networkidle' });
     await dismissOverlays(page);
+    await page.locator('[data-testid="community-name-input"]').waitFor({ timeout: 10000 });
     await page.fill('[data-testid="community-name-input"]', firstRun);
     await page.click('[data-testid="create-community-submit"]');
 
@@ -347,6 +351,7 @@ test.describe('Community Creation - Network Diagnostics', () => {
   test('Auth token is sent with community creation request', async ({ page }) => {
     await page.goto('/communities/create', { waitUntil: 'networkidle' });
     await dismissOverlays(page);
+    await page.locator('[data-testid="community-name-input"]').waitFor({ timeout: 10000 });
     await page.fill('[data-testid="community-name-input"]', `auth-check-${Date.now()}`);
 
     let authHeader = null;

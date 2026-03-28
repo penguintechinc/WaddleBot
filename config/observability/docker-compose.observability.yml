@@ -35,7 +35,7 @@ version: '3.8'
 services:
   # Prometheus - Metrics Collection and Storage
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.2.1@sha256:6927e0919a144aa7616fd0137d4816816d42f6b816de3af269ab065250859a62
     container_name: waddlebot-prometheus
     hostname: prometheus
     restart: unless-stopped
@@ -107,7 +107,7 @@ services:
 
   # Grafana - Visualization and Dashboards
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:12.4.2@sha256:83749231c3835e390a3144e5e940203e42b9589761f20ef3169c716e734ad505
     container_name: waddlebot-grafana
     hostname: grafana
     restart: unless-stopped

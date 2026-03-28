@@ -60,7 +60,7 @@ test.describe('Modules & Marketplace', () => {
     await gotoAdmin(page, `/admin/${communityId}/modules`);
 
     await expect(page.locator('button:has-text("Installed Modules")')).toBeVisible({ timeout: 5000 });
-    await expect(page.locator('button:has-text("Browse Marketplace")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('button:has-text("Browse Marketplace")').first()).toBeVisible({ timeout: 5000 });
   });
 
   test('Installed Modules tab is active by default', async ({ page }) => {
@@ -68,6 +68,8 @@ test.describe('Modules & Marketplace', () => {
     await gotoAdmin(page, `/admin/${communityId}/modules`);
 
     await expect(page.locator('h1:has-text("Modules")')).toBeVisible({ timeout: 5000 });
+
+    await page.locator('th').first().waitFor({ timeout: 10000 });
 
     const tableHeaders = ['Module', 'Category', 'Status', 'Actions'];
     for (const header of tableHeaders) {
@@ -79,7 +81,7 @@ test.describe('Modules & Marketplace', () => {
     if (!communityId) { test.skip('No community found'); return; }
     await gotoAdmin(page, `/admin/${communityId}/modules`);
 
-    await page.locator('button:has-text("Browse Marketplace")').click();
+    await page.locator('button:has-text("Browse Marketplace")').first().click();
 
     await expect(page.locator('input[placeholder*="Search"]')).toBeVisible({ timeout: 5000 });
     await expect(page.locator('select')).toBeVisible({ timeout: 5000 });

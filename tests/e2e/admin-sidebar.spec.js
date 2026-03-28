@@ -28,6 +28,7 @@ async function gotoAdmin(page, url) {
 }
 
 test.describe('Admin Sidebar Collapsible Sections', () => {
+  test.setTimeout(60000);
   let communityId;
 
   test.beforeEach(async ({ page }) => {
@@ -39,6 +40,7 @@ test.describe('Admin Sidebar Collapsible Sections', () => {
     // 2. Navigate to root (loads storageState including localStorage JWT token),
     //    then read token and call API with Authorization header
     await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {}); // ensure prior API calls settle
     const token = await page.evaluate(() => localStorage.getItem('token')).catch(() => null);
     if (token) {
       try {
@@ -133,7 +135,17 @@ test.describe('Admin Sidebar Collapsible Sections', () => {
     await gotoAdmin(page, `/admin/${communityId}`);
 
     const aside = page.locator('aside').first();
-    const overflowY = await aside.evaluate((el) => getComputedStyle(el).overflowY);
+    // SidebarMenu (react-libs) may use an inner scroll container rather than
+    // putting overflow on the <aside> itself — check both.
+    const overflowY = await aside.evaluate((el) => {
+      const own = getComputedStyle(el).overflowY;
+      if (['auto', 'scroll'].includes(own)) return own;
+      for (const child of el.children) {
+        const childOverflow = getComputedStyle(child).overflowY;
+        if (['auto', 'scroll'].includes(childOverflow)) return childOverflow;
+      }
+      return own;
+    });
     expect(['auto', 'scroll']).toContain(overflowY);
   });
 });

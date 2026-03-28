@@ -23,6 +23,7 @@ on:
 permissions:
   contents: read
   packages: write
+  security-events: write
 
 env:
   REGISTRY: ghcr.io
@@ -403,7 +404,7 @@ jobs:
         if: (matrix.condition == 'true' || github.event_name == 'workflow_dispatch') && matrix.port != 0
         run: |
           # Test the built image
-          docker run --rm --name test-${{ matrix.name }} -d -p ${{ matrix.port }}:${{ matrix.port }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:latest
+          docker run --rm --name test-${{ matrix.name }} -d -p ${{ matrix.port }}:${{ matrix.port }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}
           sleep 10
 
           # Health check
@@ -497,7 +498,7 @@ jobs:
         if: (matrix.condition == 'true' || github.event_name == 'workflow_dispatch') && matrix.port != 0
         run: |
           # Test the built image
-          docker run --rm --name test-${{ matrix.name }} -d -p ${{ matrix.port }}:${{ matrix.port }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:latest
+          docker run --rm --name test-${{ matrix.name }} -d -p ${{ matrix.port }}:${{ matrix.port }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}
           sleep 10
 
           # Health check
@@ -636,7 +637,7 @@ jobs:
         if: (matrix.condition == 'true' || github.event_name == 'workflow_dispatch') && matrix.port != 0
         run: |
           # Test the built image
-          docker run --rm --name test-${{ matrix.name }} -d -p ${{ matrix.port }}:${{ matrix.port }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:latest
+          docker run --rm --name test-${{ matrix.name }} -d -p ${{ matrix.port }}:${{ matrix.port }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}
           sleep 10
 
           # Health check
@@ -783,7 +784,7 @@ jobs:
         if: (matrix.condition == 'true' || github.event_name == 'workflow_dispatch') && matrix.port != 0
         run: |
           # Test the built image
-          docker run --rm --name test-${{ matrix.name }} -d -p ${{ matrix.port }}:${{ matrix.port }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:latest
+          docker run --rm --name test-${{ matrix.name }} -d -p ${{ matrix.port }}:${{ matrix.port }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}
           sleep 10
 
           # Health check
@@ -801,7 +802,7 @@ jobs:
   integration-tests:
     name: Integration Tests
     runs-on: ubuntu-latest
-    needs: [build-core, build-collectors, build-interactions, build-admin, build-actions]
+    needs: [determine-version, build-core, build-collectors, build-interactions, build-admin, build-actions]
     if: always() && (needs.build-core.result == 'success' || needs.build-collectors.result == 'success' || needs.build-interactions.result == 'success' || needs.build-admin.result == 'success' || needs.build-actions.result == 'success')
     steps:
       - name: Checkout code
@@ -814,13 +815,13 @@ jobs:
 
       - name: Start services
         run: |
-          # Use the latest built images
+          # Use the version-tagged built images
           export REGISTRY=${{ env.REGISTRY }}
           export IMAGE_NAME=${{ env.IMAGE_NAME }}
-          export TAG=latest
+          export TAG=${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}
 
           # Start core services
-          docker-compose -f docker-compose.yml up -d postgres redis
+          docker-compose -f docker-compose.yml up -d infra-postgres infra-redis
 
           # Wait for services to be ready
           sleep 30

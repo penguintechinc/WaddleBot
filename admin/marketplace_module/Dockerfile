@@ -1,10 +1,12 @@
 # Dockerfile for WaddleBot Marketplace Module
-FROM node:20-alpine
+FROM node:20-bookworm-slim@sha256:1e85773c98c31d4fe5b545e4cb17379e617b348832fb3738b22a08f68dec30f3
 
 WORKDIR /app
 
 # Install dumb-init and build tools for native modules (bcrypt)
-RUN apk add --no-cache dumb-init python3 make g++
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    dumb-init python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy standard healthcheck script
 COPY scripts/healthcheck.py /usr/local/bin/healthcheck.py
@@ -21,7 +23,9 @@ COPY admin/marketplace_module/backend/package*.json ./
 RUN npm install --only=production
 
 # Remove build tools to reduce image size
-RUN apk del python3 make g++
+RUN apt-get remove -y python3 make g++ \
+    && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy backend source
 COPY --chown=nodejs:nodejs admin/marketplace_module/backend/src ./src

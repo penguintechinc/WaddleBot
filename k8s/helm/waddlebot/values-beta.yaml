@@ -91,18 +91,18 @@ modules:
   # Collectors/Triggers
   collectors:
     twitch:
-      image: trigger-twitch
+      image: collector-twitch
       replicas: 1
     discord:
-      image: trigger-discord
+      image: collector-discord
       replicas: 1
     slack:
-      image: trigger-slack
+      image: collector-slack
       replicas: 1
     youtubeLive:
-      image: trigger-youtube
+      image: collector-youtube
     kick:
-      image: trigger-kick
+      image: collector-kick
 
   # Interactive Modules
   interactive:

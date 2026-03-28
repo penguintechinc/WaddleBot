@@ -16,14 +16,23 @@ const CALENDAR_API_URL = process.env.CALENDAR_API_URL || 'http://calendar-intera
 export async function proxyToCalendar(path, options = {}) {
   try {
     const url = `${CALENDAR_API_URL}${path}`;
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Key': config.serviceApiKey,
-        ...options.headers,
-      },
-    });
+    const controller = new AbortController();
+    const timeoutMs = parseInt(process.env.CALENDAR_PROXY_TIMEOUT_MS || '5000', 10);
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    let response;
+    try {
+      response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': config.serviceApiKey,
+          ...options.headers,
+        },
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     const data = await response.json();
 

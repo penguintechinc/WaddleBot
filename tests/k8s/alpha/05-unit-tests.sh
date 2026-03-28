@@ -15,7 +15,7 @@ log_warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
 log_info "Running unit tests"
 cd "$REPO_ROOT"
 if [[ -d "tests/unit" ]] || [[ -d "test" ]]; then
-    if make test-unit 2>/dev/null || npm test 2>/dev/null || python -m pytest tests/unit 2>/dev/null; then
+    if make test-unit 2>/dev/null || npm test 2>/dev/null || python3 -m pytest tests/unit 2>/dev/null; then
         log_pass "Unit tests passed"
     else
         log_warn "Unit tests failed or not configured"

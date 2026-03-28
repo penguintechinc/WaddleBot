@@ -1,6 +1,6 @@
 # Multi-stage Dockerfile for WaddleBot Hub Module
 # Stage 1: Build frontend
-FROM node:20-bookworm-slim AS frontend-build
+FROM node:20-bookworm-slim@sha256:1e85773c98c31d4fe5b545e4cb17379e617b348832fb3738b22a08f68dec30f3 AS frontend-build
 
 ARG NPM_TOKEN
 
@@ -21,7 +21,7 @@ COPY admin/hub_module/frontend/ ./
 RUN npm run build
 
 # Stage 2: Production image
-FROM node:20-bookworm-slim
+FROM node:20-bookworm-slim@sha256:1e85773c98c31d4fe5b545e4cb17379e617b348832fb3738b22a08f68dec30f3
 
 WORKDIR /app
 

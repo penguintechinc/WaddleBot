@@ -27,10 +27,32 @@ const TEST_PASS = process.env.HUB_TEST_PASS || 'admin123';
 // ---------------------------------------------------------------------------
 
 /**
+ * Pre-seed localStorage with GDPR consent and dismissed overlays BEFORE any
+ * page navigation. LoginPageBuilder gates the email/password inputs on
+ * gdpr_consent.accepted === true — if the key is absent when React mounts,
+ * the inputs render as disabled and are invisible to the test. Using
+ * addInitScript ensures the key is present before any page script runs.
+ *
+ * Call this once per page object before the first navigation.
+ */
+async function addConsentInitScript(page) {
+  await page.addInitScript(() => {
+    localStorage.setItem('gdpr_consent', JSON.stringify({
+      accepted: true, essential: true, functional: true, analytics: true, marketing: true,
+      timestamp: new Date().toISOString(), policyVersion: '1.0',
+    }));
+    localStorage.setItem('vendor-request-dismissed', 'true');
+  });
+}
+
+/**
  * Extract XSRF-TOKEN from Set-Cookie headers and inject it as an accessible
  * cookie. Required when testing over HTTP (port-forward) because the backend
  * sets Secure cookies in production mode, which browsers silently drop on HTTP.
  * Playwright sees raw network responses, so we can recover and re-inject the token.
+ *
+ * IMPORTANT: call addConsentInitScript(page) BEFORE calling this function so
+ * that the gdpr_consent key is in localStorage when the /login page loads.
  */
 async function injectCsrfCookie(page) {
   let csrfToken = null;
@@ -61,8 +83,9 @@ async function injectCsrfCookie(page) {
 
 /**
  * Suppress all fixed-position overlays (cookie banner, vendor footer) by
- * injecting the localStorage keys they check. Call BEFORE navigating to
- * pages that render these overlays.
+ * injecting the localStorage keys they check. This is a best-effort fallback
+ * for overlays that may appear after navigation. For reliable suppression,
+ * prefer addConsentInitScript() which runs before React mounts.
  */
 async function suppressOverlays(page) {
   await page.evaluate(() => {
@@ -97,6 +120,9 @@ async function dismissOverlays(page) {
  * Returns the JWT token stored in localStorage.
  */
 async function loginWithPassword(page, email, password, retries = 3) {
+  // Pre-seed gdpr_consent before any navigation so LoginPageBuilder mounts
+  // with the form inputs enabled (not gated behind the consent banner).
+  await addConsentInitScript(page);
   await injectCsrfCookie(page);
   await suppressOverlays(page);
   await dismissOverlays(page);
@@ -175,18 +201,20 @@ async function installRateLimitRetry(page) {
 
 test.describe('Auth - Login Page Structure', () => {
   test.beforeEach(async ({ page }) => {
+    // Must addInitScript BEFORE navigating so React mounts with consent set.
+    await addConsentInitScript(page);
     await page.goto('/login', { waitUntil: 'networkidle' });
     await dismissOverlays(page);
   });
 
   test('login page renders email and password fields', async ({ page }) => {
-    await expect(page.locator('[data-testid="email-input"]')).toBeVisible();
-    await expect(page.locator('[data-testid="password-input"]')).toBeVisible();
-    await expect(page.locator('[data-testid="auth-submit"]')).toBeVisible();
+    await expect(page.locator('input#email')).toBeVisible();
+    await expect(page.locator('input#password')).toBeVisible();
+    await expect(page.locator('button[type="submit"]')).toBeVisible();
   });
 
   test('login page shows "Sign In" on submit button by default', async ({ page }) => {
-    await expect(page.locator('[data-testid="auth-submit"]')).toHaveText(/Sign In/i);
+    await expect(page.locator('button[type="submit"]')).toHaveText(/Sign in/i);
   });
 
   test('login page shows OAuth provider buttons', async ({ page }) => {
@@ -197,8 +225,9 @@ test.describe('Auth - Login Page Structure', () => {
     await expect(page.getByRole('button', { name: /Continue with KICK/i })).toBeVisible();
   });
 
-  test('login page shows "or continue with email" divider', async ({ page }) => {
-    await expect(page.getByText(/or continue with email/i)).toBeVisible();
+  test('login page shows "or continue with platform or email" divider', async ({ page }) => {
+    // The divider text rendered by LoginPage.jsx is "or continue with platform or email"
+    await expect(page.getByText(/or continue with platform or email/i)).toBeVisible();
   });
 });
 
@@ -219,6 +248,7 @@ test.describe('Auth - Login Flow', () => {
   });
 
   test('login with wrong password returns error response', async ({ page }) => {
+    await addConsentInitScript(page);
     await injectCsrfCookie(page);
     await suppressOverlays(page);
     await dismissOverlays(page);
@@ -244,6 +274,7 @@ test.describe('Auth - Login Flow', () => {
   });
 
   test('login with non-existent email returns error response', async ({ page }) => {
+    await addConsentInitScript(page);
     await injectCsrfCookie(page);
     await suppressOverlays(page);
     await dismissOverlays(page);
@@ -266,6 +297,7 @@ test.describe('Auth - Login Flow', () => {
   });
 
   test('login API sends correct request body', async ({ page }) => {
+    await addConsentInitScript(page);
     await injectCsrfCookie(page);
     // Install rate limit retry AFTER page load to avoid blocking networkidle
     await installRateLimitRetry(page);
@@ -289,7 +321,8 @@ test.describe('Auth - Login Flow', () => {
   });
 
   test('login API returns success structure', async ({ page }) => {
-    await page.goto('/login', { waitUntil: 'networkidle' });
+    await addConsentInitScript(page);
+    await injectCsrfCookie(page);
     // Install rate limit retry AFTER page load to avoid blocking networkidle
     await installRateLimitRetry(page);
 
@@ -364,6 +397,7 @@ test.describe('Auth - Redirects', () => {
 
 test.describe('Auth - Register Mode', () => {
   test('register toggle button appears when signup is enabled', async ({ page }) => {
+    await addConsentInitScript(page);
     await page.goto('/login', { waitUntil: 'networkidle' });
     await dismissOverlays(page);
 
@@ -385,6 +419,7 @@ test.describe('Auth - Register Mode', () => {
   });
 
   test('switching back to login mode hides username field', async ({ page }) => {
+    await addConsentInitScript(page);
     await page.goto('/login', { waitUntil: 'networkidle' });
     await dismissOverlays(page);
 

@@ -45,9 +45,24 @@ export function setCsrfToken(req, res, next) {
  * Middleware to verify CSRF token on state-changing requests
  * Should be applied to POST, PUT, PATCH, DELETE routes
  */
+// Paths exempt from CSRF verification — pre-authentication endpoints where no
+// session exists yet to forge (login CSRF is low-risk: attacker still needs
+// victim's credentials, and most auth libs don't send CSRF headers on login).
+const CSRF_EXEMPT_PATHS = [
+  '/api/v1/auth/login',
+  '/api/v1/auth/register',
+  '/api/v1/auth/passkey/login/start',
+  '/api/v1/auth/passkey/login/finish',
+];
+
 export function verifyCsrfToken(req, res, next) {
   // Skip CSRF check for GET, HEAD, OPTIONS requests
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+    return next();
+  }
+
+  // Skip CSRF check for pre-authentication endpoints (no session to forge)
+  if (CSRF_EXEMPT_PATHS.includes(req.path)) {
     return next();
   }
 

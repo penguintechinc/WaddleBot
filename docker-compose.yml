@@ -39,7 +39,7 @@ services:
   # =============================================================================
 
   infra-postgres:
-    image: postgres:15-bookworm
+    image: postgres:16-bookworm@sha256:7858a1a43bb2e3decc07650c8989ba526e0a8164f212c9bb88b622cdbd71c4be@sha256:7858a1a43bb2e3decc07650c8989ba526e0a8164f212c9bb88b622cdbd71c4be
     container_name: infra-postgres
     environment:
       POSTGRES_USER: waddlebot
@@ -82,7 +82,7 @@ services:
 
   # PostgreSQL Read Replica - routes SELECT queries here to reduce primary load
   infra-postgres-replica:
-    image: postgres:15-bookworm
+    image: postgres:16-bookworm@sha256:7858a1a43bb2e3decc07650c8989ba526e0a8164f212c9bb88b622cdbd71c4be@sha256:7858a1a43bb2e3decc07650c8989ba526e0a8164f212c9bb88b622cdbd71c4be
     container_name: infra-postgres-replica
     user: postgres
     environment:
@@ -134,7 +134,7 @@ services:
     restart: unless-stopped
 
   infra-redis:
-    image: redis:7-bookworm
+    image: redis:7-bookworm@sha256:a5995dfdf108997f8a7c9587f54fad5e94ed5848de5236a6b28119e99efd67e0@sha256:a5995dfdf108997f8a7c9587f54fad5e94ed5848de5236a6b28119e99efd67e0
     container_name: infra-redis
     entrypoint: ["/usr/local/bin/docker-entrypoint.sh"]
     environment:
@@ -227,7 +227,7 @@ services:
   # Ollama for local AI inference - auto-pulls tinyllama model on startup
   # For GPU support: docker compose --profile gpu up -d
   ai-ollama:
-    image: ollama/ollama:latest
+    image: ollama/ollama:latest@sha256:5a5d014aa774f78ebe1340c0d4afc2e35afc12a2c3b34c84e71f78ea20af4ba3
     container_name: ai-ollama
     volumes:
       - ollama-data:/root/.ollama
@@ -247,7 +247,7 @@ services:
   # Ollama with GPU - use with: docker compose --profile gpu up -d
   # Requires nvidia-container-toolkit to be installed
   ai-ollama-gpu:
-    image: ollama/ollama:latest
+    image: ollama/ollama:latest@sha256:5a5d014aa774f78ebe1340c0d4afc2e35afc12a2c3b34c84e71f78ea20af4ba3
     container_name: ai-ollama-gpu
     profiles:
       - gpu
@@ -276,7 +276,7 @@ services:
 
   # Ollama model puller - pulls tinyllama on first startup
   ai-ollama-pull:
-    image: ollama/ollama:latest
+    image: ollama/ollama:latest@sha256:5a5d014aa774f78ebe1340c0d4afc2e35afc12a2c3b34c84e71f78ea20af4ba3
     container_name: ai-ollama-pull
     volumes:
       - ollama-data:/root/.ollama
@@ -304,7 +304,7 @@ services:
 
   # Qdrant vector database for AI memory and research
   infra-qdrant:
-    image: qdrant/qdrant:latest
+    image: qdrant/qdrant:v1.12.3@sha256:283ccc6ee271237b43bfd7b995752f4cbb7a63a11ab68add3ee3bb1137bdafa7
     container_name: infra-qdrant
     volumes:
       - qdrant-data:/qdrant/storage
@@ -323,7 +323,7 @@ services:
 
   # SearXNG metasearch engine for Game Lookup sub-module
   infra-searxng:
-    image: searxng/searxng:latest
+    image: searxng/searxng:latest@sha256:a98723bfb01fb3b8b18a9e33890184b91d270b3fb51f75875a0ad1908ce7b463
     container_name: infra-searxng
     volumes:
       - ./config/searxng/settings.yml:/etc/searxng/settings.yml:ro

@@ -42,6 +42,22 @@ async function injectCsrfCookie(page) {
   }
 }
 
+/**
+ * Pre-seed localStorage with GDPR consent before any page navigation.
+ * LoginPageBuilder gates the email/password inputs on gdpr_consent.accepted.
+ * Using addInitScript ensures the key is present before React mounts.
+ * Call this once per page object before the first navigation.
+ */
+async function addConsentInitScript(page) {
+  await page.addInitScript(() => {
+    localStorage.setItem('gdpr_consent', JSON.stringify({
+      accepted: true, essential: true, functional: true, analytics: true, marketing: true,
+      timestamp: new Date().toISOString(), policyVersion: '1.0',
+    }));
+    localStorage.setItem('vendor-request-dismissed', 'true');
+  });
+}
+
 async function suppressOverlays(page) {
   await page.evaluate(() => {
     if (!localStorage.getItem('gdpr_consent')) {
@@ -86,6 +102,8 @@ async function installRateLimitRetry(page) {
 }
 
 async function loginWithPassword(page, email, password, retries = 3) {
+  // Pre-seed gdpr_consent before navigation so LoginPageBuilder mounts with inputs enabled.
+  await addConsentInitScript(page);
   await injectCsrfCookie(page);
   await suppressOverlays(page);
   await dismissOverlays(page);
@@ -121,6 +139,7 @@ async function loginWithPassword(page, email, password, retries = 3) {
 
 test.describe('Authentication Workflow', () => {
   test('Register toggle shows username field when signup enabled', async ({ page }) => {
+    await addConsentInitScript(page);
     await page.goto('/login', { waitUntil: 'networkidle' });
 
     // Check if signup is enabled on this instance

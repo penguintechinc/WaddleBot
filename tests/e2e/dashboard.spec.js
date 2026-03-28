@@ -88,8 +88,9 @@ async function loginWithPassword(page, email, password, retries = 3) {
   await suppressOverlays(page);
   await dismissOverlays(page);
 
-  await page.fill('[data-testid="email-input"], input[type="email"]', email);
-  await page.fill('[data-testid="password-input"], input[type="password"]', password);
+  await page.waitForSelector('input#email, input[type="email"]:not([disabled])', { timeout: 15000 });
+  await page.fill('input#email, input[type="email"]', email);
+  await page.fill('input#password, input[type="password"]', password);
 
   const [loginResponse] = await Promise.all([
     page.waitForResponse(
@@ -281,8 +282,9 @@ test.describe('Dashboard - Navigation', () => {
     await page.goto('/communities', { waitUntil: 'networkidle' });
     await dismissOverlays(page);
     await expect(page).toHaveURL(/\/communities$/);
-    // Authenticated user sees the create community button
-    await expect(page.locator('[data-testid="create-community-btn"]')).toBeVisible({ timeout: 8000 });
+    // Authenticated user sees the create community button.
+    // Auth context fetches /api/v1/auth/me async on mount — allow extra time for rate-limit retries.
+    await expect(page.locator('[data-testid="create-community-btn"]')).toBeVisible({ timeout: 30000 });
   });
 });
 

@@ -38,11 +38,7 @@ function CreateCommunity() {
       const response = await communityApi.create(payload);
       if (response.data.success) {
         const communityId = response.data.community.id;
-        if (isSuperAdmin) {
-          navigate('/superadmin/communities');
-        } else {
-          navigate(`/dashboard/community/${communityId}`);
-        }
+        navigate(`/dashboard/community/${communityId}`);
       }
     } catch (err) {
       const errData = err.response?.data;

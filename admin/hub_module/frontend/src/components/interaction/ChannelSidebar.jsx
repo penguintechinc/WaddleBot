@@ -46,6 +46,7 @@ export default function ChannelSidebar({
           {showCreate ? (
             <form onSubmit={handleCreate} className="bg-navy-800 border border-navy-600 rounded p-2 space-y-2">
               <input
+                data-testid="channel-name-input"
                 type="text"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
@@ -55,6 +56,7 @@ export default function ChannelSidebar({
                 className="w-full bg-navy-900 border border-navy-600 text-sky-100 rounded px-2 py-1 text-sm focus:outline-none focus:border-sky-500"
               />
               <select
+                data-testid="channel-type-select"
                 value={newType}
                 onChange={(e) => setNewType(e.target.value)}
                 className="w-full bg-navy-900 border border-navy-600 text-sky-100 rounded px-2 py-1 text-sm focus:outline-none focus:border-sky-500"
@@ -65,6 +67,7 @@ export default function ChannelSidebar({
               </select>
               <div className="flex gap-1">
                 <button
+                  data-testid="create-channel-submit"
                   type="submit"
                   disabled={creating || !newName.trim()}
                   className="flex-1 bg-gold-500 text-navy-900 hover:bg-gold-400 rounded px-2 py-1 text-xs font-medium disabled:opacity-50 transition-colors"
@@ -82,6 +85,7 @@ export default function ChannelSidebar({
             </form>
           ) : (
             <button
+              data-testid="add-channel-btn"
               type="button"
               onClick={() => setShowCreate(true)}
               className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded text-sm text-navy-300 hover:bg-navy-800 hover:text-gold-400 transition-colors"

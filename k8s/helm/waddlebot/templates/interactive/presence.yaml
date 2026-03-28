@@ -23,10 +23,7 @@ spec:
       {{- include "waddlebot.imagePullSecrets" . | nindent 6 }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
-      {{- with .Values.imagePullSecrets }}
-      imagePullSecrets:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+      {{- include "waddlebot.imagePullSecrets" . | nindent 6 }}
       initContainers:
       {{- include "waddlebot.dbMigrateInitContainer" . | nindent 6 }}
       containers:
