@@ -170,8 +170,8 @@ services:
 
   credential-manager:
     build:
-      context: ./core/credential_manager_module
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: core/credential_manager_module/Dockerfile
     container_name: credential-manager
     ports:
       - "8080:8080"
@@ -1388,8 +1388,8 @@ services:
 
   core-module-rtc:
     build:
-      context: ./core/module_rtc
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: core/module_rtc/Dockerfile
     container_name: core-module-rtc
     environment:
       MODULE_NAME: module-rtc
