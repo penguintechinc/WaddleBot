@@ -281,7 +281,7 @@ function App() {
         <Route path="/admin/:communityId/modules/memories/config" element={<AdminMemoriesConfig />} />
         <Route path="/admin/:communityId/modules/server-status/config" element={<AdminServerStatusConfig />} />
         <Route path="/admin/:communityId/modules/server-manager/config" element={<AdminServerManagerConfig />} />
-        <Route path="/admin/:communityId/marketplace" element={<AdminMarketplace />} />
+        <Route path="/admin/:communityId/marketplace" element={<MarketplaceRedirect />} />
         <Route path="/admin/:communityId/marketplace/:source/:id" element={<AdminMarketplaceModuleDetail />} />
         <Route path="/admin/:communityId/premium" element={<AdminCommunityPremium />} />
         <Route path="/admin/:communityId/stream-overlays" element={<AdminStreamOverlays />} />

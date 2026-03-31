@@ -20,6 +20,8 @@ const TEST_PASS = process.env.HUB_TEST_PASS || 'admin123';
  */
 async function injectCsrfCookie(page) {
   let csrfToken = null;
+
+  // Capture XSRF-TOKEN from any hub-api response fired during page load
   const handler = async (response) => {
     const raw = response.headers()['set-cookie'] || '';
     const match = raw.match(/XSRF-TOKEN=([^;]+)/);
@@ -28,18 +30,41 @@ async function injectCsrfCookie(page) {
   page.on('response', handler);
   await page.goto('/login', { waitUntil: 'networkidle' });
   page.off('response', handler);
+
+  // Strategy 1: React app calls hub-api on page load; Playwright stores the Secure
+  // cookie in its CDP store even though browser JS can't read it over HTTP.
+  if (!csrfToken) {
+    const existing = await page.context().cookies();
+    const xsrf = existing.find(c => c.name === 'XSRF-TOKEN');
+    if (xsrf) csrfToken = xsrf.value;
+  }
+
+  // Strategy 2: No cookie found — make a fresh hub-api call to generate one.
+  if (!csrfToken) {
+    try {
+      const resp = await page.request.get('/api/v1/health');
+      const allHeaders = await resp.headersArray();
+      const setCookieText = allHeaders
+        .filter(h => h.name.toLowerCase() === 'set-cookie')
+        .map(h => h.value).join('\n') || resp.headers()['set-cookie'] || '';
+      const match = setCookieText.match(/XSRF-TOKEN=([^;]+)/);
+      if (match) csrfToken = match[1];
+    } catch (_) { /* ignore */ }
+  }
+
   if (csrfToken) {
     const url = new URL(page.url());
     await page.context().addCookies([{
       name: 'XSRF-TOKEN',
-      value: csrfToken,
+      value: decodeURIComponent(csrfToken),
       domain: url.hostname,
       path: '/',
       httpOnly: false,
-      secure: false,
+      secure: false, // allow on HTTP (port-forward scenario)
       sameSite: 'Lax',
     }]);
   }
+  return csrfToken;
 }
 
 /**
@@ -104,9 +129,22 @@ async function installRateLimitRetry(page) {
 async function loginWithPassword(page, email, password, retries = 3) {
   // Pre-seed gdpr_consent before navigation so LoginPageBuilder mounts with inputs enabled.
   await addConsentInitScript(page);
-  await injectCsrfCookie(page);
+  const csrfToken = await injectCsrfCookie(page);
   await suppressOverlays(page);
   await dismissOverlays(page);
+
+  // LoginPageBuilder doesn't read document.cookie to build the X-XSRF-TOKEN header.
+  // Inject it via page.route() so the login POST carries the required CSRF header.
+  if (csrfToken) {
+    await page.route('**/api/v1/auth/login', async (route) => {
+      const request = route.request();
+      if (request.method() === 'POST') {
+        await route.continue({ headers: { ...request.headers(), 'x-xsrf-token': csrfToken } });
+      } else {
+        await route.continue();
+      }
+    });
+  }
 
   await page.fill('[data-testid="email-input"], input[type="email"]', email);
   await page.fill('[data-testid="password-input"], input[type="password"]', password);

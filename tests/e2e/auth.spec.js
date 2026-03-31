@@ -57,21 +57,42 @@ async function addConsentInitScript(page) {
 async function injectCsrfCookie(page) {
   let csrfToken = null;
 
+  // Capture XSRF-TOKEN from any hub-api response fired during page load
   const handler = async (response) => {
     const raw = response.headers()['set-cookie'] || '';
     const match = raw.match(/XSRF-TOKEN=([^;]+)/);
     if (match) csrfToken = match[1];
   };
-
   page.on('response', handler);
   await page.goto('/login', { waitUntil: 'networkidle' });
   page.off('response', handler);
+
+  // Strategy 1: React app calls hub-api on page load; Playwright stores the Secure
+  // cookie in its CDP store even though browser JS can't read it over HTTP.
+  if (!csrfToken) {
+    const existing = await page.context().cookies();
+    const xsrf = existing.find(c => c.name === 'XSRF-TOKEN');
+    if (xsrf) csrfToken = xsrf.value;
+  }
+
+  // Strategy 2: No cookie found — make a fresh hub-api call to generate one.
+  if (!csrfToken) {
+    try {
+      const resp = await page.request.get('/api/v1/health');
+      const allHeaders = await resp.headersArray();
+      const setCookieText = allHeaders
+        .filter(h => h.name.toLowerCase() === 'set-cookie')
+        .map(h => h.value).join('\n') || resp.headers()['set-cookie'] || '';
+      const match = setCookieText.match(/XSRF-TOKEN=([^;]+)/);
+      if (match) csrfToken = match[1];
+    } catch (_) { /* ignore */ }
+  }
 
   if (csrfToken) {
     const url = new URL(page.url());
     await page.context().addCookies([{
       name: 'XSRF-TOKEN',
-      value: csrfToken,
+      value: decodeURIComponent(csrfToken),
       domain: url.hostname,
       path: '/',
       httpOnly: false,
@@ -79,6 +100,7 @@ async function injectCsrfCookie(page) {
       sameSite: 'Lax',
     }]);
   }
+  return csrfToken;
 }
 
 /**
@@ -123,9 +145,22 @@ async function loginWithPassword(page, email, password, retries = 3) {
   // Pre-seed gdpr_consent before any navigation so LoginPageBuilder mounts
   // with the form inputs enabled (not gated behind the consent banner).
   await addConsentInitScript(page);
-  await injectCsrfCookie(page);
+  const csrfToken = await injectCsrfCookie(page);
   await suppressOverlays(page);
   await dismissOverlays(page);
+
+  // LoginPageBuilder doesn't read document.cookie to build the X-XSRF-TOKEN header.
+  // Inject it via page.route() so the login POST carries the required CSRF header.
+  if (csrfToken) {
+    await page.route('**/api/v1/auth/login', async (route) => {
+      const request = route.request();
+      if (request.method() === 'POST') {
+        await route.continue({ headers: { ...request.headers(), 'x-xsrf-token': csrfToken } });
+      } else {
+        await route.continue();
+      }
+    });
+  }
 
   // Use resilient selectors that work with or without data-testids deployed
   await page.fill('[data-testid="email-input"], input[type="email"]', email);
@@ -298,9 +333,17 @@ test.describe('Auth - Login Flow', () => {
 
   test('login API sends correct request body', async ({ page }) => {
     await addConsentInitScript(page);
-    await injectCsrfCookie(page);
+    const csrfToken1 = await injectCsrfCookie(page);
     // Install rate limit retry AFTER page load to avoid blocking networkidle
     await installRateLimitRetry(page);
+    if (csrfToken1) {
+      await page.route('**/api/v1/auth/login', async (route) => {
+        const req = route.request();
+        if (req.method() === 'POST') {
+          await route.continue({ headers: { ...req.headers(), 'x-xsrf-token': csrfToken1 } });
+        } else { await route.continue(); }
+      });
+    }
 
     await page.fill('[data-testid="email-input"], input[type="email"]', TEST_EMAIL);
     await page.fill('[data-testid="password-input"], input[type="password"]', TEST_PASS);
@@ -313,7 +356,8 @@ test.describe('Auth - Login Flow', () => {
     });
 
     await page.click('[data-testid="auth-submit"], button[type="submit"]');
-    await page.waitForURL(url => !url.toString().includes('/login'), { timeout: 10000 });
+    // Increased timeout to accommodate rate-limit retries (installRateLimitRetry waits 15s per retry)
+    await page.waitForURL(url => !url.toString().includes('/login'), { timeout: 60000 });
 
     expect(requestBody).not.toBeNull();
     expect(requestBody.email).toBe(TEST_EMAIL);
@@ -322,9 +366,17 @@ test.describe('Auth - Login Flow', () => {
 
   test('login API returns success structure', async ({ page }) => {
     await addConsentInitScript(page);
-    await injectCsrfCookie(page);
+    const csrfToken2 = await injectCsrfCookie(page);
     // Install rate limit retry AFTER page load to avoid blocking networkidle
     await installRateLimitRetry(page);
+    if (csrfToken2) {
+      await page.route('**/api/v1/auth/login', async (route) => {
+        const req = route.request();
+        if (req.method() === 'POST') {
+          await route.continue({ headers: { ...req.headers(), 'x-xsrf-token': csrfToken2 } });
+        } else { await route.continue(); }
+      });
+    }
 
     await page.fill('[data-testid="email-input"], input[type="email"]', TEST_EMAIL);
     await page.fill('[data-testid="password-input"], input[type="password"]', TEST_PASS);

@@ -543,7 +543,20 @@ export default function AdminInteractionChannels() {
     setError(null);
     try {
       const res = await interactionApi.getChannels(communityId);
-      setChannels(res.data?.channels ?? []);
+      // Normalize API camelCase fields to the snake_case the component expects
+      const raw = res.data?.channels ?? [];
+      setChannels(raw.map((c) => ({
+        ...c,
+        type: c.channelType ?? c.type,
+        sort_order: c.sortOrder ?? c.sort_order ?? 0,
+        allow_ad_hoc_voice: c.allowAdHocVoice ?? c.allow_ad_hoc_voice ?? false,
+        has_chat: c.hasChat ?? c.has_chat ?? true,
+        has_voice: c.hasVoice ?? c.has_voice ?? false,
+        has_video: c.hasVideo ?? c.has_video ?? false,
+        is_broadcast: c.isBroadcast ?? c.is_broadcast ?? false,
+        is_temporary: c.isTemporary ?? c.is_temporary ?? false,
+        temp_duration_minutes: c.tempDurationMinutes ?? c.temp_duration_minutes ?? 60,
+      })));
     } catch (err) {
       setError(err?.response?.data?.message ?? 'Failed to load channels.');
     } finally {
@@ -559,7 +572,10 @@ export default function AdminInteractionChannels() {
   async function handleCreate(formData) {
     setSaving(true);
     try {
-      await interactionApi.createChannel(communityId, formData);
+      // Backend expects channel_type (snake_case), form state uses type
+      const payload = { ...formData, channel_type: formData.type };
+      delete payload.type;
+      await interactionApi.createChannel(communityId, payload);
       setShowCreate(false);
       await loadChannels();
     } catch (err) {
@@ -572,7 +588,10 @@ export default function AdminInteractionChannels() {
   async function handleUpdate(formData) {
     setSaving(true);
     try {
-      await interactionApi.updateChannel(communityId, editChannel.id, formData);
+      // Backend expects channel_type (snake_case), form state uses type
+      const payload = { ...formData, channel_type: formData.type };
+      delete payload.type;
+      await interactionApi.updateChannel(communityId, editChannel.id, payload);
       setEditChannel(null);
       await loadChannels();
     } catch (err) {

@@ -123,6 +123,20 @@ function CommunityPublicPage() {
     );
   }
 
+  // Guard against null community (e.g. API returned success but empty body)
+  if (!community) {
+    return (
+      <div className="max-w-xl mx-auto px-4 py-20 text-center">
+        <div className="mb-4 flex justify-center">
+          <img src="/waddlebot-logo.png" alt="Community Logo" className="w-24 h-24" />
+        </div>
+        <h1 className="text-2xl font-bold mb-2 text-sky-100">Community Not Found</h1>
+        <p className="text-navy-400 mb-6">This community could not be loaded.</p>
+        <Link to="/communities" className="btn btn-primary">Browse Communities</Link>
+      </div>
+    );
+  }
+
   // Handle restricted view (minimal info returned)
   if (community?.restricted) {
     return (

@@ -12,6 +12,22 @@ async function gotoAdmin(page, url) {
     .catch(() => {});
 }
 
+// React 18 controlled <select> requires the native prototype setter + change event to update state.
+// Playwright's selectOption() updates the DOM but React's synthetic event system doesn't pick it up,
+// causing the controlled component to reset the value on next render.
+async function setChannelType(page, value) {
+  const sel = '[data-testid="channel-type-select"]';
+  await page.locator(sel).waitFor({ timeout: 5000 });
+  await page.evaluate((v) => {
+    const el = document.querySelector('[data-testid="channel-type-select"]')
+      || document.querySelector('form select:not([name="policy"])');
+    if (!el) return;
+    const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
+    nativeSetter.call(el, v);
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }, value);
+}
+
 const BASE_URL = (communityId) => `/admin/${communityId}/interaction-channels`;
 
 // Unique suffix to avoid collisions between test runs
@@ -115,8 +131,8 @@ test.describe('Interaction Channels — Create Form UI', () => {
   test('type select has exactly three options: chat, forum, voice', async ({ page }) => {
     await gotoAdmin(page, BASE_URL(communityId));
     await page.getByRole('button', { name: 'Create Channel' }).click();
-    await page.locator('[data-testid="channel-type-select"]').waitFor({ timeout: 5000 });
-    const options = await page.locator('[data-testid="channel-type-select"]').locator('option').allTextContents();
+    await page.locator('[data-testid="channel-type-select"], form select:not([name="policy"])').first().waitFor({ timeout: 5000 });
+    const options = await page.locator('[data-testid="channel-type-select"], form select:not([name="policy"])').first().locator('option').allTextContents();
     const lower = options.map((o) => o.toLowerCase());
     expect(lower).toContain('chat');
     expect(lower).toContain('forum');
@@ -129,19 +145,19 @@ test.describe('Interaction Channels — Create Form UI', () => {
     // Wait for the page to fully settle (ChannelCreationPolicy loads settings async)
     await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
     await page.getByRole('button', { name: 'Create Channel' }).click();
-    const typeSelect = page.locator('[data-testid="channel-type-select"]');
+    const typeSelect = page.locator('[data-testid="channel-type-select"], form select:not([name="policy"])').first();
     await typeSelect.waitFor({ timeout: 10000 });
     // Select voice and wait for React re-render before asserting
-    await typeSelect.selectOption('voice');
+    await setChannelType(page, 'voice');
     await expect(page.locator('#allow_ad_hoc_voice')).toBeVisible({ timeout: 10000 });
   });
 
   test('selecting chat type hides Allow Ad-Hoc checkbox', async ({ page }) => {
     await gotoAdmin(page, BASE_URL(communityId));
     await page.getByRole('button', { name: 'Create Channel' }).click();
-    await page.locator('[data-testid="channel-type-select"]').waitFor({ timeout: 5000 });
-    await page.locator('[data-testid="channel-type-select"]').selectOption('voice');
-    await page.locator('[data-testid="channel-type-select"]').selectOption('chat');
+    await page.locator('[data-testid="channel-type-select"], form select:not([name="policy"])').first().waitFor({ timeout: 5000 });
+    await setChannelType(page, 'voice');
+    await setChannelType(page, 'chat');
     const visible = await page.locator('#allow_ad_hoc_voice').isVisible().catch(() => false);
     expect(visible).toBe(false);
   });
@@ -150,9 +166,9 @@ test.describe('Interaction Channels — Create Form UI', () => {
     await gotoAdmin(page, BASE_URL(communityId));
     await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
     await page.getByRole('button', { name: 'Create Channel' }).click();
-    await page.locator('[data-testid="channel-type-select"]').waitFor({ timeout: 10000 });
-    await page.locator('[data-testid="channel-type-select"]').selectOption('voice');
-    await page.locator('[data-testid="channel-type-select"]').selectOption('forum');
+    await page.locator('[data-testid="channel-type-select"], form select:not([name="policy"])').first().waitFor({ timeout: 10000 });
+    await setChannelType(page, 'voice');
+    await setChannelType(page, 'forum');
     const visible = await page.locator('#allow_ad_hoc_voice').isVisible().catch(() => false);
     expect(visible).toBe(false);
   });
@@ -193,7 +209,7 @@ test.describe.serial('Interaction Channels — CRUD Lifecycle', () => {
     await page.locator('input[type="text"]').first().waitFor({ timeout: 10000 });
 
     await page.locator('input[type="text"]').first().fill(CHAT_NAME);
-    await page.locator('[data-testid="channel-type-select"]').selectOption('chat');
+    await setChannelType(page, 'chat');
     await page.locator('textarea').first().fill('E2E chat channel description');
     await page.locator('input[type="number"]').first().fill('10');
 
@@ -251,7 +267,7 @@ test.describe.serial('Interaction Channels — CRUD Lifecycle', () => {
     await page.locator('input[type="text"]').first().waitFor({ timeout: 5000 });
 
     await page.locator('input[type="text"]').first().fill(FORUM_NAME);
-    await page.locator('[data-testid="channel-type-select"]').selectOption('forum');
+    await setChannelType(page, 'forum');
     await page.locator('textarea').first().fill('E2E forum channel description');
     await page.locator('input[type="number"]').first().fill('20');
 
@@ -304,7 +320,7 @@ test.describe.serial('Interaction Channels — CRUD Lifecycle', () => {
     await page.locator('input[type="text"]').first().waitFor({ timeout: 5000 });
 
     await page.locator('input[type="text"]').first().fill(VOICE_NAME);
-    await page.locator('[data-testid="channel-type-select"]').selectOption('voice');
+    await setChannelType(page, 'voice');
     await page.locator('#allow_ad_hoc_voice').check();
     await page.locator('textarea').first().fill('E2E voice channel description');
     await page.locator('input[type="number"]').first().fill('30');
@@ -375,7 +391,7 @@ test.describe.serial('Interaction Channels — CRUD Lifecycle', () => {
     await page.locator('input[type="text"]').first().waitFor({ timeout: 5000 });
 
     await page.locator('input[type="text"]').first().fill(CHAT_NAME);
-    await page.locator('[data-testid="channel-type-select"]').selectOption('chat');
+    await setChannelType(page, 'chat');
     await page.locator('form').getByRole('button', { name: /^Create Channel$/ }).click();
 
     await page.waitForTimeout(2000);
@@ -423,7 +439,7 @@ test.describe.serial('Interaction Channels — CRUD Lifecycle', () => {
     expect(nameValue).toBe(CHAT_NAME);
 
     // Type pre-selected as "chat"
-    const typeValue = await page.locator('[data-testid="channel-type-select"]').inputValue();
+    const typeValue = await page.locator('[data-testid="channel-type-select"], form select:not([name="policy"])').first().inputValue();
     expect(typeValue).toBe('chat');
 
     // Description pre-filled
@@ -465,9 +481,10 @@ test.describe.serial('Interaction Channels — CRUD Lifecycle', () => {
     const card = page.locator('.bg-navy-800').filter({ hasText: EDIT_NAME }).first();
     await card.locator('button[title="Delete channel"]').click();
 
-    // DeleteConfirm renders the channel name inside the confirmation text
-    await expect(page.getByText(EDIT_NAME)).toBeVisible({ timeout: 5000 });
-    await expect(page.getByRole('button', { name: 'Delete' })).toBeVisible();
+    // DeleteConfirm renders the channel name inside the confirmation text.
+    // Use .first() since the name appears in both the card and the dialog paragraph.
+    await expect(page.getByText(EDIT_NAME).first()).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole('button', { name: 'Delete', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible();
   });
 
@@ -483,7 +500,7 @@ test.describe.serial('Interaction Channels — CRUD Lifecycle', () => {
     await expect(page.getByText(EDIT_NAME)).toBeVisible({ timeout: 5000 });
     // Delete button should be gone
     const deleteConfirmVisible = await page
-      .getByRole('button', { name: 'Delete' })
+      .getByRole('button', { name: 'Delete', exact: true })
       .isVisible()
       .catch(() => false);
     expect(deleteConfirmVisible).toBe(false);
@@ -497,7 +514,7 @@ test.describe.serial('Interaction Channels — CRUD Lifecycle', () => {
 
     const card = page.locator('.bg-navy-800').filter({ hasText: EDIT_NAME }).first();
     await card.locator('button[title="Delete channel"]').click();
-    await page.getByRole('button', { name: 'Delete' }).click();
+    await page.getByRole('button', { name: 'Delete', exact: true }).click();
 
     await page
       .getByText(EDIT_NAME)
@@ -513,7 +530,7 @@ test.describe.serial('Interaction Channels — CRUD Lifecycle', () => {
 
     const card = page.locator('.bg-navy-800').filter({ hasText: FORUM_NAME }).first();
     await card.locator('button[title="Delete channel"]').click();
-    await page.getByRole('button', { name: 'Delete' }).click();
+    await page.getByRole('button', { name: 'Delete', exact: true }).click();
 
     await page
       .getByText(FORUM_NAME)
@@ -529,7 +546,7 @@ test.describe.serial('Interaction Channels — CRUD Lifecycle', () => {
 
     const card = page.locator('.bg-navy-800').filter({ hasText: VOICE_NAME }).first();
     await card.locator('button[title="Delete channel"]').click();
-    await page.getByRole('button', { name: 'Delete' }).click();
+    await page.getByRole('button', { name: 'Delete', exact: true }).click();
 
     await page
       .getByText(VOICE_NAME)
@@ -555,7 +572,7 @@ test.describe('Interaction Channels — Badge Colors', () => {
     await page.getByRole('button', { name: 'Create Channel' }).click();
     await page.locator('input[type="text"]').first().waitFor({ timeout: 10000 });
     await page.locator('input[type="text"]').first().fill(name);
-    await page.locator('[data-testid="channel-type-select"]').selectOption(type);
+    await setChannelType(page, type);
 
     // Wait for the create API response to complete
     // Timeout must exceed the maximum rate-limit retry delay (2 retries × 15 s = 30 s)
@@ -593,7 +610,7 @@ test.describe('Interaction Channels — Badge Colors', () => {
     const card = page.locator('.bg-navy-800').filter({ hasText: name }).first();
     if (await card.isVisible().catch(() => false)) {
       await card.locator('button[title="Delete channel"]').click();
-      await page.getByRole('button', { name: 'Delete' }).click();
+      await page.getByRole('button', { name: 'Delete', exact: true }).click();
       await page
         .getByText(name)
         .waitFor({ state: 'hidden', timeout: 10000 })
@@ -658,7 +675,7 @@ test.describe('Interaction Channels — Sort Order', () => {
     await page.getByRole('button', { name: 'Create Channel' }).click();
     await page.locator('input[type="text"]').first().waitFor({ timeout: 10000 });
     await page.locator('input[type="text"]').first().fill(nameB);
-    await page.locator('[data-testid="channel-type-select"]').selectOption('chat');
+    await setChannelType(page, 'chat');
     await page.locator('input[type="number"]').first().fill('99');
     const [respB] = await Promise.all([
       page.waitForResponse(
@@ -683,7 +700,7 @@ test.describe('Interaction Channels — Sort Order', () => {
     await page.getByRole('button', { name: 'Create Channel' }).click();
     await page.locator('input[type="text"]').first().waitFor({ timeout: 10000 });
     await page.locator('input[type="text"]').first().fill(nameA);
-    await page.locator('[data-testid="channel-type-select"]').selectOption('chat');
+    await setChannelType(page, 'chat');
     await page.locator('input[type="number"]').first().fill('1');
     const [respA] = await Promise.all([
       page.waitForResponse(
@@ -713,7 +730,7 @@ test.describe('Interaction Channels — Sort Order', () => {
       const card = page.locator('.bg-navy-800').filter({ hasText: name }).first();
       if (await card.isVisible().catch(() => false)) {
         await card.locator('button[title="Delete channel"]').click();
-        await page.getByRole('button', { name: 'Delete' }).click();
+        await page.getByRole('button', { name: 'Delete', exact: true }).click();
         await page
           .getByText(name)
           .waitFor({ state: 'hidden', timeout: 10000 })
