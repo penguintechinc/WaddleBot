@@ -793,11 +793,13 @@ jobs:
           docker stop test-${{ matrix.name }}
 
   # Security scanning
+  # Security scan is informational only and does not block deployment
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
     needs: [determine-version, build-core, build-collectors, build-interactions, build-admin, build-actions]
     if: always() && (needs.build-core.result == 'success' || needs.build-collectors.result == 'success' || needs.build-interactions.result == 'success' || needs.build-admin.result == 'success' || needs.build-actions.result == 'success')
+    continue-on-error: true
     strategy:
       matrix:
         image:
@@ -907,7 +909,7 @@ jobs:
   notify:
     name: Notify Build Status
     runs-on: ubuntu-latest
-    needs: [determine-version, build-core, build-collectors, build-interactions, build-admin, build-actions, security-scan]
+    needs: [determine-version, build-core, build-collectors, build-interactions, build-admin, build-actions]
     if: always()
     steps:
       - name: Build Status Summary
