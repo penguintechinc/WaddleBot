@@ -12,7 +12,7 @@ pydal==20241111.1
 psycopg2-binary==2.9.9
 
 # HTTP Client
-aiohttp==3.9.3
+aiohttp==3.13.4
 
 # Authentication & Security
 pyjwt==2.8.0
