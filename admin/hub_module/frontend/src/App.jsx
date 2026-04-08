@@ -117,6 +117,7 @@ import VendorModules from './pages/vendor/VendorModules';
 import VendorAnalytics from './pages/vendor/VendorAnalytics';
 import VendorDiscountCodes from './pages/vendor/VendorDiscountCodes';
 import VendorSettings from './pages/vendor/VendorSettings';
+import VendorGithubSync from './pages/vendor/VendorGithubSync';
 
 // Platform admin pages
 import PlatformDashboard from './pages/platform/PlatformDashboard';
@@ -145,6 +146,7 @@ import TenantCommunities from './pages/tenant/TenantCommunities';
 // Admin pages (new)
 import AdminCommunityRoles from './pages/admin/AdminCommunityRoles';
 import AdminRaffleCustomization from './pages/admin/AdminRaffleCustomization';
+import AdminAIKnowledge from './pages/admin/AdminAIKnowledge';
 
 // Marketplace redirect helper
 function MarketplaceRedirect() {
@@ -270,6 +272,7 @@ function App() {
         <Route path="/vendor/analytics" element={<VendorAnalytics />} />
         <Route path="/vendor/discount-codes" element={<VendorDiscountCodes />} />
         <Route path="/vendor/settings" element={<VendorSettings />} />
+        <Route path="/vendor/github-sync" element={<VendorGithubSync />} />
       </Route>
 
       {/* Admin routes (community admin) */}
@@ -339,6 +342,7 @@ function App() {
         <Route path="/admin/:communityId/interaction-channels" element={<AdminInteractionChannels />} />
         <Route path="/admin/:communityId/roles" element={<AdminCommunityRoles />} />
         <Route path="/admin/:communityId/members/:userId/analytics" element={<AdminMemberAnalytics />} />
+        <Route path="/admin/:communityId/ai-knowledge" element={<AdminAIKnowledge />} />
       </Route>
 
       {/* Platform admin routes */}

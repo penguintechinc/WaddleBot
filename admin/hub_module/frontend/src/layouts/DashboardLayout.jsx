@@ -19,6 +19,7 @@ import {
   ServerStackIcon,
   TicketIcon,
   CubeIcon,
+  CodeBracketIcon,
 } from '@heroicons/react/24/outline';
 import { useMemo } from 'react';
 import GlobalBanner from '../components/GlobalBanner';
@@ -110,6 +111,7 @@ function DashboardLayout() {
           { name: 'My Modules', href: '/vendor/modules', icon: CubeIcon },
           { name: 'Analytics', href: '/vendor/analytics', icon: ChartBarSquareIcon },
           { name: 'Discount Codes', href: '/vendor/discount-codes', icon: TicketIcon },
+          { name: 'GitHub Sync', href: '/vendor/github-sync', icon: CodeBracketIcon },
           { name: 'Settings', href: '/vendor/settings', icon: Cog6ToothIcon },
         ],
       });

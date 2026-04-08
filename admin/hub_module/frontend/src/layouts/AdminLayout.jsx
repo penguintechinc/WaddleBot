@@ -40,6 +40,7 @@ import {
   InboxStackIcon,
   ClipboardDocumentListIcon,
   UserPlusIcon,
+  AcademicCapIcon,
 } from '@heroicons/react/24/outline';
 
 function AdminLayout() {
@@ -133,6 +134,7 @@ function AdminLayout() {
           items: [
             { to: `/admin/${communityId}/ai-insights`, icon: SparklesIcon, label: 'AI Insights' },
             { to: `/admin/${communityId}/ai-config`, icon: Cog6ToothIcon, label: 'AI Config' },
+            { to: `/admin/${communityId}/ai-knowledge`, icon: AcademicCapIcon, label: 'AI Knowledge', premium: true },
           ],
         },
         {

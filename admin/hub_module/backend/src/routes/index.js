@@ -29,6 +29,8 @@ import interactionAdminRoutes, { communityInteractionRouter, internalRelayRouter
 import tenantRoutes from './tenant.js';
 import analyticsRoutes from './analytics.js';
 import raffleCustomizationRoutes from './raffleCustomization.js';
+import githubSyncRoutes from './githubSync.js';
+import aiKnowledgeRoutes from './aiKnowledge.js';
 
 const router = Router();
 
@@ -113,6 +115,12 @@ router.use('/tenant', tenantRoutes);
 
 // Raffle customization routes (admin role required)
 router.use('/admin', raffleCustomizationRoutes);
+
+// GitHub Issues sync routes (admin + public webhook)
+router.use('/', githubSyncRoutes);
+
+// AI knowledge base + ticket suggestion routes (admin)
+router.use('/admin', aiKnowledgeRoutes);
 
 // Interaction routes (hub channels, forums — admin + member)
 router.use('/admin', interactionAdminRoutes);
