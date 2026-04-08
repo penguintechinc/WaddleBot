@@ -6,10 +6,10 @@ import {
   UserGroupIcon,
   ChatBubbleLeftRightIcon,
   Cog6ToothIcon,
-  ArrowLeftOnRectangleIcon,
   UserCircleIcon,
   UserIcon,
   ChartBarIcon,
+  ChartBarSquareIcon,
   BuildingStorefrontIcon,
   ShieldCheckIcon,
   ShoppingCartIcon,
@@ -18,13 +18,15 @@ import {
   InboxStackIcon,
   ServerStackIcon,
   TicketIcon,
+  CubeIcon,
 } from '@heroicons/react/24/outline';
 import { useMemo } from 'react';
 import GlobalBanner from '../components/GlobalBanner';
 import { SidebarMenu } from '@penguintechinc/react-libs';
+import UserDropdown from '../components/UserDropdown';
 
 function DashboardLayout() {
-  const { user, logout, isSuperAdmin, isVendor, isAnalyticsConsumer, isCommunityAdmin } = useAuth();
+  const { user, isSuperAdmin, isVendor, isAnalyticsConsumer, isCommunityAdmin } = useAuth();
   const location = useLocation();
   const { id: communityId } = useParams();
   const navigate = useNavigate();
@@ -105,6 +107,10 @@ function DashboardLayout() {
           { name: 'Dashboard', href: '/vendor/dashboard', icon: ChartBarIcon },
           { name: 'My Submissions', href: '/vendor/submissions', icon: BuildingStorefrontIcon },
           { name: 'Submit New Module', href: '/vendor/submit', icon: ShoppingCartIcon },
+          { name: 'My Modules', href: '/vendor/modules', icon: CubeIcon },
+          { name: 'Analytics', href: '/vendor/analytics', icon: ChartBarSquareIcon },
+          { name: 'Discount Codes', href: '/vendor/discount-codes', icon: TicketIcon },
+          { name: 'Settings', href: '/vendor/settings', icon: Cog6ToothIcon },
         ],
       });
     }
@@ -141,26 +147,7 @@ function DashboardLayout() {
             <span className="text-xl font-bold text-gold-400">Waddles</span>
           </Link>
 
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
-              {user?.avatarUrl ? (
-                <img src={user.avatarUrl} alt={user.username} className="w-8 h-8 rounded-full" />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-navy-700 flex items-center justify-center border border-navy-600">
-                  <span className="text-sky-400 font-medium">
-                    {user?.username?.charAt(0).toUpperCase()}
-                  </span>
-                </div>
-              )}
-              <span className="text-sm font-medium text-sky-100">{user?.username}</span>
-            </div>
-            <button
-              onClick={logout}
-              className="p-2 text-navy-400 hover:text-sky-300 rounded-lg hover:bg-navy-800"
-            >
-              <ArrowLeftOnRectangleIcon className="w-5 h-5" />
-            </button>
-          </div>
+          <UserDropdown />
         </div>
       </header>
 

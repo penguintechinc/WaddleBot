@@ -17,6 +17,78 @@ export async function getVendorProfile(req, res, next) {
 }
 
 /**
+ * GET /vendor/dashboard
+ * Returns enhanced dashboard data for the authenticated vendor.
+ */
+export async function getVendorDashboard(req, res, next) {
+  try {
+    const data = await vendorService.getVendorDashboard(req.user.id);
+    res.json({ success: true, ...data });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * PUT /vendor/profile
+ * Updates the authenticated user's vendor profile.
+ */
+export async function updateVendorProfile(req, res, next) {
+  try {
+    const { displayName, description, websiteUrl, payoutMethod } = req.body;
+
+    if (!displayName || typeof displayName !== 'string' || displayName.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'displayName is required' },
+      });
+    }
+
+    const URL_RE = /^https?:\/\/.+/i;
+    if (websiteUrl && !URL_RE.test(websiteUrl)) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'websiteUrl must be a valid URL starting with http:// or https://' },
+      });
+    }
+
+    const VALID_PAYOUT_METHODS = ['stripe', 'paypal', 'bank_transfer'];
+    if (payoutMethod && !VALID_PAYOUT_METHODS.includes(payoutMethod)) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: `payoutMethod must be one of: ${VALID_PAYOUT_METHODS.join(', ')}`,
+        },
+      });
+    }
+
+    const seller = await vendorService.updateVendorProfile(req.user.id, {
+      displayName: displayName.trim(),
+      description,
+      websiteUrl,
+      payoutMethod,
+    });
+    res.json({ success: true, seller });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /vendor/analytics/overview
+ * Returns a basic analytics summary for the authenticated vendor's modules.
+ */
+export async function getVendorAnalyticsOverview(req, res, next) {
+  try {
+    const analytics = await vendorService.getVendorAnalyticsOverview(req.user.id);
+    res.json({ success: true, analytics });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * POST /vendor/profile
  * Creates a vendor profile for the authenticated user.
  */
@@ -119,12 +191,15 @@ export async function createVendorRequest(req, res, next) {
 }
 
 export default {
+  getVendorDashboard,
   getVendorProfile,
   createVendorProfile,
+  updateVendorProfile,
   getVendorModules,
   createVendorModule,
   updateVendorModule,
   submitModuleForReview,
   getVendorRequest,
   createVendorRequest,
+  getVendorAnalyticsOverview,
 };

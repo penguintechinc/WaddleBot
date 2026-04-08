@@ -88,6 +88,142 @@ export async function getVendorModules(userId, { page = 1, limit = 25 } = {}) {
 }
 
 /**
+ * Returns enhanced dashboard data for a vendor: stats, recent submissions, and revenue breakdown.
+ * @param {number} userId
+ */
+export async function getVendorDashboard(userId) {
+  const sellerResult = await query(
+    `SELECT id FROM marketplace_sellers WHERE user_id = $1`,
+    [userId]
+  );
+  if (!sellerResult.rows[0]) {
+    throw errors.notFound('Vendor profile not found');
+  }
+  const sellerId = sellerResult.rows[0].id;
+
+  const [statsResult, recentResult, revenueResult] = await Promise.all([
+    query(
+      `SELECT
+         COUNT(mm.id)                                           AS "totalModules",
+         COUNT(mm.id) FILTER (WHERE mm.status = 'approved')    AS "publishedModules",
+         COUNT(mm.id) FILTER (WHERE mm.status = 'pending')     AS "pendingReview",
+         COALESCE(SUM(ci.install_count), 0)                    AS "totalInstalls",
+         COALESCE(SUM(vp.amount_paid), 0)                      AS "totalRevenue",
+         COALESCE(SUM(vp.expected_payout), 0)                  AS "expectedRevenue"
+       FROM marketplace_sellers ms
+       LEFT JOIN approved_vendor_modules mm ON mm.seller_id = ms.id
+       LEFT JOIN community_vendor_installations ci ON ci.module_id = mm.id
+       LEFT JOIN vendor_payments vp ON vp.seller_id = ms.id
+       WHERE ms.id = $1`,
+      [sellerId]
+    ),
+    query(
+      `SELECT vs.id, vs.module_id, vs.status, vs.submitted_at, mm.name AS "moduleName"
+       FROM vendor_submissions vs
+       JOIN approved_vendor_modules mm ON mm.id = vs.module_id
+       WHERE mm.seller_id = $1
+       ORDER BY vs.submitted_at DESC
+       LIMIT 5`,
+      [sellerId]
+    ),
+    query(
+      `SELECT
+         mm.id AS "moduleId",
+         mm.name AS "moduleName",
+         COALESCE(SUM(vp.amount_paid), 0) AS revenue
+       FROM approved_vendor_modules mm
+       LEFT JOIN vendor_payments vp ON vp.module_id = mm.id
+       WHERE mm.seller_id = $1
+       GROUP BY mm.id, mm.name
+       ORDER BY revenue DESC`,
+      [sellerId]
+    ),
+  ]);
+
+  return {
+    stats: statsResult.rows[0],
+    recentSubmissions: recentResult.rows,
+    revenueBreakdown: revenueResult.rows,
+  };
+}
+
+/**
+ * Updates the vendor profile for a user.
+ * @param {number} userId
+ * @param {object} profileData
+ * @param {string} profileData.displayName
+ * @param {string} [profileData.description]
+ * @param {string} [profileData.websiteUrl]
+ * @param {string} [profileData.payoutMethod]
+ */
+export async function updateVendorProfile(userId, { displayName, description, websiteUrl, payoutMethod }) {
+  const result = await query(
+    `UPDATE marketplace_sellers
+     SET display_name  = COALESCE($2, display_name),
+         description   = COALESCE($3, description),
+         website_url   = COALESCE($4, website_url),
+         payout_method = COALESCE($5, payout_method),
+         updated_at    = NOW()
+     WHERE user_id = $1
+     RETURNING *`,
+    [userId, displayName ?? null, description ?? null, websiteUrl ?? null, payoutMethod ?? null]
+  );
+  if (!result.rows[0]) {
+    throw errors.notFound('Vendor profile not found');
+  }
+  return result.rows[0];
+}
+
+/**
+ * Returns a basic analytics summary for a vendor's modules.
+ * @param {number} userId
+ */
+export async function getVendorAnalyticsOverview(userId) {
+  const sellerResult = await query(
+    `SELECT id FROM marketplace_sellers WHERE user_id = $1`,
+    [userId]
+  );
+  if (!sellerResult.rows[0]) {
+    throw errors.notFound('Vendor profile not found');
+  }
+  const sellerId = sellerResult.rows[0].id;
+
+  const [installResult, ratingResult] = await Promise.all([
+    query(
+      `SELECT
+         COALESCE(SUM(ci.install_count), 0)                                      AS "totalInstalls",
+         COALESCE(SUM(ci.uninstall_count), 0)                                    AS "totalUninstalls",
+         COALESCE(SUM(ci.install_count) FILTER (
+           WHERE DATE_TRUNC('month', ci.updated_at) = DATE_TRUNC('month', NOW())
+         ), 0)                                                                    AS "installsThisMonth",
+         COALESCE(SUM(vp.amount_paid) FILTER (
+           WHERE DATE_TRUNC('month', vp.paid_at) = DATE_TRUNC('month', NOW())
+         ), 0)                                                                    AS "revenueThisMonth"
+       FROM approved_vendor_modules mm
+       LEFT JOIN community_vendor_installations ci ON ci.module_id = mm.id
+       LEFT JOIN vendor_payments vp ON vp.module_id = mm.id
+       WHERE mm.seller_id = $1`,
+      [sellerId]
+    ),
+    query(
+      `SELECT ROUND(AVG(vmr.rating), 2) AS "avgRating"
+       FROM vendor_module_reviews vmr
+       JOIN approved_vendor_modules mm ON mm.id = vmr.module_id
+       WHERE mm.seller_id = $1`,
+      [sellerId]
+    ),
+  ]);
+
+  return {
+    totalInstalls: installResult.rows[0]['totalInstalls'],
+    totalUninstalls: installResult.rows[0]['totalUninstalls'],
+    installsThisMonth: installResult.rows[0]['installsThisMonth'],
+    revenueThisMonth: installResult.rows[0]['revenueThisMonth'],
+    avgRating: ratingResult.rows[0]['avgRating'] ?? null,
+  };
+}
+
+/**
  * Creates a new marketplace module for a vendor.
  * @param {number} userId
  * @param {object} moduleData

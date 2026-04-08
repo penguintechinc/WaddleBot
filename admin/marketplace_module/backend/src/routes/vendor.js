@@ -8,8 +8,11 @@ import { requireAuth } from '../middleware/auth.js';
 const router = Router();
 router.use(requireAuth);
 
+router.get('/dashboard', vendorController.getVendorDashboard);
 router.get('/profile', vendorController.getVendorProfile);
 router.post('/profile', vendorController.createVendorProfile);
+router.put('/profile', vendorController.updateVendorProfile);
+router.get('/analytics/overview', vendorController.getVendorAnalyticsOverview);
 router.get('/modules', vendorController.getVendorModules);
 router.post('/modules', vendorController.createVendorModule);
 router.put('/modules/:id', vendorController.updateVendorModule);

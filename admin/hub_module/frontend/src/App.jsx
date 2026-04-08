@@ -113,6 +113,10 @@ import VendorSubmissionStatus from './pages/vendor/VendorSubmissionStatus';
 import VendorDashboard from './pages/vendor/VendorDashboard';
 import VendorSubmissions from './pages/vendor/VendorSubmissions';
 import VendorRequest from './pages/vendor/VendorRequest';
+import VendorModules from './pages/vendor/VendorModules';
+import VendorAnalytics from './pages/vendor/VendorAnalytics';
+import VendorDiscountCodes from './pages/vendor/VendorDiscountCodes';
+import VendorSettings from './pages/vendor/VendorSettings';
 
 // Platform admin pages
 import PlatformDashboard from './pages/platform/PlatformDashboard';
@@ -261,6 +265,10 @@ function App() {
         <Route path="/vendor/dashboard" element={<VendorDashboard />} />
         <Route path="/vendor/submissions" element={<VendorSubmissions />} />
         <Route path="/vendor/request" element={<VendorRequest />} />
+        <Route path="/vendor/modules" element={<VendorModules />} />
+        <Route path="/vendor/analytics" element={<VendorAnalytics />} />
+        <Route path="/vendor/discount-codes" element={<VendorDiscountCodes />} />
+        <Route path="/vendor/settings" element={<VendorSettings />} />
       </Route>
 
       {/* Admin routes (community admin) */}
