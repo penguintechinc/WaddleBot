@@ -112,6 +112,7 @@ function AdminLayout() {
             { to: `/admin/${communityId}/loyalty/giveaways`, icon: HeartIcon, label: 'Giveaways' },
             { to: `/admin/${communityId}/loyalty/games`, icon: CubeIcon, label: 'Games' },
             { to: `/admin/${communityId}/loyalty/gear`, icon: InboxStackIcon, label: 'Gear' },
+            { to: `/admin/${communityId}/raffle-customization`, icon: SpeakerWaveIcon, label: 'Raffle Sounds', premium: true },
           ],
         },
         {

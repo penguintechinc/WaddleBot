@@ -144,6 +144,7 @@ import TenantCommunities from './pages/tenant/TenantCommunities';
 
 // Admin pages (new)
 import AdminCommunityRoles from './pages/admin/AdminCommunityRoles';
+import AdminRaffleCustomization from './pages/admin/AdminRaffleCustomization';
 
 // Marketplace redirect helper
 function MarketplaceRedirect() {
@@ -312,6 +313,7 @@ function App() {
         <Route path="/admin/:communityId/loyalty/giveaways" element={<LoyaltyGiveaways />} />
         <Route path="/admin/:communityId/loyalty/games" element={<LoyaltyGames />} />
         <Route path="/admin/:communityId/loyalty/gear" element={<LoyaltyGear />} />
+        <Route path="/admin/:communityId/raffle-customization" element={<AdminRaffleCustomization />} />
         <Route path="/admin/:communityId/shoutouts" element={<AdminShoutouts />} />
         <Route path="/admin/:communityId/translation" element={<AdminTranslation />} />
         <Route path="/admin/:communityId/music" element={<AdminMusicDashboard />} />

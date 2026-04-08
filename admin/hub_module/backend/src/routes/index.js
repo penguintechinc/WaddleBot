@@ -28,6 +28,7 @@ import joinRequestRoutes from './joinRequests.js';
 import interactionAdminRoutes, { communityInteractionRouter, internalRelayRouter } from './interaction.js';
 import tenantRoutes from './tenant.js';
 import analyticsRoutes from './analytics.js';
+import raffleCustomizationRoutes from './raffleCustomization.js';
 
 const router = Router();
 
@@ -109,6 +110,9 @@ router.use('/superadmin', superadminRoutes);
 
 // Tenant admin routes (tenant admin role required)
 router.use('/tenant', tenantRoutes);
+
+// Raffle customization routes (admin role required)
+router.use('/admin', raffleCustomizationRoutes);
 
 // Interaction routes (hub channels, forums — admin + member)
 router.use('/admin', interactionAdminRoutes);
