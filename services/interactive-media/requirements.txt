@@ -192,10 +192,7 @@ priority==2.0.0 \
     --hash=sha256:6f8eefce5f3ad59baf2c080a664037bb4725cd0a790d53d59ab4059288faf6aa \
     --hash=sha256:c965d54f1b8d0d0b19479db3924c7c36cf672dbf2aed92d43fbdaf4492ba18c0
     # via hypercorn
-pydal==20241204.1 \
-    --hash=sha256:1ba1f9e528b985e234f5b3acfd9d549998b44f7ed7ae747b9e8d4ad3047bf511 \
-    --hash=sha256:416f06de17ab0a5340e11195a0583abfe484eceb067cd3ab92208d3dc5aa7683
-    # via -r requirements.in
+penguin-dal>=0.3.0
 python-dotenv==1.2.2 \
     --hash=sha256:1d8214789a24de455a8b8bd8ae6fe3c6b69a5e3d64aa8a8e5d68e694bbcb285a \
     --hash=sha256:2c371a91fbd7ba082c2c1dc1f8bf89ca22564a087c2c287cd9b662adde799cf3

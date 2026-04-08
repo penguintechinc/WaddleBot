@@ -220,7 +220,7 @@ curl http://localhost:8103/api/v1/gcp/health
 
 ## Database Schema
 
-The AWS Lambda module uses PyDAL with `migrate=False` for runtime queries:
+The AWS Lambda module uses penguin-dal with `migrate=False` for runtime queries:
 
 - Lambda: invocations, execution logs, function metadata
 - Database initialization via Alembic only

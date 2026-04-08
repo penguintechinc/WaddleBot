@@ -5,7 +5,7 @@ Shared utilities and components for all WaddleBot Flask/Quart modules.
 ## Components
 
 ### Database (`database.py`)
-- **AsyncDAL**: Async wrapper around PyDAL for non-blocking database operations
+- **AsyncDAL**: Async wrapper around penguin-dal for non-blocking database operations
 - Connection pooling with configurable pool size
 - Read replica support for query distribution
 - Transaction management with context managers

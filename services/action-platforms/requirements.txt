@@ -217,8 +217,7 @@ pbr==6.1.0 \
     # via
     #   jira
     #   stevedore
-pydal==20240801.0 \
-    --hash=sha256:8c3e2c8c1f8f7c8f9a8b9c8d8e8f9a8b9c8d8e8f9a8b9c8d8e8f9a8b9c8d8e
+penguin-dal>=0.3.0
     # via common dependency
 pyjwt==2.10.1 \
     --hash=sha256:3cc5772eb20009233caf06e9d8a3b3f1f40f3019acd0f215cfc92116b3ccc3ba \

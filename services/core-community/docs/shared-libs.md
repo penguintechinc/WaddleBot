@@ -5,7 +5,7 @@ Complete documentation for WaddleBot shared libraries providing common functiona
 ## Overview
 
 The shared library suite provides standardized components for:
-- Database access (AsyncDAL, PyDAL wrapper)
+- Database access (AsyncDAL, penguin-dal wrapper)
 - Authentication and authorization (Flask-Security-Too, JWT)
 - API utilities (response formatting, decorators)
 - Logging (AAA - Authentication, Authorization, Audit)
@@ -400,7 +400,7 @@ pip install -e .
 ### Flask Core
 - Flask/Quart (async web framework)
 - Flask-Security-Too (authentication)
-- PyDAL (database abstraction)
+- penguin-dal (database abstraction)
 - aiohttp (async HTTP)
 - python-dotenv (environment variables)
 

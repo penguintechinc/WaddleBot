@@ -71,7 +71,7 @@ try:
     from lambda_action_module.services.lambda_service import LambdaService
     from lambda_action_module.services.grpc_handler import LambdaActionServicer
     from lambda_action_module.app import verify_jwt as lambda_verify_jwt
-    from pydal import DAL
+    from penguin_dal import DAL
 
     lambda_enabled = True
     lambda_db = DAL(LambdaConfig.DATABASE_URL, folder=None, pool_size=10, migrate_enabled=False)

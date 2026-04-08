@@ -163,7 +163,7 @@ The service initializes database tables for all 4 modules:
 - Server Manager: servers, bans, kicks, config, enforcement_rules
 - Server Status: server_metrics, player_status, health_events
 
-All use PyDAL with `migrate=False` (schema via Alembic only).
+All use penguin-dal with `migrate=False` (schema via Alembic only).
 
 ## Logging
 

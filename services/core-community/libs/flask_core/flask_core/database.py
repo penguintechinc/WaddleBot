@@ -1,14 +1,14 @@
 """
-Async PyDAL Database Wrapper
-=============================
+Async penguin-dal Database Wrapper
+===================================
 
-Provides async wrapper around PyDAL for non-blocking database operations.
+Provides async wrapper around penguin-dal for non-blocking database operations.
 Supports connection pooling, read replicas, and transaction management.
 """
 
-from pydal import DAL
+from penguin_dal import DAL
 # Field is exported via DAL but imported here for module users
-from pydal import Field  # noqa: F401
+from penguin_dal import Field  # noqa: F401
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional, Any, List, Dict
@@ -20,9 +20,9 @@ logger = logging.getLogger(__name__)
 
 class AsyncDAL:
     """
-    Async wrapper for PyDAL database operations.
+    Async wrapper for penguin-dal database operations.
 
-    Uses ThreadPoolExecutor to run blocking PyDAL operations
+    Uses ThreadPoolExecutor to run blocking penguin-dal operations
     in a thread pool, allowing async/await syntax without blocking
     the event loop.
     """
@@ -101,7 +101,7 @@ class AsyncDAL:
         Async select operation using read replica if available.
 
         Args:
-            query: PyDAL query object
+            query: penguin-dal query object
             *args, **kwargs: Additional select arguments
 
         Returns:
@@ -125,7 +125,7 @@ class AsyncDAL:
         Async insert operation on primary DAL.
 
         Args:
-            table: PyDAL table object
+            table: penguin-dal table object
             **fields: Field values to insert
 
         Returns:
@@ -147,7 +147,7 @@ class AsyncDAL:
         Async update operation on primary DAL.
 
         Args:
-            query: PyDAL query object
+            query: penguin-dal query object
             **update_fields: Fields to update
 
         Returns:
@@ -169,7 +169,7 @@ class AsyncDAL:
         Async delete operation on primary DAL.
 
         Args:
-            query: PyDAL query object
+            query: penguin-dal query object
 
         Returns:
             Number of records deleted
@@ -190,7 +190,7 @@ class AsyncDAL:
         Async count operation using read replica if available.
 
         Args:
-            query: PyDAL query object
+            query: penguin-dal query object
 
         Returns:
             Count of records matching query
@@ -323,7 +323,7 @@ class AsyncDAL:
         Bulk insert records asynchronously.
 
         Args:
-            table: PyDAL table object
+            table: penguin-dal table object
             records: List of dictionaries with field values
 
         Returns:
@@ -358,8 +358,8 @@ class AsyncDAL:
         return getattr(self.dal, name)
 
 
-def _convert_uri_for_pydal(uri: str) -> str:
-    """Convert postgresql:// to postgres:// for PyDAL compatibility."""
+def _convert_uri_for_dal(uri: str) -> str:
+    """Convert postgresql:// to postgres:// for penguin-dal compatibility."""
     if uri and uri.startswith('postgresql://'):
         return uri.replace('postgresql://', 'postgres://', 1)
     return uri
@@ -385,9 +385,9 @@ def init_database(
     Returns:
         Configured AsyncDAL instance
     """
-    # Convert postgresql:// to postgres:// for PyDAL compatibility
-    converted_uri = _convert_uri_for_pydal(uri)
-    converted_replica = _convert_uri_for_pydal(read_replica_uri) if read_replica_uri else None
+    # Convert postgresql:// to postgres:// for penguin-dal compatibility
+    converted_uri = _convert_uri_for_dal(uri)
+    converted_replica = _convert_uri_for_dal(read_replica_uri) if read_replica_uri else None
 
     return AsyncDAL(
         uri=converted_uri,

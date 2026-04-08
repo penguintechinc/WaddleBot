@@ -8,7 +8,7 @@ grpcio-tools>=1.64.0
 protobuf>=5.29.4,<6.0.0
 
 # Database
-pydal>=20240906.1,<20250101
+penguin-dal>=0.3.0
 
 # HTTP Client (async)
 httpx>=0.27.0,<0.28.0

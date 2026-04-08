@@ -21,7 +21,7 @@ from typing import Dict, Any, Optional, List
 
 from quart import Quart, Blueprint, request, websocket, jsonify
 import jwt
-from pydal import DAL
+from penguin_dal import DAL
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'libs'))
 

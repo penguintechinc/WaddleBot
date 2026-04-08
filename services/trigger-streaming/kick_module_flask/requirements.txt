@@ -5,4 +5,4 @@ aiohttp>=3.10.0,<4.0.0
 python-dotenv>=1.0.0
 pysher>=1.0.0
 psycopg2-binary>=2.9.9
-pydal>=20240906.1,<20250101
+penguin-dal>=0.3.0

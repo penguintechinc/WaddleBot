@@ -41,7 +41,7 @@ pyasn1==0.4.8
 pydantic-core==2.27.2
 pydantic==2.9.2
 pycparser==2.22
-pydal==20221110.1
+penguin-dal>=0.3.0
 PyJWT==2.10.1
 pyopenssl==25.0.0
 python-dateutil==2.9.0.post0

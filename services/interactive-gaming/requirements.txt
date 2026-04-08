@@ -149,9 +149,7 @@ priority==2.0.0 \
 pycparser==2.21 \
     --hash=sha256:8387fc8d527c19a02d402d4a7d9f60613c1b06c989d41a57b681652a0ea5a4f \
     --hash=sha256:e644fdec12d2872c5e0649ca0dc140250f69bcbb1cec3bcc5e9607e1ea1a8006
-pydal==20241204.1 \
-    --hash=sha256:1ba1f9e528b985e234f5b3acfd9d549998b44f7ed7ae747b9e8d4ad3047bf511 \
-    --hash=sha256:416f06de17ab0a5340e11195a0583abfe484eceb067cd3ab92208d3dc5aa7683
+penguin-dal>=0.3.0
 python-dotenv==1.2.2 \
     --hash=sha256:1d8214789a24de455a8b8bd8ae6fe3c6b69a5e3d64aa8a8e5d68e694bbcb285a \
     --hash=sha256:2c371a91fbd7ba082c2c1dc1f8bf89ca22564a087c2c287cd9b662adde799cf3

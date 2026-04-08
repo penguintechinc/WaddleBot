@@ -11,7 +11,7 @@ import sys
 from typing import Optional
 
 from quart import Quart, request, jsonify
-from pydal import DAL
+from penguin_dal import DAL
 import jwt
 from functools import wraps
 
@@ -57,7 +57,7 @@ app = Quart(__name__)
 # Initialize shared database
 db = DAL(
     'sqlite:action_platforms.db',
-    folder='/tmp/pydal',
+    folder='/tmp/penguin-dal',
     pool_size=10,
     migrate_enabled=False,
     fake_migrate_all=True

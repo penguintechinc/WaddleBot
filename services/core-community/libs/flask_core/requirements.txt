@@ -7,7 +7,7 @@ hypercorn>=0.16.0  # ASGI server for Quart
 quart-flask-patch>=0.3.0  # Flask compatibility for Quart
 
 # Database
-pydal>=20240906.1,<20250101
+penguin-dal>=0.3.0
 psycopg2-binary>=2.9.9  # PostgreSQL adapter
 sqlalchemy>=2.0  # SQLAlchemy ORM (Alembic migrations + model definitions)
 flask-sqlalchemy>=3.1.0  # Flask-SQLAlchemy integration

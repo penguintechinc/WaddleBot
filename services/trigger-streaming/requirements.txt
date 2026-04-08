@@ -15,7 +15,7 @@ twitchio>=2.8.0
 # Kick Streaming
 pysher>=1.0.0
 psycopg2-binary>=2.9.9
-pydal>=20240906.1,<20250101
+penguin-dal>=0.3.0
 
 # Environment
 python-dotenv>=1.0.0

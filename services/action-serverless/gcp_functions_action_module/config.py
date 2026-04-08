@@ -25,12 +25,12 @@ class Config:
     GCP_API_TIMEOUT: int = int(os.getenv("GCP_API_TIMEOUT", "30"))
 
     # Database Configuration
-    # PyDAL expects 'postgres://' not 'postgresql://'
+    # penguin-dal handles 'postgres://' and 'postgresql://' automatically via normalize_uri()
     _raw_db_url: str = os.getenv(
         "DATABASE_URL",
         "postgres://waddlebot:password@localhost:5432/waddlebot"
     )
-    DATABASE_URL: str = _raw_db_url.replace("postgresql://", "postgres://")
+    DATABASE_URL: str = _raw_db_url
 
     # Redis Configuration (for credential refresh notifications)
     REDIS_URL: str = os.getenv("REDIS_URL", "")

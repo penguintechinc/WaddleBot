@@ -197,7 +197,7 @@ The service reads from the WaddleBot database:
 - **Servers** - Platform-specific channel configurations (Twitch, YouTube, Kick)
 - **CommunityServers** - Links servers to communities for event routing
 
-All database access uses PyDAL with `migrate=False` (schema via Alembic only).
+All database access uses penguin-dal with `migrate=False` (schema via Alembic only).
 
 ## Logging
 

@@ -194,7 +194,7 @@ The service initializes database tables for all 3 modules:
 - **Memories**: quotes, bookmarks, reminders, reminder_schedules
 - **Translate**: translation_configs, translation_cache, translation_logs
 
-All use PyDAL with `migrate=False` (schema via Alembic only).
+All use penguin-dal with `migrate=False` (schema via Alembic only).
 
 ## Logging
 

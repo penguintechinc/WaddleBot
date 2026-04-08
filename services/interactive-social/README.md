@@ -169,7 +169,7 @@ The service initializes database tables for all 4 modules:
 - Presence: user_presence, presence_settings, presence_sync_state
 - Quotes: quotes, quote_tags, quote_search_index
 
-All use PyDAL with `migrate=False` (schema via Alembic only).
+All use penguin-dal with `migrate=False` (schema via Alembic only).
 
 ## Logging
 

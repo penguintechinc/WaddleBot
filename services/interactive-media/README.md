@@ -152,7 +152,7 @@ The service initializes database tables for clip management:
 - Reels: reel_id, community_id, name, description, created_by, published_at
 - Reel clips: reel_id, clip_id (many-to-many)
 
-All use PyDAL with `migrate=False` (schema via Alembic only).
+All use penguin-dal with `migrate=False` (schema via Alembic only).
 
 ## Logging
 

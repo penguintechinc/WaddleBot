@@ -15,7 +15,7 @@ grpcio-tools>=1.62.0
 protobuf>=5.29.4
 
 # Database
-pydal>=20241111.1
+penguin-dal>=0.3.0
 psycopg2-binary>=2.9.9
 
 # Authentication & Security

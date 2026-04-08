@@ -1,4 +1,4 @@
-from pydal import DAL
+from penguin_dal import DAL
 
 from WaddlebotLibs.matterbridge_classes import matterbridgePayload
 from WaddlebotLibs.botClasses import prize

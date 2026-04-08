@@ -10,7 +10,7 @@ grpcio-tools>=1.62.0
 aiohttp>=3.10.0,<4.0.0
 
 # Database
-pydal>=20240906.1,<20250101
+penguin-dal>=0.3.0
 
 # Workflow Execution
 RestrictedPython>=7.4

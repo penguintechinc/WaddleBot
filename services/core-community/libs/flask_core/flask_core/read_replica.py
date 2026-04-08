@@ -331,7 +331,7 @@ class ReadReplicaManager:
 
 class ReadReplicaRouter:
     """
-    Routes PyDAL operations between primary and replicas.
+    Routes penguin-dal operations between primary and replicas.
 
     Integrates with AsyncDAL to provide transparent read/write routing.
     """

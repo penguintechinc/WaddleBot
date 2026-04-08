@@ -47,7 +47,7 @@ class RefreshService:
         max_retries: int = 3,
         retry_backoff_base: int = 5,
     ) -> None:
-        # Convert pydal-style URL back for asyncpg
+        # Convert penguin-dal-style URL back for asyncpg
         self._db_url = database_url.replace("postgres://", "postgresql://")
         self._redis_url = redis_url
         self._redis_prefix = redis_prefix

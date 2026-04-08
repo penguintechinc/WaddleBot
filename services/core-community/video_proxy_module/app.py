@@ -6,7 +6,7 @@ This is a stateless, clusterable container with:
 - REST API for stream management
 - gRPC client to MarchProxy for stream control
 - JWT authentication
-- PyDAL for database operations
+- penguin-dal for database operations
 """
 import asyncio
 import logging
@@ -19,7 +19,7 @@ from typing import Dict, Any, Optional, List
 
 from quart import Quart, request, jsonify
 from quart.config import Config as QuartConfig
-from pydal import DAL, Field
+from penguin_dal import DAL, Field
 import jwt
 
 from config import Config
@@ -105,7 +105,7 @@ db = DAL(
 
 # Define database tables
 def init_database():
-    """Initialize database tables using PyDAL."""
+    """Initialize database tables using penguin-dal."""
     
     # Stream configurations table
     db.define_table(

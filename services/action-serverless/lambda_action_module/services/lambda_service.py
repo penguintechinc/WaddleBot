@@ -13,7 +13,7 @@ from typing import Optional
 
 import boto3
 from botocore.exceptions import ClientError
-from pydal import DAL
+from penguin_dal import DAL
 
 from config import Config
 
@@ -28,7 +28,7 @@ class LambdaService:
         Initialize Lambda service
 
         Args:
-            db: PyDAL database instance
+            db: penguin-dal database instance
         """
         self.db = db
         self._lambda_client = None

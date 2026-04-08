@@ -5,7 +5,7 @@ Waddles Flask Core Library
 Shared utilities for all Waddles Flask/Quart modules.
 
 Provides:
-- AsyncDAL: Async wrapper for PyDAL database operations
+- AsyncDAL: Async wrapper for penguin-dal database operations
 - Auth utilities: Flask-Security-Too and OAuth integration
 - Datamodels: Python 3.13 optimized dataclasses with slots
 - Logging: Comprehensive AAA (Authentication, Authorization, Audit) logging

@@ -174,7 +174,7 @@ curl http://localhost:8102/health
 
 ## Database Schema
 
-The service initializes database tables for all 6 platform modules. Uses PyDAL with `migrate=False` (schema via Alembic only).
+The service initializes database tables for all 6 platform modules. Uses penguin-dal with `migrate=False` (schema via Alembic only).
 
 ## Logging
 

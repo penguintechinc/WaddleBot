@@ -205,7 +205,7 @@ The service initializes database tables for all 3 modules:
   - Tracks expiration times
   - Supports: Twitch, Discord, Slack, YouTube, Spotify, Kick
 
-All use PyDAL with `migrate=False` (schema via Alembic only).
+All use penguin-dal with `migrate=False` (schema via Alembic only).
 
 ## Logging
 
@@ -246,7 +246,7 @@ Message body: ISO8601 timestamp of refresh
 
 ## Startup Sequence
 
-1. **Database** - Initialize PyDAL connection pool
+1. **Database** - Initialize penguin-dal connection pool
 2. **gRPC** - Start gRPC server on port 50030 (background)
 3. **Security Services** - Initialize security_service, spam_detector, content_filter, warning_manager
 4. **Credentials** - Start RefreshService if Redis and credential config valid

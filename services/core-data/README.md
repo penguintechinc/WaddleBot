@@ -154,7 +154,7 @@ The service initializes database tables for all 4 modules:
 - Reputation: reputation_scores, events, weights, policies
 - Labels: labels, entity_labels
 
-All use PyDAL with `migrate=False` (schema via Alembic only).
+All use penguin-dal with `migrate=False` (schema via Alembic only).
 
 ## Logging
 

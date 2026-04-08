@@ -3,7 +3,7 @@
 import os
 import logging
 from typing import Optional
-from pydal import DAL, Field
+from penguin_dal import DAL, Field
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,7 @@ def get_db() -> DAL:
 
 
 def init_database() -> DAL:
-    """Initialize database tables using PyDAL."""
+    """Initialize database tables using penguin-dal."""
     db = get_db()
     
     # Stream configurations table

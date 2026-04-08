@@ -30,7 +30,7 @@ The `module_rtc` (real-time communication) module was not found in the repositor
 ## Architecture
 
 - **Single Quart app** - All modules registered on port 8020
-- **Shared database** - One PyDAL instance (`dal`) shared across all modules
+- **Shared database** - One penguin-dal instance (`dal`) shared across all modules
 - **Unified startup/shutdown** - Coordinated initialization and cleanup
 - **Service namespacing** - URL prefixes keep endpoints organized:
   - `/api/v1/community/*` - community endpoints
@@ -44,7 +44,7 @@ The `module_rtc` (real-time communication) module was not found in the repositor
 
 Combined from all 4 modules:
 - Quart >= 0.19.5, Hypercorn >= 0.17.3
-- gRPC, PyDAL, Redis, APScheduler
+- gRPC, penguin-dal, Redis, APScheduler
 - JWT/cryptography for auth
 - See `requirements.txt` for full list
 

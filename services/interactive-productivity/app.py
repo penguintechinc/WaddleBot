@@ -401,7 +401,7 @@ def init_translate_services():
         trans_logger.info(f"Initializing translate module REST on {Config.MODULE_PORT} gRPC on 50033")
 
         if dal is None:
-            from pydal import DAL
+            from penguin_dal import DAL
             dal = DAL(TransConfig.DATABASE_URL, folder=None, pool_size=10)
             app.config['dal'] = dal
 

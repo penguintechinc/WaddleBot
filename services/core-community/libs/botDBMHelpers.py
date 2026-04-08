@@ -1,6 +1,6 @@
 # Imports
 from functools import lru_cache
-from pydal import DAL, Field
+from penguin_dal import DAL, Field
 from urllib.parse import unquote
 
 from json import load as jload
@@ -210,7 +210,7 @@ class dbm_helpers:
         
         return dict(msg=f"Table {table_name} inserted into the configuration file.")
 
-    # Function to get all tables from the configuration file, and define them in the pydal database.
+    # Function to get all tables from the configuration file, and define them in the penguin-dal database.
     def define_tables_from_config(self):
         print("Defining tables from the configuration file.")
 
