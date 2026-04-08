@@ -1,0 +1,14 @@
+__pycache__
+*.pyc
+.pytest_cache
+.coverage
+.env
+.env.local
+*.egg-info
+dist
+build
+.git
+.gitignore
+README.md
+Makefile
+test-results

@@ -1,0 +1,90 @@
+{{- if .Values.modules.actionPlatforms.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "waddlebot.fullname" . }}-action-platforms
+  labels:
+    {{- include "waddlebot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: action-platforms
+spec:
+  replicas: {{ .Values.modules.actionPlatforms.replicas }}
+  selector:
+    matchLabels:
+      {{- include "waddlebot.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: action-platforms
+  template:
+    metadata:
+      labels:
+        {{- include "waddlebot.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: action-platforms
+    spec:
+      serviceAccountName: {{ include "waddlebot.serviceAccountName" . }}
+      {{- include "waddlebot.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+      {{- include "waddlebot.dbMigrateInitContainer" . | nindent 6 }}
+      containers:
+      - name: action-platforms
+        image: "{{ .Values.global.imageRegistry }}/action-platforms:{{ .Values.modules.actionPlatforms.imageTag | default .Values.global.imageTag }}"
+        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 10 }}
+        ports:
+        - name: http
+          containerPort: 8102
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: {{ include "waddlebot.fullname" . }}-config
+        - secretRef:
+            name: {{ include "waddlebot.fullname" . }}-secrets
+        env:
+        - name: MODULE_NAME
+          value: "action-platforms"
+        - name: MODULE_PORT
+          value: "8102"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          {{- toYaml .Values.modules.actionPlatforms.resources | nindent 10 }}
+        volumeMounts:
+        - name: logs
+          mountPath: /var/log/waddlebotlog
+      volumes:
+      - name: logs
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "waddlebot.fullname" . }}-action-platforms
+  labels:
+    {{- include "waddlebot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: action-platforms
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8102
+    targetPort: http
+    protocol: TCP
+    name: http
+  selector:
+    {{- include "waddlebot.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: action-platforms
+{{- end }}

@@ -92,42 +92,22 @@ jobs:
       router: ${{ steps.changes.outputs.router }}
       marketplace: ${{ steps.changes.outputs.marketplace }}
       hub: ${{ steps.changes.outputs.hub }}
-      collector-twitch: ${{ steps.changes.outputs.collector-twitch }}
-      collector-discord: ${{ steps.changes.outputs.collector-discord }}
-      collector-slack: ${{ steps.changes.outputs.collector-slack }}
-      collector-youtube: ${{ steps.changes.outputs.collector-youtube }}
-      collector-kick: ${{ steps.changes.outputs.collector-kick }}
+      trigger-discord: ${{ steps.changes.outputs.trigger-discord }}
+      trigger-streaming: ${{ steps.changes.outputs.trigger-streaming }}
+      trigger-webhooks: ${{ steps.changes.outputs.trigger-webhooks }}
       interactive-ai: ${{ steps.changes.outputs.interactive-ai }}
-      interactive-inventory: ${{ steps.changes.outputs.interactive-inventory }}
-      interactive-alias: ${{ steps.changes.outputs.interactive-alias }}
-      interactive-shoutout: ${{ steps.changes.outputs.interactive-shoutout }}
-      interactive-calendar: ${{ steps.changes.outputs.interactive-calendar }}
-      interactive-memories: ${{ steps.changes.outputs.interactive-memories }}
-      interactive-clip: ${{ steps.changes.outputs.interactive-clip }}
-      interactive-lfg: ${{ steps.changes.outputs.interactive-lfg }}
       interactive-loyalty: ${{ steps.changes.outputs.interactive-loyalty }}
-      interactive-server-manager: ${{ steps.changes.outputs.interactive-server-manager }}
-      interactive-server-status: ${{ steps.changes.outputs.interactive-server-status }}
-      interactive-spotify: ${{ steps.changes.outputs.interactive-spotify }}
-      interactive-translate: ${{ steps.changes.outputs.interactive-translate }}
-      interactive-youtube-music: ${{ steps.changes.outputs.interactive-youtube-music }}
-      core-labels: ${{ steps.changes.outputs.core-labels }}
+      interactive-social: ${{ steps.changes.outputs.interactive-social }}
+      interactive-gaming: ${{ steps.changes.outputs.interactive-gaming }}
+      interactive-media: ${{ steps.changes.outputs.interactive-media }}
+      interactive-productivity: ${{ steps.changes.outputs.interactive-productivity }}
+      core-data: ${{ steps.changes.outputs.core-data }}
       core-identity: ${{ steps.changes.outputs.core-identity }}
-      core-browser-source: ${{ steps.changes.outputs.core-browser-source }}
-      core-reputation: ${{ steps.changes.outputs.core-reputation }}
       core-community: ${{ steps.changes.outputs.core-community }}
       ai-researcher: ${{ steps.changes.outputs.ai-researcher }}
-      core-video-proxy: ${{ steps.changes.outputs.core-video-proxy }}
-      core-engagement: ${{ steps.changes.outputs.core-engagement }}
-      core-module-rtc: ${{ steps.changes.outputs.core-module-rtc }}
-      core-workflow: ${{ steps.changes.outputs.core-workflow }}
-      core-analytics: ${{ steps.changes.outputs.core-analytics }}
-      core-credential-manager: ${{ steps.changes.outputs.core-credential-manager }}
-      core-security: ${{ steps.changes.outputs.core-security }}
+      action-platforms: ${{ steps.changes.outputs.action-platforms }}
+      action-serverless: ${{ steps.changes.outputs.action-serverless }}
       action-discord: ${{ steps.changes.outputs.action-discord }}
-      action-slack: ${{ steps.changes.outputs.action-slack }}
-      action-twitch: ${{ steps.changes.outputs.action-twitch }}
-      action-youtube: ${{ steps.changes.outputs.action-youtube }}
       libs: ${{ steps.changes.outputs.libs }}
       migrations: ${{ steps.changes.outputs.migrations }}
 
@@ -149,113 +129,84 @@ jobs:
             hub:
               - 'admin/hub_module/**'
               - 'libs/**'
-            collector-twitch:
-              - 'trigger/receiver/twitch_module/**'
-              - 'libs/**'
-            collector-discord:
+            trigger-discord:
               - 'trigger/receiver/discord_module/**'
               - 'libs/**'
-            collector-slack:
-              - 'trigger/receiver/slack_module/**'
-              - 'libs/**'
-            collector-youtube:
+            trigger-streaming:
+              - 'trigger/receiver/twitch_module/**'
               - 'trigger/receiver/youtube_live_module/**'
-              - 'libs/**'
-            collector-kick:
               - 'trigger/receiver/kick_module_flask/**'
+              - 'libs/**'
+            trigger-webhooks:
+              - 'trigger/receiver/slack_module/**'
+              - 'trigger/receiver/teams_module/**'
+              - 'trigger/receiver/mattermost_module/**'
+              - 'trigger/receiver/googlechat_module/**'
               - 'libs/**'
             interactive-ai:
               - 'action/interactive/ai_interaction_module/**'
               - 'libs/**'
-            interactive-inventory:
-              - 'action/interactive/inventory_interaction_module/**'
-              - 'libs/**'
-            interactive-alias:
-              - 'action/interactive/alias_interaction_module/**'
-              - 'libs/**'
-            interactive-shoutout:
-              - 'action/interactive/shoutout_interaction_module/**'
-              - 'libs/**'
-            interactive-calendar:
-              - 'action/interactive/calendar_interaction_module/**'
-              - 'libs/**'
-            interactive-memories:
-              - 'action/interactive/memories_interaction_module/**'
-              - 'libs/**'
-            interactive-clip:
-              - 'action/interactive/clip_interaction_module/**'
-              - 'libs/**'
-            interactive-lfg:
-              - 'action/interactive/lfg_interaction_module/**'
-              - 'libs/**'
             interactive-loyalty:
               - 'action/interactive/loyalty_interaction_module/**'
               - 'libs/**'
-            interactive-server-manager:
-              - 'action/interactive/server_manager_interaction_module/**'
+            interactive-social:
+              - 'action/interactive/alias_interaction_module/**'
+              - 'action/interactive/shoutout_interaction_module/**'
+              - 'action/interactive/presence_module/**'
+              - 'action/interactive/quote_interaction_module/**'
               - 'libs/**'
-            interactive-server-status:
+            interactive-gaming:
+              - 'action/interactive/lfg_interaction_module/**'
+              - 'action/interactive/inventory_interaction_module/**'
+              - 'action/interactive/server_manager_interaction_module/**'
               - 'action/interactive/server_status_interaction_module/**'
               - 'libs/**'
-            interactive-spotify:
+            interactive-media:
+              - 'action/interactive/clip_interaction_module/**'
               - 'action/interactive/spotify_interaction_module/**'
-              - 'libs/**'
-            interactive-translate:
-              - 'action/interactive/translate_interaction_module/**'
-              - 'libs/**'
-            interactive-youtube-music:
               - 'action/interactive/youtube_music_interaction_module/**'
               - 'libs/**'
-            core-labels:
+            interactive-productivity:
+              - 'action/interactive/calendar_interaction_module/**'
+              - 'action/interactive/memories_interaction_module/**'
+              - 'action/interactive/translate_interaction_module/**'
+              - 'libs/**'
+            core-data:
+              - 'core/analytics_core_module/**'
+              - 'core/engagement_module/**'
+              - 'core/reputation_module/**'
               - 'core/labels_core_module/**'
               - 'libs/**'
             core-identity:
               - 'core/identity_core_module/**'
-              - 'libs/**'
-            core-browser-source:
-              - 'core/browser_source_core_module/**'
-              - 'libs/**'
-            core-reputation:
-              - 'core/reputation_module/**'
+              - 'core/security_core_module/**'
+              - 'core/credential_manager_module/**'
               - 'libs/**'
             core-community:
               - 'core/community_module/**'
+              - 'core/workflow_core_module/**'
+              - 'core/browser_source_core_module/**'
+              - 'core/video_proxy_module/**'
+              - 'core/module_rtc/**'
               - 'libs/**'
             ai-researcher:
               - 'core/ai_researcher_module/**'
               - 'libs/**'
-            core-video-proxy:
-              - 'core/video_proxy_module/**'
+            action-platforms:
+              - 'action/pushing/slack_action_module/**'
+              - 'action/pushing/teams_action_module/**'
+              - 'action/pushing/mattermost_action_module/**'
+              - 'action/pushing/googlechat_action_module/**'
+              - 'action/pushing/twitch_action_module/**'
+              - 'action/pushing/youtube_action_module/**'
               - 'libs/**'
-            core-engagement:
-              - 'core/engagement_module/**'
-              - 'libs/**'
-            core-module-rtc:
-              - 'core/module_rtc/**'
-              - 'libs/**'
-            core-workflow:
-              - 'core/workflow_core_module/**'
-              - 'libs/**'
-            core-analytics:
-              - 'core/analytics_core_module/**'
-              - 'libs/**'
-            core-credential-manager:
-              - 'core/credential_manager_module/**'
-              - 'libs/**'
-            core-security:
-              - 'core/security_core_module/**'
+            action-serverless:
+              - 'action/pushing/lambda_action_module/**'
+              - 'action/pushing/openwhisk_action_module/**'
+              - 'action/pushing/gcp_functions_action_module/**'
               - 'libs/**'
             action-discord:
               - 'action/pushing/discord_action_module/**'
-              - 'libs/**'
-            action-slack:
-              - 'action/pushing/slack_action_module/**'
-              - 'libs/**'
-            action-twitch:
-              - 'action/pushing/twitch_action_module/**'
-              - 'libs/**'
-            action-youtube:
-              - 'action/pushing/youtube_action_module/**'
               - 'libs/**'
             libs:
               - 'libs/**'
@@ -271,19 +222,10 @@ jobs:
       needs.detect-changes.outputs.router == 'true' ||
       needs.detect-changes.outputs.marketplace == 'true' ||
       needs.detect-changes.outputs.migrations == 'true' ||
-      needs.detect-changes.outputs.core-labels == 'true' ||
+      needs.detect-changes.outputs.core-data == 'true' ||
       needs.detect-changes.outputs.core-identity == 'true' ||
-      needs.detect-changes.outputs.core-browser-source == 'true' ||
-      needs.detect-changes.outputs.core-reputation == 'true' ||
       needs.detect-changes.outputs.core-community == 'true' ||
       needs.detect-changes.outputs.ai-researcher == 'true' ||
-      needs.detect-changes.outputs.core-video-proxy == 'true' ||
-      needs.detect-changes.outputs.core-engagement == 'true' ||
-      needs.detect-changes.outputs.core-module-rtc == 'true' ||
-      needs.detect-changes.outputs.core-workflow == 'true' ||
-      needs.detect-changes.outputs.core-analytics == 'true' ||
-      needs.detect-changes.outputs.core-credential-manager == 'true' ||
-      needs.detect-changes.outputs.core-security == 'true' ||
       needs.detect-changes.outputs.libs == 'true' ||
       github.event_name == 'workflow_dispatch'
     strategy:
@@ -303,58 +245,25 @@ jobs:
             port: 0
             context: .
             condition: ${{ needs.detect-changes.outputs.migrations == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: core/labels_core_module
-            name: core-labels
+          - name: core-data
+            dockerfile: ./services/core-data/Dockerfile
             port: 0
-            condition: ${{ needs.detect-changes.outputs.core-labels == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: core/identity_core_module
-            name: core-identity
+            context: .
+            condition: ${{ needs.detect-changes.outputs.core-data == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - name: core-identity
+            dockerfile: ./services/core-identity/Dockerfile
             port: 0
+            context: .
             condition: ${{ needs.detect-changes.outputs.core-identity == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: core/browser_source_core_module
-            name: core-browser-source
+          - name: core-community
+            dockerfile: ./services/core-community/Dockerfile
             port: 0
-            condition: ${{ needs.detect-changes.outputs.core-browser-source == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: core/reputation_module
-            name: core-reputation
-            port: 0
-            condition: ${{ needs.detect-changes.outputs.core-reputation == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: core/community_module
-            name: core-community
-            port: 0
+            context: .
             condition: ${{ needs.detect-changes.outputs.core-community == 'true' || needs.detect-changes.outputs.libs == 'true' }}
           - module: core/ai_researcher_module
             name: ai-researcher
             port: 0
             condition: ${{ needs.detect-changes.outputs.ai-researcher == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: core/video_proxy_module
-            name: core-video-proxy
-            port: 0
-            condition: ${{ needs.detect-changes.outputs.core-video-proxy == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: core/engagement_module
-            name: core-engagement
-            port: 0
-            condition: ${{ needs.detect-changes.outputs.core-engagement == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: core/module_rtc
-            name: core-module-rtc
-            port: 0
-            condition: ${{ needs.detect-changes.outputs.core-module-rtc == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: core/workflow_core_module
-            name: core-workflow
-            port: 0
-            condition: ${{ needs.detect-changes.outputs.core-workflow == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: core/analytics_core_module
-            name: core-analytics
-            port: 0
-            condition: ${{ needs.detect-changes.outputs.core-analytics == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: core/credential_manager_module
-            name: core-credential-manager
-            port: 0
-            condition: ${{ needs.detect-changes.outputs.core-credential-manager == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: core/security_core_module
-            name: core-security
-            port: 0
-            condition: ${{ needs.detect-changes.outputs.core-security == 'true' || needs.detect-changes.outputs.libs == 'true' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -412,43 +321,36 @@ jobs:
           # Stop container
           docker stop test-${{ matrix.name }}
 
-  # Build collector modules
-  build-collectors:
-    name: Build Collector Modules
+  # Build trigger modules
+  build-triggers:
+    name: Build Trigger Modules
     runs-on: ubuntu-latest
     needs: [determine-version, detect-changes]
     if: >
-      needs.detect-changes.outputs.collector-twitch == 'true' ||
-      needs.detect-changes.outputs.collector-discord == 'true' ||
-      needs.detect-changes.outputs.collector-slack == 'true' ||
-      needs.detect-changes.outputs.collector-youtube == 'true' ||
-      needs.detect-changes.outputs.collector-kick == 'true' ||
+      needs.detect-changes.outputs.trigger-streaming == 'true' ||
+      needs.detect-changes.outputs.trigger-discord == 'true' ||
+      needs.detect-changes.outputs.trigger-webhooks == 'true' ||
       needs.detect-changes.outputs.libs == 'true' ||
       github.event_name == 'workflow_dispatch'
     strategy:
       fail-fast: false
       matrix:
         include:
-          - module: trigger/receiver/twitch_module
-            name: collector-twitch
-            port: 8010
-            condition: ${{ needs.detect-changes.outputs.collector-twitch == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: trigger/receiver/discord_module
-            name: collector-discord
-            port: 8011
-            condition: ${{ needs.detect-changes.outputs.collector-discord == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: trigger/receiver/slack_module
-            name: collector-slack
-            port: 8012
-            condition: ${{ needs.detect-changes.outputs.collector-slack == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: trigger/receiver/youtube_live_module
-            name: collector-youtube
+          - name: trigger-streaming
+            dockerfile: ./services/trigger-streaming/Dockerfile
             port: 0
-            condition: ${{ needs.detect-changes.outputs.collector-youtube == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: trigger/receiver/kick_module_flask
-            name: collector-kick
+            context: .
+            condition: ${{ needs.detect-changes.outputs.trigger-streaming == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - name: trigger-discord
+            dockerfile: ./services/trigger-discord/Dockerfile
             port: 0
-            condition: ${{ needs.detect-changes.outputs.collector-kick == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+            context: .
+            condition: ${{ needs.detect-changes.outputs.trigger-discord == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - name: trigger-webhooks
+            dockerfile: ./services/trigger-webhooks/Dockerfile
+            port: 0
+            context: .
+            condition: ${{ needs.detect-changes.outputs.trigger-webhooks == 'true' || needs.detect-changes.outputs.libs == 'true' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -476,8 +378,8 @@ jobs:
         uses: docker/build-push-action@v5
         if: matrix.condition == 'true' || github.event_name == 'workflow_dispatch'
         with:
-          context: .
-          file: ./${{ matrix.module }}/Dockerfile
+          context: ${{ matrix.context || '.' }}
+          file: ${{ matrix.dockerfile || format('./{0}/Dockerfile', matrix.module) }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -513,19 +415,11 @@ jobs:
     needs: [determine-version, detect-changes]
     if: >
       needs.detect-changes.outputs.interactive-ai == 'true' ||
-      needs.detect-changes.outputs.interactive-inventory == 'true' ||
-      needs.detect-changes.outputs.interactive-alias == 'true' ||
-      needs.detect-changes.outputs.interactive-shoutout == 'true' ||
-      needs.detect-changes.outputs.interactive-calendar == 'true' ||
-      needs.detect-changes.outputs.interactive-memories == 'true' ||
-      needs.detect-changes.outputs.interactive-clip == 'true' ||
-      needs.detect-changes.outputs.interactive-lfg == 'true' ||
       needs.detect-changes.outputs.interactive-loyalty == 'true' ||
-      needs.detect-changes.outputs.interactive-server-manager == 'true' ||
-      needs.detect-changes.outputs.interactive-server-status == 'true' ||
-      needs.detect-changes.outputs.interactive-spotify == 'true' ||
-      needs.detect-changes.outputs.interactive-translate == 'true' ||
-      needs.detect-changes.outputs.interactive-youtube-music == 'true' ||
+      needs.detect-changes.outputs.interactive-social == 'true' ||
+      needs.detect-changes.outputs.interactive-gaming == 'true' ||
+      needs.detect-changes.outputs.interactive-media == 'true' ||
+      needs.detect-changes.outputs.interactive-productivity == 'true' ||
       needs.detect-changes.outputs.libs == 'true' ||
       github.event_name == 'workflow_dispatch'
     strategy:
@@ -536,58 +430,30 @@ jobs:
             name: interactive-ai
             port: 8020
             condition: ${{ needs.detect-changes.outputs.interactive-ai == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: action/interactive/inventory_interaction_module
-            name: interactive-inventory
-            port: 8024
-            condition: ${{ needs.detect-changes.outputs.interactive-inventory == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: action/interactive/alias_interaction_module
-            name: interactive-alias
-            port: 8022
-            condition: ${{ needs.detect-changes.outputs.interactive-alias == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: action/interactive/shoutout_interaction_module
-            name: interactive-shoutout
-            port: 8023
-            condition: ${{ needs.detect-changes.outputs.interactive-shoutout == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: action/interactive/calendar_interaction_module
-            name: interactive-calendar
-            port: 0
-            condition: ${{ needs.detect-changes.outputs.interactive-calendar == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: action/interactive/memories_interaction_module
-            name: interactive-memories
-            port: 0
-            condition: ${{ needs.detect-changes.outputs.interactive-memories == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: action/interactive/clip_interaction_module
-            name: interactive-clip
-            port: 0
-            condition: ${{ needs.detect-changes.outputs.interactive-clip == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: action/interactive/lfg_interaction_module
-            name: interactive-lfg
-            port: 0
-            condition: ${{ needs.detect-changes.outputs.interactive-lfg == 'true' || needs.detect-changes.outputs.libs == 'true' }}
           - module: action/interactive/loyalty_interaction_module
             name: interactive-loyalty
             port: 0
             condition: ${{ needs.detect-changes.outputs.interactive-loyalty == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: action/interactive/server_manager_interaction_module
-            name: interactive-server-manager
+          - name: interactive-social
+            dockerfile: ./services/interactive-social/Dockerfile
             port: 0
-            condition: ${{ needs.detect-changes.outputs.interactive-server-manager == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: action/interactive/server_status_interaction_module
-            name: interactive-server-status
+            context: .
+            condition: ${{ needs.detect-changes.outputs.interactive-social == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - name: interactive-gaming
+            dockerfile: ./services/interactive-gaming/Dockerfile
             port: 0
-            condition: ${{ needs.detect-changes.outputs.interactive-server-status == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: action/interactive/spotify_interaction_module
-            name: interactive-spotify
+            context: .
+            condition: ${{ needs.detect-changes.outputs.interactive-gaming == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - name: interactive-media
+            dockerfile: ./services/interactive-media/Dockerfile
             port: 0
-            condition: ${{ needs.detect-changes.outputs.interactive-spotify == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: action/interactive/translate_interaction_module
-            name: interactive-translate
+            context: .
+            condition: ${{ needs.detect-changes.outputs.interactive-media == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - name: interactive-productivity
+            dockerfile: ./services/interactive-productivity/Dockerfile
             port: 0
-            condition: ${{ needs.detect-changes.outputs.interactive-translate == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: action/interactive/youtube_music_interaction_module
-            name: interactive-youtube-music
-            port: 0
-            condition: ${{ needs.detect-changes.outputs.interactive-youtube-music == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+            context: .
+            condition: ${{ needs.detect-changes.outputs.interactive-productivity == 'true' || needs.detect-changes.outputs.libs == 'true' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -710,9 +576,8 @@ jobs:
     needs: [determine-version, detect-changes]
     if: >
       needs.detect-changes.outputs.action-discord == 'true' ||
-      needs.detect-changes.outputs.action-slack == 'true' ||
-      needs.detect-changes.outputs.action-twitch == 'true' ||
-      needs.detect-changes.outputs.action-youtube == 'true' ||
+      needs.detect-changes.outputs.action-platforms == 'true' ||
+      needs.detect-changes.outputs.action-serverless == 'true' ||
       needs.detect-changes.outputs.libs == 'true' ||
       github.event_name == 'workflow_dispatch'
     strategy:
@@ -723,18 +588,16 @@ jobs:
             name: action-discord
             port: 0
             condition: ${{ needs.detect-changes.outputs.action-discord == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: action/pushing/slack_action_module
-            name: action-slack
+          - name: action-platforms
+            dockerfile: ./services/action-platforms/Dockerfile
             port: 0
-            condition: ${{ needs.detect-changes.outputs.action-slack == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: action/pushing/twitch_action_module
-            name: action-twitch
+            context: .
+            condition: ${{ needs.detect-changes.outputs.action-platforms == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - name: action-serverless
+            dockerfile: ./services/action-serverless/Dockerfile
             port: 0
-            condition: ${{ needs.detect-changes.outputs.action-twitch == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: action/pushing/youtube_action_module
-            name: action-youtube
-            port: 0
-            condition: ${{ needs.detect-changes.outputs.action-youtube == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+            context: .
+            condition: ${{ needs.detect-changes.outputs.action-serverless == 'true' || needs.detect-changes.outputs.libs == 'true' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

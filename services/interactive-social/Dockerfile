@@ -1,0 +1,20 @@
+FROM python:3.13-slim-bookworm@sha256:a58daefb915e1e03ad48f3ca4df8832065412c5c35cacb9d39f4229184de12b6 AS builder
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+FROM python:3.13-slim-bookworm@sha256:a58daefb915e1e03ad48f3ca4df8832065412c5c35cacb9d39f4229184de12b6
+WORKDIR /app
+COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+COPY app.py .
+COPY alias_interaction_module ./alias_interaction_module
+COPY shoutout_interaction_module ./shoutout_interaction_module
+COPY presence_module ./presence_module
+COPY quote_interaction_module ./quote_interaction_module
+
+EXPOSE 8010
+HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
+  CMD python3 -c "import httpx; resp = httpx.get('http://localhost:8010/healthz'); exit(0 if resp.status_code == 200 else 1)" || exit 1
+
+CMD ["python3", "app.py"]

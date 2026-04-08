@@ -1,0 +1,34 @@
+# Core Framework
+quart>=0.20.0
+hypercorn>=0.16.0
+
+# gRPC Support
+grpcio>=1.64.0
+grpcio-tools>=1.64.0
+protobuf>=5.29.4,<6.0.0
+
+# Database
+pydal>=20240906.1,<20250101
+
+# HTTP Client (async)
+httpx>=0.27.0,<0.28.0
+aiohttp>=3.11.18
+
+# JWT & Auth
+pyjwt>=2.8.0
+cryptography>=44.0.3
+
+# Environment
+python-dotenv>=1.0.0
+
+# Data processing
+python-dateutil>=2.8.2
+python-json-logger>=2.0.7
+
+# Redis for caching
+redis>=5.0.0
+
+# Development
+pytest>=7.4.0
+pytest-asyncio>=0.23.0
+pytest-cov>=4.1.0

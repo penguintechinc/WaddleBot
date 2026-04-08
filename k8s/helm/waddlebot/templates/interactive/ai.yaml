@@ -1,23 +1,23 @@
-{{- if .Values.modules.interactive.ai.enabled }}
+{{- if .Values.modules.interactiveAi.enabled }}
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "waddlebot.fullname" . }}-ai-interaction
+  name: {{ include "waddlebot.fullname" . }}-interactive-ai
   labels:
     {{- include "waddlebot.labels" . | nindent 4 }}
-    app.kubernetes.io/component: ai-interaction
+    app.kubernetes.io/component: interactive-ai
 spec:
-  replicas: {{ .Values.modules.interactive.ai.replicas }}
+  replicas: {{ .Values.modules.interactiveAi.replicas }}
   selector:
     matchLabels:
       {{- include "waddlebot.selectorLabels" . | nindent 6 }}
-      app.kubernetes.io/component: ai-interaction
+      app.kubernetes.io/component: interactive-ai
   template:
     metadata:
       labels:
         {{- include "waddlebot.selectorLabels" . | nindent 8 }}
-        app.kubernetes.io/component: ai-interaction
+        app.kubernetes.io/component: interactive-ai
     spec:
       serviceAccountName: {{ include "waddlebot.serviceAccountName" . }}
       {{- include "waddlebot.imagePullSecrets" . | nindent 6 }}
@@ -26,8 +26,8 @@ spec:
       initContainers:
       {{- include "waddlebot.dbMigrateInitContainer" . | nindent 6 }}
       containers:
-      - name: ai-interaction
-        image: "{{ .Values.global.imageRegistry }}/interactive-ai:{{ .Values.modules.interactive.ai.imageTag | default .Values.global.imageTag }}"
+      - name: interactive-ai
+        image: "{{ .Values.global.imageRegistry }}/interactive-ai:{{ .Values.modules.interactiveAi.imageTag | default .Values.global.imageTag }}"
         imagePullPolicy: {{ .Values.global.imagePullPolicy }}
         securityContext:
           {{- toYaml .Values.securityContext | nindent 10 }}
@@ -39,22 +39,22 @@ spec:
         - configMapRef:
             name: {{ include "waddlebot.fullname" . }}-config
         - configMapRef:
-            name: {{ include "waddlebot.fullname" . }}-ai-interaction-config
+            name: {{ include "waddlebot.fullname" . }}-interactive-ai-config
             optional: true
         - secretRef:
             name: {{ include "waddlebot.fullname" . }}-secrets
         - secretRef:
-            name: {{ include "waddlebot.fullname" . }}-ai-interaction-secret
+            name: {{ include "waddlebot.fullname" . }}-interactive-ai-secret
             optional: true
         env:
         - name: MODULE_NAME
-          value: "ai-interaction"
+          value: "interactive-ai"
         - name: MODULE_PORT
           value: "8005"
         - name: AI_PROVIDER
-          value: {{ .Values.modules.interactive.ai.aiProvider | default "ollama" | quote }}
+          value: {{ .Values.modules.interactiveAi.aiProvider | default "ollama" | quote }}
         - name: OLLAMA_HOST
-          value: {{ .Values.modules.interactive.ai.ollamaHost | default "http://ollama:11434" | quote }}
+          value: {{ .Values.modules.interactiveAi.ollamaHost | default "http://ollama:11434" | quote }}
         livenessProbe:
           httpGet:
             path: /health
@@ -72,7 +72,7 @@ spec:
           timeoutSeconds: 3
           failureThreshold: 3
         resources:
-          {{- toYaml .Values.modules.interactive.ai.resources | nindent 10 }}
+          {{- toYaml .Values.modules.interactiveAi.resources | nindent 10 }}
         volumeMounts:
         - name: logs
           mountPath: /var/log/waddlebotlog
@@ -83,10 +83,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "waddlebot.fullname" . }}-ai-interaction
+  name: {{ include "waddlebot.fullname" . }}-interactive-ai
   labels:
     {{- include "waddlebot.labels" . | nindent 4 }}
-    app.kubernetes.io/component: ai-interaction
+    app.kubernetes.io/component: interactive-ai
 spec:
   type: ClusterIP
   ports:
@@ -96,5 +96,5 @@ spec:
     name: http
   selector:
     {{- include "waddlebot.selectorLabels" . | nindent 4 }}
-    app.kubernetes.io/component: ai-interaction
+    app.kubernetes.io/component: interactive-ai
 {{- end }}

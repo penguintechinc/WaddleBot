@@ -221,8 +221,7 @@ infrastructure:
 
 # Processing Module
 modules:
-  # Processing Module - Router
-  # NOTE: Router uses component-based DB config, not DATABASE_URL
+  # Processing Module - Router (UNCHANGED)
   router:
     enabled: true
     name: router
@@ -246,21 +245,24 @@ modules:
       LOG_LEVEL: "INFO"
       WORKERS: "4"
       THREADS_PER_WORKER: "10"
-      # Router uses component-based database config (not DATABASE_URL)
       DATABASE_HOST: "infra-postgres"
       DATABASE_PORT: "5432"
       DATABASE_NAME: "waddlebot"
       DATABASE_USER: "waddlebot"
-      # DATABASE_PASSWORD set via secretKeyRef
       READ_REPLICA_HOST: "infra-postgres-replica"
       READ_REPLICA_PORT: "5432"
-      # Redis component config
       REDIS_HOST: "infra-redis"
       REDIS_PORT: "6379"
-      # REDIS_PASSWORD set via secretKeyRef
       REDIS_KEY_PREFIX: "router:"
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+      limits:
+        cpu: "2000m"
+        memory: "2Gi"
 
-  # Admin Modules
+  # Admin Modules (UNCHANGED)
   hub:
     enabled: true
     name: hub-api
@@ -278,6 +280,13 @@ modules:
       PORT: "8060"
       LOG_LEVEL: "INFO"
       SESSION_TYPE: "redis"
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "256Mi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
 
   hubWebui:
     enabled: true
@@ -298,92 +307,275 @@ modules:
         cpu: "500m"
         memory: "512Mi"
 
-  # Core Modules
-  identityCore:
+  # Consolidated Core Modules
+  coreData:
     enabled: true
-    name: identity-core
-    image: waddlebot-identity-core
+    name: core-data
+    image: waddlebot-core-data
+    imageTag: ""
+    port: 8040
+    replicas: 2
+    resourcePreset: medium
+    service:
+      type: ClusterIP
+      port: 8040
+    env:
+      MODULE_NAME: "core_data"
+      MODULE_VERSION: "1.0.0"
+      PORT: "8040"
+      LOG_LEVEL: "INFO"
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "256Mi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
+
+  coreIdentity:
+    enabled: true
+    name: core-identity
+    image: waddlebot-core-identity
     imageTag: ""
     port: 8050
+    replicas: 2
+    resourcePreset: medium
     service:
       type: ClusterIP
       port: 8050
-    replicas: 2
-    resourcePreset: medium
     env:
-      MODULE_NAME: "identity_core_module"
+      MODULE_NAME: "core_identity"
       MODULE_VERSION: "1.0.0"
       PORT: "8050"
       LOG_LEVEL: "INFO"
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "256Mi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
 
-  labelsCore:
+  coreCommunity:
     enabled: true
-    name: labels-core
-    image: waddlebot-labels-core
-    imageTag: ""
-    port: 8023
-    service:
-      type: ClusterIP
-      port: 8023
-    replicas: 2
-    resourcePreset: medium
-    env:
-      MODULE_NAME: "labels_core_module"
-      MODULE_VERSION: "1.0.0"
-      PORT: "8023"
-      LOG_LEVEL: "INFO"
-
-  browserSource:
-    enabled: true
-    name: browser-source
-    image: waddlebot-browser-source
-    imageTag: ""
-    port: 8027
-    replicas: 2
-    resourcePreset: medium
-    service:
-      type: ClusterIP
-      port: 8027
-    env:
-      MODULE_NAME: "browser_source_core_module"
-      MODULE_VERSION: "1.0.0"
-      PORT: "8027"
-      LOG_LEVEL: "INFO"
-
-  reputation:
-    enabled: true
-    name: reputation
-    image: waddlebot-reputation
-    imageTag: ""
-    port: 8021
-    service:
-      type: ClusterIP
-      port: 8021
-    replicas: 2
-    resourcePreset: medium
-    env:
-      MODULE_NAME: "reputation_module"
-      MODULE_VERSION: "1.0.0"
-      PORT: "8021"
-      LOG_LEVEL: "INFO"
-
-  community:
-    enabled: true
-    name: community
-    image: waddlebot-community
+    name: core-community
+    image: waddlebot-core-community
     imageTag: ""
     port: 8020
+    replicas: 2
+    resourcePreset: medium
     service:
       type: ClusterIP
       port: 8020
-    replicas: 2
-    resourcePreset: medium
     env:
-      MODULE_NAME: "community_module"
+      MODULE_NAME: "core_community"
       MODULE_VERSION: "1.0.0"
       PORT: "8020"
       LOG_LEVEL: "INFO"
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "256Mi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
 
+  # Consolidated Trigger Modules
+  triggerWebhooks:
+    enabled: true
+    name: trigger-webhooks
+    image: waddlebot-trigger-webhooks
+    imageTag: ""
+    port: 8100
+    replicas: 1
+    resourcePreset: medium
+    service:
+      type: ClusterIP
+      port: 8100
+    env:
+      MODULE_NAME: "trigger_webhooks"
+      MODULE_VERSION: "1.0.0"
+      PORT: "8100"
+      LOG_LEVEL: "INFO"
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+
+  triggerStreaming:
+    enabled: true
+    name: trigger-streaming
+    image: waddlebot-trigger-streaming
+    imageTag: ""
+    port: 8101
+    replicas: 1
+    resourcePreset: medium
+    service:
+      type: ClusterIP
+      port: 8101
+    env:
+      MODULE_NAME: "trigger_streaming"
+      MODULE_VERSION: "1.0.0"
+      PORT: "8101"
+      LOG_LEVEL: "INFO"
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+
+  # Consolidated Action Modules
+  actionPlatforms:
+    enabled: true
+    name: action-platforms
+    image: waddlebot-action-platforms
+    imageTag: ""
+    port: 8102
+    replicas: 2
+    resourcePreset: medium
+    service:
+      type: ClusterIP
+      port: 8102
+    env:
+      MODULE_NAME: "action_platforms"
+      MODULE_VERSION: "1.0.0"
+      PORT: "8102"
+      LOG_LEVEL: "INFO"
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "256Mi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
+
+  actionServerless:
+    enabled: true
+    name: action-serverless
+    image: waddlebot-action-serverless
+    imageTag: ""
+    port: 8103
+    replicas: 1
+    resourcePreset: medium
+    service:
+      type: ClusterIP
+      port: 8103
+    env:
+      MODULE_NAME: "action_serverless"
+      MODULE_VERSION: "1.0.0"
+      PORT: "8103"
+      LOG_LEVEL: "INFO"
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+
+  # Consolidated Interactive Modules
+  interactiveSocial:
+    enabled: true
+    name: interactive-social
+    image: waddlebot-interactive-social
+    imageTag: ""
+    port: 8010
+    replicas: 2
+    resourcePreset: medium
+    service:
+      type: ClusterIP
+      port: 8010
+    env:
+      MODULE_NAME: "interactive_social"
+      MODULE_VERSION: "1.0.0"
+      PORT: "8010"
+      LOG_LEVEL: "INFO"
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "256Mi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
+
+  interactiveGaming:
+    enabled: true
+    name: interactive-gaming
+    image: waddlebot-interactive-gaming
+    imageTag: ""
+    port: 8104
+    replicas: 2
+    resourcePreset: medium
+    service:
+      type: ClusterIP
+      port: 8104
+    env:
+      MODULE_NAME: "interactive_gaming"
+      MODULE_VERSION: "1.0.0"
+      PORT: "8104"
+      LOG_LEVEL: "INFO"
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "256Mi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
+
+  interactiveMedia:
+    enabled: true
+    name: interactive-media
+    image: waddlebot-interactive-media
+    imageTag: ""
+    port: 8105
+    replicas: 1
+    resourcePreset: medium
+    service:
+      type: ClusterIP
+      port: 8105
+    env:
+      MODULE_NAME: "interactive_media"
+      MODULE_VERSION: "1.0.0"
+      PORT: "8105"
+      LOG_LEVEL: "INFO"
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+
+  interactiveProductivity:
+    enabled: true
+    name: interactive-productivity
+    image: waddlebot-interactive-productivity
+    imageTag: ""
+    port: 8030
+    replicas: 2
+    resourcePreset: medium
+    service:
+      type: ClusterIP
+      port: 8030
+    env:
+      MODULE_NAME: "interactive_productivity"
+      MODULE_VERSION: "1.0.0"
+      PORT: "8030"
+      LOG_LEVEL: "INFO"
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "256Mi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
+
+  # Unchanged Enterprise Modules
   aiResearcher:
     enabled: true
     name: ai-researcher
@@ -400,74 +592,30 @@ modules:
       MODULE_VERSION: "1.0.0"
       PORT: "8070"
       LOG_LEVEL: "INFO"
-
-  # Video Proxy Module - MarchProxy wrapper for streaming
-  videoProxy:
-    enabled: true
-    name: video-proxy
-    image: waddlebot-video-proxy
-    imageTag: ""
-    port: 8092
-    grpcPort: 50065
-    service:
-      type: ClusterIP
-      port: 8092
-    replicas: 1  # Single replica to avoid PyDAL migration race conditions
-    resourcePreset: medium
     resources:
       requests:
-        cpu: "250m"
-        memory: "256Mi"
-      limits:
-        cpu: "1000m"
-        memory: "1Gi"
-    env:
-      MODULE_NAME: "video_proxy_module"
-      MODULE_VERSION: "1.0.0"
-      MODULE_PORT: "8092"
-      GRPC_PORT: "50065"
-      LOG_LEVEL: "INFO"
-
-  # Engagement Module - Polls and Forms
-  engagement:
-    enabled: true
-    name: engagement
-    image: waddlebot-engagement
-    imageTag: ""
-    port: 8091
-    grpcPort: 50066
-    service:
-      type: ClusterIP
-      port: 8091
-    replicas: 1  # Single replica to avoid PyDAL migration race conditions
-    resourcePreset: medium
-    resources:
-      requests:
-        cpu: "100m"
-        memory: "128Mi"
-      limits:
         cpu: "500m"
         memory: "512Mi"
-    env:
-      MODULE_NAME: "engagement_module"
-      MODULE_VERSION: "1.0.0"
-      MODULE_PORT: "8091"
-      GRPC_PORT: "50066"
-      LOG_LEVEL: "INFO"
+      limits:
+        cpu: "2000m"
+        memory: "2Gi"
 
-  # Module RTC - LiveKit WebRTC for community calls
-  moduleRtc:
+  triggerDiscord:
     enabled: true
-    name: module-rtc
-    image: waddlebot-module-rtc
+    name: trigger-discord
+    image: waddlebot-trigger-discord
     imageTag: ""
-    port: 8093
-    grpcPort: 50067
+    port: 8011
     service:
       type: ClusterIP
-      port: 8093
+      port: 8011
     replicas: 2
     resourcePreset: medium
+    env:
+      MODULE_NAME: "trigger_discord_module"
+      MODULE_VERSION: "1.0.0"
+      PORT: "8011"
+      LOG_LEVEL: "INFO"
     resources:
       requests:
         cpu: "250m"
@@ -475,424 +623,79 @@ modules:
       limits:
         cpu: "1000m"
         memory: "1Gi"
-    autoscaling:
-      enabled: true
-      minReplicas: 2
-      maxReplicas: 10
-      targetCPUUtilizationPercentage: 70
-    env:
-      MODULE_NAME: "module_rtc"
-      MODULE_VERSION: "1.0.0"
-      REST_PORT: "8093"
-      GRPC_PORT: "50067"
-      LOG_LEVEL: "INFO"
 
-  # Analytics Core Module
-  analytics:
+  actionDiscord:
     enabled: true
-    name: analytics-core
-    image: waddlebot-analytics-core
+    name: action-discord
+    image: waddlebot-action-discord
     imageTag: ""
-    port: 8040
+    port: 8012
     service:
       type: ClusterIP
-      port: 8040
-    replicas: 1
-    resourcePreset: small
+      port: 8012
+    replicas: 2
+    resourcePreset: medium
     env:
-      MODULE_NAME: "analytics_core_module"
+      MODULE_NAME: "action_discord_module"
       MODULE_VERSION: "1.0.0"
-      PORT: "8040"
+      PORT: "8012"
       LOG_LEVEL: "INFO"
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "256Mi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
 
-  # Security Core Module
-  security:
+  interactiveAi:
     enabled: true
-    name: security-core
-    image: waddlebot-security-core
+    name: interactive-ai
+    image: waddlebot-interactive-ai
     imageTag: ""
-    port: 8041
+    port: 8013
     service:
       type: ClusterIP
-      port: 8041
+      port: 8013
     replicas: 1
-    resourcePreset: small
+    resourcePreset: large
     env:
-      MODULE_NAME: "security_core_module"
+      MODULE_NAME: "interactive_ai_module"
       MODULE_VERSION: "1.0.0"
-      PORT: "8041"
+      PORT: "8013"
       LOG_LEVEL: "INFO"
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+      limits:
+        cpu: "2000m"
+        memory: "2Gi"
 
-  # Workflow Core Module
-  workflow:
+  interactiveLoyalty:
     enabled: true
-    name: workflow-core
-    image: waddlebot-workflow-core
+    name: interactive-loyalty
+    image: waddlebot-interactive-loyalty
     imageTag: ""
-    port: 8090
+    port: 8014
     service:
       type: ClusterIP
-      port: 8090
+      port: 8014
     replicas: 1
-    resourcePreset: small
+    resourcePreset: medium
     env:
-      MODULE_NAME: "workflow_core_module"
+      MODULE_NAME: "interactive_loyalty_module"
       MODULE_VERSION: "1.0.0"
-      PORT: "8090"
+      PORT: "8014"
       LOG_LEVEL: "INFO"
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "256Mi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
 
-  # Credential Manager Module
-  credentialManager:
-    enabled: true
-    name: credential-manager
-    image: waddlebot-credential-manager
-    imageTag: ""
-    port: 8095
-    service:
-      type: ClusterIP
-      port: 8095
-    replicas: 1
-    resourcePreset: small
-    env:
-      MODULE_NAME: "credential_manager_module"
-      MODULE_VERSION: "1.0.0"
-      PORT: "8095"
-      LOG_LEVEL: "INFO"
-      SECRETS_BACKEND: "kubernetes"
-
-# Trigger Modules - Receivers
-  # Trigger/Collector Modules
-  collectors:
-    twitch:
-      enabled: true
-      name: twitch-collector
-      image: waddlebot-twitch-collector
-      imageTag: ""
-      port: 8002
-      replicas: 2
-      resourcePreset: large
-      env:
-        MODULE_NAME: "twitch_module"
-        MODULE_VERSION: "1.0.0"
-        PORT: "8002"
-        LOG_LEVEL: "INFO"
-        PLATFORM: "twitch"
-
-    discord:
-      enabled: true
-      name: discord-collector
-      image: waddlebot-discord-collector
-      imageTag: ""
-      port: 8003
-      replicas: 2
-      resourcePreset: medium
-      env:
-        MODULE_NAME: "discord_module"
-        MODULE_VERSION: "1.0.0"
-        PORT: "8003"
-        LOG_LEVEL: "INFO"
-        PLATFORM: "discord"
-
-    slack:
-      enabled: true
-      name: slack-collector
-      image: waddlebot-slack-collector
-      imageTag: ""
-      port: 8004
-      replicas: 2
-      resourcePreset: medium
-      env:
-        MODULE_NAME: "slack_module"
-        MODULE_VERSION: "1.0.0"
-        PORT: "8004"
-        LOG_LEVEL: "INFO"
-        PLATFORM: "slack"
-
-    youtubeLive:
-      enabled: true
-      name: youtube-live-collector
-      image: waddlebot-youtube-live-collector
-      imageTag: ""
-      port: 8006
-      replicas: 1
-      resourcePreset: medium
-      env:
-        MODULE_NAME: "youtube_live_module"
-        MODULE_VERSION: "1.0.0"
-        PORT: "8006"
-        LOG_LEVEL: "INFO"
-        PLATFORM: "youtube"
-
-    kick:
-      enabled: true
-      name: kick-collector
-      image: waddlebot-kick-collector
-      imageTag: ""
-      port: 8007
-      replicas: 1
-      resourcePreset: medium
-      env:
-        MODULE_NAME: "kick_module"
-        MODULE_VERSION: "1.0.0"
-        PORT: "8007"
-        LOG_LEVEL: "INFO"
-        PLATFORM: "kick"
-
-    teams:
-      enabled: false
-      image: waddlebot-teams-collector
-      imageTag: ""
-      replicas: 1
-      resources:
-        requests:
-          cpu: 100m
-          memory: 128Mi
-        limits:
-          cpu: 500m
-          memory: 256Mi
-    mattermost:
-      enabled: false
-      image: waddlebot-mattermost-collector
-      imageTag: ""
-      replicas: 1
-      resources:
-        requests:
-          cpu: 100m
-          memory: 128Mi
-        limits:
-          cpu: 500m
-          memory: 256Mi
-    googlechat:
-      enabled: false
-      image: waddlebot-googlechat-collector
-      imageTag: ""
-      replicas: 1
-      resources:
-        requests:
-          cpu: 100m
-          memory: 128Mi
-        limits:
-          cpu: 500m
-          memory: 256Mi
-
-  # Action Modules - Interactive
-  interactive:
-    ai:
-      enabled: true
-      name: ai-interaction
-      image: waddlebot-ai-interaction
-      imageTag: ""
-      port: 8005
-      replicas: 2
-      resourcePreset: large
-      env:
-        MODULE_NAME: "ai_interaction_module"
-        MODULE_VERSION: "1.0.0"
-        PORT: "8005"
-        LOG_LEVEL: "INFO"
-        AI_PROVIDER: "ollama"
-
-    alias:
-      enabled: true
-      name: alias-interaction
-      image: waddlebot-alias-interaction
-      imageTag: ""
-      port: 8010
-      replicas: 2
-      resourcePreset: small
-      env:
-        MODULE_NAME: "alias_interaction_module"
-        MODULE_VERSION: "1.0.0"
-        PORT: "8010"
-        LOG_LEVEL: "INFO"
-
-    shoutout:
-      enabled: true
-      name: shoutout-interaction
-      image: waddlebot-shoutout-interaction
-      imageTag: ""
-      port: 8011
-      replicas: 2
-      resourcePreset: medium
-      env:
-        MODULE_NAME: "shoutout_interaction_module"
-        MODULE_VERSION: "1.0.0"
-        PORT: "8011"
-        LOG_LEVEL: "INFO"
-
-    inventory:
-      enabled: true
-      name: inventory-interaction
-      image: waddlebot-inventory-interaction
-      imageTag: ""
-      port: 8024
-      replicas: 2
-      resourcePreset: medium
-      env:
-        MODULE_NAME: "inventory_interaction_module"
-        MODULE_VERSION: "1.0.0"
-        PORT: "8024"
-        LOG_LEVEL: "INFO"
-
-    calendar:
-      enabled: true
-      name: calendar-interaction
-      image: waddlebot-calendar-interaction
-      imageTag: ""
-      port: 8030
-      replicas: 2
-      resourcePreset: medium
-      env:
-        MODULE_NAME: "calendar_interaction_module"
-        MODULE_VERSION: "1.0.0"
-        PORT: "8030"
-        LOG_LEVEL: "INFO"
-
-    memories:
-      enabled: true
-      name: memories-interaction
-      image: waddlebot-memories-interaction
-      imageTag: ""
-      port: 8031
-      replicas: 2
-      resourcePreset: medium
-      env:
-        MODULE_NAME: "memories_interaction_module"
-        MODULE_VERSION: "1.0.0"
-        PORT: "8031"
-        LOG_LEVEL: "INFO"
-
-    youtubeMusic:
-      enabled: true
-      name: youtube-music
-      image: waddlebot-youtube-music
-      imageTag: ""
-      port: 8025
-      replicas: 1
-      resourcePreset: medium
-      env:
-        MODULE_NAME: "youtube_music_interaction_module"
-        MODULE_VERSION: "1.0.0"
-        PORT: "8025"
-        LOG_LEVEL: "INFO"
-
-    spotify:
-      enabled: true
-      name: spotify-interaction
-      image: waddlebot-spotify-interaction
-      imageTag: ""
-      port: 8026
-      replicas: 1
-      resourcePreset: medium
-      env:
-        MODULE_NAME: "spotify_interaction_module"
-        MODULE_VERSION: "1.0.0"
-        PORT: "8026"
-        LOG_LEVEL: "INFO"
-
-    loyalty:
-      enabled: true
-      name: loyalty-interaction
-      image: waddlebot-loyalty-interaction
-      imageTag: ""
-      port: 8032
-      replicas: 2
-      resourcePreset: medium
-      env:
-        MODULE_NAME: "loyalty_interaction_module"
-        MODULE_VERSION: "1.0.0"
-        PORT: "8032"
-        LOG_LEVEL: "INFO"
-
-    translate:
-      enabled: false
-      replicas: 2
-      resources:
-        requests:
-          cpu: "100m"
-          memory: "128Mi"
-        limits:
-          cpu: "500m"
-          memory: "512Mi"
-
-    lfg:
-      enabled: true
-      name: lfg-interaction
-      image: waddlebot-lfg-interaction
-      imageTag: ""
-      port: 8096
-      grpcPort: 50034
-      replicas: 2
-      resourcePreset: small
-      env:
-        MODULE_NAME: "lfg_interaction_module"
-        MODULE_VERSION: "1.0.0"
-        PORT: "8096"
-        GRPC_PORT: "50034"
-        LOG_LEVEL: "INFO"
-
-    clip:
-      enabled: true
-      name: clip-interaction
-      image: waddlebot-clip-interaction
-      imageTag: ""
-      port: 8098
-      grpcPort: 50036
-      replicas: 2
-      resourcePreset: small
-      env:
-        MODULE_NAME: "clip_interaction_module"
-        MODULE_VERSION: "1.0.0"
-        PORT: "8098"
-        GRPC_PORT: "50036"
-        LOG_LEVEL: "INFO"
-
-    serverStatus:
-      enabled: true
-      name: server-status-interaction
-      image: waddlebot-server-status-interaction
-      imageTag: ""
-      port: 8097
-      grpcPort: 50035
-      replicas: 1
-      resourcePreset: small
-      env:
-        MODULE_NAME: "server_status_interaction_module"
-        MODULE_VERSION: "1.0.0"
-        PORT: "8097"
-        GRPC_PORT: "50035"
-        LOG_LEVEL: "INFO"
-
-    serverManager:
-      enabled: true
-      name: server-manager-interaction
-      image: waddlebot-server-manager-interaction
-      imageTag: ""
-      port: 8099
-      grpcPort: 50037
-      replicas: 1
-      resourcePreset: small
-      env:
-        MODULE_NAME: "server_manager_interaction_module"
-        MODULE_VERSION: "1.0.0"
-        PORT: "8099"
-        GRPC_PORT: "50037"
-        LOG_LEVEL: "INFO"
-
-    presence:
-      enabled: false
-      image: waddlebot-presence
-      imageTag: ""
-      replicas: 1
-      resources:
-        requests:
-          cpu: 100m
-          memory: 128Mi
-        limits:
-          cpu: 500m
-          memory: 256Mi
-
-  # Marketplace Module
   marketplace:
     enabled: true
     name: marketplace
@@ -901,13 +704,6 @@ modules:
     port: 8100
     replicas: 2
     resourcePreset: medium
-    resources:
-      requests:
-        cpu: "250m"
-        memory: "256Mi"
-      limits:
-        cpu: "1000m"
-        memory: "1Gi"
     service:
       type: ClusterIP
       port: 8100
@@ -916,132 +712,291 @@ modules:
       MODULE_VERSION: "1.0.0"
       PORT: "8100"
       LOG_LEVEL: "INFO"
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "256Mi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
 
-  # Action Modules - Pushing (disabled for now)
-  pushing:
-    discordAction:
-      enabled: false
-    slackAction:
-      enabled: false
-    twitchAction:
-      enabled: false
-    youtubeAction:
-      enabled: false
+  migrations:
+    enabled: true
+    name: migrations
+    image: waddlebot-migrations
+    imageTag: ""
+    port: 8999
+    replicas: 1
+    resourcePreset: medium
+    service:
+      type: ClusterIP
+      port: 8999
+    env:
+      MODULE_NAME: "migrations_module"
+      MODULE_VERSION: "1.0.0"
+      PORT: "8999"
+      LOG_LEVEL: "INFO"
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
 
-  # Action Modules - Platform Actions
-  platformActions:
+  # Trigger Collectors (Webhook Receivers - Unchanged)
+  collectors:
     discord:
       enabled: true
-      name: discord-action
-      image: waddlebot-discord-action
+      image: waddlebot-trigger-discord
       imageTag: ""
-      httpPort: 8070
-      grpcPort: 50051
-      replicas: 2
-      resourcePreset: medium
-      env:
-        MODULE_NAME: "discord_action_module"
-        MODULE_VERSION: "1.0.0"
-        HTTP_PORT: "8070"
-        GRPC_PORT: "50051"
-        LOG_LEVEL: "INFO"
-        PLATFORM: "discord"
-
-    slack:
-      enabled: true
-      name: slack-action
-      image: waddlebot-slack-action
-      imageTag: ""
-      httpPort: 8071
-      grpcPort: 50052
-      replicas: 2
-      resourcePreset: medium
-      env:
-        MODULE_NAME: "slack_action_module"
-        MODULE_VERSION: "1.0.0"
-        HTTP_PORT: "8071"
-        GRPC_PORT: "50052"
-        LOG_LEVEL: "INFO"
-        PLATFORM: "slack"
+      port: 8003
+      replicas: 1
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "128Mi"
+        limits:
+          cpu: "500m"
+          memory: "512Mi"
 
     twitch:
       enabled: true
-      name: twitch-action
-      image: waddlebot-twitch-action
+      image: waddlebot-trigger-twitch
       imageTag: ""
-      httpPort: 8072
-      grpcPort: 50053
-      replicas: 2
-      resourcePreset: medium
-      env:
-        MODULE_NAME: "twitch_action_module"
-        MODULE_VERSION: "1.0.0"
-        HTTP_PORT: "8072"
-        GRPC_PORT: "50053"
-        LOG_LEVEL: "INFO"
-        PLATFORM: "twitch"
-
-    youtube:
-      enabled: true
-      name: youtube-action
-      image: waddlebot-youtube-action
-      imageTag: ""
-      httpPort: 8073
-      grpcPort: 50054
+      port: 8002
       replicas: 1
-      resourcePreset: medium
-      env:
-        MODULE_NAME: "youtube_action_module"
-        MODULE_VERSION: "1.0.0"
-        HTTP_PORT: "8073"
-        GRPC_PORT: "50054"
-        LOG_LEVEL: "INFO"
-        PLATFORM: "youtube"
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "128Mi"
+        limits:
+          cpu: "500m"
+          memory: "512Mi"
+
+    slack:
+      enabled: true
+      image: waddlebot-trigger-slack
+      imageTag: ""
+      port: 8004
+      replicas: 1
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "128Mi"
+        limits:
+          cpu: "500m"
+          memory: "512Mi"
+
+    youtubeLive:
+      enabled: true
+      image: waddlebot-trigger-youtube
+      imageTag: ""
+      port: 8005
+      replicas: 1
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "128Mi"
+        limits:
+          cpu: "500m"
+          memory: "512Mi"
 
     teams:
       enabled: false
-      image: waddlebot-teams-action
+      image: waddlebot-trigger-teams
       imageTag: ""
+      port: 8006
       replicas: 1
-      httpPort: 8074
-      grpcPort: 50057
       resources:
         requests:
-          cpu: 100m
-          memory: 128Mi
+          cpu: "100m"
+          memory: "128Mi"
         limits:
-          cpu: 500m
-          memory: 256Mi
+          cpu: "500m"
+          memory: "512Mi"
+
     mattermost:
       enabled: false
-      image: waddlebot-mattermost-action
+      image: waddlebot-trigger-mattermost
       imageTag: ""
+      port: 8007
       replicas: 1
-      httpPort: 8075
-      grpcPort: 50058
       resources:
         requests:
-          cpu: 100m
-          memory: 128Mi
+          cpu: "100m"
+          memory: "128Mi"
         limits:
-          cpu: 500m
-          memory: 256Mi
+          cpu: "500m"
+          memory: "512Mi"
+
     googlechat:
       enabled: false
-      image: waddlebot-googlechat-action
+      image: waddlebot-trigger-googlechat
       imageTag: ""
+      port: 8008
       replicas: 1
-      httpPort: 8076
-      grpcPort: 50059
       resources:
         requests:
-          cpu: 100m
-          memory: 128Mi
+          cpu: "100m"
+          memory: "128Mi"
         limits:
-          cpu: 500m
-          memory: 256Mi
+          cpu: "500m"
+          memory: "512Mi"
 
-# OAuth Configuration (optional, set via secrets)
+    kick:
+      enabled: false
+      image: waddlebot-trigger-kick
+      imageTag: ""
+      port: 8009
+      replicas: 1
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "128Mi"
+        limits:
+          cpu: "500m"
+          memory: "512Mi"
+
+# Ingress Configuration
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+  hosts:
+    - host: waddlebot.local
+      paths:
+        - path: /
+          pathType: Prefix
+          service: hub
+          port: 8060
+        - path: /api/router
+          pathType: Prefix
+          service: router
+          port: 8000
+        # Core Data consolidated routes (analytics, engagement, reputation, labels)
+        - path: /api/v1/analytics
+          pathType: Prefix
+          service: core-data
+          port: 8040
+        - path: /api/v1/engagement
+          pathType: Prefix
+          service: core-data
+          port: 8040
+        - path: /api/v1/reputation
+          pathType: Prefix
+          service: core-data
+          port: 8040
+        - path: /api/v1/labels
+          pathType: Prefix
+          service: core-data
+          port: 8040
+        # Core Identity consolidated routes (identity, security, credentials)
+        - path: /api/v1/identity
+          pathType: Prefix
+          service: core-identity
+          port: 8050
+        - path: /api/v1/security
+          pathType: Prefix
+          service: core-identity
+          port: 8050
+        - path: /api/v1/credentials
+          pathType: Prefix
+          service: core-identity
+          port: 8050
+        # Core Community consolidated routes (community, workflow, browser-source, stream, module-rtc)
+        - path: /api/v1/community-core
+          pathType: Prefix
+          service: core-community
+          port: 8020
+        - path: /api/v1/workflow
+          pathType: Prefix
+          service: core-community
+          port: 8020
+        - path: /api/v1/browser-source
+          pathType: Prefix
+          service: core-community
+          port: 8020
+        - path: /api/v1/stream
+          pathType: Prefix
+          service: core-community
+          port: 8020
+        # Interactive Social consolidated routes (alias, shoutout, presence, quote)
+        - path: /api/v1/alias
+          pathType: Prefix
+          service: interactive-social
+          port: 8010
+        - path: /api/v1/shoutout
+          pathType: Prefix
+          service: interactive-social
+          port: 8010
+        - path: /api/v1/presence
+          pathType: Prefix
+          service: interactive-social
+          port: 8010
+        - path: /api/v1/quotes
+          pathType: Prefix
+          service: interactive-social
+          port: 8010
+        # Interactive Gaming consolidated routes (lfg, inventory, server-manager, server-status)
+        - path: /api/v1/lfg
+          pathType: Prefix
+          service: interactive-gaming
+          port: 8104
+        - path: /api/v1/inventory
+          pathType: Prefix
+          service: interactive-gaming
+          port: 8104
+        - path: /api/v1/server-manager
+          pathType: Prefix
+          service: interactive-gaming
+          port: 8104
+        - path: /api/v1/server-status
+          pathType: Prefix
+          service: interactive-gaming
+          port: 8104
+        # Interactive Media consolidated routes (clip, spotify, youtube-music)
+        - path: /api/v1/clips
+          pathType: Prefix
+          service: interactive-media
+          port: 8105
+        - path: /api/v1/spotify
+          pathType: Prefix
+          service: interactive-media
+          port: 8105
+        - path: /api/v1/youtube-music
+          pathType: Prefix
+          service: interactive-media
+          port: 8105
+        # Interactive Productivity consolidated routes (calendar, memories, translate)
+        - path: /api/v1/calendar
+          pathType: Prefix
+          service: interactive-productivity
+          port: 8030
+        - path: /api/v1/memories
+          pathType: Prefix
+          service: interactive-productivity
+          port: 8030
+        - path: /api/v1/translate
+          pathType: Prefix
+          service: interactive-productivity
+          port: 8030
+        # Unchanged services
+        - path: /api/v1/marketplace
+          pathType: Prefix
+          service: marketplace
+          port: 8100
+  tls:
+    - secretName: waddlebot-tls
+      hosts:
+        - waddlebot.local
+
+# OAuth Configuration (set via secrets and environment variables)
 oauth:
   discord:
     clientId: ""
@@ -1081,7 +1036,7 @@ oauth:
     serviceAccountKey: ""
     projectId: ""
 
-# Cloud Provider Configuration (optional)
+# Cloud Provider Configuration (AWS Lambda, GCP Functions, etc.)
 aws:
   accessKeyId: ""
   secretAccessKey: ""
@@ -1114,68 +1069,6 @@ dependencies:
     enabled: true  # Use existing K8s service
     host: "infra-qdrant"
     port: 6333
-
-# Ingress Configuration
-ingress:
-  enabled: true
-  className: "nginx"
-  annotations:
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
-    nginx.ingress.kubernetes.io/rate-limit: "100"
-  hosts:
-    - host: waddlebot.local
-      paths:
-        - path: /
-          pathType: Prefix
-          service: hub
-          port: 8060
-        - path: /api/router
-          pathType: Prefix
-          service: router
-          port: 8000
-        - path: /api/identity
-          pathType: Prefix
-          service: identity-core
-          port: 8050
-        - path: /api/labels
-          pathType: Prefix
-          service: labels-core
-          port: 8023
-        - path: /api/browser-source
-          pathType: Prefix
-          service: browser-source
-          port: 8027
-        - path: /api/reputation
-          pathType: Prefix
-          service: reputation
-          port: 8021
-        - path: /api/community
-          pathType: Prefix
-          service: community
-          port: 8020
-        - path: /webhooks/twitch
-          pathType: Prefix
-          service: twitch-collector
-          port: 8002
-        - path: /webhooks/discord
-          pathType: Prefix
-          service: discord-collector
-          port: 8003
-        - path: /webhooks/slack
-          pathType: Prefix
-          service: slack-collector
-          port: 8004
-        - path: /api/v1/marketplace
-          pathType: Prefix
-          service: marketplace
-          port: 8100
-  tls:
-    - secretName: waddlebot-tls
-      hosts:
-        - waddlebot.local
 
 # Shared Environment Variables (applied to all modules)
 sharedEnv:

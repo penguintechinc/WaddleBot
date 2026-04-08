@@ -1,0 +1,90 @@
+{{- if .Values.modules.triggerWebhooks.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "waddlebot.fullname" . }}-trigger-webhooks
+  labels:
+    {{- include "waddlebot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: trigger-webhooks
+spec:
+  replicas: {{ .Values.modules.triggerWebhooks.replicas }}
+  selector:
+    matchLabels:
+      {{- include "waddlebot.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: trigger-webhooks
+  template:
+    metadata:
+      labels:
+        {{- include "waddlebot.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: trigger-webhooks
+    spec:
+      serviceAccountName: {{ include "waddlebot.serviceAccountName" . }}
+      {{- include "waddlebot.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+      {{- include "waddlebot.dbMigrateInitContainer" . | nindent 6 }}
+      containers:
+      - name: trigger-webhooks
+        image: "{{ .Values.global.imageRegistry }}/trigger-webhooks:{{ .Values.modules.triggerWebhooks.imageTag | default .Values.global.imageTag }}"
+        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 10 }}
+        ports:
+        - name: http
+          containerPort: 8100
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: {{ include "waddlebot.fullname" . }}-config
+        - secretRef:
+            name: {{ include "waddlebot.fullname" . }}-secrets
+        env:
+        - name: MODULE_NAME
+          value: "trigger-webhooks"
+        - name: MODULE_PORT
+          value: "8100"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          {{- toYaml .Values.modules.triggerWebhooks.resources | nindent 10 }}
+        volumeMounts:
+        - name: logs
+          mountPath: /var/log/waddlebotlog
+      volumes:
+      - name: logs
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "waddlebot.fullname" . }}-trigger-webhooks
+  labels:
+    {{- include "waddlebot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: trigger-webhooks
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8100
+    targetPort: http
+    protocol: TCP
+    name: http
+  selector:
+    {{- include "waddlebot.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: trigger-webhooks
+{{- end }}

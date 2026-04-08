@@ -21,32 +21,19 @@ images:
   - name: core-router
     newName: waddlebot/core-router
     newTag: alpha
-  - name: core-identity
-    newName: waddlebot/core-identity
-    newTag: alpha
-  - name: core-labels
-    newName: waddlebot/core-labels
-    newTag: alpha
-  - name: core-browser-source
-    newName: waddlebot/core-browser-source
-    newTag: alpha
-  - name: core-reputation
-    newName: waddlebot/core-reputation
-    newTag: alpha
-  - name: core-community
-    newName: waddlebot/core-community
-    newTag: alpha
   - name: core-ai-researcher
     newName: waddlebot/core-ai-researcher
     newTag: alpha
-  - name: core-video-proxy
-    newName: waddlebot/core-video-proxy
+
+  # Consolidated services — use locally built images (waddlebot/{service}:alpha)
+  - name: core-data
+    newName: waddlebot/core-data
     newTag: alpha
-  - name: core-engagement
-    newName: waddlebot/core-engagement
+  - name: core-identity
+    newName: waddlebot/core-identity
     newTag: alpha
-  - name: core-module-rtc
-    newName: waddlebot/core-module-rtc
+  - name: core-community
+    newName: waddlebot/core-community
     newTag: alpha
 
   # Collectors
@@ -56,57 +43,51 @@ images:
   - name: collector-discord
     newName: waddlebot/collector-discord
     newTag: alpha
-  - name: collector-slack
-    newName: waddlebot/collector-slack
+
+  # Consolidated trigger services
+  - name: trigger-webhooks
+    newName: waddlebot/trigger-webhooks
     newTag: alpha
-  - name: collector-youtube-live
-    newName: waddlebot/collector-youtube-live
-    newTag: alpha
-  - name: collector-kick
-    newName: waddlebot/collector-kick
+  - name: trigger-streaming
+    newName: waddlebot/trigger-streaming
     newTag: alpha
 
   # Interactive Modules
   - name: interactive-ai
     newName: waddlebot/interactive-ai
     newTag: alpha
-  - name: interactive-alias
-    newName: waddlebot/interactive-alias
-    newTag: alpha
-  - name: interactive-shoutout
-    newName: waddlebot/interactive-shoutout
-    newTag: alpha
-  - name: interactive-inventory
-    newName: waddlebot/interactive-inventory
-    newTag: alpha
-  - name: interactive-calendar
-    newName: waddlebot/interactive-calendar
-    newTag: alpha
-  - name: interactive-memories
-    newName: waddlebot/interactive-memories
-    newTag: alpha
-  - name: interactive-youtube-music
-    newName: waddlebot/interactive-youtube-music
-    newTag: alpha
-  - name: interactive-spotify
-    newName: waddlebot/interactive-spotify
-    newTag: alpha
   - name: interactive-loyalty
     newName: waddlebot/interactive-loyalty
+    newTag: alpha
+  - name: interactive-translate
+    newName: waddlebot/interactive-translate
+    newTag: alpha
+
+  # Consolidated interactive services
+  - name: interactive-social
+    newName: waddlebot/interactive-social
+    newTag: alpha
+  - name: interactive-gaming
+    newName: waddlebot/interactive-gaming
+    newTag: alpha
+  - name: interactive-media
+    newName: waddlebot/interactive-media
+    newTag: alpha
+  - name: interactive-productivity
+    newName: waddlebot/interactive-productivity
     newTag: alpha
 
   # Action/Pushing Services
   - name: action-discord
     newName: waddlebot/action-discord
     newTag: alpha
-  - name: action-slack
-    newName: waddlebot/action-slack
+
+  # Consolidated action services
+  - name: action-platforms
+    newName: waddlebot/action-platforms
     newTag: alpha
-  - name: action-twitch
-    newName: waddlebot/action-twitch
-    newTag: alpha
-  - name: action-youtube
-    newName: waddlebot/action-youtube
+  - name: action-serverless
+    newName: waddlebot/action-serverless
     newTag: alpha
 
   # Infrastructure Services — use upstream images directly
