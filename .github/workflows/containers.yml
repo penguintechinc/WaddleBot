@@ -13,7 +13,9 @@ on:
       - 'core/**'
       - 'admin/hub_module/**'
       - 'admin/marketplace_module/**'
+      - 'services/**'
       - 'libs/flask_core/**'
+      - 'migrations/**'
       - 'docker-compose.yml'
       - '.version'
       - '.github/workflows/containers.yml'
@@ -109,6 +111,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: Detect changes
         uses: dorny/paths-filter@v2
