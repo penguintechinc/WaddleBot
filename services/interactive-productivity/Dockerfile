@@ -21,13 +21,14 @@ WORKDIR /app
 COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
+# Copy config and combined app
+COPY services/interactive-productivity/config.py .
+COPY services/interactive-productivity/app.py .
+
 # Copy all three module directories
 COPY action/interactive/calendar_interaction_module ./calendar_interaction_module
 COPY action/interactive/memories_interaction_module ./memories_interaction_module
 COPY action/interactive/translate_interaction_module ./translate_interaction_module
-
-# Copy combined app
-COPY services/interactive-productivity/app.py .
 
 # Expose ports
 # Port 8030: REST API (calendar, memories, translate)

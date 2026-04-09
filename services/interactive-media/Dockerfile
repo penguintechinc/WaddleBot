@@ -20,7 +20,8 @@ WORKDIR /app
 COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Copy application code
+# Copy config and application code
+COPY services/interactive-media/config.py .
 COPY services/interactive-media/app.py .
 
 # Copy module directories

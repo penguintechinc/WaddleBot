@@ -19,22 +19,14 @@ import time
 
 import grpc
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)),
-                                'action/interactive/libs'))
+sys.path.insert(0, os.getcwd())
 
 from quart import Blueprint, Quart, request, jsonify
 from hypercorn.asyncio import serve
 from hypercorn.config import Config as HypercornConfig
 
-# Load config - try calendar first, fallback to memories, then translate
-try:
-    from action.interactive.calendar_interaction_module.config import Config as CalendarConfig
-    Config = CalendarConfig
-except ImportError:
-    try:
-        from action.interactive.memories_interaction_module.config import Config
-    except ImportError:
-        from action.interactive.translate_interaction_module.config import Config
+# Load config from the current service
+from config import Config
 
 # Quart app setup
 app = Quart(__name__)
@@ -95,21 +87,21 @@ def init_calendar_services():
         return
 
     try:
-        from action.interactive.calendar_interaction_module.config import Config as CalConfig
-        from action.interactive.calendar_interaction_module.flask_core import (
+        from calendar_interaction_module.config import Config as CalConfig
+        from calendar_interaction_module.flask_core import (
             init_database, setup_aaa_logging
         )
-        from action.interactive.calendar_interaction_module.services.calendar_service import CalendarService
-        from action.interactive.calendar_interaction_module.services.permission_service import PermissionService
-        from action.interactive.calendar_interaction_module.services.context_service import ContextService
-        from action.interactive.calendar_interaction_module.services.rsvp_service import RSVPService
-        from action.interactive.calendar_interaction_module.services.ticket_service import TicketService
-        from action.interactive.calendar_interaction_module.services.event_admin_service import EventAdminService
-        from action.interactive.calendar_interaction_module.services.calendar_oauth_service import CalendarOAuthService
-        from action.interactive.calendar_interaction_module.services.availability_service import AvailabilityService
-        from action.interactive.calendar_interaction_module.services.booking_service import BookingService
-        from action.interactive.calendar_interaction_module.services.group_availability_service import GroupAvailabilityService
-        from action.interactive.calendar_interaction_module.services.tournament_service import TournamentService
+        from calendar_interaction_module.services.calendar_service import CalendarService
+        from calendar_interaction_module.services.permission_service import PermissionService
+        from calendar_interaction_module.services.context_service import ContextService
+        from calendar_interaction_module.services.rsvp_service import RSVPService
+        from calendar_interaction_module.services.ticket_service import TicketService
+        from calendar_interaction_module.services.event_admin_service import EventAdminService
+        from calendar_interaction_module.services.calendar_oauth_service import CalendarOAuthService
+        from calendar_interaction_module.services.availability_service import AvailabilityService
+        from calendar_interaction_module.services.booking_service import BookingService
+        from calendar_interaction_module.services.group_availability_service import GroupAvailabilityService
+        from calendar_interaction_module.services.tournament_service import TournamentService
 
         calendar_logger = setup_aaa_logging('calendar_interaction_module', CalConfig.MODULE_VERSION)
         calendar_logger.system("Initializing calendar module", action="startup")
@@ -131,7 +123,7 @@ def init_calendar_services():
         tournament_service = TournamentService(dal, CalConfig)
 
         # Blueprint setup - import endpoints after services initialized
-        from action.interactive.calendar_interaction_module.app import (
+        from calendar_interaction_module.app import (
             calendar_bp as cal_bp, context_bp as ctx_bp,
             ticket_bp as tick_bp, tournament_bp as tour_bp
         )
@@ -164,13 +156,13 @@ def init_memories_services():
         return
 
     try:
-        from action.interactive.memories_interaction_module.config import Config as MemConfig
-        from action.interactive.memories_interaction_module.flask_core import (
+        from memories_interaction_module.config import Config as MemConfig
+        from memories_interaction_module.flask_core import (
             init_database, setup_aaa_logging
         )
-        from action.interactive.memories_interaction_module.services.quote_service import QuoteService
-        from action.interactive.memories_interaction_module.services.bookmark_service import BookmarkService
-        from action.interactive.memories_interaction_module.services.reminder_service import ReminderService
+        from memories_interaction_module.services.quote_service import QuoteService
+        from memories_interaction_module.services.bookmark_service import BookmarkService
+        from memories_interaction_module.services.reminder_service import ReminderService
 
         mem_logger = setup_aaa_logging('memories_interaction_module', MemConfig.MODULE_VERSION)
         mem_logger.system("Initializing memories module", action="startup")
@@ -186,7 +178,7 @@ def init_memories_services():
         # Create and register blueprint
         from flask_core import async_endpoint, success_response, error_response
         from flask_core.validation import validate_json, validate_query
-        from action.interactive.memories_interaction_module.validation_models import (
+        from memories_interaction_module.validation_models import (
             QuoteCreateRequest, QuoteSearchParams, QuoteVoteRequest, QuoteDeleteRequest,
             BookmarkCreateRequest, BookmarkSearchParams, BookmarkDeleteRequest,
             PopularBookmarksParams, ReminderCreateRequest, ReminderSearchParams,
@@ -392,10 +384,10 @@ def init_translate_services():
         return
 
     try:
-        from action.interactive.translate_interaction_module.config import Config as TransConfig
-        from action.interactive.translate_interaction_module.services.translation_service import TranslationService
-        from action.interactive.translate_interaction_module.proto import translate_interaction_pb2_grpc
-        from action.interactive.translate_interaction_module.services.grpc_handler import TranslateInteractionServicer
+        from translate_interaction_module.config import Config as TransConfig
+        from translate_interaction_module.services.translation_service import TranslationService
+        from translate_interaction_module.proto import translate_interaction_pb2_grpc
+        from translate_interaction_module.services.grpc_handler import TranslateInteractionServicer
 
         trans_logger = logging.getLogger('translate_interaction_module')
         trans_logger.info(f"Initializing translate module REST on {Config.MODULE_PORT} gRPC on 50033")
@@ -504,8 +496,8 @@ async def start_grpc_server():
             logger.info("Translate service not initialized - skipping gRPC")
             return
 
-        from action.interactive.translate_interaction_module.proto import translate_interaction_pb2_grpc
-        from action.interactive.translate_interaction_module.services.grpc_handler import TranslateInteractionServicer
+        from translate_interaction_module.proto import translate_interaction_pb2_grpc
+        from translate_interaction_module.services.grpc_handler import TranslateInteractionServicer
 
         server = grpc.aio.server(
             futures.ThreadPoolExecutor(max_workers=10)

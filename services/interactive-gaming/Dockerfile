@@ -13,8 +13,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY libs/flask_core /app/libs/flask_core
 RUN pip install --no-cache-dir /app/libs/flask_core
 
-# Copy app and all 4 module directories
+# Copy config and app
+COPY services/interactive-gaming/config.py .
 COPY services/interactive-gaming/app.py .
+
+# Copy all 4 module directories
 COPY action/interactive/lfg_interaction_module/ ./lfg_interaction_module/
 COPY action/interactive/inventory_interaction_module/ ./inventory_interaction_module/
 COPY action/interactive/server_manager_interaction_module/ ./server_manager_interaction_module/
@@ -29,8 +32,11 @@ WORKDIR /app
 COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Copy app and all 4 module directories
+# Copy config and app
+COPY services/interactive-gaming/config.py .
 COPY services/interactive-gaming/app.py .
+
+# Copy all 4 module directories
 COPY action/interactive/lfg_interaction_module/ ./lfg_interaction_module/
 COPY action/interactive/inventory_interaction_module/ ./inventory_interaction_module/
 COPY action/interactive/server_manager_interaction_module/ ./server_manager_interaction_module/
@@ -38,8 +44,8 @@ COPY action/interactive/server_status_interaction_module/ ./server_status_intera
 
 # Health check using native Python (no curl)
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8104/healthz').read()" || exit 1
+    CMD python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8104/healthz').read()" || exit 1
 
 EXPOSE 8104
 
-CMD ["python", "app.py"]
+CMD ["python3", "app.py"]
