@@ -214,9 +214,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Card(
             child: ListTile(
               leading: Icon(
-                widget.licenseService.isValid
-                    ? Icons.verified
-                    : Icons.warning,
+                widget.licenseService.isValid ? Icons.verified : Icons.warning,
                 color: widget.licenseService.isValid
                     ? Colors.green
                     : Colors.orange,
@@ -270,10 +268,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const Icon(Icons.smart_toy),
                 const SizedBox(width: 8),
                 const Text('Waddles Integration',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 const Spacer(),
                 if (!licensed)
-                  const Chip(label: Text('Pro', style: TextStyle(fontSize: 11))),
+                  const Chip(
+                      label: Text('Pro', style: TextStyle(fontSize: 11))),
               ],
             ),
             const SizedBox(height: 8),

@@ -93,8 +93,7 @@ class StreamControls extends StatelessWidget {
             icon: Icon(isStreaming ? Icons.stop : Icons.play_arrow),
             label: Text(isStreaming ? 'Stop' : 'Start'),
             style: FilledButton.styleFrom(
-              backgroundColor:
-                  isStreaming ? GazerTheme.streamingRed : null,
+              backgroundColor: isStreaming ? GazerTheme.streamingRed : null,
             ),
           ),
         ],

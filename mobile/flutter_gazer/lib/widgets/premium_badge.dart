@@ -175,7 +175,7 @@ class PremiumBadge extends StatelessWidget {
       borderRadius: BorderRadius.circular(_getSizeValue() * 0.5),
       boxShadow: [
         BoxShadow(
-          color: (backgroundColor ?? const Color(0xFFD4AF37)).withOpacity( 0.4),
+          color: (backgroundColor ?? const Color(0xFFD4AF37)).withOpacity(0.4),
           blurRadius: 6,
           offset: const Offset(0, 2),
         ),

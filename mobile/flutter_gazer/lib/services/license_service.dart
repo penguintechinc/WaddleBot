@@ -19,7 +19,8 @@ class LicenseService {
   LicenseService({Dio? dio}) : _dio = dio ?? Dio();
 
   LicenseInfo? get currentLicense => _currentLicense;
-  bool get isValid => _currentLicense?.isValid == true && !(_currentLicense?.isExpired ?? true);
+  bool get isValid =>
+      _currentLicense?.isValid == true && !(_currentLicense?.isExpired ?? true);
 
   bool isFeatureAvailable(String feature) {
     return _currentLicense?.hasFeature(feature) ?? false;
@@ -273,8 +274,9 @@ class LicenseService {
         licenseKey: json['license_key'] as String,
         isValid: json['is_valid'] as bool,
         expirationDate: json['expiration'] as int,
-        features:
-            (json['features'] as List<dynamic>).map((e) => e.toString()).toSet(),
+        features: (json['features'] as List<dynamic>)
+            .map((e) => e.toString())
+            .toSet(),
         maxStreams: json['max_streams'] as int? ?? 1,
         licenseName: json['license_name'] as String? ?? '',
         error: json['error'] as String?,

@@ -32,8 +32,7 @@ class UsbError extends UsbDeviceState {
 /// Bridge to native USB capture via platform channels.
 class UsbCaptureService {
   static const _channel = MethodChannel('io.waddlebot.gazer/usb_capture');
-  static const _stateChannel =
-      EventChannel('io.waddlebot.gazer/usb_state');
+  static const _stateChannel = EventChannel('io.waddlebot.gazer/usb_state');
 
   final _stateController = StreamController<UsbDeviceState>.broadcast();
   StreamSubscription? _nativeStateSub;
@@ -49,9 +48,8 @@ class UsbCaptureService {
   }
 
   void _listenNativeState() {
-    _nativeStateSub = _stateChannel
-        .receiveBroadcastStream()
-        .map<UsbDeviceState>((event) {
+    _nativeStateSub =
+        _stateChannel.receiveBroadcastStream().map<UsbDeviceState>((event) {
       final map = event as Map;
       switch (map['state'] as String) {
         case 'disconnected':

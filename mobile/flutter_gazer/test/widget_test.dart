@@ -10,8 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gazer_waddlebot/app.dart';
 
 void main() {
-  testWidgets('App initializes without crashing',
-      (WidgetTester tester) async {
+  testWidgets('App initializes without crashing', (WidgetTester tester) async {
     // Build our app and trigger a frame.
     await tester.pumpWidget(const GazerApp());
 

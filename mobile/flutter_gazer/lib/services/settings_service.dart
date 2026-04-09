@@ -106,7 +106,8 @@ class SettingsService {
 
   Future<WaddleBotDomain> loadApiDomain() async {
     final prefs = await SharedPreferences.getInstance();
-    final domainIndex = prefs.getInt(_keyApiDomain) ?? 2; // production is index 2
+    final domainIndex =
+        prefs.getInt(_keyApiDomain) ?? 2; // production is index 2
     switch (domainIndex) {
       case 0:
         return WaddleBotDomain.penguintech;

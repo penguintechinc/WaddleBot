@@ -54,7 +54,6 @@ extension WaddleBotDomainExtension on WaddleBotDomain {
         return WaddleBotDomain.production;
     }
   }
-
 }
 
 extension WaddleBotDomainFactory on WaddleBotDomain {

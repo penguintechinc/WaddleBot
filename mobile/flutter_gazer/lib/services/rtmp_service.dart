@@ -21,9 +21,8 @@ class RtmpService {
   }
 
   void _listenNativeState() {
-    _nativeStateSub = _stateChannel
-        .receiveBroadcastStream()
-        .map<StreamState>((event) {
+    _nativeStateSub =
+        _stateChannel.receiveBroadcastStream().map<StreamState>((event) {
       final map = event as Map;
       switch (map['state'] as String) {
         case 'disconnected':

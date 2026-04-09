@@ -222,8 +222,8 @@ class CommunityDetail extends Community {
           DateTime.now(),
       updatedAt: DateTime.tryParse(json['updated_at'] as String? ?? '') ??
           DateTime.now(),
-      stats: CommunityStats.fromJson(
-          json['stats'] as Map<String, dynamic>? ?? {}),
+      stats:
+          CommunityStats.fromJson(json['stats'] as Map<String, dynamic>? ?? {}),
       recentActivity: (json['recent_activity'] as List<dynamic>?)
               ?.map((e) =>
                   ActivityItem.fromJson(e as Map<String, dynamic>? ?? {}))

@@ -46,7 +46,6 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
     super.dispose();
   }
 
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -74,7 +73,6 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
           if (community == null) {
             return _buildErrorState('Community not found');
           }
-
 
           return _buildDetailContent(community);
         },

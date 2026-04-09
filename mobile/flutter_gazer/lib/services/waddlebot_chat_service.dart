@@ -19,8 +19,7 @@ class WaddleBotChatService {
 
   final _messageController = StreamController<ChatMessage>.broadcast();
   final _typingController = StreamController<TypingEvent>.broadcast();
-  final _connectionController =
-      StreamController<WBConnectionState>.broadcast();
+  final _connectionController = StreamController<WBConnectionState>.broadcast();
   final _channelsController = StreamController<List<ChatChannel>>.broadcast();
   final _messageHistoryController =
       StreamController<MessageHistory>.broadcast();
@@ -31,8 +30,7 @@ class WaddleBotChatService {
 
   Stream<ChatMessage> get incomingMessages => _messageController.stream;
   Stream<TypingEvent> get typingEvents => _typingController.stream;
-  Stream<WBConnectionState> get connectionState =>
-      _connectionController.stream;
+  Stream<WBConnectionState> get connectionState => _connectionController.stream;
   Stream<List<ChatChannel>> get channels => _channelsController.stream;
   Stream<MessageHistory> get messageHistory => _messageHistoryController.stream;
   WBConnectionState get currentConnectionState => _connectionState;
@@ -187,21 +185,18 @@ class WaddleBotChatService {
   Future<MessageHistory> getMessageHistory(String channelId,
       {int limit = 20, String? cursor}) async {
     final completer = Completer<MessageHistory>();
-    _socket?.emitWithAck(
-        'chat:history',
-        {
-          'channel_id': channelId,
-          'limit': limit,
-          if (cursor != null) 'cursor': cursor,
-        },
-        ack: (response) {
+    _socket?.emitWithAck('chat:history', {
+      'channel_id': channelId,
+      'limit': limit,
+      if (cursor != null) 'cursor': cursor,
+    }, ack: (response) {
       if (response is Map<String, dynamic>) {
         final history = MessageHistory.fromJson(response);
         _messageHistoryCache[channelId] = history;
         completer.complete(history);
       } else {
-        completer.complete(
-            const MessageHistory(messages: [], hasMore: false, nextCursor: null));
+        completer.complete(const MessageHistory(
+            messages: [], hasMore: false, nextCursor: null));
       }
     });
     return completer.future;

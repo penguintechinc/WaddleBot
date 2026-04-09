@@ -24,8 +24,7 @@ class WaddleBotService {
 
   /// Report that a stream has started.
   Future<void> reportStreamStarted(StreamConfig config) async {
-    _activeStreamId =
-        'gazer-${DateTime.now().millisecondsSinceEpoch}';
+    _activeStreamId = 'gazer-${DateTime.now().millisecondsSinceEpoch}';
     _streamStartTime = DateTime.now();
 
     final event = StreamEvent(

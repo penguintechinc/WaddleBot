@@ -217,7 +217,7 @@ class _AppSidebarState extends State<AppSidebar> {
                   vertical: 4,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFD4AF37).withOpacity( 0.2),
+                  color: const Color(0xFFD4AF37).withOpacity(0.2),
                   borderRadius: BorderRadius.circular(4),
                   border: Border.all(
                     color: const Color(0xFFD4AF37),

@@ -29,7 +29,8 @@ void main() {
     });
 
     group('Login Flow', () {
-      testWidgets('Login with valid credentials succeeds', (WidgetTester tester) async {
+      testWidgets('Login with valid credentials succeeds',
+          (WidgetTester tester) async {
         await tester.pumpWidget(const GazerApp());
         await tester.pumpAndSettle();
 
@@ -51,7 +52,8 @@ void main() {
             reason: 'Login should navigate to main screen');
       });
 
-      testWidgets('Login with invalid credentials shows error', (WidgetTester tester) async {
+      testWidgets('Login with invalid credentials shows error',
+          (WidgetTester tester) async {
         await tester.pumpWidget(const GazerApp());
         await tester.pumpAndSettle();
 
@@ -66,10 +68,12 @@ void main() {
 
         final errorText = find.text('Invalid credentials');
         expect(errorText, findsWidgets,
-            reason: 'Error message should be displayed for invalid credentials');
+            reason:
+                'Error message should be displayed for invalid credentials');
       });
 
-      testWidgets('User data persists after login', (WidgetTester tester) async {
+      testWidgets('User data persists after login',
+          (WidgetTester tester) async {
         const testEmail = 'persist.test@example.com';
         const testPassword = 'PersistPassword123!';
 
@@ -97,13 +101,13 @@ void main() {
         await authService.refreshToken();
 
         final newToken = authService.accessToken;
-        expect(newToken, isNotNull,
-            reason: 'Token should be refreshed');
+        expect(newToken, isNotNull, reason: 'Token should be refreshed');
         expect(authService.isAuthenticated, true,
             reason: 'User should remain authenticated after token refresh');
       });
 
-      testWidgets('Logout clears authentication state', (WidgetTester tester) async {
+      testWidgets('Logout clears authentication state',
+          (WidgetTester tester) async {
         const testEmail = 'logout.test@example.com';
         const testPassword = 'LogoutPassword123!';
 
@@ -128,7 +132,8 @@ void main() {
         await authService.login(testEmail, testPassword);
       });
 
-      testWidgets('Communities list renders correctly', (WidgetTester tester) async {
+      testWidgets('Communities list renders correctly',
+          (WidgetTester tester) async {
         await tester.pumpWidget(const GazerApp());
         await tester.pumpAndSettle();
 
@@ -141,8 +146,10 @@ void main() {
             reason: 'Community list should contain community tiles');
       });
 
-      testWidgets('Communities data loads from backend', (WidgetTester tester) async {
-        final response = await communityService.getCommunities(page: 1, pageSize: 20);
+      testWidgets('Communities data loads from backend',
+          (WidgetTester tester) async {
+        final response =
+            await communityService.getCommunities(page: 1, pageSize: 20);
 
         expect(response.items, isNotEmpty,
             reason: 'Communities list should not be empty');
@@ -161,11 +168,13 @@ void main() {
         }
       });
 
-      testWidgets('Communities list displays correct data', (WidgetTester tester) async {
+      testWidgets('Communities list displays correct data',
+          (WidgetTester tester) async {
         await tester.pumpWidget(const GazerApp());
         await tester.pumpAndSettle(const Duration(seconds: 2));
 
-        final response = await communityService.getCommunities(page: 1, pageSize: 20);
+        final response =
+            await communityService.getCommunities(page: 1, pageSize: 20);
         expect(response.items, isNotEmpty);
 
         final firstCommunity = response.items.first;
@@ -180,7 +189,8 @@ void main() {
 
       testWidgets('Community detail screen shows backend data',
           (WidgetTester tester) async {
-        final response = await communityService.getCommunities(page: 1, pageSize: 20);
+        final response =
+            await communityService.getCommunities(page: 1, pageSize: 20);
         expect(response.items, isNotEmpty);
 
         final firstCommunity = response.items.first;
@@ -197,8 +207,10 @@ void main() {
             reason: 'Community stats should be included');
       });
 
-      testWidgets('Community stats display correctly', (WidgetTester tester) async {
-        final response = await communityService.getCommunities(page: 1, pageSize: 20);
+      testWidgets('Community stats display correctly',
+          (WidgetTester tester) async {
+        final response =
+            await communityService.getCommunities(page: 1, pageSize: 20);
         expect(response.items, isNotEmpty);
 
         final firstCommunity = response.items.first;
@@ -236,7 +248,8 @@ void main() {
         }
       });
 
-      testWidgets('Community updates propagate to UI', (WidgetTester tester) async {
+      testWidgets('Community updates propagate to UI',
+          (WidgetTester tester) async {
         final initialResponse =
             await communityService.getCommunities(page: 1, pageSize: 20);
         expect(initialResponse.items, isNotEmpty);
@@ -260,7 +273,8 @@ void main() {
         await authService.login(testEmail, testPassword);
       });
 
-      testWidgets('Chat screen renders after login', (WidgetTester tester) async {
+      testWidgets('Chat screen renders after login',
+          (WidgetTester tester) async {
         await tester.pumpWidget(const GazerApp());
         await tester.pumpAndSettle();
 
@@ -269,7 +283,8 @@ void main() {
             reason: 'Chat screen should be accessible after login');
       });
 
-      testWidgets('Message sending works correctly', (WidgetTester tester) async {
+      testWidgets('Message sending works correctly',
+          (WidgetTester tester) async {
         await tester.pumpWidget(const GazerApp());
         await tester.pumpAndSettle();
 
@@ -278,8 +293,7 @@ void main() {
 
         expect(messageInputField, findsOneWidget,
             reason: 'Message input field should exist');
-        expect(sendButton, findsOneWidget,
-            reason: 'Send button should exist');
+        expect(sendButton, findsOneWidget, reason: 'Send button should exist');
 
         await tester.enterText(messageInputField, 'Test message');
         await tester.tap(sendButton);
@@ -290,7 +304,8 @@ void main() {
             reason: 'Sent message should appear in chat');
       });
 
-      testWidgets('Message history displays correctly', (WidgetTester tester) async {
+      testWidgets('Message history displays correctly',
+          (WidgetTester tester) async {
         await tester.pumpWidget(const GazerApp());
         await tester.pumpAndSettle(const Duration(seconds: 2));
 
@@ -303,7 +318,8 @@ void main() {
             reason: 'Messages should be displayed as text');
       });
 
-      testWidgets('Message timestamps display correctly', (WidgetTester tester) async {
+      testWidgets('Message timestamps display correctly',
+          (WidgetTester tester) async {
         final testMessage = ChatMessage(
           id: 'msg-001',
           communityId: 'comm-001',
@@ -315,13 +331,13 @@ void main() {
 
         expect(testMessage.createdAt, isNotNull,
             reason: 'Message should have timestamp');
-        expect(testMessage.id, isNotEmpty,
-            reason: 'Message should have ID');
+        expect(testMessage.id, isNotEmpty, reason: 'Message should have ID');
         expect(testMessage.senderUsername, isNotEmpty,
             reason: 'Message should have sender username');
       });
 
-      testWidgets('Typing indicators display correctly', (WidgetTester tester) async {
+      testWidgets('Typing indicators display correctly',
+          (WidgetTester tester) async {
         const typingEvent = TypingEvent(
           communityId: 'comm-001',
           channelName: 'general',
@@ -338,7 +354,8 @@ void main() {
             reason: 'Typing event should have channel name');
       });
 
-      testWidgets('Message reactions work correctly', (WidgetTester tester) async {
+      testWidgets('Message reactions work correctly',
+          (WidgetTester tester) async {
         await tester.pumpWidget(const GazerApp());
         await tester.pumpAndSettle();
 
@@ -357,7 +374,8 @@ void main() {
         }
       });
 
-      testWidgets('Message threads work correctly', (WidgetTester tester) async {
+      testWidgets('Message threads work correctly',
+          (WidgetTester tester) async {
         await tester.pumpWidget(const GazerApp());
         await tester.pumpAndSettle();
 
@@ -370,7 +388,8 @@ void main() {
             reason: 'Thread view should be accessible');
       });
 
-      testWidgets('Real-time message updates propagate', (WidgetTester tester) async {
+      testWidgets('Real-time message updates propagate',
+          (WidgetTester tester) async {
         await tester.pumpWidget(const GazerApp());
         await tester.pumpAndSettle(const Duration(seconds: 2));
 
@@ -387,7 +406,8 @@ void main() {
             reason: 'Message count should increase or stay the same');
       });
 
-      testWidgets('Message editing works correctly', (WidgetTester tester) async {
+      testWidgets('Message editing works correctly',
+          (WidgetTester tester) async {
         await tester.pumpWidget(const GazerApp());
         await tester.pumpAndSettle();
 
@@ -406,7 +426,8 @@ void main() {
         }
       });
 
-      testWidgets('Message deletion works correctly', (WidgetTester tester) async {
+      testWidgets('Message deletion works correctly',
+          (WidgetTester tester) async {
         await tester.pumpWidget(const GazerApp());
         await tester.pumpAndSettle();
 
@@ -460,7 +481,8 @@ void main() {
         await authService.login(testEmail, testPassword);
       });
 
-      testWidgets('User data consistency across sessions', (WidgetTester tester) async {
+      testWidgets('User data consistency across sessions',
+          (WidgetTester tester) async {
         final user1 = authService.currentUser;
         expect(user1, isNotNull);
 
@@ -475,11 +497,13 @@ void main() {
 
       testWidgets('Community data remains consistent during updates',
           (WidgetTester tester) async {
-        final response1 = await communityService.getCommunities(page: 1, pageSize: 20);
+        final response1 =
+            await communityService.getCommunities(page: 1, pageSize: 20);
         expect(response1.items, isNotEmpty);
 
         final community1 = response1.items.first;
-        final detail1 = await communityService.getCommunityDetail(community1.id);
+        final detail1 =
+            await communityService.getCommunityDetail(community1.id);
 
         expect(detail1.data!.id, community1.id,
             reason: 'Community ID should be consistent');
@@ -489,12 +513,13 @@ void main() {
             reason: 'Community owner should be consistent');
       });
 
-      testWidgets('API responses contain all required fields', (WidgetTester tester) async {
-        final response = await communityService.getCommunities(page: 1, pageSize: 20);
+      testWidgets('API responses contain all required fields',
+          (WidgetTester tester) async {
+        final response =
+            await communityService.getCommunities(page: 1, pageSize: 20);
 
         for (final community in response.items) {
-          expect(community.id, isNotEmpty,
-              reason: 'Community must have ID');
+          expect(community.id, isNotEmpty, reason: 'Community must have ID');
           expect(community.name, isNotEmpty,
               reason: 'Community must have name');
           expect(community.ownerId, isNotEmpty,
@@ -528,13 +553,13 @@ void main() {
             reason: 'Sender username should be preserved');
       });
 
-      testWidgets('Error responses are handled gracefully', (WidgetTester tester) async {
+      testWidgets('Error responses are handled gracefully',
+          (WidgetTester tester) async {
         try {
           await communityService.getCommunityDetail('invalid-community-id');
           fail('Should throw error for invalid community ID');
         } catch (e) {
-          expect(e, isNotNull,
-              reason: 'Invalid request should raise error');
+          expect(e, isNotNull, reason: 'Invalid request should raise error');
         }
       });
     });
@@ -546,20 +571,22 @@ void main() {
         await authService.login(testEmail, testPassword);
       });
 
-      testWidgets('Large community list loads efficiently', (WidgetTester tester) async {
+      testWidgets('Large community list loads efficiently',
+          (WidgetTester tester) async {
         final stopwatch = Stopwatch()..start();
 
-        final response = await communityService.getCommunities(page: 1, pageSize: 100);
+        final response =
+            await communityService.getCommunities(page: 1, pageSize: 100);
 
         stopwatch.stop();
 
-        expect(response.items, isNotEmpty,
-            reason: 'Should load communities');
+        expect(response.items, isNotEmpty, reason: 'Should load communities');
         expect(stopwatch.elapsedMilliseconds, lessThan(5000),
             reason: 'Large list should load within 5 seconds');
       });
 
-      testWidgets('Multiple API calls execute concurrently', (WidgetTester tester) async {
+      testWidgets('Multiple API calls execute concurrently',
+          (WidgetTester tester) async {
         final stopwatch = Stopwatch()..start();
 
         final futures = [
@@ -578,7 +605,8 @@ void main() {
             reason: 'Concurrent requests should complete within 10 seconds');
       });
 
-      testWidgets('UI remains responsive during data loading', (WidgetTester tester) async {
+      testWidgets('UI remains responsive during data loading',
+          (WidgetTester tester) async {
         await tester.pumpWidget(const GazerApp());
         await tester.pumpAndSettle();
 
@@ -603,7 +631,8 @@ void main() {
         } catch (_) {}
       });
 
-      testWidgets('Handles connection timeouts gracefully', (WidgetTester tester) async {
+      testWidgets('Handles connection timeouts gracefully',
+          (WidgetTester tester) async {
         await tester.pumpWidget(const GazerApp());
         await tester.pumpAndSettle();
 
@@ -612,7 +641,8 @@ void main() {
             reason: 'Error messages should display on failure');
       });
 
-      testWidgets('Retry mechanism works on failed requests', (WidgetTester tester) async {
+      testWidgets('Retry mechanism works on failed requests',
+          (WidgetTester tester) async {
         int requestCount = 0;
         try {
           await communityService.getCommunities(page: 1, pageSize: 20);
@@ -630,7 +660,8 @@ void main() {
             reason: 'Should attempt multiple requests');
       });
 
-      testWidgets('Authentication error triggers logout', (WidgetTester tester) async {
+      testWidgets('Authentication error triggers logout',
+          (WidgetTester tester) async {
         await authService.logout();
 
         expect(authService.isAuthenticated, false,
@@ -646,4 +677,3 @@ void main() {
     });
   });
 }
-
