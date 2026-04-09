@@ -343,7 +343,7 @@ class _PresetCard extends StatelessWidget {
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: ElderColors.amber500.withValues(alpha: 0.2),
+                            color: ElderColors.amber500.withOpacity(0.2),
                             border: Border.all(color: ElderColors.amber500),
                             borderRadius: BorderRadius.circular(4),
                           ),

@@ -218,7 +218,7 @@ class _StreamSetupScreenState extends State<StreamSetupScreen> {
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: GazerTheme.connectedGreen.withValues(alpha: 0.2),
+                            color: GazerTheme.connectedGreen.withOpacity(0.2),
                             border:
                                 Border.all(color: GazerTheme.connectedGreen),
                             borderRadius: BorderRadius.circular(4),
@@ -241,7 +241,7 @@ class _StreamSetupScreenState extends State<StreamSetupScreen> {
                                 vertical: 4,
                               ),
                               decoration: BoxDecoration(
-                                color: ElderColors.amber500.withValues(alpha: 0.2),
+                                color: ElderColors.amber500.withOpacity(0.2),
                                 border: Border.all(color: ElderColors.amber500),
                                 borderRadius: BorderRadius.circular(4),
                               ),

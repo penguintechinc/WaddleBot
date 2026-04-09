@@ -2,10 +2,8 @@ include: package:flutter_lints/flutter.yaml
 
 analyzer:
   errors:
-    deprecated_member_use: ignore
     use_build_context_synchronously: ignore
     control_flow_in_finally: ignore
-    unused_element_parameter: ignore
 
 linter:
   rules:

@@ -175,8 +175,8 @@ class _LicenseStatusWidgetState extends State<LicenseStatusWidget> {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: isExpired
-              ? Colors.red.withValues(alpha: 0.5)
-              : const Color(0xFFD4AF37).withValues(alpha: 0.3),
+              ? Colors.red.withOpacity( 0.5)
+              : const Color(0xFFD4AF37).withOpacity( 0.3),
           width: 1,
         ),
       ),
@@ -224,10 +224,10 @@ class _LicenseStatusWidgetState extends State<LicenseStatusWidget> {
                                 vertical: 4,
                               ),
                               decoration: BoxDecoration(
-                                color: tierColor.withValues(alpha: 0.15),
+                                color: tierColor.withOpacity( 0.15),
                                 borderRadius: BorderRadius.circular(4),
                                 border: Border.all(
-                                  color: tierColor.withValues(alpha: 0.5),
+                                  color: tierColor.withOpacity( 0.5),
                                   width: 0.5,
                                 ),
                               ),
@@ -249,10 +249,10 @@ class _LicenseStatusWidgetState extends State<LicenseStatusWidget> {
                                   vertical: 4,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: Colors.red.withValues(alpha: 0.15),
+                                  color: Colors.red.withOpacity( 0.15),
                                   borderRadius: BorderRadius.circular(4),
                                   border: Border.all(
-                                    color: Colors.red.withValues(alpha: 0.5),
+                                    color: Colors.red.withOpacity( 0.5),
                                     width: 0.5,
                                   ),
                                 ),

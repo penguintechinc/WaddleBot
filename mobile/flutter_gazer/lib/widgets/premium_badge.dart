@@ -175,7 +175,7 @@ class PremiumBadge extends StatelessWidget {
       borderRadius: BorderRadius.circular(_getSizeValue() * 0.5),
       boxShadow: [
         BoxShadow(
-          color: (backgroundColor ?? const Color(0xFFD4AF37)).withValues(alpha: 0.4),
+          color: (backgroundColor ?? const Color(0xFFD4AF37)).withOpacity( 0.4),
           blurRadius: 6,
           offset: const Offset(0, 2),
         ),
@@ -271,7 +271,6 @@ class _PremiumBadgeOverlay extends StatelessWidget {
   final Alignment alignment;
 
   const _PremiumBadgeOverlay({
-    super.key,
     required this.child,
     required this.badge,
     this.alignment = Alignment.topRight,

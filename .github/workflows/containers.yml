@@ -441,7 +441,7 @@ jobs:
         if: matrix.condition == 'true' || github.event_name == 'workflow_dispatch'
         with:
           context: .
-          file: ./${{ matrix.module }}/Dockerfile
+          file: ${{ matrix.dockerfile }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -580,7 +580,7 @@ jobs:
         if: matrix.condition == 'true' || github.event_name == 'workflow_dispatch'
         with:
           context: .
-          file: ./${{ matrix.module }}/Dockerfile
+          file: ${{ matrix.dockerfile }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

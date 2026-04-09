@@ -261,7 +261,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: ElderColors.amber500.withValues(alpha: 0.2),
+                      color: ElderColors.amber500.withOpacity( 0.2),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Icon(
@@ -314,7 +314,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: ElderColors.amber500.withValues(alpha: 0.2),
+                    color: ElderColors.amber500.withOpacity( 0.2),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Icon(
@@ -556,7 +556,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             leading: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: ElderColors.amber500.withValues(alpha: 0.2),
+                color: ElderColors.amber500.withOpacity( 0.2),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(icon, color: ElderColors.amber500, size: 24),
@@ -596,7 +596,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: ElderColors.amber500.withValues(alpha: 0.2),
+                      color: ElderColors.amber500.withOpacity( 0.2),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Icon(
@@ -661,7 +661,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: tierColor.withValues(alpha: 0.2),
+                    color: tierColor.withOpacity( 0.2),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
@@ -712,7 +712,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       const Text('License Tier'),
                       Chip(
                         label: Text(tierName),
-                        backgroundColor: tierColor.withValues(alpha: 0.2),
+                        backgroundColor: tierColor.withOpacity( 0.2),
                         labelStyle: TextStyle(color: tierColor),
                       ),
                     ],
@@ -773,7 +773,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             style: const TextStyle(fontSize: 11),
                           ),
                           backgroundColor:
-                              ElderColors.amber500.withValues(alpha: 0.2),
+                              ElderColors.amber500.withOpacity( 0.2),
                           labelStyle: const TextStyle(
                             color: ElderColors.amber500,
                             fontSize: 11,
@@ -847,7 +847,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: ElderColors.amber500.withValues(alpha: 0.2),
+                    color: ElderColors.amber500.withOpacity( 0.2),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Icon(
@@ -941,7 +941,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: ElderColors.amber500.withValues(alpha: 0.2),
+                    color: ElderColors.amber500.withOpacity( 0.2),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Icon(
@@ -1054,7 +1054,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: ElderColors.red500.withValues(alpha: 0.2),
+                    color: ElderColors.red500.withOpacity( 0.2),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Icon(
