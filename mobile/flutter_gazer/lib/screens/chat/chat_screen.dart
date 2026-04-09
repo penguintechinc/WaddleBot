@@ -188,8 +188,8 @@ class _ChatScreenState extends State<ChatScreen> {
               return Container(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 color: state == WBConnectionState.error
-                    ? GazerTheme.streamingRed.withOpacity(0.2)
-                    : ElderColors.amber700.withOpacity(0.2),
+                    ? GazerTheme.streamingRed.withValues(alpha: 0.2)
+                    : ElderColors.amber700.withValues(alpha: 0.2),
                 child: Center(
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,

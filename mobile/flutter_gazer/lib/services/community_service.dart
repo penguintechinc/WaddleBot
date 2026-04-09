@@ -237,7 +237,7 @@ class CommunityService {
   /// ```
   Future<ApiResponse<void>> deleteCommunity(String id) async {
     try {
-      final response = await _apiClient.delete<Map<String, dynamic>>(
+      await _apiClient.delete<Map<String, dynamic>>(
         '$_basePath/$id',
         fromJson: (responseData) => responseData as Map<String, dynamic>,
       );

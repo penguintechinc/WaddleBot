@@ -211,7 +211,7 @@ class _StreamingPreviewScreenState extends State<StreamingPreviewScreen> {
                               vertical: 4,
                             ),
                             decoration: BoxDecoration(
-                              color: ElderColors.amber500.withOpacity(0.9),
+                              color: ElderColors.amber500.withValues(alpha: 0.9),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: const Text(

@@ -152,7 +152,7 @@ class _PremiumGateDialogState extends State<PremiumGateDialog> {
                 ),
                 border: Border(
                   bottom: BorderSide(
-                    color: const Color(0xFFD4AF37).withOpacity( 0.3),
+                    color: const Color(0xFFD4AF37).withValues(alpha:  0.3),
                     width: 1,
                   ),
                 ),
@@ -163,7 +163,7 @@ class _PremiumGateDialogState extends State<PremiumGateDialog> {
                     width: 56,
                     height: 56,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFD4AF37).withOpacity( 0.15),
+                      color: const Color(0xFFD4AF37).withValues(alpha:  0.15),
                       shape: BoxShape.circle,
                       border: Border.all(
                         color: const Color(0xFFD4AF37),
@@ -244,11 +244,11 @@ class _PremiumGateDialogState extends State<PremiumGateDialog> {
                                 ),
                                 decoration: BoxDecoration(
                                   color: _getTierColor(widget.currentTier)
-                                      .withOpacity( 0.15),
+                                      .withValues(alpha:  0.15),
                                   borderRadius: BorderRadius.circular(4),
                                   border: Border.all(
                                     color: _getTierColor(widget.currentTier)
-                                        .withOpacity( 0.5),
+                                        .withValues(alpha:  0.5),
                                     width: 0.5,
                                   ),
                                 ),
@@ -290,11 +290,11 @@ class _PremiumGateDialogState extends State<PremiumGateDialog> {
                                 ),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFD4AF37)
-                                      .withOpacity( 0.15),
+                                      .withValues(alpha:  0.15),
                                   borderRadius: BorderRadius.circular(4),
                                   border: Border.all(
                                     color: const Color(0xFFD4AF37)
-                                        .withOpacity( 0.5),
+                                        .withValues(alpha:  0.5),
                                     width: 0.5,
                                   ),
                                 ),

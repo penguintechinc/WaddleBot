@@ -8,7 +8,6 @@ import '../models/license_info.dart';
 
 /// Manages license validation against PenguinTech license server.
 class LicenseService {
-  static const _prefsName = 'gazer_license';
   static const _keyLicenseKey = 'license_key';
   static const _keyLastValidation = 'last_validation';
   static const _keyLicenseData = 'license_data';

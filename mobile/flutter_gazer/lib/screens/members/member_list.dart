@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_libs/flutter_libs.dart';
-import 'package:intl/intl.dart';
 import '../../services/member_service.dart';
-import '../../services/waddlebot_auth_service.dart';
 import '../../models/member.dart';
 import '../../models/api_response.dart';
 import 'member_detail.dart';
@@ -34,7 +32,6 @@ class MemberListScreen extends StatefulWidget {
 
 class _MemberListScreenState extends State<MemberListScreen> {
   late final MemberService _memberService;
-  late final WaddleBotAuthService _authService;
   late final TextEditingController _searchController;
 
   List<Member> _members = [];
@@ -69,7 +66,6 @@ class _MemberListScreenState extends State<MemberListScreen> {
   void initState() {
     super.initState();
     _memberService = MemberService.getInstance();
-    _authService = WaddleBotAuthService();
     _searchController = TextEditingController();
     _scrollController = ScrollController();
     _searchController.addListener(_onSearchChanged);
@@ -144,7 +140,7 @@ class _MemberListScreenState extends State<MemberListScreen> {
         _isLoading = false;
         _isSearching = false;
         _hasError = true;
-        _errorMessage = e.message ?? 'Search failed';
+        _errorMessage = e.message;
       });
     } catch (e) {
       if (!mounted) return;
@@ -214,7 +210,7 @@ class _MemberListScreenState extends State<MemberListScreen> {
       setState(() {
         _isLoading = false;
         _hasError = true;
-        _errorMessage = e.message ?? 'Failed to load members';
+        _errorMessage = e.message;
       });
     } catch (e) {
       if (!mounted) return;

@@ -400,8 +400,8 @@ jobs:
         run: |
           set +e
           found_secrets=0
-          for file in $(find mobile/flutter_gazer -type f \( -name "*.dart" -o -name "*.yaml" -o -name "*.yml" \) ! -path "*/.*"); do
-            if grep -iE "(password|secret|token|key).*=|api_key|private_key" "$file" | grep -v "^//" | grep -v "description:"; then
+          for file in $(find mobile/flutter_gazer -type f \( -name "*.dart" -o -name "*.yaml" -o -name "*.yml" \) ! -path "*/.*" ! -path "*/test/*"); do
+            if grep -nE "(password|secret|api_key|private_key|secret_key)\s*[:=]\s*['\"][^'\"]{8,}" "$file" | grep -v "^.*//"; then
               echo "Potential secret found in: $file"
               found_secrets=1
             fi

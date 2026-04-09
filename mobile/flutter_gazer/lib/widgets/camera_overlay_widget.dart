@@ -36,7 +36,7 @@ class _CameraOverlayWidgetState extends State<CameraOverlayWidget> {
     final overlayW = size.width * widget.settings.sizeFraction;
     switch (widget.settings.position) {
       case OverlayCorner.topLeft:
-        _position = Offset(margin, margin);
+        _position = const Offset(margin, margin);
       case OverlayCorner.topRight:
         _position = Offset(size.width - overlayW - margin, margin);
       case OverlayCorner.bottomLeft:

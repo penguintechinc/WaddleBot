@@ -72,20 +72,6 @@ class _StreamSetupScreenState extends State<StreamSetupScreen> {
     }
   }
 
-  /// Validates external RTMP URL and checks premium license.
-  /// Returns true if validation passes, false if blocked by license.
-  bool _validateRtmpUrl(String url) {
-    final isExternal = !_isWaddleBotRtmpUrl(url);
-
-    if (isExternal) {
-      final license = widget.licenseService.currentLicense;
-      final canUseExternal = license?.canStreamExternal() ?? false;
-      return canUseExternal;
-    }
-
-    return true; // Waddles URL always allowed
-  }
-
   Future<void> _toggleExternalRtmp() async {
     if (_showExternalRtmp) {
       if (!mounted) return;
@@ -149,15 +135,6 @@ class _StreamSetupScreenState extends State<StreamSetupScreen> {
     );
   }
 
-  /// Shows premium gate dialog for external RTMP restrictions.
-  void _showExternalRtmpPremiumGate() {
-    _showUpgradeDialog(
-      'External RTMP Required',
-      'External RTMP servers require a Pro or Enterprise license. '
-          'This URL is not on the WaddleBot platform.',
-    );
-  }
-
   void _applyPreset(
       int width, int height, int fps, int bitrate, bool isPremium) {
     final license = widget.licenseService.currentLicense;
@@ -190,65 +167,6 @@ class _StreamSetupScreenState extends State<StreamSetupScreen> {
         ),
       );
     }
-  }
-
-  Future<void> _saveCustomQuality() async {
-    final bitrateStr = _bitrateController.text;
-    if (bitrateStr.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter a bitrate'),
-          backgroundColor: ElderColors.red500,
-        ),
-      );
-      return;
-    }
-
-    try {
-      final bitrate = (double.parse(bitrateStr) * 1000000).toInt();
-      final license = widget.licenseService.currentLicense;
-      final maxBitrate = license?.getMaxBitrate() ?? 1500000;
-
-      if (bitrate > maxBitrate) {
-        _showUpgradeDialog(
-          'Bitrate Limit Exceeded',
-          'Your tier supports up to ${(maxBitrate / 1000000).toStringAsFixed(1)} Mbps. '
-              'Upgrade for higher bitrate.',
-        );
-        return;
-      }
-
-      final newConfig = _config.copyWith(videoBitrate: bitrate);
-      _updateConfig(newConfig);
-
-      if (!mounted) return;
-      Navigator.pop(context);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Invalid bitrate value'),
-          backgroundColor: ElderColors.red500,
-        ),
-      );
-    }
-  }
-
-  /// Validates current stream configuration before saving.
-  /// Returns true if configuration is valid and can be saved.
-  bool _validateStreamConfig() {
-    final url = _rtmpUrlController.text.trim();
-
-    // If external RTMP section is shown, validate the URL
-    if (_showExternalRtmp && url.isNotEmpty) {
-      if (!_validateRtmpUrl(url)) {
-        _showExternalRtmpPremiumGate();
-        return false;
-      }
-    }
-
-    return true;
   }
 
   @override
@@ -300,7 +218,7 @@ class _StreamSetupScreenState extends State<StreamSetupScreen> {
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: GazerTheme.connectedGreen.withOpacity(0.2),
+                            color: GazerTheme.connectedGreen.withValues(alpha: 0.2),
                             border:
                                 Border.all(color: GazerTheme.connectedGreen),
                             borderRadius: BorderRadius.circular(4),
@@ -323,7 +241,7 @@ class _StreamSetupScreenState extends State<StreamSetupScreen> {
                                 vertical: 4,
                               ),
                               decoration: BoxDecoration(
-                                color: ElderColors.amber500.withOpacity(0.2),
+                                color: ElderColors.amber500.withValues(alpha: 0.2),
                                 border: Border.all(color: ElderColors.amber500),
                                 borderRadius: BorderRadius.circular(4),
                               ),

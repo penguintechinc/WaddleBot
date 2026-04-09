@@ -34,7 +34,6 @@ jobs:
           scan-ref: '.'
           format: 'sarif'
           output: 'trivy-results.sarif'
-          trivy-version: 'v0.69.3'
 
       - name: Upload Trivy scan results
         uses: github/codeql-action/upload-sarif@v3
@@ -131,7 +130,6 @@ jobs:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.service }}:latest
           format: 'sarif'
           output: 'trivy-${{ matrix.service }}.sarif'
-          trivy-version: 'v0.69.3'
 
       - name: Upload container scan results
         uses: github/codeql-action/upload-sarif@v3

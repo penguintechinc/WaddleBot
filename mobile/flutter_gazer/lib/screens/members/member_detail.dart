@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_libs/flutter_libs.dart';
 import 'package:intl/intl.dart';
 import '../../services/member_service.dart';
-import '../../services/waddlebot_auth_service.dart';
 import '../../models/member.dart';
 import '../../models/api_response.dart';
 
@@ -35,7 +34,6 @@ class MemberDetailScreen extends StatefulWidget {
 
 class _MemberDetailScreenState extends State<MemberDetailScreen> {
   late final MemberService _memberService;
-  late final WaddleBotAuthService _authService;
 
   MemberDetail? _memberDetail;
   bool _isLoading = true;
@@ -72,7 +70,6 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
   void initState() {
     super.initState();
     _memberService = MemberService.getInstance();
-    _authService = WaddleBotAuthService();
     _loadMemberDetail();
   }
 
@@ -112,7 +109,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
       setState(() {
         _isLoading = false;
         _hasError = true;
-        _errorMessage = e.message ?? 'Failed to load member details';
+        _errorMessage = e.message;
       });
     } catch (e) {
       if (!mounted) return;
@@ -173,7 +170,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(e.message ?? 'Failed to update role'),
+          content: Text(e.message),
           backgroundColor: ElderColors.red500,
         ),
       );
@@ -272,26 +269,6 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
   /// Format date for display
   String _formatDate(DateTime date) {
     return DateFormat('MMM d, yyyy').format(date);
-  }
-
-  /// Format relative time
-  String _getRelativeTime(DateTime date) {
-    final now = DateTime.now();
-    final diff = now.difference(date);
-
-    if (diff.inMinutes < 1) {
-      return 'Now';
-    } else if (diff.inMinutes < 60) {
-      return '${diff.inMinutes}m ago';
-    } else if (diff.inHours < 24) {
-      return '${diff.inHours}h ago';
-    } else if (diff.inDays < 30) {
-      return '${diff.inDays}d ago';
-    } else if (diff.inDays < 365) {
-      return '${(diff.inDays / 30).floor()}mo ago';
-    } else {
-      return '${(diff.inDays / 365).floor()}y ago';
-    }
   }
 
   @override

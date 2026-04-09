@@ -90,7 +90,7 @@ class _CommunityListScreenState extends State<CommunityListScreen> {
       setState(() {
         _isLoading = false;
         _hasError = true;
-        _errorMessage = e.message ?? 'Failed to load communities';
+        _errorMessage = e.message;
       });
     } catch (e) {
       if (!mounted) return;

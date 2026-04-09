@@ -358,7 +358,6 @@ class DomainSelectionTest extends StatefulWidget {
 
 class _DomainSelectionTestState extends State<DomainSelectionTest> {
   WaddleBotDomain? _selectedDomain;
-  bool _isLoading = false;
 
   @override
   void initState() {
@@ -399,18 +398,15 @@ class _DomainSelectionTestState extends State<DomainSelectionTest> {
           TextButton(
             onPressed: () async {
               Navigator.pop(context);
-              setState(() => _isLoading = true);
               try {
                 await widget.settingsService.saveApiDomain(newDomain);
 
                 if (!mounted) return;
                 setState(() {
                   _selectedDomain = newDomain;
-                  _isLoading = false;
                 });
               } catch (e) {
-                if (!mounted) return;
-                setState(() => _isLoading = false);
+                // Error handled
               }
             },
             child: const Text('Change Domain',
@@ -443,7 +439,7 @@ class _DomainSelectionTestState extends State<DomainSelectionTest> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFBBF24).withOpacity(0.2),
+                    color: const Color(0xFFFBBF24).withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Icon(

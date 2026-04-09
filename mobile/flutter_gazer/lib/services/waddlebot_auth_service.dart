@@ -79,7 +79,7 @@ class WaddleBotAuthService {
         return true;
       }
     } catch (e) {
-      print('Error loading stored tokens: $e');
+      // Error loading stored tokens
     }
     return false;
   }
@@ -134,7 +134,6 @@ class WaddleBotAuthService {
           // This allows license validation tied to the authenticated user
           unawaited(_licenseService.initialize());
         } catch (e) {
-          print('Warning: License validation failed: $e');
           // Continue despite license check failure — feature gating handles this
         }
       }
@@ -265,7 +264,6 @@ class WaddleBotAuthService {
         await _licenseService.clearLicense();
       }
     } catch (e) {
-      print('Error during logout: $e');
       rethrow;
     }
   }
@@ -291,7 +289,7 @@ class WaddleBotAuthService {
         await refreshToken();
         return true;
       } catch (e) {
-        print('Token refresh failed: $e');
+        // Token refresh failed
         return false;
       }
     }

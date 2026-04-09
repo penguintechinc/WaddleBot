@@ -120,7 +120,7 @@ class ApiClient {
     try {
       _authToken = await _secureStorage.read(key: _authTokenKey);
     } catch (e) {
-      print('Error loading auth token: $e');
+      // Error loading auth token, continue without it
     }
   }
 
@@ -130,7 +130,6 @@ class ApiClient {
       _authToken = token;
       await _secureStorage.write(key: _authTokenKey, value: token);
     } catch (e) {
-      print('Error saving auth token: $e');
       rethrow;
     }
   }
@@ -144,7 +143,6 @@ class ApiClient {
       _authToken = null;
       await _secureStorage.delete(key: _authTokenKey);
     } catch (e) {
-      print('Error clearing auth token: $e');
       rethrow;
     }
   }
@@ -668,16 +666,8 @@ class LicenseInterceptor extends Interceptor {
 class ErrorInterceptor extends Interceptor {
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
-    // Log error details
-    print('API Error - Status: ${err.response?.statusCode}');
-    print('Error Message: ${err.message}');
-
-    // Additional error context
-    if (err.response != null) {
-      print('Response data: ${err.response?.data}');
-    }
-
-    // You can add error tracking/analytics here
+    // Log error details (commented out for production)
+    // Error tracking/analytics would go here
     // analyticsService.logError(err);
 
     // Continue with error propagation

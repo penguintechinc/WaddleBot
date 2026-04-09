@@ -583,7 +583,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
       ActivityType.memberLeft => Icons.person_remove,
       ActivityType.messagePosted => Icons.message,
       ActivityType.commandExecuted => Icons.terminal,
-      ActivityType.workflowTriggered => Icons.workflow,
+      ActivityType.workflowTriggered => Icons.account_tree,
     };
   }
 
