@@ -2,16 +2,16 @@ FROM python:3.13-slim-bookworm@sha256:f13a6b7565175da40695e8109f64cbc4d2e65f4c9e
 WORKDIR /app
 
 # Copy requirements
-COPY requirements.txt .
+COPY services/core-identity/requirements.txt .
 
 # Install dependencies with no cache
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY app.py .
-COPY identity_core_module/ ./identity_core_module/
-COPY security_core_module/ ./security_core_module/
-COPY credential_manager_module/ ./credential_manager_module/
+COPY services/core-identity/app.py .
+COPY core/identity_core_module/ ./identity_core_module/
+COPY core/security_core_module/ ./security_core_module/
+COPY core/credential_manager_module/ ./credential_manager_module/
 
 
 FROM python:3.13-slim-bookworm@sha256:f13a6b7565175da40695e8109f64cbc4d2e65f4c9ef2e3b321c3a44fa3c06fe7

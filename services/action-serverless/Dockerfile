@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python dependencies
-COPY requirements.txt .
+COPY services/action-serverless/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # ============================================================================
@@ -29,10 +29,10 @@ COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/pytho
 COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy application code
-COPY app.py .
-COPY lambda_action_module/ ./lambda_action_module/
-COPY openwhisk_action_module/ ./openwhisk_action_module/
-COPY gcp_functions_action_module/ ./gcp_functions_action_module/
+COPY services/action-serverless/app.py .
+COPY action/pushing/lambda_action_module/ ./lambda_action_module/
+COPY action/pushing/openwhisk_action_module/ ./openwhisk_action_module/
+COPY action/pushing/gcp_functions_action_module/ ./gcp_functions_action_module/
 
 # Create non-root user
 RUN useradd -m -u 1000 appuser && \

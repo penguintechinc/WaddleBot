@@ -6,20 +6,22 @@ FROM python:3.13-slim-bookworm@sha256:f13a6b7565175da40695e8109f64cbc4d2e65f4c9e
 WORKDIR /app
 
 # Copy requirements
-COPY requirements.txt .
+COPY services/core-data/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy all 4 module source directories
-COPY ../../core/analytics_core_module /app/core/analytics_core_module
-COPY ../../core/engagement_module /app/core/engagement_module
-COPY ../../core/reputation_module /app/core/reputation_module
-COPY ../../core/labels_core_module /app/core/labels_core_module
+COPY core/analytics_core_module /app/core/analytics_core_module
+COPY core/engagement_module /app/core/engagement_module
+COPY core/reputation_module /app/core/reputation_module
+COPY core/labels_core_module /app/core/labels_core_module
 
 # Copy shared libs
-COPY ../../libs /app/libs
+COPY libs /app/libs
 
-# Copy combined app.py
-COPY app.py /app/app.py
+# Copy combined app files
+COPY services/core-data/app.py /app/app.py
+COPY services/core-data/config.py /app/config.py
+COPY services/core-data/engagement_bp.py /app/engagement_bp.py
 
 # Final stage
 FROM python:3.13-slim-bookworm@sha256:f13a6b7565175da40695e8109f64cbc4d2e65f4c9ef2e3b321c3a44fa3c06fe7

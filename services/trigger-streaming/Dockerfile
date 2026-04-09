@@ -6,14 +6,14 @@ FROM python:3.13-slim-bookworm@sha256:f13a6b7565175da40695e8109f64cbc4d2e65f4c9e
 WORKDIR /app
 
 # Copy requirements for pip dependency resolution
-COPY requirements.txt .
+COPY services/trigger-streaming/requirements.txt .
 RUN pip install --no-cache-dir --require-hashes -r requirements.txt
 
 # Copy all three module directories (maintain original structure)
-COPY twitch_module twitch_module/
-COPY youtube_live_module youtube_live_module/
-COPY kick_module_flask kick_module_flask/
-COPY app.py app.py
+COPY trigger/receiver/twitch_module twitch_module/
+COPY trigger/receiver/youtube_live_module youtube_live_module/
+COPY trigger/receiver/kick_module_flask kick_module_flask/
+COPY services/trigger-streaming/app.py app.py
 
 # Runtime stage
 FROM python:3.13-slim-bookworm@sha256:f13a6b7565175da40695e8109f64cbc4d2e65f4c9ef2e3b321c3a44fa3c06fe7

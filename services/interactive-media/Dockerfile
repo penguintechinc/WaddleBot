@@ -5,7 +5,7 @@ FROM python:3.13-slim-bookworm@sha256:f13a6b7565175da40695e8109f64cbc4d2e65f4c9e
 WORKDIR /app
 
 # Copy requirements and install dependencies
-COPY requirements.txt .
+COPY services/interactive-media/requirements.txt .
 RUN pip install --no-cache-dir --require-hashes -r requirements.txt
 
 # Runtime stage
@@ -17,12 +17,12 @@ COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/pytho
 COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy application code
-COPY app.py .
+COPY services/interactive-media/app.py .
 
 # Copy module directories
-COPY clip_interaction_module ./clip_interaction_module
-COPY spotify_interaction_module ./spotify_interaction_module
-COPY youtube_music_interaction_module ./youtube_music_interaction_module
+COPY action/interactive/clip_interaction_module ./clip_interaction_module
+COPY action/interactive/spotify_interaction_module ./spotify_interaction_module
+COPY action/interactive/youtube_music_interaction_module ./youtube_music_interaction_module
 
 # Copy shared libraries
 COPY action/interactive/libs ./libs

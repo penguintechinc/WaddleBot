@@ -7,7 +7,7 @@ FROM python:3.13-slim-bookworm@sha256:f13a6b7565175da40695e8109f64cbc4d2e65f4c9e
 WORKDIR /app
 
 # Copy requirements
-COPY requirements.txt .
+COPY services/action-platforms/requirements.txt .
 
 # Install dependencies with hashes
 RUN pip install --no-cache-dir --require-hashes -r requirements.txt
@@ -27,15 +27,15 @@ COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/pytho
 COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy application code
-COPY app.py .
+COPY services/action-platforms/app.py .
 
 # Copy all 6 platform module directories
-COPY ../../action/pushing/slack_action_module ./slack_action_module
-COPY ../../action/pushing/teams_action_module ./teams_action_module
-COPY ../../action/pushing/mattermost_action_module ./mattermost_action_module
-COPY ../../action/pushing/googlechat_action_module ./googlechat_action_module
-COPY ../../action/pushing/twitch_action_module ./twitch_action_module
-COPY ../../action/pushing/youtube_action_module ./youtube_action_module
+COPY action/pushing/slack_action_module ./slack_action_module
+COPY action/pushing/teams_action_module ./teams_action_module
+COPY action/pushing/mattermost_action_module ./mattermost_action_module
+COPY action/pushing/googlechat_action_module ./googlechat_action_module
+COPY action/pushing/twitch_action_module ./twitch_action_module
+COPY action/pushing/youtube_action_module ./youtube_action_module
 
 # Create non-root user
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app

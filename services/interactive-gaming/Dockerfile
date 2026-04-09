@@ -6,15 +6,15 @@ FROM python:3.13-slim-bookworm@sha256:f13a6b7565175da40695e8109f64cbc4d2e65f4c9e
 WORKDIR /app
 
 # Copy requirements and install dependencies
-COPY requirements.txt .
+COPY services/interactive-gaming/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy app and all 4 module directories
-COPY app.py .
-COPY lfg_interaction_module/ ./lfg_interaction_module/
-COPY inventory_interaction_module/ ./inventory_interaction_module/
-COPY server_manager_interaction_module/ ./server_manager_interaction_module/
-COPY server_status_interaction_module/ ./server_status_interaction_module/
+COPY services/interactive-gaming/app.py .
+COPY action/interactive/lfg_interaction_module/ ./lfg_interaction_module/
+COPY action/interactive/inventory_interaction_module/ ./inventory_interaction_module/
+COPY action/interactive/server_manager_interaction_module/ ./server_manager_interaction_module/
+COPY action/interactive/server_status_interaction_module/ ./server_status_interaction_module/
 
 # Runtime stage
 FROM python:3.13-slim-bookworm@sha256:f13a6b7565175da40695e8109f64cbc4d2e65f4c9ef2e3b321c3a44fa3c06fe7
@@ -26,11 +26,11 @@ COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/pytho
 COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy app and all 4 module directories
-COPY app.py .
-COPY lfg_interaction_module/ ./lfg_interaction_module/
-COPY inventory_interaction_module/ ./inventory_interaction_module/
-COPY server_manager_interaction_module/ ./server_manager_interaction_module/
-COPY server_status_interaction_module/ ./server_status_interaction_module/
+COPY services/interactive-gaming/app.py .
+COPY action/interactive/lfg_interaction_module/ ./lfg_interaction_module/
+COPY action/interactive/inventory_interaction_module/ ./inventory_interaction_module/
+COPY action/interactive/server_manager_interaction_module/ ./server_manager_interaction_module/
+COPY action/interactive/server_status_interaction_module/ ./server_status_interaction_module/
 
 # Health check using native Python (no curl)
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
