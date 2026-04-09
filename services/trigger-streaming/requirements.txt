@@ -16,6 +16,7 @@ twitchio>=2.8.0
 pysher>=1.0.0
 psycopg2-binary>=2.9.9
 penguin-dal>=0.3.0
+pydal>=20240601.1
 
 # Environment
 python-dotenv>=1.0.0

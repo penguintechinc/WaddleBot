@@ -9,6 +9,10 @@ WORKDIR /app
 COPY services/trigger-streaming/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy and install flask_core from shared libs
+COPY libs/flask_core /app/libs/flask_core
+RUN pip install --no-cache-dir /app/libs/flask_core
+
 # Copy all three module directories (maintain original structure)
 COPY trigger/receiver/twitch_module twitch_module/
 COPY trigger/receiver/youtube_live_module youtube_live_module/

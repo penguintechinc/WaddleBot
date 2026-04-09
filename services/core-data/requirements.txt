@@ -9,6 +9,7 @@ protobuf>=5.29.4,<6.0.0
 
 # Database
 penguin-dal>=0.3.0
+pydal>=20240601.1
 
 # HTTP Client (async)
 httpx>=0.27.0,<0.28.0

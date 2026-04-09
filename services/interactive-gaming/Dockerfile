@@ -9,6 +9,10 @@ WORKDIR /app
 COPY services/interactive-gaming/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy and install flask_core from shared libs
+COPY libs/flask_core /app/libs/flask_core
+RUN pip install --no-cache-dir /app/libs/flask_core
+
 # Copy app and all 4 module directories
 COPY services/interactive-gaming/app.py .
 COPY action/interactive/lfg_interaction_module/ ./lfg_interaction_module/

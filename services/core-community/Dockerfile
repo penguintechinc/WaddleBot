@@ -27,6 +27,9 @@ COPY core/video_proxy_module ./video_proxy_module
 # Copy shared libs
 COPY libs ./libs
 
+# Install flask_core from libs
+RUN pip install --no-cache-dir ./libs/flask_core
+
 # Runtime stage
 FROM python:3.13-slim-bookworm@sha256:f13a6b7565175da40695e8109f64cbc4d2e65f4c9ef2e3b321c3a44fa3c06fe7
 

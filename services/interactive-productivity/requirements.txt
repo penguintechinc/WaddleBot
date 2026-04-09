@@ -47,6 +47,7 @@ propcache==0.4.1
 protobuf==6.33.6
 # pybind11 removed: only needed by fasttext-wheel (optional)
 penguin-dal>=0.3.0
+pydal>=20240601.1
 pydantic==2.12.5
 pydantic-core==2.41.5
 pygments==2.19.2

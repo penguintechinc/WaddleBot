@@ -18,6 +18,9 @@ COPY core/labels_core_module /app/core/labels_core_module
 # Copy shared libs
 COPY libs /app/libs
 
+# Install flask_core from libs
+RUN pip install --no-cache-dir /app/libs/flask_core
+
 # Copy combined app files
 COPY services/core-data/app.py /app/app.py
 COPY services/core-data/config.py /app/config.py

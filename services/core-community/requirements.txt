@@ -16,6 +16,7 @@ protobuf>=5.29.4
 
 # Database
 penguin-dal>=0.3.0
+pydal>=20240601.1
 psycopg2-binary>=2.9.9
 
 # Authentication & Security

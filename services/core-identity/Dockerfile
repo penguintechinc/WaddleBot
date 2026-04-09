@@ -7,6 +7,10 @@ COPY services/core-identity/requirements.txt .
 # Install dependencies with no cache
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy and install flask_core from shared libs
+COPY libs/flask_core /app/libs/flask_core
+RUN pip install --no-cache-dir /app/libs/flask_core
+
 # Copy application code
 COPY services/core-identity/app.py .
 COPY core/identity_core_module/ ./identity_core_module/
