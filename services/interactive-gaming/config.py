@@ -41,10 +41,29 @@ class Config:
     # Router/API endpoints
     ROUTER_URL = os.getenv('ROUTER_URL', 'http://localhost:8000')
     CORE_API_URL = os.getenv('CORE_API_URL', 'http://router-service:8000')
+    ROUTER_API_URL = os.getenv('ROUTER_API_URL', 'http://router-service:8000/api/v1/router')
+
+    # Legacy compatibility - alternative to JWT_SECRET_KEY
+    SECRET_KEY = os.getenv('SECRET_KEY', 'change-me-in-production')
 
     # License Server (optional, for feature gating)
     LICENSE_SERVER_URL = os.getenv('LICENSE_SERVER_URL', '')
     RELEASE_MODE = os.getenv('RELEASE_MODE', 'false').lower() == 'true'
+
+    # LFG-specific settings
+    LFG_DEFAULT_EXPIRY_MINUTES = int(os.getenv('LFG_DEFAULT_EXPIRY_MINUTES', '120'))
+    LFG_MAX_ACTIVE_POSTS_PER_USER = int(os.getenv('LFG_MAX_ACTIVE_POSTS_PER_USER', '3'))
+
+    # Server Manager & Server Status polling settings
+    DEFAULT_POLL_INTERVAL_MINUTES = int(os.getenv('DEFAULT_POLL_INTERVAL_MINUTES', '5'))
+    STATUS_CHECK_TIMEOUT = int(os.getenv('STATUS_CHECK_TIMEOUT', '10'))
+
+    # Server Manager RCON settings
+    RCON_ENCRYPTION_KEY = os.getenv('RCON_ENCRYPTION_KEY', '')
+    RCON_CONNECTION_TTL = int(os.getenv('RCON_CONNECTION_TTL', '60'))
+
+    # Security service endpoint
+    SECURITY_CORE_URL = os.getenv('SECURITY_CORE_URL', 'http://security-core-service:8010')
 
     def validate(self):
         """Validate required configuration."""
