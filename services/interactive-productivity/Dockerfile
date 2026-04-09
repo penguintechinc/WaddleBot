@@ -1,6 +1,6 @@
 # Multi-stage build for interactive-productivity service
 # Combines calendar, memories, and translate modules
-FROM python:3.13-slim-bookworm@sha256:1abab50eb9fa45facd8d8eafc78e84e62a01a57c10f87c4cdd91cf25c45e8cdd AS builder
+FROM python:3.13-slim-bookworm@sha256:f13a6b7565175da40695e8109f64cbc4d2e65f4c9ef2e3b321c3a44fa3c06fe7 AS builder
 
 WORKDIR /app
 
@@ -9,7 +9,7 @@ COPY services/interactive-productivity/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Runtime stage
-FROM python:3.13-slim-bookworm@sha256:1abab50eb9fa45facd8d8eafc78e84e62a01a57c10f87c4cdd91cf25c45e8cdd
+FROM python:3.13-slim-bookworm@sha256:f13a6b7565175da40695e8109f64cbc4d2e65f4c9ef2e3b321c3a44fa3c06fe7
 
 WORKDIR /app
 

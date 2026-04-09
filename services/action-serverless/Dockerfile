@@ -1,5 +1,5 @@
 # Multi-stage build for combined serverless action module
-FROM python:3.13-slim-bookworm@sha256:d0be73fcf9fc3c01a86f61a0a0be81eb2ac3f69f64c5f8db92aafd71b91da5c2 AS builder
+FROM python:3.13-slim-bookworm@sha256:f13a6b7565175da40695e8109f64cbc4d2e65f4c9ef2e3b321c3a44fa3c06fe7 AS builder
 
 WORKDIR /app
 
@@ -15,7 +15,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # ============================================================================
 # Runtime stage
 # ============================================================================
-FROM python:3.13-slim-bookworm@sha256:d0be73fcf9fc3c01a86f61a0a0be81eb2ac3f69f64c5f8db92aafd71b91da5c2
+FROM python:3.13-slim-bookworm@sha256:f13a6b7565175da40695e8109f64cbc4d2e65f4c9ef2e3b321c3a44fa3c06fe7
 
 WORKDIR /app
 

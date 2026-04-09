@@ -1,5 +1,5 @@
 # Multi-stage build for combined webhook receiver service
-FROM python:3.13-slim-bookworm@sha256:PLACEHOLDER_SHA as builder
+FROM python:3.13-slim-bookworm@sha256:f13a6b7565175da40695e8109f64cbc4d2e65f4c9ef2e3b321c3a44fa3c06fe7 as builder
 
 WORKDIR /app
 
@@ -8,7 +8,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Final stage
-FROM python:3.13-slim-bookworm@sha256:PLACEHOLDER_SHA
+FROM python:3.13-slim-bookworm@sha256:f13a6b7565175da40695e8109f64cbc4d2e65f4c9ef2e3b321c3a44fa3c06fe7
 
 WORKDIR /app
 

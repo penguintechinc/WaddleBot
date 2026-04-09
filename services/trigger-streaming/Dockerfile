@@ -2,7 +2,7 @@
 # Supports: Twitch, YouTube Live, Kick streaming receivers
 # Port: 8101
 
-FROM python:3.13-slim-bookworm@sha256:fdb97db0e06c2af9a4dd8a25a1d7d0f08cbf33cc79f9a9fc1c3c5df5a5e5f5c1 AS builder
+FROM python:3.13-slim-bookworm@sha256:f13a6b7565175da40695e8109f64cbc4d2e65f4c9ef2e3b321c3a44fa3c06fe7 AS builder
 WORKDIR /app
 
 # Copy requirements for pip dependency resolution
@@ -16,7 +16,7 @@ COPY kick_module_flask kick_module_flask/
 COPY app.py app.py
 
 # Runtime stage
-FROM python:3.13-slim-bookworm@sha256:fdb97db0e06c2af9a4dd8a25a1d7d0f08cbf33cc79f9a9fc1c3c5df5a5e5f5c1
+FROM python:3.13-slim-bookworm@sha256:f13a6b7565175da40695e8109f64cbc4d2e65f4c9ef2e3b321c3a44fa3c06fe7
 WORKDIR /app
 
 # Copy installed packages from builder

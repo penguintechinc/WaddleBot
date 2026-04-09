@@ -1,4 +1,4 @@
-FROM python:3.13-slim-bookworm@sha256:e347c5f57bcf7e5e1ca2af9a97c7ef2f33c4d3b21e27f1e4b2d3f5e6f7a8b9c0d AS builder
+FROM python:3.13-slim-bookworm@sha256:f13a6b7565175da40695e8109f64cbc4d2e65f4c9ef2e3b321c3a44fa3c06fe7 AS builder
 WORKDIR /app
 
 # Copy requirements
@@ -14,7 +14,7 @@ COPY security_core_module/ ./security_core_module/
 COPY credential_manager_module/ ./credential_manager_module/
 
 
-FROM python:3.13-slim-bookworm@sha256:e347c5f57bcf7e5e1ca2af9a97c7ef2f33c4d3b21e27f1e4b2d3f5e6f7a8b9c0d
+FROM python:3.13-slim-bookworm@sha256:f13a6b7565175da40695e8109f64cbc4d2e65f4c9ef2e3b321c3a44fa3c06fe7
 WORKDIR /app
 
 # Copy from builder

@@ -1,7 +1,7 @@
 # Multi-stage build for Interactive Media Service
 # Combines clip, spotify, and youtube_music interaction modules
 
-FROM python:3.13-slim-bookworm AS builder
+FROM python:3.13-slim-bookworm@sha256:f13a6b7565175da40695e8109f64cbc4d2e65f4c9ef2e3b321c3a44fa3c06fe7 AS builder
 WORKDIR /app
 
 # Copy requirements and install dependencies
@@ -9,7 +9,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --require-hashes -r requirements.txt
 
 # Runtime stage
-FROM python:3.13-slim-bookworm
+FROM python:3.13-slim-bookworm@sha256:f13a6b7565175da40695e8109f64cbc4d2e65f4c9ef2e3b321c3a44fa3c06fe7
 WORKDIR /app
 
 # Copy installed packages from builder

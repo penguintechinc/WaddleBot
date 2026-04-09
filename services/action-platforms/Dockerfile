@@ -2,7 +2,7 @@
 # Consolidates 6 platform action modules: Slack, Teams, Mattermost, GoogleChat, Twitch, YouTube
 
 # Stage 1: Builder
-FROM python:3.13-slim-bookworm@sha256:60e7c5aa1c6f93024089c3873fcb3f92a8de61d4ff1e0e44eab6639f02c2e2e8 AS builder
+FROM python:3.13-slim-bookworm@sha256:f13a6b7565175da40695e8109f64cbc4d2e65f4c9ef2e3b321c3a44fa3c06fe7 AS builder
 
 WORKDIR /app
 
@@ -13,7 +13,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --require-hashes -r requirements.txt
 
 # Stage 2: Runtime
-FROM python:3.13-slim-bookworm@sha256:60e7c5aa1c6f93024089c3873fcb3f92a8de61d4ff1e0e44eab6639f02c2e2e8
+FROM python:3.13-slim-bookworm@sha256:f13a6b7565175da40695e8109f64cbc4d2e65f4c9ef2e3b321c3a44fa3c06fe7
 
 WORKDIR /app
 
