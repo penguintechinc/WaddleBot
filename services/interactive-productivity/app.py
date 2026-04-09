@@ -19,6 +19,11 @@ import time
 
 import grpc
 
+# Add module directories to sys.path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'calendar_interaction_module'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'memories_interaction_module'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'translate_interaction_module'))
+
 from quart import Blueprint, Quart, request, jsonify
 from hypercorn.asyncio import serve
 from hypercorn.config import Config as HypercornConfig

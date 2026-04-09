@@ -19,6 +19,12 @@ from concurrent import futures
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
 
+# Add module directories to sys.path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'community_module'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'workflow_core_module'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'browser_source_core_module'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'video_proxy_module'))
+
 from quart import Quart, Blueprint, request, websocket, jsonify
 import jwt
 from penguin_dal import DAL

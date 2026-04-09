@@ -21,6 +21,11 @@ sys.path.insert(0,
                 os.path.join(os.path.dirname(os.path.dirname(__file__)),
                              'libs'))
 
+# Setup path for constituent modules
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'twitch_module'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'youtube_live_module'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'kick_module_flask'))
+
 from flask_core import (async_endpoint, create_health_blueprint,  # noqa: E402
                         init_database, setup_aaa_logging,
                         success_response, error_response)

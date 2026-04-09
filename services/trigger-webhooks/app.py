@@ -16,6 +16,12 @@ original_receiver_path = os.path.join(
 )
 sys.path.insert(0, original_receiver_path)
 
+# Setup paths for module directories
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'slack_module'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'teams_module'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'mattermost_module'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'googlechat_module'))
+
 from flask_core import (async_endpoint, create_health_blueprint,  # noqa: E402
                         init_database, setup_aaa_logging,
                         success_response)

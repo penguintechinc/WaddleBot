@@ -11,6 +11,11 @@ import asyncio
 import os
 import sys
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'lfg_interaction_module'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'inventory_interaction_module'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'server_manager_interaction_module'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'server_status_interaction_module'))
+
 from quart import Quart
 from flask_core import (
     create_health_blueprint,

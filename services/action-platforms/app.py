@@ -17,7 +17,12 @@ from functools import wraps
 
 # Import platform-specific services
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'action', 'pushing'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'slack_action_module'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'teams_action_module'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'mattermost_action_module'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'googlechat_action_module'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'twitch_action_module'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'youtube_action_module'))
 
 from slack_action_module.config import Config as SlackConfig
 from slack_action_module.services.slack_service import SlackService
