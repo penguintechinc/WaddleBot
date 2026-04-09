@@ -79,10 +79,7 @@ app = Quart(__name__)
 # Initialize shared database
 db = DAL(
     'sqlite:action_platforms.db',
-    folder='/tmp/penguin-dal',
     pool_size=10,
-    migrate_enabled=False,
-    fake_migrate_all=True
 )
 
 # Platform service instances

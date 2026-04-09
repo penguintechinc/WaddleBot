@@ -16,12 +16,12 @@ from botbuilder.core import (
     BotFrameworkAdapter,
     BotFrameworkAdapterSettings,
     TurnContext,
-    ConversationReference,
 )
 from botbuilder.schema import (
     Activity,
     ActivityTypes,
     ChannelAccount,
+    ConversationReference,
 )
 from botbuilder.integration.aiohttp.cloud_adapter import CloudAdapter
 from botbuilder.integration.aiohttp.adapter_settings import AdapterSettings
