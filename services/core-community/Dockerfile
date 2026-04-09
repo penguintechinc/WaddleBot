@@ -17,6 +17,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY services/core-community/app.py .
+COPY services/core-community/config.py .
 
 # Copy all 4 module directories
 COPY core/community_module ./community_module

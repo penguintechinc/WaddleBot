@@ -124,9 +124,9 @@ async def _run_twitch_bot():
 @app.before_serving
 async def startup():
     """Initialize all streaming services on application startup."""
-    global (dal, twitch_viewer_tracker, twitch_bot, twitch_channel_manager,
-            twitch_eventsub_handler, twitch_bot_task, youtube_client,
-            youtube_chat_poller, youtube_webhook_handler)
+    global dal, twitch_viewer_tracker, twitch_bot, twitch_channel_manager, \
+           twitch_eventsub_handler, twitch_bot_task, youtube_client, \
+           youtube_chat_poller, youtube_webhook_handler
 
     logger.system("Starting trigger-streaming service", action="startup")
 

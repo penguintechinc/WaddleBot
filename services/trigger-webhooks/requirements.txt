@@ -12,9 +12,10 @@ slack-bolt>=1.18.0
 slack-sdk>=3.21.0
 
 # Microsoft Bot Framework and Teams SDK
-botbuilder-core>=4.14.0
-botbuilder-schema>=4.14.0
-botbuilder-integration-aiohttp>=4.14.0
+botbuilder-core>=4.16.0
+botbuilder-schema>=4.16.0
+botbuilder-integration-aiohttp>=4.16.0
+botframework-connector>=4.16.0
 
 # Mattermost SDK and WebSocket
 mattermostdriver>=7.3.0
