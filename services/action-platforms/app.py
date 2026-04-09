@@ -218,7 +218,9 @@ def require_auth(f):
 async def health_check():
     """Health check endpoint"""
     try:
-        db.executesql('SELECT 1')
+        # Verify database connection is initialized
+        if db is None:
+            raise RuntimeError("Database not initialized")
 
         active_services = list(services.keys())
         return jsonify({

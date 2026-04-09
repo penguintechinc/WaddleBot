@@ -139,12 +139,12 @@ async def startup():
 
 # Register all blueprints with their URL prefixes
 # LFG module endpoints: /api/v1/lfg/*
-app.register_blueprint(lfg_api_bp)
+app.register_blueprint(lfg_api_bp, name='lfg_api')
 
 # Inventory module endpoints: /api/v1/inventory/*
 # (Note: inventory module only has /api/v1/status endpoint)
 inventory_api_bp.url_prefix = '/api/v1/inventory'
-app.register_blueprint(inventory_api_bp)
+app.register_blueprint(inventory_api_bp, name='inventory_api')
 
 # Server Manager endpoints:
 # - /api/v1/server-status/* (backward compat with server_status module)
@@ -155,7 +155,7 @@ app.register_blueprint(manager_api_bp)
 # Server Status endpoints: /api/v1/server-status/*
 # Note: These overlap with manager_status_bp; manager_status_bp takes precedence
 # for backward compatibility. Additional server_status endpoints are available here.
-app.register_blueprint(status_api_bp)
+app.register_blueprint(status_api_bp, name='status_api')
 
 
 if __name__ == '__main__':

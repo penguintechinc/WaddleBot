@@ -26,6 +26,7 @@ COPY trigger/receiver/slack_module slack_module
 COPY trigger/receiver/teams_module teams_module
 COPY trigger/receiver/mattermost_module mattermost_module
 COPY trigger/receiver/googlechat_module googlechat_module
+COPY trigger/receiver/libs libs
 
 # Health check using Quart's health endpoint
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 \

@@ -9,12 +9,15 @@ import sys
 
 from quart import Blueprint, Quart, request
 
-# Setup path for shared libraries from original receiver location
+# Setup path for shared libraries — works both locally and in Docker
+# Locally: trigger/receiver/ contains libs/ package
+# Docker: /app/ contains libs/ (copied by Dockerfile)
 original_receiver_path = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
-    'trigger', 'receiver', 'libs'
+    'trigger', 'receiver'
 )
 sys.path.insert(0, original_receiver_path)
+sys.path.insert(0, os.path.dirname(__file__))
 
 _base_dir = os.path.dirname(__file__)
 
