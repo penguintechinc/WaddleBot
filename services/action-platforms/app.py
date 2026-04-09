@@ -78,8 +78,8 @@ app = Quart(__name__)
 
 # Initialize shared database
 db = DAL(
-    'sqlite:action_platforms.db',
-    pool_size=10,
+    os.getenv('DATABASE_URL', 'sqlite:///tmp/action_platforms.db'),
+    pool_size=int(os.getenv('DB_POOL_SIZE', '10')),
 )
 
 # Platform service instances

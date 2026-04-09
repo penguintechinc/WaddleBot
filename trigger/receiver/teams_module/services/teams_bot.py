@@ -23,8 +23,7 @@ from botbuilder.schema import (
     ChannelAccount,
     ConversationReference,
 )
-from botbuilder.integration.aiohttp.cloud_adapter import CloudAdapter
-from botbuilder.integration.aiohttp.adapter_settings import AdapterSettings
+# botbuilder.integration.aiohttp removed in newer versions — unused imports removed
 
 
 class TeamsBotService:
