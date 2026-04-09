@@ -6,7 +6,7 @@ WORKDIR /app
 
 # Copy requirements and install dependencies
 COPY services/interactive-media/requirements.txt .
-RUN pip install --no-cache-dir --require-hashes -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Runtime stage
 FROM python:3.13-slim-bookworm@sha256:f13a6b7565175da40695e8109f64cbc4d2e65f4c9ef2e3b321c3a44fa3c06fe7
@@ -23,9 +23,6 @@ COPY services/interactive-media/app.py .
 COPY action/interactive/clip_interaction_module ./clip_interaction_module
 COPY action/interactive/spotify_interaction_module ./spotify_interaction_module
 COPY action/interactive/youtube_music_interaction_module ./youtube_music_interaction_module
-
-# Copy shared libraries
-COPY action/interactive/libs ./libs
 
 # Environment variables
 ENV PYTHONUNBUFFERED=1

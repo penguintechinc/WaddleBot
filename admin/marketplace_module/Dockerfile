@@ -13,8 +13,8 @@ COPY scripts/healthcheck.py /usr/local/bin/healthcheck.py
 RUN chmod 755 /usr/local/bin/healthcheck.py
 
 # Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
+RUN groupadd -r -g 1001 nodejs && \
+    useradd -r -u 1001 -g nodejs -s /sbin/nologin nodejs
 
 # Copy backend package files
 COPY admin/marketplace_module/backend/package*.json ./
@@ -43,9 +43,9 @@ USER nodejs
 # Expose port
 EXPOSE 8070
 
-# Health check
+# Health check using native Node.js (python3 removed in build)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python3 /usr/local/bin/healthcheck.py http://localhost:8070/health
+    CMD node -e "require('http').get('http://localhost:8070/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
 
 # Start with dumb-init
 ENTRYPOINT ["dumb-init", "--"]

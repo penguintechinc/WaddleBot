@@ -22,9 +22,6 @@ COPY action/interactive/calendar_interaction_module ./calendar_interaction_modul
 COPY action/interactive/memories_interaction_module ./memories_interaction_module
 COPY action/interactive/translate_interaction_module ./translate_interaction_module
 
-# Copy shared libs
-COPY action/interactive/libs ./libs
-
 # Copy combined app
 COPY services/interactive-productivity/app.py .
 

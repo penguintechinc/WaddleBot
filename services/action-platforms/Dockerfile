@@ -9,8 +9,8 @@ WORKDIR /app
 # Copy requirements
 COPY services/action-platforms/requirements.txt .
 
-# Install dependencies with hashes
-RUN pip install --no-cache-dir --require-hashes -r requirements.txt
+# Install dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Stage 2: Runtime
 FROM python:3.13-slim-bookworm@sha256:f13a6b7565175da40695e8109f64cbc4d2e65f4c9ef2e3b321c3a44fa3c06fe7

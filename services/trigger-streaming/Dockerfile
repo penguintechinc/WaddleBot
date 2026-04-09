@@ -7,7 +7,7 @@ WORKDIR /app
 
 # Copy requirements for pip dependency resolution
 COPY services/trigger-streaming/requirements.txt .
-RUN pip install --no-cache-dir --require-hashes -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy all three module directories (maintain original structure)
 COPY trigger/receiver/twitch_module twitch_module/
