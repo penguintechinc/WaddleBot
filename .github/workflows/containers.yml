@@ -217,7 +217,7 @@ jobs:
             condition: ${{ needs.detect-changes.outputs.router == 'true' || needs.detect-changes.outputs.libs == 'true' }}
           - module: admin/marketplace_module
             name: marketplace
-            port: 8001
+            port: 8070
             condition: ${{ needs.detect-changes.outputs.marketplace == 'true' || needs.detect-changes.outputs.libs == 'true' }}
           - name: migrations
             dockerfile: ./migrations/Dockerfile
