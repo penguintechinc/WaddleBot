@@ -34,8 +34,8 @@ jinja2==3.1.6
 jmespath==1.1.0
 markupsafe==3.0.2
 multidict>=6.0.0,<7.0.0
-proto-plus==1.25.0
-protobuf==5.29.3
+proto-plus==1.27.2
+protobuf==6.33.6
 pyasn1-modules==0.4.1
 pyasn1==0.4.8
 pydantic-core==2.27.2
