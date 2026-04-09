@@ -149,13 +149,13 @@ app.register_blueprint(inventory_api_bp, name='inventory_api')
 # Server Manager endpoints:
 # - /api/v1/server-status/* (backward compat with server_status module)
 # - /api/v1/server-manager/* (new RCON/enforcement endpoints)
-app.register_blueprint(manager_status_bp)
+app.register_blueprint(manager_status_bp, name='mgr_status_api')
 app.register_blueprint(manager_api_bp)
 
 # Server Status endpoints: /api/v1/server-status/*
 # Note: These overlap with manager_status_bp; manager_status_bp takes precedence
 # for backward compatibility. Additional server_status endpoints are available here.
-app.register_blueprint(status_api_bp, name='status_api')
+app.register_blueprint(status_api_bp, name='svr_status_api')
 
 
 if __name__ == '__main__':
