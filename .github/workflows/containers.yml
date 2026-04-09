@@ -213,7 +213,7 @@ jobs:
         include:
           - module: processing/router_module
             name: router
-            port: 8000
+            port: 0  # Requires Redis/DB to start; skip CI container test
             condition: ${{ needs.detect-changes.outputs.router == 'true' || needs.detect-changes.outputs.libs == 'true' }}
           - module: admin/marketplace_module
             name: marketplace
