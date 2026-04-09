@@ -3,7 +3,6 @@ import 'package:intl/intl.dart';
 import 'dart:developer' as developer;
 import 'package:flutter_libs/flutter_libs.dart';
 import '../../config/constants.dart';
-import '../../config/form_configs.dart';
 import '../../models/auth.dart';
 import '../../models/license_info.dart';
 import '../../models/domain_config.dart';
@@ -83,9 +82,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _handleAccountSettingsEdit() async {
-    final formBuilder = FormConfigs.getUserProfileFormConfig(
-      onSubmit: (_) async {},
-    );
     // Pre-populate form with current user data
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -95,20 +91,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _handleAudioSettings() async {
-    const availableMicrophones = [
-      'Default Microphone',
-      'Built-in Mic',
-      'External USB Mic'
-    ];
-    final isPremium = widget.licenseService
-        .isFeatureAvailable(AppConstants.featureAdvancedSettings);
-
-    final formBuilder = FormConfigs.getAudioSettingsFormConfig(
-      isPremium: isPremium,
-      availableMicrophones: availableMicrophones,
-      onSubmit: (_) async {},
-    );
-
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -118,10 +100,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _handleNotificationPreferences() async {
-    final formBuilder = FormConfigs.getNotificationPreferencesFormConfig(
-      onSubmit: (_) async {},
-    );
-
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Notification preferences coming soon')),

@@ -118,7 +118,7 @@ class _StreamingPreviewScreenState extends State<StreamingPreviewScreen> {
     final result = await OverlaySettingsDialog.show(context, _overlaySettings);
     if (result != null && mounted) {
       setState(() => _overlaySettings = result);
-      await widget.compositorService.updateOverlay(_overlaySettings);
+      widget.compositorService.updateOverlaySettings(_overlaySettings);
     }
   }
 

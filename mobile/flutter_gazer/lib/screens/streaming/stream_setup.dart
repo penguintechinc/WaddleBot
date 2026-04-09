@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_libs/flutter_libs.dart';
-import '../../config/constants.dart';
 import '../../config/theme.dart';
 import '../../models/license_info.dart';
 import '../../models/stream_config.dart';
@@ -32,7 +31,6 @@ class _StreamSetupScreenState extends State<StreamSetupScreen> {
 
   late StreamConfig _config;
   bool _showExternalRtmp = false;
-  bool _useCustomQuality = false;
   bool _isExternalRtmpUrl = false;
 
   @override
@@ -183,7 +181,6 @@ class _StreamSetupScreenState extends State<StreamSetupScreen> {
     );
 
     _updateConfig(newConfig);
-    setState(() => _useCustomQuality = false);
 
     if (actualBitrate < bitrate) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -308,7 +305,7 @@ class _StreamSetupScreenState extends State<StreamSetupScreen> {
                                 Border.all(color: GazerTheme.connectedGreen),
                             borderRadius: BorderRadius.circular(4),
                           ),
-                          child: const Text(
+                          child: Text(
                             'FREE',
                             style: TextStyle(
                               fontSize: 11,
@@ -415,9 +412,7 @@ class _StreamSetupScreenState extends State<StreamSetupScreen> {
                 currentConfig: _config,
                 licenseService: widget.licenseService,
                 onPresetSelect: _applyPreset,
-                onCustom: () {
-                  setState(() => _useCustomQuality = true);
-                },
+                onCustom: () {},
               ),
               const SizedBox(height: 24),
 
@@ -504,13 +499,13 @@ class _StreamSetupScreenState extends State<StreamSetupScreen> {
                           padding: const EdgeInsets.only(top: 4),
                           child: Row(
                             children: [
-                              const Icon(
+                              Icon(
                                 Icons.check_circle,
                                 size: 14,
                                 color: GazerTheme.connectedGreen,
                               ),
                               const SizedBox(width: 6),
-                              const Text(
+                              Text(
                                 'External RTMP unlocked',
                                 style: TextStyle(
                                   fontSize: 12,

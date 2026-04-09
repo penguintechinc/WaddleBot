@@ -1,4 +1,5 @@
 name: Desktop Bridge Build
+# DISABLED: source code not present in repo (v2.2.x consolidation)
 
 on:
   push:
@@ -20,6 +21,7 @@ env:
 jobs:
   # Code Quality and Security
   code-quality:
+    if: false
     name: Code Quality & Security
     runs-on: ubuntu-latest
     steps:
@@ -84,6 +86,7 @@ jobs:
 
   # Unit Tests
   unit-tests:
+    if: false
     name: Unit Tests
     runs-on: ${{ matrix.os }}
     needs: code-quality
@@ -155,6 +158,7 @@ jobs:
 
   # Integration Tests
   integration-tests:
+    if: false
     name: Integration Tests
     runs-on: ${{ matrix.os }}
     needs: unit-tests
@@ -198,6 +202,7 @@ jobs:
 
   # Build Binaries
   build:
+    if: false
     name: Build Binaries
     runs-on: ${{ matrix.os }}
     needs: unit-tests
@@ -277,6 +282,7 @@ jobs:
 
   # Build Docker Image
   build-docker:
+    if: false
     name: Build Docker Image
     runs-on: ubuntu-latest
     needs: unit-tests
@@ -322,6 +328,7 @@ jobs:
 
   # Benchmarks
   benchmarks:
+    if: false
     name: Benchmarks
     runs-on: ubuntu-latest
     needs: unit-tests
@@ -366,6 +373,7 @@ jobs:
 
   # Generate Documentation
   documentation:
+    if: false
     name: Generate Documentation
     runs-on: ubuntu-latest
     needs: unit-tests
@@ -411,6 +419,7 @@ jobs:
 
   # Create Release
   release:
+    if: false
     name: Create Release
     runs-on: ubuntu-latest
     needs: [build, integration-tests, benchmarks, build-docker]
@@ -476,6 +485,7 @@ jobs:
 
   # Performance Monitoring
   performance-monitoring:
+    if: false
     name: Performance Monitoring
     runs-on: ubuntu-latest
     needs: benchmarks
@@ -500,6 +510,7 @@ jobs:
 
   # Build Summary
   build-summary:
+    if: false
     name: Build Summary
     runs-on: ubuntu-latest
     needs: [code-quality, unit-tests, integration-tests, build, build-docker, documentation]
@@ -544,6 +555,7 @@ jobs:
 
   # Deployment
   deploy:
+    if: false
     name: Deploy
     runs-on: ubuntu-latest
     needs: [build, build-docker]

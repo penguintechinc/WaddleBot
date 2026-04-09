@@ -6,6 +6,7 @@
 # Deprecated: This workflow will be removed in a future version.
 # Maintenance Mode: Critical bug fixes and security patches only.
 name: Android App Build (LEGACY)
+# DISABLED: source code not present in repo (v2.2.x consolidation)
 
 on:
   push:
@@ -29,6 +30,7 @@ env:
 jobs:
   # Static Analysis and Code Quality
   static-analysis:
+    if: false
     name: Static Analysis
     runs-on: ubuntu-latest
     steps:
@@ -86,6 +88,7 @@ jobs:
 
   # Unit Tests
   unit-tests:
+    if: false
     name: Unit Tests
     runs-on: ubuntu-latest
     steps:
@@ -144,6 +147,7 @@ jobs:
 
   # Instrumentation Tests
   instrumentation-tests:
+    if: false
     name: Instrumentation Tests
     runs-on: ubuntu-latest
     strategy:
@@ -217,6 +221,7 @@ jobs:
 
   # Build APKs
   build-apk:
+    if: false
     name: Build APK
     runs-on: ubuntu-latest
     needs: [static-analysis, unit-tests]
@@ -302,6 +307,7 @@ jobs:
 
   # Build AAB (Android App Bundle)
   build-aab:
+    if: false
     name: Build AAB
     runs-on: ubuntu-latest
     needs: [static-analysis, unit-tests]
@@ -359,6 +365,7 @@ jobs:
 
   # Security Analysis
   security-analysis:
+    if: false
     name: Security Analysis
     runs-on: ubuntu-latest
     needs: [build-apk]
@@ -408,6 +415,7 @@ jobs:
 
   # Performance Testing
   performance-test:
+    if: false
     name: Performance Testing
     runs-on: ubuntu-latest
     needs: [build-apk]
@@ -452,6 +460,7 @@ jobs:
 
   # Deploy to Play Store (Internal Track)
   deploy-internal:
+    if: false
     name: Deploy to Play Store (Internal)
     runs-on: ubuntu-latest
     needs: [build-aab, instrumentation-tests, security-analysis]
@@ -485,6 +494,7 @@ jobs:
 
   # Generate and upload build artifacts summary
   build-summary:
+    if: false
     name: Build Summary
     runs-on: ubuntu-latest
     needs: [static-analysis, unit-tests, instrumentation-tests, build-apk, build-aab, security-analysis, performance-test]
@@ -531,6 +541,7 @@ jobs:
 
   # Cleanup
   cleanup:
+    if: false
     name: Cleanup
     runs-on: ubuntu-latest
     needs: [build-summary]

@@ -92,11 +92,8 @@ jobs:
       router: ${{ steps.changes.outputs.router }}
       marketplace: ${{ steps.changes.outputs.marketplace }}
       hub: ${{ steps.changes.outputs.hub }}
-      trigger-discord: ${{ steps.changes.outputs.trigger-discord }}
       trigger-streaming: ${{ steps.changes.outputs.trigger-streaming }}
       trigger-webhooks: ${{ steps.changes.outputs.trigger-webhooks }}
-      interactive-ai: ${{ steps.changes.outputs.interactive-ai }}
-      interactive-loyalty: ${{ steps.changes.outputs.interactive-loyalty }}
       interactive-social: ${{ steps.changes.outputs.interactive-social }}
       interactive-gaming: ${{ steps.changes.outputs.interactive-gaming }}
       interactive-media: ${{ steps.changes.outputs.interactive-media }}
@@ -104,10 +101,8 @@ jobs:
       core-data: ${{ steps.changes.outputs.core-data }}
       core-identity: ${{ steps.changes.outputs.core-identity }}
       core-community: ${{ steps.changes.outputs.core-community }}
-      ai-researcher: ${{ steps.changes.outputs.ai-researcher }}
       action-platforms: ${{ steps.changes.outputs.action-platforms }}
       action-serverless: ${{ steps.changes.outputs.action-serverless }}
-      action-discord: ${{ steps.changes.outputs.action-discord }}
       libs: ${{ steps.changes.outputs.libs }}
       migrations: ${{ steps.changes.outputs.migrations }}
 
@@ -129,9 +124,6 @@ jobs:
             hub:
               - 'admin/hub_module/**'
               - 'libs/**'
-            trigger-discord:
-              - 'trigger/receiver/discord_module/**'
-              - 'libs/**'
             trigger-streaming:
               - 'trigger/receiver/twitch_module/**'
               - 'trigger/receiver/youtube_live_module/**'
@@ -142,12 +134,6 @@ jobs:
               - 'trigger/receiver/teams_module/**'
               - 'trigger/receiver/mattermost_module/**'
               - 'trigger/receiver/googlechat_module/**'
-              - 'libs/**'
-            interactive-ai:
-              - 'action/interactive/ai_interaction_module/**'
-              - 'libs/**'
-            interactive-loyalty:
-              - 'action/interactive/loyalty_interaction_module/**'
               - 'libs/**'
             interactive-social:
               - 'action/interactive/alias_interaction_module/**'
@@ -189,9 +175,6 @@ jobs:
               - 'core/video_proxy_module/**'
               - 'core/module_rtc/**'
               - 'libs/**'
-            ai-researcher:
-              - 'core/ai_researcher_module/**'
-              - 'libs/**'
             action-platforms:
               - 'action/pushing/slack_action_module/**'
               - 'action/pushing/teams_action_module/**'
@@ -204,9 +187,6 @@ jobs:
               - 'action/pushing/lambda_action_module/**'
               - 'action/pushing/openwhisk_action_module/**'
               - 'action/pushing/gcp_functions_action_module/**'
-              - 'libs/**'
-            action-discord:
-              - 'action/pushing/discord_action_module/**'
               - 'libs/**'
             libs:
               - 'libs/**'
@@ -225,7 +205,6 @@ jobs:
       needs.detect-changes.outputs.core-data == 'true' ||
       needs.detect-changes.outputs.core-identity == 'true' ||
       needs.detect-changes.outputs.core-community == 'true' ||
-      needs.detect-changes.outputs.ai-researcher == 'true' ||
       needs.detect-changes.outputs.libs == 'true' ||
       github.event_name == 'workflow_dispatch'
     strategy:
@@ -260,10 +239,6 @@ jobs:
             port: 0
             context: .
             condition: ${{ needs.detect-changes.outputs.core-community == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: core/ai_researcher_module
-            name: ai-researcher
-            port: 0
-            condition: ${{ needs.detect-changes.outputs.ai-researcher == 'true' || needs.detect-changes.outputs.libs == 'true' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -328,7 +303,6 @@ jobs:
     needs: [determine-version, detect-changes]
     if: >
       needs.detect-changes.outputs.trigger-streaming == 'true' ||
-      needs.detect-changes.outputs.trigger-discord == 'true' ||
       needs.detect-changes.outputs.trigger-webhooks == 'true' ||
       needs.detect-changes.outputs.libs == 'true' ||
       github.event_name == 'workflow_dispatch'
@@ -341,11 +315,6 @@ jobs:
             port: 0
             context: .
             condition: ${{ needs.detect-changes.outputs.trigger-streaming == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - name: trigger-discord
-            dockerfile: ./services/trigger-discord/Dockerfile
-            port: 0
-            context: .
-            condition: ${{ needs.detect-changes.outputs.trigger-discord == 'true' || needs.detect-changes.outputs.libs == 'true' }}
           - name: trigger-webhooks
             dockerfile: ./services/trigger-webhooks/Dockerfile
             port: 0
@@ -414,8 +383,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: [determine-version, detect-changes]
     if: >
-      needs.detect-changes.outputs.interactive-ai == 'true' ||
-      needs.detect-changes.outputs.interactive-loyalty == 'true' ||
       needs.detect-changes.outputs.interactive-social == 'true' ||
       needs.detect-changes.outputs.interactive-gaming == 'true' ||
       needs.detect-changes.outputs.interactive-media == 'true' ||
@@ -426,14 +393,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - module: action/interactive/ai_interaction_module
-            name: interactive-ai
-            port: 8020
-            condition: ${{ needs.detect-changes.outputs.interactive-ai == 'true' || needs.detect-changes.outputs.libs == 'true' }}
-          - module: action/interactive/loyalty_interaction_module
-            name: interactive-loyalty
-            port: 0
-            condition: ${{ needs.detect-changes.outputs.interactive-loyalty == 'true' || needs.detect-changes.outputs.libs == 'true' }}
           - name: interactive-social
             dockerfile: ./services/interactive-social/Dockerfile
             port: 0
@@ -575,7 +534,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: [determine-version, detect-changes]
     if: >
-      needs.detect-changes.outputs.action-discord == 'true' ||
       needs.detect-changes.outputs.action-platforms == 'true' ||
       needs.detect-changes.outputs.action-serverless == 'true' ||
       needs.detect-changes.outputs.libs == 'true' ||
@@ -584,10 +542,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - module: action/pushing/discord_action_module
-            name: action-discord
-            port: 0
-            condition: ${{ needs.detect-changes.outputs.action-discord == 'true' || needs.detect-changes.outputs.libs == 'true' }}
           - name: action-platforms
             dockerfile: ./services/action-platforms/Dockerfile
             port: 0
@@ -660,8 +614,8 @@ jobs:
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
-    needs: [determine-version, build-core, build-collectors, build-interactions, build-admin, build-actions]
-    if: always() && (needs.build-core.result == 'success' || needs.build-collectors.result == 'success' || needs.build-interactions.result == 'success' || needs.build-admin.result == 'success' || needs.build-actions.result == 'success')
+    needs: [determine-version, build-core, build-triggers, build-interactions, build-admin, build-actions]
+    if: always() && (needs.build-core.result == 'success' || needs.build-triggers.result == 'success' || needs.build-interactions.result == 'success' || needs.build-admin.result == 'success' || needs.build-actions.result == 'success')
     continue-on-error: true
     strategy:
       matrix:
@@ -670,42 +624,17 @@ jobs:
           - marketplace
           - hub-api
           - hub-webui
-          - collector-twitch
-          - collector-discord
-          - collector-slack
-          - collector-youtube
-          - collector-kick
-          - interactive-ai
-          - interactive-inventory
-          - interactive-alias
-          - interactive-shoutout
-          - interactive-calendar
-          - interactive-memories
-          - interactive-clip
-          - interactive-lfg
-          - interactive-loyalty
-          - interactive-server-manager
-          - interactive-server-status
-          - interactive-spotify
-          - interactive-translate
-          - interactive-youtube-music
-          - core-labels
+          - trigger-streaming
+          - trigger-webhooks
+          - interactive-social
+          - interactive-gaming
+          - interactive-media
+          - interactive-productivity
+          - core-data
           - core-identity
-          - core-browser-source
-          - core-reputation
           - core-community
-          - ai-researcher
-          - core-video-proxy
-          - core-engagement
-          - core-module-rtc
-          - core-workflow
-          - core-analytics
-          - core-credential-manager
-          - core-security
-          - action-discord
-          - action-slack
-          - action-twitch
-          - action-youtube
+          - action-platforms
+          - action-serverless
           - migrations
     steps:
       - name: Run Trivy vulnerability scanner
@@ -725,7 +654,7 @@ jobs:
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [determine-version, build-core, build-collectors, build-interactions, build-admin, build-actions]
+    needs: [determine-version, build-core, build-triggers, build-interactions, build-admin, build-actions]
     if: needs.determine-version.outputs.is_release == 'true'
     permissions:
       contents: write
@@ -772,7 +701,7 @@ jobs:
   notify:
     name: Notify Build Status
     runs-on: ubuntu-latest
-    needs: [determine-version, build-core, build-collectors, build-interactions, build-admin, build-actions]
+    needs: [determine-version, build-core, build-triggers, build-interactions, build-admin, build-actions]
     if: always()
     steps:
       - name: Build Status Summary
@@ -781,7 +710,7 @@ jobs:
           echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| Core Modules | ${{ needs.build-core.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Collector Modules | ${{ needs.build-collectors.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Trigger Modules | ${{ needs.build-triggers.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Interaction Modules | ${{ needs.build-interactions.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Admin Modules | ${{ needs.build-admin.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Action Modules | ${{ needs.build-actions.result }} |" >> $GITHUB_STEP_SUMMARY

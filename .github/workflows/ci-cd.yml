@@ -7,6 +7,11 @@ on:
     branches: [ main, develop ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  packages: write
+  security-events: write
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
@@ -73,16 +78,16 @@ jobs:
     strategy:
       matrix:
         service:
-          - router_module
-          - marketplace_module
-          - portal_module
-          - twitch_module
-          - discord_module
-          - slack_module
-          - ai_interaction_module
-          - labels_core_module
-          - alias_interaction_module
-          - shoutout_interaction_module
+          - processing/router_module
+          - admin/marketplace_module
+          - admin/hub_module
+          - core/identity_core_module
+          - core/community_module
+          - core/analytics_core_module
+          - trigger/receiver/twitch_module
+          - trigger/receiver/discord_module
+          - action/interactive/loyalty_interaction_module
+          - action/interactive/ai_interaction_module
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -139,6 +144,7 @@ jobs:
     name: Android App Build
     runs-on: ubuntu-latest
     needs: security
+    if: false  # DISABLED: Premium/Android source not present
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -207,6 +213,7 @@ jobs:
     name: Desktop Bridge Build
     runs-on: ${{ matrix.os }}
     needs: security
+    if: false  # DISABLED: Premium/Desktop source not present
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]

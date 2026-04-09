@@ -46,13 +46,6 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
     super.dispose();
   }
 
-  /// Navigate to edit community screen
-  void _navigateToEditCommunity(CommunityDetail community) {
-    Navigator.of(context).pushNamed(
-      '/edit-community',
-      arguments: community,
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -61,17 +54,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
         title: const Text('Community Details'),
         backgroundColor: ElderColors.slate800,
         elevation: 0,
-        actions: widget.isAdmin
-            ? [
-                IconButton(
-                  icon: const Icon(Icons.edit),
-                  onPressed: () {
-                    // This will be called with community data from FutureBuilder
-                  },
-                  tooltip: 'Edit Community',
-                ),
-              ]
-            : null,
+        actions: null,
       ),
       backgroundColor: ElderColors.slate950,
       body: FutureBuilder<ApiResponse<CommunityDetail>>(
@@ -92,12 +75,6 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
             return _buildErrorState('Community not found');
           }
 
-          // Update AppBar action with community data
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted && widget.isAdmin) {
-              // Action already defined in AppBar
-            }
-          });
 
           return _buildDetailContent(community);
         },
@@ -461,17 +438,19 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
                           ),
                         ],
                       ),
-                      LinearProgressIndicator(
-                        value: community.stats.activeMembers /
-                            (community.stats.memberCount > 0
-                                ? community.stats.memberCount
-                                : 1),
-                        minHeight: 8,
-                        backgroundColor: ElderColors.slate700,
-                        valueColor: const AlwaysStoppedAnimation<Color>(
-                          ElderColors.green500,
+                      Expanded(
+                        child: LinearProgressIndicator(
+                          value: community.stats.activeMembers /
+                              (community.stats.memberCount > 0
+                                  ? community.stats.memberCount
+                                  : 1),
+                          minHeight: 8,
+                          backgroundColor: ElderColors.slate700,
+                          valueColor: const AlwaysStoppedAnimation<Color>(
+                            ElderColors.green500,
+                          ),
                         ),
-                      ).expand(),
+                      ),
                     ],
                   ),
                 ],
@@ -599,18 +578,13 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen>
 
   /// Get icon for activity type
   IconData _getActivityIcon(ActivityType type) {
-    switch (type) {
-      case ActivityType.memberJoined:
-        return Icons.person_add;
-      case ActivityType.memberLeft:
-        return Icons.person_remove;
-      case ActivityType.messagePosted:
-        return Icons.message;
-      case ActivityType.commandExecuted:
-        return Icons.terminal;
-      case ActivityType.workflowTriggered:
-        return Icons.workflow;
-    }
+    return switch (type) {
+      ActivityType.memberJoined => Icons.person_add,
+      ActivityType.memberLeft => Icons.person_remove,
+      ActivityType.messagePosted => Icons.message,
+      ActivityType.commandExecuted => Icons.terminal,
+      ActivityType.workflowTriggered => Icons.workflow,
+    };
   }
 
   /// Build info card for Overview tab

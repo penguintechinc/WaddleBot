@@ -23,47 +23,34 @@ NAMESPACE="waddlebot"
 HELM_CHART="${PROJECT_ROOT}/k8s/helm/waddlebot"
 KUBE_CONTEXT="dal2-beta"
 
-# Services to build and push — paths must match actual project layout
+# Services to build and push — v2.2.x consolidated architecture (22 containers)
 declare -A SERVICES=(
+    # Standalone hub services (keep as-is)
     [hub-api]="${PROJECT_ROOT}/admin/hub_module/Dockerfile"
     [hub-webui]="${PROJECT_ROOT}/admin/hub_module/Dockerfile.webui"
-    [core-video-proxy]="${PROJECT_ROOT}/core/video_proxy_module/Dockerfile"
-    [core-engagement]="${PROJECT_ROOT}/core/engagement_module/Dockerfile"
-    [core-module-rtc]="${PROJECT_ROOT}/core/module_rtc/Dockerfile"
+    # Router & AI researcher (processing/core)
     [router]="${PROJECT_ROOT}/processing/router_module/Dockerfile"
-    [core-identity]="${PROJECT_ROOT}/core/identity_core_module/Dockerfile"
-    [core-labels]="${PROJECT_ROOT}/core/labels_core_module/Dockerfile"
-    [core-browser-source]="${PROJECT_ROOT}/core/browser_source_core_module/Dockerfile"
-    [core-reputation]="${PROJECT_ROOT}/core/reputation_module/Dockerfile"
-    [core-community]="${PROJECT_ROOT}/core/community_module/Dockerfile"
     [ai-researcher]="${PROJECT_ROOT}/core/ai_researcher_module/Dockerfile"
-    [trigger-twitch]="${PROJECT_ROOT}/trigger/receiver/twitch_module/Dockerfile"
+    # New consolidated core services (services/ directory)
+    [core-data]="${PROJECT_ROOT}/services/core-data/Dockerfile"
+    [core-identity]="${PROJECT_ROOT}/services/core-identity/Dockerfile"
+    [core-community]="${PROJECT_ROOT}/services/core-community/Dockerfile"
+    # Trigger services (separate + consolidated)
     [trigger-discord]="${PROJECT_ROOT}/trigger/receiver/discord_module/Dockerfile"
-    [trigger-slack]="${PROJECT_ROOT}/trigger/receiver/slack_module/Dockerfile"
-    [trigger-youtube]="${PROJECT_ROOT}/trigger/receiver/youtube_live_module/Dockerfile"
-    [trigger-kick]="${PROJECT_ROOT}/trigger/receiver/kick_module_flask/Dockerfile"
-    [interactive-ai]="${PROJECT_ROOT}/action/interactive/ai_interaction_module/Dockerfile"
-    [interactive-alias]="${PROJECT_ROOT}/action/interactive/alias_interaction_module/Dockerfile"
-    [interactive-shoutout]="${PROJECT_ROOT}/action/interactive/shoutout_interaction_module/Dockerfile"
-    [interactive-inventory]="${PROJECT_ROOT}/action/interactive/inventory_interaction_module/Dockerfile"
-    [interactive-calendar]="${PROJECT_ROOT}/action/interactive/calendar_interaction_module/Dockerfile"
-    [interactive-memories]="${PROJECT_ROOT}/action/interactive/memories_interaction_module/Dockerfile"
-    [interactive-youtube-music]="${PROJECT_ROOT}/action/interactive/youtube_music_interaction_module/Dockerfile"
-    [interactive-spotify]="${PROJECT_ROOT}/action/interactive/spotify_interaction_module/Dockerfile"
-    [interactive-loyalty]="${PROJECT_ROOT}/action/interactive/loyalty_interaction_module/Dockerfile"
-    [interactive-translate]="${PROJECT_ROOT}/action/interactive/translate_interaction_module/Dockerfile"
-    [interactive-lfg]="${PROJECT_ROOT}/action/interactive/lfg_interaction_module/Dockerfile"
-    [interactive-clip]="${PROJECT_ROOT}/action/interactive/clip_interaction_module/Dockerfile"
-    [interactive-server-status]="${PROJECT_ROOT}/action/interactive/server_status_interaction_module/Dockerfile"
-    [interactive-server-manager]="${PROJECT_ROOT}/action/interactive/server_manager_interaction_module/Dockerfile"
+    [trigger-streaming]="${PROJECT_ROOT}/services/trigger-streaming/Dockerfile"
+    [trigger-webhooks]="${PROJECT_ROOT}/services/trigger-webhooks/Dockerfile"
+    # Action services (separate + consolidated)
     [action-discord]="${PROJECT_ROOT}/action/pushing/discord_action_module/Dockerfile"
-    [action-slack]="${PROJECT_ROOT}/action/pushing/slack_action_module/Dockerfile"
-    [action-twitch]="${PROJECT_ROOT}/action/pushing/twitch_action_module/Dockerfile"
-    [action-youtube]="${PROJECT_ROOT}/action/pushing/youtube_action_module/Dockerfile"
-    [core-analytics]="${PROJECT_ROOT}/core/analytics_core_module/Dockerfile"
-    [core-security]="${PROJECT_ROOT}/core/security_core_module/Dockerfile"
-    [core-workflow]="${PROJECT_ROOT}/core/workflow_core_module/Dockerfile"
-    [core-credential-manager]="${PROJECT_ROOT}/core/credential_manager_module/Dockerfile"
+    [action-platforms]="${PROJECT_ROOT}/services/action-platforms/Dockerfile"
+    [action-serverless]="${PROJECT_ROOT}/services/action-serverless/Dockerfile"
+    # Interactive services (separate + consolidated)
+    [interactive-ai]="${PROJECT_ROOT}/action/interactive/ai_interaction_module/Dockerfile"
+    [interactive-loyalty]="${PROJECT_ROOT}/action/interactive/loyalty_interaction_module/Dockerfile"
+    [interactive-social]="${PROJECT_ROOT}/services/interactive-social/Dockerfile"
+    [interactive-gaming]="${PROJECT_ROOT}/services/interactive-gaming/Dockerfile"
+    [interactive-media]="${PROJECT_ROOT}/services/interactive-media/Dockerfile"
+    [interactive-productivity]="${PROJECT_ROOT}/services/interactive-productivity/Dockerfile"
+    # Admin & migrations
     [marketplace]="${PROJECT_ROOT}/admin/marketplace_module/Dockerfile"
     [waddlebot-migrations]="${PROJECT_ROOT}/migrations/Dockerfile"
 )
@@ -127,22 +114,15 @@ OPTIONS:
   --rollback             Rollback to previous deployment
   --help                 Show this help message
 
-SERVICES:
+SERVICES (v2.2.x — 22 total):
   hub-api, hub-webui
   router, ai-researcher
-  core-video-proxy, core-engagement, core-module-rtc
-  core-identity, core-labels, core-browser-source
-  core-reputation, core-community
-  core-analytics, core-security, core-workflow, core-credential-manager
-  marketplace
-  trigger-twitch, trigger-discord, trigger-slack
-  trigger-youtube, trigger-kick
-  interactive-ai, interactive-alias, interactive-shoutout
-  interactive-inventory, interactive-calendar, interactive-memories
-  interactive-youtube-music, interactive-spotify, interactive-loyalty
-  interactive-translate, interactive-lfg, interactive-clip
-  interactive-server-status, interactive-server-manager
-  action-discord, action-slack, action-twitch, action-youtube
+  core-data, core-identity, core-community
+  trigger-discord, trigger-streaming, trigger-webhooks
+  action-discord, action-platforms, action-serverless
+  interactive-ai, interactive-loyalty, interactive-social
+  interactive-gaming, interactive-media, interactive-productivity
+  marketplace, waddlebot-migrations
 
 EXAMPLES:
   # Deploy all services with a specific tag

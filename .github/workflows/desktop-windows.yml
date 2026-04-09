@@ -1,4 +1,5 @@
 name: Desktop Bridge - Windows
+# DISABLED: source code not present in repo (v2.2.x consolidation)
 
 on:
   push:
@@ -18,6 +19,7 @@ env:
 
 jobs:
   lint:
+    if: false
     name: Lint (Windows)
     runs-on: windows-latest
     defaults:
@@ -41,6 +43,7 @@ jobs:
         run: golangci-lint run --timeout=5m
 
   test:
+    if: false
     name: Test (Windows)
     runs-on: windows-latest
     needs: lint
@@ -68,6 +71,7 @@ jobs:
           flags: desktop-windows
 
   build:
+    if: false
     name: Build (Windows AMD64)
     runs-on: windows-latest
     needs: test

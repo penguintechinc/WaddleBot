@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_libs/flutter_libs.dart';
-import '../../config/theme.dart';
 import '../../models/license_info.dart';
 import '../../models/stream_config.dart';
 import '../../services/license_service.dart';
@@ -203,7 +202,7 @@ class _QualityPresetsCardState extends State<QualityPresetsCard> {
               const SizedBox(height: 12),
               TextField(
                 controller: bitrateController,
-                keyboardType: TextInputType.numberWithDecimalPoint,
+                keyboardType: TextInputType.numberWithOptions(decimal: true),
                 decoration: const InputDecoration(
                   labelText: 'Bitrate (Mbps)',
                   border: OutlineInputBorder(),

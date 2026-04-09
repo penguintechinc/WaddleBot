@@ -16,6 +16,11 @@ on:
       - 'libs/flask_core/**'
   workflow_dispatch:
 
+
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   build:
     name: Build inventory-interaction Container
