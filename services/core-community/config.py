@@ -8,10 +8,8 @@ Unified configuration for all 4 modules:
 - video_proxy_module
 """
 import os
-from dataclasses import dataclass
 
 
-@dataclass
 class Config:
     """Unified configuration for core-community service."""
 

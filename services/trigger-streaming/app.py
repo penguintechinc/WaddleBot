@@ -21,27 +21,42 @@ sys.path.insert(0,
                 os.path.join(os.path.dirname(os.path.dirname(__file__)),
                              'libs'))
 
-# Setup path for constituent modules
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'twitch_module'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'youtube_live_module'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'kick_module_flask'))
+_base_dir = os.path.dirname(__file__)
+
+
+_COLLIDING_MODULES = frozenset({
+    'services', 'controllers', 'config', 'validation_models', 'models',
+})
+
+
+def _setup_module_imports(module_name: str) -> None:
+    """Flush cached packages that collide across modules and prioritize module dir."""
+    for key in list(sys.modules):
+        top = key.split('.', 1)[0]
+        if top in _COLLIDING_MODULES:
+            del sys.modules[key]
+    sys.path.insert(0, os.path.join(_base_dir, module_name))
+
 
 from flask_core import (async_endpoint, create_health_blueprint,  # noqa: E402
                         init_database, setup_aaa_logging,
                         success_response, error_response)
 
-# Import platform-specific modules
+# Import each module with isolated sys.path to avoid services/ collision
+_setup_module_imports('twitch_module')
 from twitch_module.config import Config as TwitchConfig  # noqa: E402
 from twitch_module.services.viewer_tracker import ViewerTracker  # noqa: E402
 from twitch_module.services.twitch_bot import TwitchBotService  # noqa: E402
 from twitch_module.services.channel_manager import ChannelManager  # noqa: E402
 from twitch_module.services.eventsub_handler import EventSubHandler  # noqa: E402
 
+_setup_module_imports('youtube_live_module')
 from youtube_live_module.config import Config as YouTubeConfig  # noqa: E402
 from youtube_live_module.services.youtube_client import YouTubeClient  # noqa: E402
 from youtube_live_module.services.chat_poller import ChatPoller  # noqa: E402
 from youtube_live_module.services.webhook_handler import WebhookHandler  # noqa: E402
 
+_setup_module_imports('kick_module_flask')
 from kick_module_flask.config import Config as KickConfig  # noqa: E402
 
 app = Quart(__name__)

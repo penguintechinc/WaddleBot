@@ -17,29 +17,46 @@ from functools import wraps
 
 # Import platform-specific services
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'slack_action_module'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'teams_action_module'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'mattermost_action_module'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'googlechat_action_module'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'twitch_action_module'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'youtube_action_module'))
 
+_base_dir = os.path.dirname(__file__)
+
+
+_COLLIDING_MODULES = frozenset({
+    'services', 'controllers', 'config', 'validation_models', 'models',
+})
+
+
+def _setup_module_imports(module_name: str) -> None:
+    """Flush cached packages that collide across modules and prioritize module dir."""
+    for key in list(sys.modules):
+        top = key.split('.', 1)[0]
+        if top in _COLLIDING_MODULES:
+            del sys.modules[key]
+    sys.path.insert(0, os.path.join(_base_dir, module_name))
+
+# Import each module with isolated sys.path to avoid services/ collision
+_setup_module_imports('slack_action_module')
 from slack_action_module.config import Config as SlackConfig
 from slack_action_module.services.slack_service import SlackService
 
+_setup_module_imports('teams_action_module')
 from teams_action_module.config import Config as TeamsConfig
 from teams_action_module.services.teams_service import TeamsService
 
+_setup_module_imports('mattermost_action_module')
 from mattermost_action_module.config import Config as MattermostConfig
 from mattermost_action_module.services.mattermost_service import MattermostService
 
+_setup_module_imports('googlechat_action_module')
 from googlechat_action_module.config import Config as GoogleChatConfig
 from googlechat_action_module.services.googlechat_service import GoogleChatService
 
+_setup_module_imports('twitch_action_module')
 from twitch_action_module.config import Config as TwitchConfig
 from twitch_action_module.services.twitch_service import TwitchService
 from twitch_action_module.services.token_manager import TokenManager
 
+_setup_module_imports('youtube_action_module')
 from youtube_action_module.config import Config as YouTubeConfig
 from youtube_action_module.services.oauth_manager import OAuthManager
 from youtube_action_module.services.youtube_service import YouTubeService

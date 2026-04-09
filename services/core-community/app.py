@@ -19,11 +19,25 @@ from concurrent import futures
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
 
-# Add module directories to sys.path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'community_module'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'workflow_core_module'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'browser_source_core_module'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'video_proxy_module'))
+_base_dir = os.path.dirname(__file__)
+
+
+_COLLIDING_MODULES = frozenset({
+    'services', 'controllers', 'config', 'validation_models', 'models',
+})
+
+
+def _setup_module_imports(module_name: str) -> None:
+    """Flush cached packages that collide across modules and prioritize module dir."""
+    for key in list(sys.modules):
+        top = key.split('.', 1)[0]
+        if top in _COLLIDING_MODULES:
+            del sys.modules[key]
+    sys.path.insert(0, os.path.join(_base_dir, module_name))
+
+
+# Add first module to path for initial flask_core import resolution
+_setup_module_imports('community_module')
 
 from quart import Quart, Blueprint, request, websocket, jsonify
 import jwt
@@ -108,6 +122,8 @@ async def startup():
         # ====================================================================
         logger.system("Initializing workflow_core_module", action="module_init")
 
+        _setup_module_imports('workflow_core_module')
+
         if hasattr(Config, 'LICENSE_SERVER_URL'):
             from workflow_core_module.services.license_service import LicenseService
             license_service = LicenseService(
@@ -183,6 +199,8 @@ async def startup():
         # ====================================================================
         logger.system("Initializing browser_source_core_module", action="module_init")
 
+        _setup_module_imports('browser_source_core_module')
+
         try:
             from browser_source_core_module.services.overlay_service import OverlayService
             overlay_service = OverlayService(dal)
@@ -194,6 +212,8 @@ async def startup():
         # VIDEO PROXY MODULE INIT
         # ====================================================================
         logger.system("Initializing video_proxy_module", action="module_init")
+
+        _setup_module_imports('video_proxy_module')
         # Video proxy module uses same dal, just needs tables initialized
         # Tables are defined in the startup phase
 

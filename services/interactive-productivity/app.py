@@ -19,10 +19,25 @@ import time
 
 import grpc
 
-# Add module directories to sys.path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'calendar_interaction_module'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'memories_interaction_module'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'translate_interaction_module'))
+_base_dir = os.path.dirname(__file__)
+
+
+_COLLIDING_MODULES = frozenset({
+    'services', 'controllers', 'config', 'validation_models', 'models',
+})
+
+
+def _setup_module_imports(module_name: str) -> None:
+    """Flush cached packages that collide across modules and prioritize module dir."""
+    for key in list(sys.modules):
+        top = key.split('.', 1)[0]
+        if top in _COLLIDING_MODULES:
+            del sys.modules[key]
+    sys.path.insert(0, os.path.join(_base_dir, module_name))
+
+
+# Initialize first module path for imports
+_setup_module_imports('calendar_interaction_module')
 
 from quart import Blueprint, Quart, request, jsonify
 from hypercorn.asyncio import serve
@@ -158,6 +173,7 @@ def init_memories_services():
         return
 
     try:
+        _setup_module_imports('memories_interaction_module')
         from memories_interaction_module.config import Config as MemConfig
         from flask_core import (
             init_database, setup_aaa_logging
@@ -386,6 +402,7 @@ def init_translate_services():
         return
 
     try:
+        _setup_module_imports('translate_interaction_module')
         from translate_interaction_module.config import Config as TransConfig
         from translate_interaction_module.services.translation_service import TranslationService
         from translate_interaction_module.proto import translate_interaction_pb2_grpc
@@ -498,6 +515,7 @@ async def start_grpc_server():
             logger.info("Translate service not initialized - skipping gRPC")
             return
 
+        _setup_module_imports('translate_interaction_module')
         from translate_interaction_module.proto import translate_interaction_pb2_grpc
         from translate_interaction_module.services.grpc_handler import TranslateInteractionServicer
 

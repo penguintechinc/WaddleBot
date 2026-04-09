@@ -16,23 +16,40 @@ original_receiver_path = os.path.join(
 )
 sys.path.insert(0, original_receiver_path)
 
-# Setup paths for module directories
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'slack_module'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'teams_module'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'mattermost_module'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'googlechat_module'))
+_base_dir = os.path.dirname(__file__)
+
+
+_COLLIDING_MODULES = frozenset({
+    'services', 'controllers', 'config', 'validation_models', 'models',
+})
+
+
+def _setup_module_imports(module_name: str) -> None:
+    """Flush cached packages that collide across modules and prioritize module dir."""
+    for key in list(sys.modules):
+        top = key.split('.', 1)[0]
+        if top in _COLLIDING_MODULES:
+            del sys.modules[key]
+    sys.path.insert(0, os.path.join(_base_dir, module_name))
 
 from flask_core import (async_endpoint, create_health_blueprint,  # noqa: E402
                         init_database, setup_aaa_logging,
                         success_response)
 
-# Import platform-specific configs and services
+# Import each module with isolated sys.path to avoid services/ collision
+_setup_module_imports('slack_module')
 from slack_module.config import Config as SlackConfig  # noqa: E402
 from slack_module.services.slack_bolt_app import SlackBoltService  # noqa: E402
+
+_setup_module_imports('teams_module')
 from teams_module.config import Config as TeamsConfig  # noqa: E402
 from teams_module.services.teams_bot import TeamsBotService  # noqa: E402
+
+_setup_module_imports('mattermost_module')
 from mattermost_module.config import Config as MattermostConfig  # noqa: E402
 from mattermost_module.services.mattermost_bot import MattermostBotService  # noqa: E402
+
+_setup_module_imports('googlechat_module')
 from googlechat_module.config import Config as GoogleChatConfig  # noqa: E402
 from googlechat_module.services.googlechat_bot import GoogleChatBotService  # noqa: E402
 

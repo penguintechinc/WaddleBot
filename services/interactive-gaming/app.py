@@ -11,10 +11,21 @@ import asyncio
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'lfg_interaction_module'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'inventory_interaction_module'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'server_manager_interaction_module'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'server_status_interaction_module'))
+_base_dir = os.path.dirname(__file__)
+
+
+_COLLIDING_MODULES = frozenset({
+    'services', 'controllers', 'config', 'validation_models', 'models',
+})
+
+
+def _setup_module_imports(module_name: str) -> None:
+    """Flush cached packages that collide across modules and prioritize module dir."""
+    for key in list(sys.modules):
+        top = key.split('.', 1)[0]
+        if top in _COLLIDING_MODULES:
+            del sys.modules[key]
+    sys.path.insert(0, os.path.join(_base_dir, module_name))
 
 from quart import Quart
 from flask_core import (
@@ -24,16 +35,19 @@ from flask_core import (
 )
 from config import Config
 
-# Import all 4 modules' blueprints and services
+# Import each module with isolated sys.path to avoid services/ collision
+_setup_module_imports('lfg_interaction_module')
 from lfg_interaction_module.app import (  # noqa: E402
     api_bp as lfg_api_bp,
 )
 from lfg_interaction_module.services.lfg_service import LfgService  # noqa: E402
 
+_setup_module_imports('inventory_interaction_module')
 from inventory_interaction_module.app import (  # noqa: E402
     api_bp as inventory_api_bp,
 )
 
+_setup_module_imports('server_manager_interaction_module')
 from server_manager_interaction_module.app import (  # noqa: E402
     status_bp as manager_status_bp,
     manager_bp as manager_api_bp,
@@ -54,6 +68,7 @@ from server_manager_interaction_module.services.enforcement_service import (  # 
     EnforcementService,
 )
 
+_setup_module_imports('server_status_interaction_module')
 from server_status_interaction_module.app import (  # noqa: E402
     api_bp as status_api_bp,
 )
