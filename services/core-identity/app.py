@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.join(app_dir, 'credential_manager_module'))
 
 # Import shared utilities from modules
 from identity_core_module.config import Config as IdentityConfig
-from identity_core_module.flask_core import (
+from flask_core import (
     async_endpoint, create_health_blueprint, init_database,
     setup_aaa_logging, success_response, error_response,
 )

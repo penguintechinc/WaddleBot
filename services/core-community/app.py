@@ -103,7 +103,7 @@ async def startup():
         logger.system("Initializing workflow_core_module", action="module_init")
 
         if hasattr(Config, 'LICENSE_SERVER_URL'):
-            from services.license_service import LicenseService
+            from workflow_core_module.services.license_service import LicenseService
             license_service = LicenseService(
                 license_server_url=Config.LICENSE_SERVER_URL,
                 redis_url=Config.REDIS_URL if hasattr(Config, 'REDIS_URL') else None,
@@ -117,20 +117,20 @@ async def startup():
                 license_service = None
 
         try:
-            from services.permission_service import PermissionService
+            from workflow_core_module.services.permission_service import PermissionService
             permission_service = PermissionService(dal=dal, logger=logger)
             app.config['permission_service'] = permission_service
         except ImportError:
             logger.warning("PermissionService not available")
 
         try:
-            from services.validation_service import WorkflowValidationService
+            from workflow_core_module.services.validation_service import WorkflowValidationService
             validation_service = WorkflowValidationService()
         except ImportError:
             logger.warning("WorkflowValidationService not available")
 
         try:
-            from services.workflow_service import WorkflowService
+            from workflow_core_module.services.workflow_service import WorkflowService
             workflow_service = WorkflowService(
                 dal=dal,
                 license_service=license_service,
@@ -143,7 +143,7 @@ async def startup():
             logger.warning("WorkflowService not available")
 
         try:
-            from services.workflow_engine import WorkflowEngine
+            from workflow_core_module.services.workflow_engine import WorkflowEngine
             workflow_engine = WorkflowEngine(
                 dal=dal,
                 router_url=getattr(Config, 'ROUTER_URL', 'http://localhost:8080'),
@@ -159,14 +159,14 @@ async def startup():
 
         # Register workflow API controllers if available
         try:
-            from controllers.workflow_api import register_workflow_api
+            from workflow_core_module.controllers.workflow_api import register_workflow_api
             if workflow_service:
                 register_workflow_api(app, workflow_service)
         except ImportError:
             logger.warning("Workflow API controllers not available")
 
         try:
-            from controllers.execution_api import register_execution_api
+            from workflow_core_module.controllers.execution_api import register_execution_api
             if workflow_engine:
                 register_execution_api(app, workflow_engine)
         except ImportError:
@@ -178,7 +178,7 @@ async def startup():
         logger.system("Initializing browser_source_core_module", action="module_init")
 
         try:
-            from services.overlay_service import OverlayService
+            from browser_source_core_module.services.overlay_service import OverlayService
             overlay_service = OverlayService(dal)
             app.config['overlay_service'] = overlay_service
         except ImportError:

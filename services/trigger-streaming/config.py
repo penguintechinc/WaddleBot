@@ -1,10 +1,10 @@
 """
-Interactive Media Service Configuration
+Trigger Streaming Service Configuration
 
-Unified configuration for all 3 modules:
-- clip_interaction_module
-- spotify_interaction_module
-- youtube_music_interaction_module
+Unified configuration for all 3 streaming platforms:
+- Twitch (IRC bot + EventSub webhooks)
+- YouTube Live (chat polling + PubSubHubbub webhooks)
+- Kick (webhook events)
 """
 import os
 from dataclasses import dataclass
@@ -12,12 +12,12 @@ from dataclasses import dataclass
 
 @dataclass
 class Config:
-    """Unified configuration for interactive-media service."""
+    """Unified configuration for trigger-streaming service."""
 
     # Service Identity
-    MODULE_NAME = os.getenv('MODULE_NAME', 'interactive-media')
+    MODULE_NAME = os.getenv('MODULE_NAME', 'trigger-streaming')
     MODULE_VERSION = os.getenv('MODULE_VERSION', '0.0.1')
-    MODULE_PORT = int(os.getenv('MODULE_PORT', '8105'))
+    MODULE_PORT = int(os.getenv('MODULE_PORT', '8101'))
     MODULE_HOST = os.getenv('MODULE_HOST', '0.0.0.0')
 
     # Database
@@ -34,21 +34,19 @@ class Config:
     # Logging
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
 
-    # Redis (for cache, notifications, etc.)
+    # Redis (for caching, rate limiting, etc.)
     REDIS_URL = os.getenv('REDIS_URL', '')
 
     # Router/API endpoints
     ROUTER_URL = os.getenv('ROUTER_URL', 'http://localhost:8000')
-    CORE_API_URL = os.getenv('CORE_API_URL', 'http://router-service:8000')
-
-    # Module URLs for Twitch, Spotify, YouTube Music interactions
-    TWITCH_MODULE_URL = os.getenv('TWITCH_MODULE_URL', 'http://action-twitch:8000')
-    SPOTIFY_MODULE_URL = os.getenv('SPOTIFY_MODULE_URL', 'http://localhost:8000')
-    YOUTUBE_MUSIC_MODULE_URL = os.getenv('YOUTUBE_MUSIC_MODULE_URL', 'http://localhost:8000')
+    ROUTER_API_URL = os.getenv('ROUTER_API_URL', 'http://router-service:8000')
 
     # License Server (optional, for feature gating)
     LICENSE_SERVER_URL = os.getenv('LICENSE_SERVER_URL', '')
     RELEASE_MODE = os.getenv('RELEASE_MODE', 'false').lower() == 'true'
+
+    # Hub/API endpoints for cross-service communication
+    HUB_API_URL = os.getenv('HUB_API_URL', 'http://hub-api:8003')
 
     def validate(self):
         """Validate required configuration."""

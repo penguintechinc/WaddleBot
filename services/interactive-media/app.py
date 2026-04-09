@@ -12,13 +12,8 @@ import asyncio
 import os
 import sys
 
-sys.path.insert(
-    0,
-    os.path.join(os.path.dirname(os.path.dirname(__file__)), 'libs'),
-)
-
-from quart import Blueprint, Quart, request  # noqa: E402
-from flask_core import (  # noqa: E402
+from quart import Blueprint, Quart, request
+from flask_core import (
     async_endpoint,
     create_health_blueprint,
     error_response,
@@ -26,7 +21,7 @@ from flask_core import (  # noqa: E402
     setup_aaa_logging,
     success_response,
 )
-from config import Config  # noqa: E402
+from config import Config
 
 # Import services from modules
 from clip_interaction_module.services.twitch_clip_service import (  # noqa: E402

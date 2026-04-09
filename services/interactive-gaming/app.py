@@ -11,21 +11,13 @@ import asyncio
 import os
 import sys
 
-sys.path.insert(
-    0,
-    os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-        'libs',
-    ),
-)
-
-from quart import Quart  # noqa: E402
-from flask_core import (  # noqa: E402
+from quart import Quart
+from flask_core import (
     create_health_blueprint,
     init_database,
     setup_aaa_logging,
 )
-from config import Config  # noqa: E402
+from config import Config
 
 # Import all 4 modules' blueprints and services
 from lfg_interaction_module.app import (  # noqa: E402

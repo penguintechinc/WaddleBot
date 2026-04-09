@@ -32,32 +32,21 @@ app = Quart(__name__)
 
 # Configure logging
 def setup_logging():
-    """Setup comprehensive logging."""
+    """Setup comprehensive logging to stdout only (container best practice)."""
     log_format = (
         "[%(asctime)s] %(levelname)s %(name)s:%(funcName)s:%(lineno)d "
         "%(message)s"
     )
     formatter = logging.Formatter(log_format)
 
-    # Console handler
+    # Console handler only - container logs are captured by orchestrator
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(formatter)
-
-    # File handler with rotation
-    log_dir = os.getenv("LOG_DIR", "/var/log/waddlebot")
-    os.makedirs(log_dir, exist_ok=True)
-    file_handler = logging.handlers.RotatingFileHandler(
-        f"{log_dir}/action_serverless.log",
-        maxBytes=10485760,
-        backupCount=5,
-    )
-    file_handler.setFormatter(formatter)
 
     # Root logger
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO)
     root_logger.addHandler(console_handler)
-    root_logger.addHandler(file_handler)
 
 setup_logging()
 logger = logging.getLogger(__name__)

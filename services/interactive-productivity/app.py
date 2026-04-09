@@ -19,11 +19,10 @@ import time
 
 import grpc
 
-sys.path.insert(0, os.getcwd())
-
 from quart import Blueprint, Quart, request, jsonify
 from hypercorn.asyncio import serve
 from hypercorn.config import Config as HypercornConfig
+from flask_core import create_health_blueprint
 
 # Load config from the current service
 from config import Config
@@ -69,8 +68,6 @@ cache_manager = None
 # HEALTH CHECKS
 # ============================================================================
 
-from flask_core import create_health_blueprint
-
 health_bp = create_health_blueprint('interactive-productivity', '2.0.0')
 app.register_blueprint(health_bp)
 
@@ -88,7 +85,7 @@ def init_calendar_services():
 
     try:
         from calendar_interaction_module.config import Config as CalConfig
-        from calendar_interaction_module.flask_core import (
+        from flask_core import (
             init_database, setup_aaa_logging
         )
         from calendar_interaction_module.services.calendar_service import CalendarService
@@ -157,7 +154,7 @@ def init_memories_services():
 
     try:
         from memories_interaction_module.config import Config as MemConfig
-        from memories_interaction_module.flask_core import (
+        from flask_core import (
             init_database, setup_aaa_logging
         )
         from memories_interaction_module.services.quote_service import QuoteService
