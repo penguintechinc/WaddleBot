@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./fixtures');
 
 test.describe('Spotlighted Communities', () => {
   test('should show spotlighted section when communities exist', async ({ page }) => {

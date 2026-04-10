@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./fixtures');
 
 test.describe('Calendar Events Admin', () => {
   // Note: requires a community to exist. These tests verify page loads and UI elements.

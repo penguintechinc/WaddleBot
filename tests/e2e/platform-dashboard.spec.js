@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./fixtures');
 
 // ---------------------------------------------------------------------------
 // Helper: skip gracefully if the test user lacks platform-admin role.

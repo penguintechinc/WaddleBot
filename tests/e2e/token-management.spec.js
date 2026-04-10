@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./fixtures');
 
 test.describe('Personal & Community Access Tokens', () => {
   test('should load personal access token page', async ({ page }) => {

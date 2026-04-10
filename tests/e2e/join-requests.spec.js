@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./fixtures');
 
 test.describe('Community Join Policy & Join Requests', () => {
   test('should show join mode section in community profile admin', async ({ page }) => {

@@ -8,7 +8,7 @@
  *   HUB_TEST_PASS   - Test user password (default: admin123)
  */
 
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./fixtures');
 
 /** Suppress overlays by injecting localStorage keys before navigation */
 async function suppressOverlays(page) {

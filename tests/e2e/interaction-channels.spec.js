@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./fixtures');
 
 async function gotoAdmin(page, url) {
   await page.goto(url, { waitUntil: 'domcontentloaded' });

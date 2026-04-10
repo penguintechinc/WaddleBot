@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./fixtures');
 
 test.describe('Support Ticket System', () => {
   test('should show support type in community creation', async ({ page }) => {

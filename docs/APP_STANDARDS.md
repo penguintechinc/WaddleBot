@@ -2,6 +2,32 @@
 
 This document defines local application standards that apply to Waddles development.
 
+## Microservice Architecture (v2.2.x)
+
+The v2.2.x release consolidated 51 containers into 22 services by grouping related modules into consolidated Quart applications:
+
+**Consolidated Services** (in `services/` directory, 11 services):
+- `action-platforms` — Twitch/Discord/Slack action modules
+- `action-serverless` — Webhook/HTTP action modules
+- `core-community` — Community, membership, join-requests modules
+- `core-data` — Database access, schemas, migrations
+- `core-identity` — Authentication, identity, user linking
+- `interactive-gaming` — Gaming, leaderboard, loyalty modules
+- `interactive-media` — Media, gallery, streaming modules
+- `interactive-productivity` — Forms, calendar, inventory modules
+- `interactive-social` — Social, reputation, shoutout modules
+- `trigger-streaming` — Twitch/YouTube event receivers
+- `trigger-webhooks` — Discord/Slack/generic webhook receivers
+
+**Admin Services** (separate, 2 services):
+- `hub-api` — Admin/management API
+- `hub-webui` — Admin portal frontend
+
+**Infrastructure** (separate):
+- `migrations` — Database schema management container
+
+Each consolidated service runs a single Quart app combining related module blueprints on port 8080.
+
 ## Container Naming Convention
 
 All Docker containers, Kubernetes resources, and internal DNS references MUST follow this naming pattern:

@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./fixtures');
 
 test.describe('Form Results Visibility', () => {
   test('should show results visibility option in form creation', async ({ page }) => {

@@ -28,6 +28,11 @@ const path = require('path');
 
 const AUTH_STATE_PATH = path.join(__dirname, '.auth-state.json');
 
+// Inter-test cooldown (ms) — prevents rate-limit cascades on beta where each
+// page navigation fires 4-5 parallel API requests.  Default 2s; override via
+// env var for local runs where the server has no rate limiter.
+const TEST_COOLDOWN_MS = parseInt(process.env.TEST_COOLDOWN_MS || '2000', 10);
+
 module.exports = defineConfig({
   testDir: './',
   fullyParallel: false,  // Allow parallel execution within projects
@@ -46,6 +51,9 @@ module.exports = defineConfig({
     video: 'retain-on-failure',
     ignoreHTTPSErrors: true, // For self-signed / internal certs
   },
+
+  // Seed test data if missing — checks for test user, creates admin + community
+  globalSetup: require.resolve('./global-setup.js'),
 
   timeout: 90000, // 90 seconds per test (allows for rate-limit retries)
 

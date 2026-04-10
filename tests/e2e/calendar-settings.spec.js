@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./fixtures');
 
 test.describe('Calendar Settings', () => {
   test('should load calendar settings page', async ({ page }) => {

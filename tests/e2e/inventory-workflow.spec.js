@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./fixtures');
 
 test.describe('Inventory (Quartermaster) System', () => {
   test('should load admin inventory page', async ({ page }) => {

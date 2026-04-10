@@ -8,7 +8,7 @@
  *   HUB_TEST_PASS   - Test user password (default: admin123)
  */
 
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./fixtures');
 
 const TEST_EMAIL = process.env.HUB_TEST_EMAIL || 'admin@localhost.local';
 const TEST_PASS = process.env.HUB_TEST_PASS || 'admin123';
@@ -108,23 +108,6 @@ async function dismissOverlays(page) {
   }
 }
 
-async function installRateLimitRetry(page) {
-  await page.route('**/api/**', async (route) => {
-    try {
-      let response = await route.fetch();
-      let retries = 2;
-      while (response.status() === 429 && retries > 0) {
-        console.log(`[rate-limit-retry] 429 on ${route.request().url()}, waiting 15s (${retries} left)...`);
-        await new Promise(r => setTimeout(r, 15000));
-        response = await route.fetch();
-        retries--;
-      }
-      await route.fulfill({ response });
-    } catch {
-      // Context/page closed while route was in-flight — ignore gracefully
-    }
-  });
-}
 
 async function loginWithPassword(page, email, password, retries = 3) {
   // Pre-seed gdpr_consent before navigation so LoginPageBuilder mounts with inputs enabled.

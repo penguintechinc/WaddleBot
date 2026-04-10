@@ -17,7 +17,7 @@
  *   HUB_TEST_PASS   - Test user password (default: admin123)
  */
 
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./fixtures');
 
 const TEST_EMAIL = process.env.HUB_TEST_EMAIL || 'admin@localhost.local';
 const TEST_PASS = process.env.HUB_TEST_PASS || 'admin123';
@@ -208,27 +208,6 @@ async function injectToken(page, token) {
   await page.evaluate((t) => localStorage.setItem('token', t), token);
 }
 
-/**
- * Intercept /api/v1/auth/me and retry on 429. The React app's fetchCurrentUser
- * clears the token on ANY error, so this ensures the auth check succeeds.
- */
-async function installRateLimitRetry(page) {
-  await page.route('**/api/**', async (route) => {
-    try {
-      let response = await route.fetch();
-      let retries = 2;
-      while (response.status() === 429 && retries > 0) {
-        console.log(`[rate-limit-retry] 429 on ${route.request().url()}, waiting 15s (${retries} left)...`);
-        await new Promise(r => setTimeout(r, 15000));
-        response = await route.fetch();
-        retries--;
-      }
-      await route.fulfill({ response });
-    } catch {
-      // Context/page closed while route was in-flight — ignore gracefully
-    }
-  });
-}
 
 // ---------------------------------------------------------------------------
 // Test Suite: Login Page Structure
@@ -334,8 +313,6 @@ test.describe('Auth - Login Flow', () => {
   test('login API sends correct request body', async ({ page }) => {
     await addConsentInitScript(page);
     const csrfToken1 = await injectCsrfCookie(page);
-    // Install rate limit retry AFTER page load to avoid blocking networkidle
-    await installRateLimitRetry(page);
     if (csrfToken1) {
       await page.route('**/api/v1/auth/login', async (route) => {
         const req = route.request();
@@ -367,8 +344,6 @@ test.describe('Auth - Login Flow', () => {
   test('login API returns success structure', async ({ page }) => {
     await addConsentInitScript(page);
     const csrfToken2 = await injectCsrfCookie(page);
-    // Install rate limit retry AFTER page load to avoid blocking networkidle
-    await installRateLimitRetry(page);
     if (csrfToken2) {
       await page.route('**/api/v1/auth/login', async (route) => {
         const req = route.request();
@@ -425,8 +400,6 @@ test.describe('Auth - Redirects', () => {
     const token = await loginWithPassword(page, TEST_EMAIL, TEST_PASS);
     expect(token).toBeTruthy();
 
-    // Install rate limit retry AFTER login to protect the auth check during redirect
-    await installRateLimitRetry(page);
     await page.goto('/login', { waitUntil: 'networkidle' });
     await page.waitForURL(url => !url.toString().includes('/login'), { timeout: 15000 });
     await expect(page).toHaveURL(/\/dashboard/);

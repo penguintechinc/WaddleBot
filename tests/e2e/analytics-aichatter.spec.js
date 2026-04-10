@@ -24,7 +24,7 @@
  *   TEST_MEMBER_USER_ID  - Member user ID for member analytics tests
  */
 
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./fixtures');
 
 // ---------------------------------------------------------------------------
 // Helpers
