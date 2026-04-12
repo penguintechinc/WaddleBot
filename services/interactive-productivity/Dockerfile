@@ -35,6 +35,11 @@ COPY action/interactive/translate_interaction_module ./translate_interaction_mod
 # Port 50033: gRPC (translate module)
 EXPOSE 8030 50033
 
+# Create non-root user
+RUN groupadd -r appuser && useradd -r -g appuser -m appuser && chown -R appuser:appuser /app
+
+USER appuser
+
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
   CMD python3 -c "import http.client; conn = http.client.HTTPConnection('localhost', 8030); conn.request('GET', '/healthz'); conn.getresponse().status == 200 or exit(1)" || exit 1

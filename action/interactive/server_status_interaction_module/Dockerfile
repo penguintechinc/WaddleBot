@@ -8,4 +8,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN mkdir -p /var/log/waddlebotlog
 RUN groupadd -r waddlebot && useradd -r -g waddlebot -m waddlebot
 RUN chown -R waddlebot:waddlebot /app /var/log/waddlebotlog
+USER waddlebot
 CMD ["hypercorn", "app:app", "--bind", "0.0.0.0:8097", "--workers", "4"]

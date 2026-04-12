@@ -35,6 +35,11 @@ ENV MODULE_NAME=interactive_media_service
 ENV MODULE_VERSION=1.0.0
 ENV MODULE_PORT=8105
 
+# Create non-root user
+RUN groupadd -r appuser && useradd -r -g appuser -m appuser && chown -R appuser:appuser /app
+
+USER appuser
+
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
   CMD python3 -c "import asyncio; import sys; \

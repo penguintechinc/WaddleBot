@@ -21,9 +21,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN mkdir -p /var/log/waddlebotlog
 
 # Create non-root user
-RUN groupadd -r waddlebot && useradd -r -g waddlebot -m waddlebot
+RUN useradd --create-home --shell /bin/bash appuser
 
 # Set proper permissions for app directory and log directory
-RUN chown -R waddlebot:waddlebot /app /var/log/waddlebotlog
+RUN chown -R appuser:appuser /app /var/log/waddlebotlog
+
+USER appuser
 
 CMD ["hypercorn", "app:app", "--bind", "0.0.0.0:8027", "--workers", "4"]

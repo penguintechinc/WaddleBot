@@ -46,6 +46,10 @@ COPY action/interactive/server_status_interaction_module/ ./server_status_intera
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
     CMD python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8104/healthz').read()" || exit 1
 
+RUN groupadd -r appuser && useradd -r -g appuser -m appuser && chown -R appuser:appuser /app
+
+USER appuser
+
 EXPOSE 8104
 
 CMD ["python3", "app.py"]

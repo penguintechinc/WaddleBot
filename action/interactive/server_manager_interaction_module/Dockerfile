@@ -9,4 +9,5 @@ RUN mkdir -p /var/log/waddlebotlog
 RUN groupadd -r waddlebot && useradd -r -g waddlebot -m waddlebot
 RUN chown -R waddlebot:waddlebot /app /var/log/waddlebotlog
 EXPOSE 8099
+USER waddlebot
 CMD hypercorn app:app --bind "0.0.0.0:${MODULE_PORT:-8099}" --workers 4

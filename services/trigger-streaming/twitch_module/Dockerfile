@@ -28,4 +28,6 @@ RUN groupadd -r waddlebot && useradd -r -g waddlebot -m waddlebot
 # Set proper permissions for app directory and log directory
 RUN chown -R waddlebot:waddlebot /app /var/log/waddlebotlog
 
+USER waddlebot
+
 CMD ["hypercorn", "app:app", "--bind", "0.0.0.0:8002", "--workers", "4"]

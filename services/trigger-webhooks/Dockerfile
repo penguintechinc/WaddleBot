@@ -20,19 +20,24 @@ WORKDIR /app
 COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Copy application code and module directories
-COPY services/trigger-webhooks/app.py .
-COPY trigger/receiver/slack_module slack_module
-COPY trigger/receiver/teams_module teams_module
-COPY trigger/receiver/mattermost_module mattermost_module
-COPY trigger/receiver/googlechat_module googlechat_module
-COPY libs/platform_receiver libs/platform_receiver
-RUN touch libs/__init__.py
+# Create non-root user
+RUN useradd --create-home --shell /bin/bash appuser
+
+# Copy application code and module directories with ownership
+COPY --chown=appuser:appuser services/trigger-webhooks/app.py .
+COPY --chown=appuser:appuser trigger/receiver/slack_module slack_module
+COPY --chown=appuser:appuser trigger/receiver/teams_module teams_module
+COPY --chown=appuser:appuser trigger/receiver/mattermost_module mattermost_module
+COPY --chown=appuser:appuser trigger/receiver/googlechat_module googlechat_module
+COPY --chown=appuser:appuser libs/platform_receiver libs/platform_receiver
+RUN touch libs/__init__.py && chown appuser:appuser libs/__init__.py
 
 # Health check using Quart's health endpoint
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
   CMD python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz').read()" || exit 1
 
 EXPOSE 8100
+
+USER appuser
 
 CMD ["python3", "-m", "hypercorn", "app:app", "--bind", "0.0.0.0:8100"]

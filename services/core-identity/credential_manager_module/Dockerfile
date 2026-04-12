@@ -14,6 +14,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY core/credential_manager_module/ .
 
+# Create non-root user
+RUN groupadd -r appuser && useradd -r -g appuser -m appuser && chown -R appuser:appuser /app
+
+USER appuser
+
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
     CMD curl -f http://localhost:8095/health || exit 1

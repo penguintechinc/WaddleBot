@@ -30,4 +30,6 @@ RUN chown -R waddlebot:waddlebot /app /var/log/waddlebotlog
 
 EXPOSE 8012
 
+USER waddlebot
+
 CMD ["hypercorn", "app:app", "--bind", "0.0.0.0:8012", "--workers", "4"]

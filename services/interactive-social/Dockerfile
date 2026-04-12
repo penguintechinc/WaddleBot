@@ -20,4 +20,8 @@ EXPOSE 8010
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
   CMD python3 -c "import httpx; resp = httpx.get('http://localhost:8010/healthz'); exit(0 if resp.status_code == 200 else 1)" || exit 1
 
+RUN groupadd -r appuser && useradd -r -g appuser -m appuser && chown -R appuser:appuser /app
+
+USER appuser
+
 CMD ["python3", "app.py"]

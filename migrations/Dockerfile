@@ -26,4 +26,12 @@ COPY config/postgres/migrations/ config/postgres/migrations/
 COPY migrations/run-alembic.sh ./run.sh
 RUN chmod +x ./run.sh
 
+# Create non-root user
+RUN useradd --create-home --shell /bin/bash appuser
+
+# Set proper permissions for migrations
+RUN chown -R appuser:appuser /app
+
+USER appuser
+
 ENTRYPOINT ["./run.sh"]

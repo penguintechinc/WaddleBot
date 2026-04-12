@@ -14,10 +14,18 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY core/credential_manager_module/ .
 
+# Create non-root user
+RUN useradd --create-home --shell /bin/bash appuser
+
+# Set proper permissions
+RUN chown -R appuser:appuser /app
+
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
     CMD curl -f http://localhost:8095/health || exit 1
 
 EXPOSE 8095
+
+USER appuser
 
 CMD ["python", "-m", "quart", "--app", "app:app", "run", "--host", "0.0.0.0", "--port", "8095"]

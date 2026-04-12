@@ -37,12 +37,14 @@ RUN mkdir -p /app/models && \
 RUN mkdir -p /var/log/waddlebotlog
 
 # Create non-root user
-RUN groupadd -r waddlebot && useradd -r -g waddlebot -m waddlebot
+RUN useradd --create-home --shell /bin/bash appuser
 
 # Set proper permissions for app directory, models, and log directory
-RUN chown -R waddlebot:waddlebot /app /var/log/waddlebotlog
+RUN chown -R appuser:appuser /app /var/log/waddlebotlog
 
 # Environment variable for fastText model path
 ENV FASTTEXT_MODEL_PATH=/app/models/lid.176.bin
+
+USER appuser
 
 CMD ["hypercorn", "app:app", "--bind", "0.0.0.0:8000", "--workers", "4"]
