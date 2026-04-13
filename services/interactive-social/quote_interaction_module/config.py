@@ -17,11 +17,12 @@ class Config:
     MODULE_VERSION = os.getenv('QUOTE_MODULE_VERSION', '1.0.0')
     MODULE_PORT = int(os.getenv('QUOTE_MODULE_PORT', 5012))
 
-    # Database configuration
-    DATABASE_URL = os.getenv(
-        'DATABASE_URL',
-        'postgresql://waddlebot:waddlebot@localhost:5432/waddlebot'
-    )
+    # Database configuration - build URL from components
+    DATABASE_HOST = os.getenv('DATABASE_HOST', 'infra-postgres')
+    DATABASE_PORT = os.getenv('DATABASE_PORT', '5432')
+    DATABASE_NAME = os.getenv('DATABASE_NAME', 'waddlebot')
+    DATABASE_USER = os.getenv('DATABASE_USER', 'waddlebot')
+    DATABASE_PASSWORD = os.getenv('DATABASE_PASSWORD', '')
 
     # Optional read replica for queries
     READ_REPLICA_URL = os.getenv('READ_REPLICA_URL')
@@ -123,3 +124,13 @@ class Config:
         )
         thread.start()
         return thread
+
+
+# Construct DATABASE_URL from components
+from urllib.parse import quote_plus as _quote_plus
+_db_password = Config.DATABASE_PASSWORD
+if _db_password:
+    _encoded_pw = _quote_plus(_db_password)
+    Config.DATABASE_URL = f"postgresql://{Config.DATABASE_USER}:{_encoded_pw}@{Config.DATABASE_HOST}:{Config.DATABASE_PORT}/{Config.DATABASE_NAME}"
+else:
+    Config.DATABASE_URL = f"postgresql://{Config.DATABASE_USER}@{Config.DATABASE_HOST}:{Config.DATABASE_PORT}/{Config.DATABASE_NAME}"

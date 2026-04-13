@@ -2,7 +2,6 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 namespace: waddlebot
-namePrefix: alpha-
 
 resources:
   - ../../base
@@ -18,7 +17,7 @@ images:
   - name: hub-webui
     newName: waddlebot/hub-webui
     newTag: alpha
-  - name: core-router
+  - name: router
     newName: waddlebot/core-router
     newTag: alpha
   - name: core-ai-researcher
@@ -146,43 +145,6 @@ patches:
       kind: Deployment
       labelSelector: "app.kubernetes.io/component notin (hub-webui,storage,ai-runtime,database,vector-db,cache)"
 
-  # Fix service hostnames — Kustomize namePrefix adds "alpha-" to service
-  # names but not to ConfigMap values that reference them.
-  - patch: |-
-      apiVersion: v1
-      kind: ConfigMap
-      metadata:
-        name: waddlebot-config
-      data:
-        DATABASE_HOST: alpha-infra-postgres
-        READ_REPLICA_HOST: alpha-infra-postgres
-        REDIS_HOST: alpha-infra-redis
-        MINIO_ENDPOINT: alpha-infra-minio:9000
-        QDRANT_HOST: alpha-infra-qdrant
-        OLLAMA_HOST: alpha-ai-ollama
-        HUB_HOST: alpha-hub-api
-        ROUTER_HOST: alpha-core-router
-        TRANSLATE_GRPC_HOST: alpha-interactive-translate:50033
-        TRANSLATE_API_URL: http://alpha-interactive-translate:8033
-        QDRANT_URL: http://alpha-infra-qdrant:6333
-        DATABASE_URL: postgresql://waddlebot:changeme@alpha-infra-postgres:5432/waddlebot
-
-  # Inject waddlebot-config ConfigMap into main app containers so DATABASE_URL
-  # and other config values reach the Python services.
-  # The base manifests only mount the configmap in init containers (db-migrate);
-  # the main container envFrom only has the secretRef. Without this patch,
-  # DATABASE_URL is absent and PyDAL falls back to localhost:5432.
-  # Excludes hub-webui (nginx) and infra workloads (they don't use this config).
-  - patch: |-
-      - op: add
-        path: /spec/template/spec/containers/0/envFrom/-
-        value:
-          configMapRef:
-            name: waddlebot-config
-    target:
-      kind: Deployment
-      labelSelector: "app.kubernetes.io/component notin (hub-webui,storage,ai-runtime,database,vector-db,cache)"
-
   # Configure ingress for alpha environment.
   # Note: Kustomize's namePrefix transformer auto-updates ingress backend
   # service references, so most paths (hub-webui, hub-api, collectors, etc.)
@@ -200,13 +162,13 @@ patches:
             secretName: waddlebot-tls
       - op: replace
         path: /spec/rules/0/http/paths/4/backend/service/name
-        value: alpha-module-rtc
+        value: module-rtc
     target:
       kind: Ingress
       name: waddlebot-ingress
 
 configMapGenerator:
-  - name: alpha-environment
+  - name: environment
     behavior: create
     literals:
       - LOG_LEVEL=DEBUG

@@ -15,7 +15,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy requirements and install Python dependencies
 COPY action/pushing/discord_action_module/requirements.txt /app/
-RUN pip install --no-cache-dir -r requirements.txt
+# Pre-install setuptools to satisfy grpcio-tools' unlocked transitive dep in --require-hashes mode
+RUN pip install --no-cache-dir setuptools && pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
 COPY action/pushing/discord_action_module/ /app/

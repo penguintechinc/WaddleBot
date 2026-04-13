@@ -49,6 +49,8 @@ spec:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: false
         envFrom:
+        - configMapRef:
+            name: waddlebot-config
         - secretRef:
             name: waddlebot-secrets
             optional: true
@@ -57,21 +59,6 @@ spec:
           value: "interactive-media"
         - name: MODULE_PORT
           value: "8105"
-        - name: DB_HOST
-          value: "infra-postgres"
-        - name: DB_PORT
-          value: "5432"
-        - name: DB_NAME
-          value: "waddlebot"
-        - name: DB_USER
-          value: "waddlebot"
-        - name: DB_PASS
-          valueFrom:
-            secretKeyRef:
-              name: waddlebot-secrets
-              key: POSTGRES_PASSWORD
-        - name: REDIS_HOST
-          value: "infra-redis"
         livenessProbe:
           httpGet:
             path: /health

@@ -35,9 +35,9 @@ spec:
         env:
         - name: MODULE_NAME
           value: "hub-webui"
-        - name: REDIS_HOST
-          value: "infra-redis"
         envFrom:
+        - configMapRef:
+            name: waddlebot-config
         - secretRef:
             name: waddlebot-secrets
             optional: true

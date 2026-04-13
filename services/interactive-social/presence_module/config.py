@@ -14,14 +14,21 @@ class Config:
     MODULE_VERSION = '1.0.0'
     MODULE_PORT = int(os.getenv('MODULE_PORT', '8042'))
 
-    DATABASE_URL: str = os.getenv(
-        'DATABASE_URL',
-        'postgresql://waddlebot:password@localhost:5432/waddlebot',
-    )
-    REDIS_URL: str = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+    # Database configuration - build URL from components
+    DATABASE_HOST = os.getenv('DATABASE_HOST', 'infra-postgres')
+    DATABASE_PORT = os.getenv('DATABASE_PORT', '5432')
+    DATABASE_NAME = os.getenv('DATABASE_NAME', 'waddlebot')
+    DATABASE_USER = os.getenv('DATABASE_USER', 'waddlebot')
+    DATABASE_PASSWORD = os.getenv('DATABASE_PASSWORD', '')
+
+    # Redis configuration - build URL from components
+    REDIS_HOST = os.getenv('REDIS_HOST', 'infra-redis')
+    REDIS_PORT = os.getenv('REDIS_PORT', '6379')
+    REDIS_DB = os.getenv('REDIS_DB', '0')
+
     ROUTER_API_URL: str = os.getenv(
         'ROUTER_API_URL',
-        'http://router-service:8000/api/v1/router',
+        'http://core-router:8000/api/v1/router',
     )
     LOG_LEVEL: str = os.getenv('LOG_LEVEL', 'INFO')
 
@@ -62,3 +69,15 @@ class Config:
             cls.MODULE_VERSION,
             cls.MODULE_PORT,
         )
+
+
+# Construct DATABASE_URL and REDIS_URL from components
+from urllib.parse import quote_plus as _quote_plus
+_db_password = Config.DATABASE_PASSWORD
+if _db_password:
+    _encoded_pw = _quote_plus(_db_password)
+    Config.DATABASE_URL = f"postgresql://{Config.DATABASE_USER}:{_encoded_pw}@{Config.DATABASE_HOST}:{Config.DATABASE_PORT}/{Config.DATABASE_NAME}"
+else:
+    Config.DATABASE_URL = f"postgresql://{Config.DATABASE_USER}@{Config.DATABASE_HOST}:{Config.DATABASE_PORT}/{Config.DATABASE_NAME}"
+
+Config.REDIS_URL = f"redis://{Config.REDIS_HOST}:{Config.REDIS_PORT}/{Config.REDIS_DB}"

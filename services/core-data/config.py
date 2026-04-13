@@ -9,6 +9,7 @@ Unified configuration for all 4 modules:
 """
 import os
 from dataclasses import dataclass
+from urllib.parse import quote_plus as _quote_plus
 
 @dataclass
 class Config:
@@ -20,8 +21,12 @@ class Config:
     MODULE_PORT = int(os.getenv('MODULE_PORT', '8040'))
     MODULE_HOST = os.getenv('MODULE_HOST', '0.0.0.0')
 
-    # Database
-    DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://localhost/waddlebot')
+    # Database - build URL from components
+    DATABASE_HOST = os.getenv('DATABASE_HOST', 'infra-postgres')
+    DATABASE_PORT = os.getenv('DATABASE_PORT', '5432')
+    DATABASE_NAME = os.getenv('DATABASE_NAME', 'waddlebot')
+    DATABASE_USER = os.getenv('DATABASE_USER', 'waddlebot')
+    DATABASE_PASSWORD = os.getenv('DATABASE_PASSWORD', '')
     DB_POOL_SIZE = int(os.getenv('DB_POOL_SIZE', '10'))
     DB_MAX_RETRIES = int(os.getenv('DB_MAX_RETRIES', '5'))
     DB_RETRY_DELAY = int(os.getenv('DB_RETRY_DELAY', '5'))
@@ -63,3 +68,16 @@ class Config:
             raise ValueError("SERVICE_API_KEY environment variable is required")
         if not self.JWT_SECRET_KEY:
             raise ValueError("JWT_SECRET_KEY environment variable is required")
+
+
+# Construct DATABASE_URL from components after class definition
+_db_user = Config.DATABASE_USER
+_db_password = Config.DATABASE_PASSWORD
+_db_host = Config.DATABASE_HOST
+_db_port = Config.DATABASE_PORT
+_db_name = Config.DATABASE_NAME
+if _db_password:
+    _encoded_pw = _quote_plus(_db_password)
+    Config.DATABASE_URL = f"postgresql://{_db_user}:{_encoded_pw}@{_db_host}:{_db_port}/{_db_name}"
+else:
+    Config.DATABASE_URL = f"postgresql://{_db_user}@{_db_host}:{_db_port}/{_db_name}"
