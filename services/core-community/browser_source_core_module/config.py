@@ -20,7 +20,7 @@ class Config:  # noqa: E302
     GRPC_PORT = int(os.getenv('GRPC_PORT', '50050'))
     DATABASE_URL = os.getenv(
         'DATABASE_URL',
-        'postgresql://waddlebot:password@localhost:5432/waddlebot'
+        'postgres://waddlebot:password@localhost:5432/waddlebot'
     )
     CORE_API_URL = os.getenv(
         'CORE_API_URL',

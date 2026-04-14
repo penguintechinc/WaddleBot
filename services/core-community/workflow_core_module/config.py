@@ -23,11 +23,11 @@ class Config:
     # Database Configuration
     DATABASE_URI = os.getenv(
         'DATABASE_URL',
-        'postgresql://waddlebot:password@postgres:5432/waddlebot'
+        'postgres://waddlebot:password@postgres:5432/waddlebot'
     )
     READ_REPLICA_URIS = os.getenv(
         'READ_REPLICA_URIS',
-        'postgresql://waddlebot:password@postgres:5433/waddlebot'
+        'postgres://waddlebot:password@postgres:5433/waddlebot'
     ).split(',')
 
     # Redis Configuration — build URL from parts so password comes from secret

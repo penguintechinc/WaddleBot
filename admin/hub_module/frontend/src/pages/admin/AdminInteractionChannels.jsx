@@ -68,7 +68,7 @@ function ChannelTypeBadge({ type }) {
   const className = TYPE_BADGE[type] ?? 'bg-navy-600/20 text-navy-300';
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${className}`}>
-      {label}
+      {label.trim()}
     </span>
   );
 }
@@ -278,6 +278,13 @@ function ChannelForm({ initial, onSave, onCancel, saving }) {
   function set(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
+
+  // Reset allow_ad_hoc_voice when switching away from voice type
+  useEffect(() => {
+    if (form.type !== 'voice' && form.allow_ad_hoc_voice) {
+      setForm((prev) => ({ ...prev, allow_ad_hoc_voice: false }));
+    }
+  }, [form.type]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleSubmit(e) {
     e.preventDefault();

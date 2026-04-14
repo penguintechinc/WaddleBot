@@ -150,18 +150,18 @@ _db_name = Config.DATABASE_NAME
 if _db_password:
     # URL-encode password to handle special characters like / + = etc.
     _encoded_db_password = quote_plus(_db_password)
-    Config.DATABASE_URL = f"postgresql://{_db_user}:{_encoded_db_password}@{_db_host}:{_db_port}/{_db_name}"
+    Config.DATABASE_URL = f"postgres://{_db_user}:{_encoded_db_password}@{_db_host}:{_db_port}/{_db_name}"
 else:
-    Config.DATABASE_URL = f"postgresql://{_db_user}@{_db_host}:{_db_port}/{_db_name}"
+    Config.DATABASE_URL = f"postgres://{_db_user}@{_db_host}:{_db_port}/{_db_name}"
 
 # Compute READ_REPLICA_URL if configured
 _replica_host = Config.READ_REPLICA_HOST
 _replica_port = Config.READ_REPLICA_PORT
 if _replica_host:
     if _db_password:
-        Config.READ_REPLICA_URL = f"postgresql://{_db_user}:{_encoded_db_password}@{_replica_host}:{_replica_port}/{_db_name}"
+        Config.READ_REPLICA_URL = f"postgres://{_db_user}:{_encoded_db_password}@{_replica_host}:{_replica_port}/{_db_name}"
     else:
-        Config.READ_REPLICA_URL = f"postgresql://{_db_user}@{_replica_host}:{_replica_port}/{_db_name}"
+        Config.READ_REPLICA_URL = f"postgres://{_db_user}@{_replica_host}:{_replica_port}/{_db_name}"
 else:
     Config.READ_REPLICA_URL = ''
 

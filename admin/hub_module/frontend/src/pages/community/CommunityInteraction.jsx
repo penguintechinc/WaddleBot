@@ -121,12 +121,14 @@ function CommunityInteraction() {
     );
   }
 
-  if (!channels.length && !canCreateChannel) {
+  if (!channels.length) {
     return (
       <div className="text-center py-20">
         <ChatBubbleLeftRightIcon className="w-12 h-12 text-navy-600 mx-auto mb-4" />
         <p className="text-navy-400 text-lg">No channels yet</p>
-        <p className="text-navy-500 text-sm mt-1">Ask a community admin to create channels.</p>
+        <p className="text-navy-500 text-sm mt-1">
+          Ask a community admin to create channels.
+        </p>
       </div>
     );
   }

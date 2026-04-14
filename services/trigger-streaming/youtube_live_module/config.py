@@ -20,7 +20,7 @@ class Config:
 
     DATABASE_URL = os.getenv(
         'DATABASE_URL',
-        'postgresql://waddlebot:password@localhost:5432/waddlebot'
+        'postgres://waddlebot:password@localhost:5432/waddlebot'
     )
     ROUTER_API_URL = os.getenv(
         'ROUTER_API_URL',

@@ -167,6 +167,22 @@ patches:
       kind: Ingress
       name: waddlebot-ingress
 
+  # Raise hub-api rate limit for alpha (higher than beta for E2E test runs)
+  - patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: RATE_LIMIT_MAX_REQUESTS
+          value: "1000"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: RATE_LIMIT_WINDOW_MS
+          value: "60000"
+    target:
+      kind: Deployment
+      name: hub-api
+
 configMapGenerator:
   - name: environment
     behavior: create

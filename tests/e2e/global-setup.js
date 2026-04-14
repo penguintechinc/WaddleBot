@@ -63,18 +63,30 @@ async function globalSetup() {
 // Check if test user can login
 // ---------------------------------------------------------------------------
 
-async function checkTestUser() {
-  try {
-    const resp = await fetch(`${BASE_URL}/api/v1/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: TEST_EMAIL, password: TEST_PASS }),
-    });
-    const data = await resp.json().catch(() => ({}));
-    return data.success === true;
-  } catch {
-    return false;
+async function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function checkTestUser(retries = 2) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const resp = await fetch(`${BASE_URL}/api/v1/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: TEST_EMAIL, password: TEST_PASS }),
+      });
+      if (resp.status === 429) {
+        console.log(`[global-setup] Rate limited on checkTestUser (attempt ${attempt + 1}/${retries + 1}), waiting 5s...`);
+        if (attempt < retries) { await sleep(5000); continue; }
+        return false;
+      }
+      const data = await resp.json().catch(() => ({}));
+      return data.success === true;
+    } catch {
+      return false;
+    }
   }
+  return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -89,14 +101,16 @@ async function seedViaKubectl() {
   const passwordHash = '$2b$12$4bHCtATjQNY//n42FMy/P.Uieygqwj.Hh5FbuPJJweqXcZbaTSK0u';
 
   const seedSql = [
+    // Create global tenant (if not exists)
+    `INSERT INTO tenants (slug, display_name, is_global) VALUES ('global', 'Waddles Global', TRUE) ON CONFLICT (slug) DO NOTHING;`,
     // Create admin user
     `INSERT INTO hub_users (email, username, password_hash, is_active, is_super_admin, email_verified, created_at, updated_at)`,
     `VALUES ('${TEST_EMAIL}', 'admin', '${passwordHash}', true, true, true, NOW(), NOW())`,
     `ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash, is_super_admin = true, is_active = true, email_verified = true, updated_at = NOW();`,
     // Create global community
-    `INSERT INTO communities (name, display_name, description, is_public, is_active, is_global, platform, member_count, created_at)`,
-    `VALUES ('waddlebot-global', 'Waddles Global', 'Global community for all users.', true, true, true, 'global', 1, NOW())`,
-    `ON CONFLICT (name) DO UPDATE SET is_global = true, is_active = true;`,
+    `INSERT INTO communities (name, display_name, description, is_public, is_active, is_global, platform, member_count, tenant_id, created_at)`,
+    `VALUES ('waddlebot-global', 'Waddles Global', 'Global community for all users.', true, true, true, 'global', 1, (SELECT id FROM tenants WHERE is_global = TRUE), NOW())`,
+    `ON CONFLICT (name) DO UPDATE SET is_global = true, is_active = true, tenant_id = COALESCE(communities.tenant_id, (SELECT id FROM tenants WHERE is_global = TRUE));`,
     // Add admin to global community
     `INSERT INTO community_members (community_id, user_id, role, is_active, joined_at)`,
     `SELECT c.id, u.id, 'admin', true, NOW()`,

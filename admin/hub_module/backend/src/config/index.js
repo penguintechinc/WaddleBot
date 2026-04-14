@@ -24,8 +24,15 @@ export const config = {
 
   // Database
   database: {
-    url: process.env.DATABASE_URL || 'postgresql://waddlebot:password@localhost:5432/waddlebot',
-    poolSize: parseInt(process.env.DATABASE_POOL_SIZE || '10', 10),
+    url: process.env.DATABASE_URL || (() => {
+      const host = process.env.DATABASE_HOST || 'localhost';
+      const port = process.env.DATABASE_PORT || '5432';
+      const name = process.env.DATABASE_NAME || 'waddlebot';
+      const user = process.env.DATABASE_USER || 'waddlebot';
+      const pass = encodeURIComponent(process.env.DATABASE_PASSWORD || 'password');
+      return `postgresql://${user}:${pass}@${host}:${port}/${name}`;
+    })(),
+    poolSize: parseInt(process.env.DATABASE_POOL_SIZE || process.env.DB_POOL_SIZE || '10', 10),
   },
 
   // JWT

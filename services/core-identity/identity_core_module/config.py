@@ -122,9 +122,9 @@ _db_port = Config.DATABASE_PORT
 _db_name = Config.DATABASE_NAME
 if _db_password:
     _encoded_pw = _quote_plus(_db_password)
-    Config.DATABASE_URL = f"postgresql://{_db_user}:{_encoded_pw}@{_db_host}:{_db_port}/{_db_name}"
+    Config.DATABASE_URL = f"postgres://{_db_user}:{_encoded_pw}@{_db_host}:{_db_port}/{_db_name}"
 else:
-    Config.DATABASE_URL = f"postgresql://{_db_user}@{_db_host}:{_db_port}/{_db_name}"
+    Config.DATABASE_URL = f"postgres://{_db_user}@{_db_host}:{_db_port}/{_db_name}"
 
 # Construct REDIS_URL from components
 _redis_password = Config.REDIS_PASSWORD

@@ -14,7 +14,7 @@ class Config:
     MODULE_PORT = int(os.getenv('MODULE_PORT', '8002'))
     DATABASE_URL = os.getenv(
         'DATABASE_URL',
-        'postgresql://waddlebot:password@localhost:5432/waddlebot'
+        'postgres://waddlebot:password@localhost:5432/waddlebot'
     )
     CORE_API_URL = os.getenv('CORE_API_URL',
                              'http://router-service:8000')

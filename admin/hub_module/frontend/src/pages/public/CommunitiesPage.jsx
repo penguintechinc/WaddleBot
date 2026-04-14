@@ -6,7 +6,7 @@ import CommunityTypeBadge, { communityTypeConfig } from '../../components/Commun
 import { getPlatformIcon, getPlatformLabel, getAllPlatformOptions } from '../../utils/platformConfig';
 
 function CommunitiesPage() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const [communities, setCommunities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -68,21 +68,23 @@ function CommunitiesPage() {
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold mb-4 gradient-text">Discover Communities</h1>
         <p className="text-navy-400">Browse public communities using Waddles</p>
-        {isAuthenticated ? (
-          <Link
-            to="/communities/create"
-            className="btn btn-primary mt-4 inline-block"
-            data-testid="create-community-btn"
-          >
-            + Create a Community
-          </Link>
-        ) : (
-          <Link
-            to="/login"
-            className="btn btn-secondary mt-4 inline-block"
-          >
-            Sign in to Create a Community
-          </Link>
+        {!authLoading && (
+          isAuthenticated ? (
+            <Link
+              to="/communities/create"
+              className="btn btn-primary mt-4 inline-block"
+              data-testid="create-community-btn"
+            >
+              + Create a Community
+            </Link>
+          ) : (
+            <Link
+              to="/login"
+              className="btn btn-secondary mt-4 inline-block"
+            >
+              Sign in to Create a Community
+            </Link>
+          )
         )}
       </div>
 

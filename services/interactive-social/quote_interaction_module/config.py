@@ -131,6 +131,6 @@ from urllib.parse import quote_plus as _quote_plus
 _db_password = Config.DATABASE_PASSWORD
 if _db_password:
     _encoded_pw = _quote_plus(_db_password)
-    Config.DATABASE_URL = f"postgresql://{Config.DATABASE_USER}:{_encoded_pw}@{Config.DATABASE_HOST}:{Config.DATABASE_PORT}/{Config.DATABASE_NAME}"
+    Config.DATABASE_URL = f"postgres://{Config.DATABASE_USER}:{_encoded_pw}@{Config.DATABASE_HOST}:{Config.DATABASE_PORT}/{Config.DATABASE_NAME}"
 else:
-    Config.DATABASE_URL = f"postgresql://{Config.DATABASE_USER}@{Config.DATABASE_HOST}:{Config.DATABASE_PORT}/{Config.DATABASE_NAME}"
+    Config.DATABASE_URL = f"postgres://{Config.DATABASE_USER}@{Config.DATABASE_HOST}:{Config.DATABASE_PORT}/{Config.DATABASE_NAME}"
