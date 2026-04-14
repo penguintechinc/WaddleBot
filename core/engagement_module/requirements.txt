@@ -7,7 +7,7 @@ pydal==20241111.1
 psycopg2-binary==2.9.9
 aiohttp>=3.11.18
 pyjwt==2.12.1
-cryptography>=46.0.0
+cryptography>=46.0.6
 python-dateutil==2.8.2
 python-json-logger==2.0.7
 pytest==7.4.3
