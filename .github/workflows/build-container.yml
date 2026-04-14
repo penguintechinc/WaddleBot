@@ -1,5 +1,10 @@
 name: Build Container (Reusable)
 
+# Reusable workflow for building multi-arch container images.
+# Strategy: build amd64 and arm64 on native runners in parallel,
+# then merge into a single multi-arch OCI manifest.
+# This eliminates QEMU emulation overhead for arm64 (3-5x speedup).
+
 on:
   workflow_call:
     inputs:
@@ -37,7 +42,6 @@ jobs:
       - name: Determine version and suffix
         id: version
         run: |
-          # Read version from .version file
           if [ -f .version ]; then
             VERSION=$(cat .version | tr -d '[:space:]')
           else
@@ -53,31 +57,23 @@ jobs:
             IS_RELEASE="false"
           fi
 
-          # Determine suffix based on branch and release status
           if [ "$IS_RELEASE" = "true" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            # Version release on main: no suffix, plus 'latest' tag
             echo "suffix=" >> $GITHUB_OUTPUT
             echo "is_release=true" >> $GITHUB_OUTPUT
-            echo "Building RELEASE: v${VERSION} and latest"
           elif [[ "${{ github.ref }}" == refs/heads/v* ]]; then
-            # Release branch (v*.x), not a release: -beta suffix
             echo "suffix=-beta" >> $GITHUB_OUTPUT
             echo "is_release=false" >> $GITHUB_OUTPUT
-            echo "Building BETA: v${VERSION}-beta"
           elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            # Main branch, not a release: -gamma suffix
             echo "suffix=-gamma" >> $GITHUB_OUTPUT
             echo "is_release=false" >> $GITHUB_OUTPUT
-            echo "Building GAMMA: v${VERSION}-gamma"
           else
-            # Non-main, non-release branch: -alpha suffix
             echo "suffix=-alpha" >> $GITHUB_OUTPUT
             echo "is_release=false" >> $GITHUB_OUTPUT
-            echo "Building ALPHA: v${VERSION}-alpha"
           fi
 
-  build-and-push:
-    name: Build and Push Container
+  # Build amd64 image on native x86 runner
+  build-amd64:
+    name: Build (amd64)
     runs-on: ubuntu-latest
     needs: determine-version
     steps:
@@ -94,35 +90,91 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ inputs.module_name }}
-          tags: |
-            type=raw,value=${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}
-            type=raw,value=latest,enable=${{ needs.determine-version.outputs.is_release == 'true' }}
-
-      - name: Build and push Docker image
+      - name: Build and push amd64 image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./${{ inputs.module_path }}/Dockerfile
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          platforms: linux/amd64,linux/arm64
-          cache-from: type=gha,scope=${{ inputs.module_name }}
-          cache-to: type=gha,mode=max,scope=${{ inputs.module_name }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ inputs.module_name }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}-amd64
+          platforms: linux/amd64
+          cache-from: type=gha,scope=${{ inputs.module_name }}-amd64
+          cache-to: type=gha,mode=max,scope=${{ inputs.module_name }}-amd64
           build-args: |
             MODULE_NAME=${{ inputs.module_name }}
             MODULE_PORT=${{ inputs.module_port }}
             NPM_TOKEN=${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build summary
+  # Build arm64 image on native ARM runner (no QEMU)
+  build-arm64:
+    name: Build (arm64)
+    runs-on: ubuntu-24.04-arm
+    needs: determine-version
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push arm64 image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./${{ inputs.module_path }}/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ inputs.module_name }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}-arm64
+          platforms: linux/arm64
+          cache-from: type=gha,scope=${{ inputs.module_name }}-arm64
+          cache-to: type=gha,mode=max,scope=${{ inputs.module_name }}-arm64
+          build-args: |
+            MODULE_NAME=${{ inputs.module_name }}
+            MODULE_PORT=${{ inputs.module_port }}
+            NPM_TOKEN=${{ secrets.GITHUB_TOKEN }}
+
+  # Merge amd64 + arm64 into a single multi-arch OCI index manifest
+  merge:
+    name: Merge Multi-Arch Manifest
+    runs-on: ubuntu-latest
+    needs: [determine-version, build-amd64, build-arm64]
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push multi-arch manifest
+        env:
+          VERSION: ${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}
+          IS_RELEASE: ${{ needs.determine-version.outputs.is_release }}
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ inputs.module_name }}
         run: |
-          echo "## Build Complete: ${{ inputs.module_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Image:** \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ inputs.module_name }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Tags:** \`${{ steps.meta.outputs.tags }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** \`${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}\`" >> $GITHUB_STEP_SUMMARY
+          docker buildx imagetools create \
+            -t "${IMAGE}:${VERSION}" \
+            "${IMAGE}:${VERSION}-amd64" \
+            "${IMAGE}:${VERSION}-arm64"
+
+          if [ "$IS_RELEASE" = "true" ]; then
+            docker buildx imagetools create \
+              -t "${IMAGE}:latest" \
+              "${IMAGE}:${VERSION}-amd64" \
+              "${IMAGE}:${VERSION}-arm64"
+          fi
+
+          echo "## Build Complete: ${{ inputs.module_name }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Image:** \`${IMAGE}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Tag:** \`${VERSION}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Platforms:** linux/amd64, linux/arm64" >> "$GITHUB_STEP_SUMMARY"

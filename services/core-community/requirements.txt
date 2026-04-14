@@ -21,7 +21,7 @@ psycopg2-binary>=2.9.9
 
 # Authentication & Security
 python-jose[cryptography]>=3.4.0
-pyjwt>=2.8.0
+pyjwt>=2.10.0
 cryptography>=44.0.3
 
 # Workflow Execution

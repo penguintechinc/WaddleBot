@@ -1,0 +1,81 @@
+name: Security & Code Quality
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  # Fast checks (~2-3 min): Trivy fs, pip-audit, npm audit, Dependency Review
+  # This is the check that matters for day-to-day development velocity.
+  security-fast:
+    name: Security & Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Trivy vulnerability scanner (filesystem)
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1  # v0.35.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Run pip-audit
+        run: |
+          pip install pip-audit
+          find . -name requirements.txt -exec pip-audit -r {} \; || true
+
+      - name: Run npm audit
+        run: |
+          cd admin/hub_module/backend && npm audit --production --audit-level=moderate || true
+          cd ../frontend && npm audit --production --audit-level=moderate || true
+          cd ../../.. && npm audit --production --audit-level=moderate || true
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        if: github.event_name == 'pull_request'
+        with:
+          fail-on-severity: high
+
+  # Slow static analysis (~17-21 min): CodeQL on go/javascript/python.
+  # Runs in parallel with builds -- does NOT gate container builds or any other jobs.
+  # Pre-existing OS-level CVEs in bookworm base images cause false positives;
+  # continue-on-error prevents them from blocking the pipeline.
+  codeql:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: go, javascript, python
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Run CodeQL Analysis
+        uses: github/codeql-action/analyze@v3

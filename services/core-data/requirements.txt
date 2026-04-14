@@ -16,7 +16,7 @@ httpx>=0.27.0,<0.28.0
 aiohttp>=3.11.18
 
 # JWT & Auth
-pyjwt>=2.8.0
+pyjwt>=2.10.0
 cryptography>=44.0.3
 
 # Environment

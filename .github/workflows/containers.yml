@@ -208,9 +208,11 @@ jobs:
             migrations:
               - 'migrations/**'
 
-  # Build core modules
-  build-core:
-    name: Build Core Modules
+  # ============================================================
+  # Build core modules — amd64
+  # ============================================================
+  build-core-amd64:
+    name: Build Core Modules (amd64)
     runs-on: ubuntu-latest
     needs: [determine-version, detect-changes]
     if: >
@@ -228,11 +230,11 @@ jobs:
         include:
           - module: processing/router_module
             name: router
-            port: 0  # Requires Redis/DB to start; skip CI container test
+            port: 0
             condition: ${{ needs.detect-changes.outputs.router == 'true' || needs.detect-changes.outputs.libs == 'true' }}
           - module: admin/marketplace_module
             name: marketplace
-            port: 0  # Requires database to start; skip CI container test
+            port: 0
             condition: ${{ needs.detect-changes.outputs.marketplace == 'true' || needs.detect-changes.outputs.libs == 'true' }}
           - name: migrations
             dockerfile: ./migrations/Dockerfile
@@ -268,27 +270,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GHCR_PUSH_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}
-          tags: |
-            type=raw,value=${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}
-            type=raw,value=latest,enable=${{ needs.determine-version.outputs.is_release == 'true' }}
-
-      - name: Build and push Docker image
+      - name: Build and push Docker image (amd64)
         uses: docker/build-push-action@v5
         if: matrix.condition == 'true' || github.event_name == 'workflow_dispatch'
         with:
           context: ${{ matrix.context || '.' }}
           file: ${{ matrix.dockerfile || format('./{0}/Dockerfile', matrix.module) }}
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          platforms: linux/amd64,linux/arm64
-          cache-from: type=gha,scope=${{ matrix.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}-amd64
+          platforms: linux/amd64
+          cache-from: type=gha,scope=${{ matrix.name }}-amd64
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}-amd64
           build-args: |
             MODULE_NAME=${{ matrix.name }}
             MODULE_PORT=${{ matrix.port }}
@@ -296,24 +288,173 @@ jobs:
       - name: Run container tests
         if: (matrix.condition == 'true' || github.event_name == 'workflow_dispatch') && matrix.port != 0
         run: |
-          # Test the built image
-          docker run --rm --name test-${{ matrix.name }} -d -p ${{ matrix.port }}:${{ matrix.port }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}
+          docker run --rm --name test-${{ matrix.name }} -d -p ${{ matrix.port }}:${{ matrix.port }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}-amd64
           sleep 10
-
-          # Health check
           if curl -f http://localhost:${{ matrix.port }}/health; then
             echo "Health check passed for ${{ matrix.name }}"
           else
             echo "Health check failed for ${{ matrix.name }}"
             exit 1
           fi
-
-          # Stop container
           docker stop test-${{ matrix.name }}
 
-  # Build trigger modules
-  build-triggers:
-    name: Build Trigger Modules
+  # ============================================================
+  # Build core modules — arm64
+  # ============================================================
+  build-core-arm64:
+    name: Build Core Modules (arm64)
+    runs-on: ubuntu-24.04-arm
+    needs: [determine-version, detect-changes]
+    if: >
+      needs.detect-changes.outputs.router == 'true' ||
+      needs.detect-changes.outputs.marketplace == 'true' ||
+      needs.detect-changes.outputs.migrations == 'true' ||
+      needs.detect-changes.outputs.core-data == 'true' ||
+      needs.detect-changes.outputs.core-identity == 'true' ||
+      needs.detect-changes.outputs.core-community == 'true' ||
+      needs.detect-changes.outputs.libs == 'true' ||
+      github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - module: processing/router_module
+            name: router
+            port: 0
+            condition: ${{ needs.detect-changes.outputs.router == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - module: admin/marketplace_module
+            name: marketplace
+            port: 0
+            condition: ${{ needs.detect-changes.outputs.marketplace == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - name: migrations
+            dockerfile: ./migrations/Dockerfile
+            port: 0
+            context: .
+            condition: ${{ needs.detect-changes.outputs.migrations == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - name: core-data
+            dockerfile: ./services/core-data/Dockerfile
+            port: 0
+            context: .
+            condition: ${{ needs.detect-changes.outputs.core-data == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - name: core-identity
+            dockerfile: ./services/core-identity/Dockerfile
+            port: 0
+            context: .
+            condition: ${{ needs.detect-changes.outputs.core-identity == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - name: core-community
+            dockerfile: ./services/core-community/Dockerfile
+            port: 0
+            context: .
+            condition: ${{ needs.detect-changes.outputs.core-community == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_PUSH_TOKEN }}
+
+      - name: Build and push Docker image (arm64)
+        uses: docker/build-push-action@v5
+        if: matrix.condition == 'true' || github.event_name == 'workflow_dispatch'
+        with:
+          context: ${{ matrix.context || '.' }}
+          file: ${{ matrix.dockerfile || format('./{0}/Dockerfile', matrix.module) }}
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}-arm64
+          platforms: linux/arm64
+          cache-from: type=gha,scope=${{ matrix.name }}-arm64
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}-arm64
+          build-args: |
+            MODULE_NAME=${{ matrix.name }}
+            MODULE_PORT=${{ matrix.port }}
+
+      - name: Run container tests
+        if: (matrix.condition == 'true' || github.event_name == 'workflow_dispatch') && matrix.port != 0
+        run: |
+          docker run --rm --name test-${{ matrix.name }} -d -p ${{ matrix.port }}:${{ matrix.port }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}-arm64
+          sleep 10
+          if curl -f http://localhost:${{ matrix.port }}/health; then
+            echo "Health check passed for ${{ matrix.name }}"
+          else
+            echo "Health check failed for ${{ matrix.name }}"
+            exit 1
+          fi
+          docker stop test-${{ matrix.name }}
+
+  # ============================================================
+  # Merge core modules manifest
+  # ============================================================
+  merge-core:
+    name: Merge Core Modules
+    runs-on: ubuntu-latest
+    needs: [determine-version, detect-changes, build-core-amd64, build-core-arm64]
+    if: >
+      needs.detect-changes.outputs.router == 'true' ||
+      needs.detect-changes.outputs.marketplace == 'true' ||
+      needs.detect-changes.outputs.migrations == 'true' ||
+      needs.detect-changes.outputs.core-data == 'true' ||
+      needs.detect-changes.outputs.core-identity == 'true' ||
+      needs.detect-changes.outputs.core-community == 'true' ||
+      needs.detect-changes.outputs.libs == 'true' ||
+      github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: router
+            condition: ${{ needs.detect-changes.outputs.router == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - name: marketplace
+            condition: ${{ needs.detect-changes.outputs.marketplace == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - name: migrations
+            condition: ${{ needs.detect-changes.outputs.migrations == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - name: core-data
+            condition: ${{ needs.detect-changes.outputs.core-data == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - name: core-identity
+            condition: ${{ needs.detect-changes.outputs.core-identity == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - name: core-community
+            condition: ${{ needs.detect-changes.outputs.core-community == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+    steps:
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_PUSH_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Create and push multi-arch manifest
+        if: matrix.condition == 'true' || github.event_name == 'workflow_dispatch'
+        env:
+          VERSION: "${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}"
+          IS_RELEASE: ${{ needs.determine-version.outputs.is_release }}
+          IMAGE: "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}"
+        run: |
+          docker buildx imagetools create \
+            -t "${IMAGE}:${VERSION}" \
+            "${IMAGE}:${VERSION}-amd64" \
+            "${IMAGE}:${VERSION}-arm64"
+
+          if [ "$IS_RELEASE" = "true" ]; then
+            docker buildx imagetools create \
+              -t "${IMAGE}:latest" \
+              "${IMAGE}:${VERSION}-amd64" \
+              "${IMAGE}:${VERSION}-arm64"
+          fi
+
+  # ============================================================
+  # Build trigger modules — amd64
+  # ============================================================
+  build-triggers-amd64:
+    name: Build Trigger Modules (amd64)
     runs-on: ubuntu-latest
     needs: [determine-version, detect-changes]
     if: >
@@ -349,27 +490,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GHCR_PUSH_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}
-          tags: |
-            type=raw,value=${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}
-            type=raw,value=latest,enable=${{ needs.determine-version.outputs.is_release == 'true' }}
-
-      - name: Build and push Docker image
+      - name: Build and push Docker image (amd64)
         uses: docker/build-push-action@v5
         if: matrix.condition == 'true' || github.event_name == 'workflow_dispatch'
         with:
           context: ${{ matrix.context || '.' }}
           file: ${{ matrix.dockerfile || format('./{0}/Dockerfile', matrix.module) }}
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          platforms: linux/amd64,linux/arm64
-          cache-from: type=gha,scope=${{ matrix.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}-amd64
+          platforms: linux/amd64
+          cache-from: type=gha,scope=${{ matrix.name }}-amd64
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}-amd64
           build-args: |
             MODULE_NAME=${{ matrix.name }}
             MODULE_PORT=${{ matrix.port }}
@@ -377,24 +508,139 @@ jobs:
       - name: Run container tests
         if: (matrix.condition == 'true' || github.event_name == 'workflow_dispatch') && matrix.port != 0
         run: |
-          # Test the built image
-          docker run --rm --name test-${{ matrix.name }} -d -p ${{ matrix.port }}:${{ matrix.port }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}
+          docker run --rm --name test-${{ matrix.name }} -d -p ${{ matrix.port }}:${{ matrix.port }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}-amd64
           sleep 10
-
-          # Health check
           if curl -f http://localhost:${{ matrix.port }}/health; then
             echo "Health check passed for ${{ matrix.name }}"
           else
             echo "Health check failed for ${{ matrix.name }}"
             exit 1
           fi
-
-          # Stop container
           docker stop test-${{ matrix.name }}
 
-  # Build interaction modules
-  build-interactions:
-    name: Build Interaction Modules
+  # ============================================================
+  # Build trigger modules — arm64
+  # ============================================================
+  build-triggers-arm64:
+    name: Build Trigger Modules (arm64)
+    runs-on: ubuntu-24.04-arm
+    needs: [determine-version, detect-changes]
+    if: >
+      needs.detect-changes.outputs.trigger-streaming == 'true' ||
+      needs.detect-changes.outputs.trigger-webhooks == 'true' ||
+      needs.detect-changes.outputs.libs == 'true' ||
+      github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: trigger-streaming
+            dockerfile: ./services/trigger-streaming/Dockerfile
+            port: 0
+            context: .
+            condition: ${{ needs.detect-changes.outputs.trigger-streaming == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - name: trigger-webhooks
+            dockerfile: ./services/trigger-webhooks/Dockerfile
+            port: 0
+            context: .
+            condition: ${{ needs.detect-changes.outputs.trigger-webhooks == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_PUSH_TOKEN }}
+
+      - name: Build and push Docker image (arm64)
+        uses: docker/build-push-action@v5
+        if: matrix.condition == 'true' || github.event_name == 'workflow_dispatch'
+        with:
+          context: ${{ matrix.context || '.' }}
+          file: ${{ matrix.dockerfile || format('./{0}/Dockerfile', matrix.module) }}
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}-arm64
+          platforms: linux/arm64
+          cache-from: type=gha,scope=${{ matrix.name }}-arm64
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}-arm64
+          build-args: |
+            MODULE_NAME=${{ matrix.name }}
+            MODULE_PORT=${{ matrix.port }}
+
+      - name: Run container tests
+        if: (matrix.condition == 'true' || github.event_name == 'workflow_dispatch') && matrix.port != 0
+        run: |
+          docker run --rm --name test-${{ matrix.name }} -d -p ${{ matrix.port }}:${{ matrix.port }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}-arm64
+          sleep 10
+          if curl -f http://localhost:${{ matrix.port }}/health; then
+            echo "Health check passed for ${{ matrix.name }}"
+          else
+            echo "Health check failed for ${{ matrix.name }}"
+            exit 1
+          fi
+          docker stop test-${{ matrix.name }}
+
+  # ============================================================
+  # Merge trigger modules manifest
+  # ============================================================
+  merge-triggers:
+    name: Merge Trigger Modules
+    runs-on: ubuntu-latest
+    needs: [determine-version, detect-changes, build-triggers-amd64, build-triggers-arm64]
+    if: >
+      needs.detect-changes.outputs.trigger-streaming == 'true' ||
+      needs.detect-changes.outputs.trigger-webhooks == 'true' ||
+      needs.detect-changes.outputs.libs == 'true' ||
+      github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: trigger-streaming
+            condition: ${{ needs.detect-changes.outputs.trigger-streaming == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - name: trigger-webhooks
+            condition: ${{ needs.detect-changes.outputs.trigger-webhooks == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+    steps:
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_PUSH_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Create and push multi-arch manifest
+        if: matrix.condition == 'true' || github.event_name == 'workflow_dispatch'
+        env:
+          VERSION: "${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}"
+          IS_RELEASE: ${{ needs.determine-version.outputs.is_release }}
+          IMAGE: "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}"
+        run: |
+          docker buildx imagetools create \
+            -t "${IMAGE}:${VERSION}" \
+            "${IMAGE}:${VERSION}-amd64" \
+            "${IMAGE}:${VERSION}-arm64"
+
+          if [ "$IS_RELEASE" = "true" ]; then
+            docker buildx imagetools create \
+              -t "${IMAGE}:latest" \
+              "${IMAGE}:${VERSION}-amd64" \
+              "${IMAGE}:${VERSION}-arm64"
+          fi
+
+  # ============================================================
+  # Build interaction modules — amd64
+  # ============================================================
+  build-interactions-amd64:
+    name: Build Interaction Modules (amd64)
     runs-on: ubuntu-latest
     needs: [determine-version, detect-changes]
     if: >
@@ -442,27 +688,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GHCR_PUSH_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}
-          tags: |
-            type=raw,value=${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}
-            type=raw,value=latest,enable=${{ needs.determine-version.outputs.is_release == 'true' }}
-
-      - name: Build and push Docker image
+      - name: Build and push Docker image (amd64)
         uses: docker/build-push-action@v5
         if: matrix.condition == 'true' || github.event_name == 'workflow_dispatch'
         with:
           context: .
           file: ${{ matrix.dockerfile }}
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          platforms: linux/amd64,linux/arm64
-          cache-from: type=gha,scope=${{ matrix.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}-amd64
+          platforms: linux/amd64
+          cache-from: type=gha,scope=${{ matrix.name }}-amd64
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}-amd64
           build-args: |
             MODULE_NAME=${{ matrix.name }}
             MODULE_PORT=${{ matrix.port }}
@@ -470,24 +706,157 @@ jobs:
       - name: Run container tests
         if: (matrix.condition == 'true' || github.event_name == 'workflow_dispatch') && matrix.port != 0
         run: |
-          # Test the built image
-          docker run --rm --name test-${{ matrix.name }} -d -p ${{ matrix.port }}:${{ matrix.port }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}
+          docker run --rm --name test-${{ matrix.name }} -d -p ${{ matrix.port }}:${{ matrix.port }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}-amd64
           sleep 10
-
-          # Health check
           if curl -f http://localhost:${{ matrix.port }}/health; then
             echo "Health check passed for ${{ matrix.name }}"
           else
             echo "Health check failed for ${{ matrix.name }}"
             exit 1
           fi
-
-          # Stop container
           docker stop test-${{ matrix.name }}
 
-  # Build admin modules (hub-api, hub-webui)
-  build-admin:
-    name: Build Admin Modules
+  # ============================================================
+  # Build interaction modules — arm64
+  # ============================================================
+  build-interactions-arm64:
+    name: Build Interaction Modules (arm64)
+    runs-on: ubuntu-24.04-arm
+    needs: [determine-version, detect-changes]
+    if: >
+      needs.detect-changes.outputs.interactive-social == 'true' ||
+      needs.detect-changes.outputs.interactive-gaming == 'true' ||
+      needs.detect-changes.outputs.interactive-media == 'true' ||
+      needs.detect-changes.outputs.interactive-productivity == 'true' ||
+      needs.detect-changes.outputs.libs == 'true' ||
+      github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: interactive-social
+            dockerfile: ./services/interactive-social/Dockerfile
+            port: 0
+            context: .
+            condition: ${{ needs.detect-changes.outputs.interactive-social == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - name: interactive-gaming
+            dockerfile: ./services/interactive-gaming/Dockerfile
+            port: 0
+            context: .
+            condition: ${{ needs.detect-changes.outputs.interactive-gaming == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - name: interactive-media
+            dockerfile: ./services/interactive-media/Dockerfile
+            port: 0
+            context: .
+            condition: ${{ needs.detect-changes.outputs.interactive-media == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - name: interactive-productivity
+            dockerfile: ./services/interactive-productivity/Dockerfile
+            port: 0
+            context: .
+            condition: ${{ needs.detect-changes.outputs.interactive-productivity == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_PUSH_TOKEN }}
+
+      - name: Build and push Docker image (arm64)
+        uses: docker/build-push-action@v5
+        if: matrix.condition == 'true' || github.event_name == 'workflow_dispatch'
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}-arm64
+          platforms: linux/arm64
+          cache-from: type=gha,scope=${{ matrix.name }}-arm64
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}-arm64
+          build-args: |
+            MODULE_NAME=${{ matrix.name }}
+            MODULE_PORT=${{ matrix.port }}
+
+      - name: Run container tests
+        if: (matrix.condition == 'true' || github.event_name == 'workflow_dispatch') && matrix.port != 0
+        run: |
+          docker run --rm --name test-${{ matrix.name }} -d -p ${{ matrix.port }}:${{ matrix.port }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}-arm64
+          sleep 10
+          if curl -f http://localhost:${{ matrix.port }}/health; then
+            echo "Health check passed for ${{ matrix.name }}"
+          else
+            echo "Health check failed for ${{ matrix.name }}"
+            exit 1
+          fi
+          docker stop test-${{ matrix.name }}
+
+  # ============================================================
+  # Merge interaction modules manifest
+  # ============================================================
+  merge-interactions:
+    name: Merge Interaction Modules
+    runs-on: ubuntu-latest
+    needs: [determine-version, detect-changes, build-interactions-amd64, build-interactions-arm64]
+    if: >
+      needs.detect-changes.outputs.interactive-social == 'true' ||
+      needs.detect-changes.outputs.interactive-gaming == 'true' ||
+      needs.detect-changes.outputs.interactive-media == 'true' ||
+      needs.detect-changes.outputs.interactive-productivity == 'true' ||
+      needs.detect-changes.outputs.libs == 'true' ||
+      github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: interactive-social
+            condition: ${{ needs.detect-changes.outputs.interactive-social == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - name: interactive-gaming
+            condition: ${{ needs.detect-changes.outputs.interactive-gaming == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - name: interactive-media
+            condition: ${{ needs.detect-changes.outputs.interactive-media == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - name: interactive-productivity
+            condition: ${{ needs.detect-changes.outputs.interactive-productivity == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+    steps:
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_PUSH_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Create and push multi-arch manifest
+        if: matrix.condition == 'true' || github.event_name == 'workflow_dispatch'
+        env:
+          VERSION: "${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}"
+          IS_RELEASE: ${{ needs.determine-version.outputs.is_release }}
+          IMAGE: "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}"
+        run: |
+          docker buildx imagetools create \
+            -t "${IMAGE}:${VERSION}" \
+            "${IMAGE}:${VERSION}-amd64" \
+            "${IMAGE}:${VERSION}-arm64"
+
+          if [ "$IS_RELEASE" = "true" ]; then
+            docker buildx imagetools create \
+              -t "${IMAGE}:latest" \
+              "${IMAGE}:${VERSION}-amd64" \
+              "${IMAGE}:${VERSION}-arm64"
+          fi
+
+  # ============================================================
+  # Build admin modules — amd64
+  # ============================================================
+  build-admin-amd64:
+    name: Build Admin Modules (amd64)
     runs-on: ubuntu-latest
     needs: [determine-version, detect-changes]
     if: needs.detect-changes.outputs.hub == 'true' || needs.detect-changes.outputs.libs == 'true' || github.event_name == 'workflow_dispatch'
@@ -517,35 +886,149 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GHCR_PUSH_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}
-          tags: |
-            type=raw,value=${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}
-            type=raw,value=latest,enable=${{ needs.determine-version.outputs.is_release == 'true' }}
-
-      - name: Build and push Docker image
+      - name: Build and push Docker image (amd64)
         uses: docker/build-push-action@v5
         if: matrix.condition == 'true' || github.event_name == 'workflow_dispatch'
         with:
           context: .
           file: ${{ matrix.dockerfile }}
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          platforms: linux/amd64,linux/arm64
-          cache-from: type=gha,scope=${{ matrix.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}-amd64
+          platforms: linux/amd64
+          cache-from: type=gha,scope=${{ matrix.name }}-amd64
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}-amd64
           build-args: |
             MODULE_NAME=${{ matrix.name }}
             MODULE_PORT=${{ matrix.port }}
             NPM_TOKEN=${{ secrets.GITHUB_TOKEN }}
 
-  # Build action/pushing modules
-  build-actions:
-    name: Build Action Modules
+      - name: Run container tests
+        if: (matrix.condition == 'true' || github.event_name == 'workflow_dispatch') && matrix.port != 0
+        run: |
+          docker run --rm --name test-${{ matrix.name }} -d -p ${{ matrix.port }}:${{ matrix.port }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}-amd64
+          sleep 10
+          if curl -f http://localhost:${{ matrix.port }}/health; then
+            echo "Health check passed for ${{ matrix.name }}"
+          else
+            echo "Health check failed for ${{ matrix.name }}"
+            exit 1
+          fi
+          docker stop test-${{ matrix.name }}
+
+  # ============================================================
+  # Build admin modules — arm64
+  # ============================================================
+  build-admin-arm64:
+    name: Build Admin Modules (arm64)
+    runs-on: ubuntu-24.04-arm
+    needs: [determine-version, detect-changes]
+    if: needs.detect-changes.outputs.hub == 'true' || needs.detect-changes.outputs.libs == 'true' || github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: hub-api
+            dockerfile: ./admin/hub_module/Dockerfile
+            port: 3000
+            condition: ${{ needs.detect-changes.outputs.hub == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - name: hub-webui
+            dockerfile: ./admin/hub_module/Dockerfile.webui
+            port: 5173
+            condition: ${{ needs.detect-changes.outputs.hub == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_PUSH_TOKEN }}
+
+      - name: Build and push Docker image (arm64)
+        uses: docker/build-push-action@v5
+        if: matrix.condition == 'true' || github.event_name == 'workflow_dispatch'
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}-arm64
+          platforms: linux/arm64
+          cache-from: type=gha,scope=${{ matrix.name }}-arm64
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}-arm64
+          build-args: |
+            MODULE_NAME=${{ matrix.name }}
+            MODULE_PORT=${{ matrix.port }}
+            NPM_TOKEN=${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run container tests
+        if: (matrix.condition == 'true' || github.event_name == 'workflow_dispatch') && matrix.port != 0
+        run: |
+          docker run --rm --name test-${{ matrix.name }} -d -p ${{ matrix.port }}:${{ matrix.port }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}-arm64
+          sleep 10
+          if curl -f http://localhost:${{ matrix.port }}/health; then
+            echo "Health check passed for ${{ matrix.name }}"
+          else
+            echo "Health check failed for ${{ matrix.name }}"
+            exit 1
+          fi
+          docker stop test-${{ matrix.name }}
+
+  # ============================================================
+  # Merge admin modules manifest
+  # ============================================================
+  merge-admin:
+    name: Merge Admin Modules
+    runs-on: ubuntu-latest
+    needs: [determine-version, detect-changes, build-admin-amd64, build-admin-arm64]
+    if: needs.detect-changes.outputs.hub == 'true' || needs.detect-changes.outputs.libs == 'true' || github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: hub-api
+            condition: ${{ needs.detect-changes.outputs.hub == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - name: hub-webui
+            condition: ${{ needs.detect-changes.outputs.hub == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+    steps:
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_PUSH_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Create and push multi-arch manifest
+        if: matrix.condition == 'true' || github.event_name == 'workflow_dispatch'
+        env:
+          VERSION: "${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}"
+          IS_RELEASE: ${{ needs.determine-version.outputs.is_release }}
+          IMAGE: "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}"
+        run: |
+          docker buildx imagetools create \
+            -t "${IMAGE}:${VERSION}" \
+            "${IMAGE}:${VERSION}-amd64" \
+            "${IMAGE}:${VERSION}-arm64"
+
+          if [ "$IS_RELEASE" = "true" ]; then
+            docker buildx imagetools create \
+              -t "${IMAGE}:latest" \
+              "${IMAGE}:${VERSION}-amd64" \
+              "${IMAGE}:${VERSION}-arm64"
+          fi
+
+  # ============================================================
+  # Build action modules — amd64
+  # ============================================================
+  build-actions-amd64:
+    name: Build Action Modules (amd64)
     runs-on: ubuntu-latest
     needs: [determine-version, detect-changes]
     if: >
@@ -581,27 +1064,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GHCR_PUSH_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}
-          tags: |
-            type=raw,value=${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}
-            type=raw,value=latest,enable=${{ needs.determine-version.outputs.is_release == 'true' }}
-
-      - name: Build and push Docker image
+      - name: Build and push Docker image (amd64)
         uses: docker/build-push-action@v5
         if: matrix.condition == 'true' || github.event_name == 'workflow_dispatch'
         with:
           context: .
           file: ${{ matrix.dockerfile }}
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          platforms: linux/amd64,linux/arm64
-          cache-from: type=gha,scope=${{ matrix.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}-amd64
+          platforms: linux/amd64
+          cache-from: type=gha,scope=${{ matrix.name }}-amd64
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}-amd64
           build-args: |
             MODULE_NAME=${{ matrix.name }}
             MODULE_PORT=${{ matrix.port }}
@@ -609,28 +1082,143 @@ jobs:
       - name: Run container tests
         if: (matrix.condition == 'true' || github.event_name == 'workflow_dispatch') && matrix.port != 0
         run: |
-          # Test the built image
-          docker run --rm --name test-${{ matrix.name }} -d -p ${{ matrix.port }}:${{ matrix.port }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}
+          docker run --rm --name test-${{ matrix.name }} -d -p ${{ matrix.port }}:${{ matrix.port }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}-amd64
           sleep 10
-
-          # Health check
           if curl -f http://localhost:${{ matrix.port }}/health; then
             echo "Health check passed for ${{ matrix.name }}"
           else
             echo "Health check failed for ${{ matrix.name }}"
             exit 1
           fi
-
-          # Stop container
           docker stop test-${{ matrix.name }}
 
+  # ============================================================
+  # Build action modules — arm64
+  # ============================================================
+  build-actions-arm64:
+    name: Build Action Modules (arm64)
+    runs-on: ubuntu-24.04-arm
+    needs: [determine-version, detect-changes]
+    if: >
+      needs.detect-changes.outputs.action-platforms == 'true' ||
+      needs.detect-changes.outputs.action-serverless == 'true' ||
+      needs.detect-changes.outputs.libs == 'true' ||
+      github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: action-platforms
+            dockerfile: ./services/action-platforms/Dockerfile
+            port: 0
+            context: .
+            condition: ${{ needs.detect-changes.outputs.action-platforms == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - name: action-serverless
+            dockerfile: ./services/action-serverless/Dockerfile
+            port: 0
+            context: .
+            condition: ${{ needs.detect-changes.outputs.action-serverless == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_PUSH_TOKEN }}
+
+      - name: Build and push Docker image (arm64)
+        uses: docker/build-push-action@v5
+        if: matrix.condition == 'true' || github.event_name == 'workflow_dispatch'
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}-arm64
+          platforms: linux/arm64
+          cache-from: type=gha,scope=${{ matrix.name }}-arm64
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}-arm64
+          build-args: |
+            MODULE_NAME=${{ matrix.name }}
+            MODULE_PORT=${{ matrix.port }}
+
+      - name: Run container tests
+        if: (matrix.condition == 'true' || github.event_name == 'workflow_dispatch') && matrix.port != 0
+        run: |
+          docker run --rm --name test-${{ matrix.name }} -d -p ${{ matrix.port }}:${{ matrix.port }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}-arm64
+          sleep 10
+          if curl -f http://localhost:${{ matrix.port }}/health; then
+            echo "Health check passed for ${{ matrix.name }}"
+          else
+            echo "Health check failed for ${{ matrix.name }}"
+            exit 1
+          fi
+          docker stop test-${{ matrix.name }}
+
+  # ============================================================
+  # Merge action modules manifest
+  # ============================================================
+  merge-actions:
+    name: Merge Action Modules
+    runs-on: ubuntu-latest
+    needs: [determine-version, detect-changes, build-actions-amd64, build-actions-arm64]
+    if: >
+      needs.detect-changes.outputs.action-platforms == 'true' ||
+      needs.detect-changes.outputs.action-serverless == 'true' ||
+      needs.detect-changes.outputs.libs == 'true' ||
+      github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: action-platforms
+            condition: ${{ needs.detect-changes.outputs.action-platforms == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - name: action-serverless
+            condition: ${{ needs.detect-changes.outputs.action-serverless == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+    steps:
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_PUSH_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Create and push multi-arch manifest
+        if: matrix.condition == 'true' || github.event_name == 'workflow_dispatch'
+        env:
+          VERSION: "${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}"
+          IS_RELEASE: ${{ needs.determine-version.outputs.is_release }}
+          IMAGE: "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.name }}"
+        run: |
+          docker buildx imagetools create \
+            -t "${IMAGE}:${VERSION}" \
+            "${IMAGE}:${VERSION}-amd64" \
+            "${IMAGE}:${VERSION}-arm64"
+
+          if [ "$IS_RELEASE" = "true" ]; then
+            docker buildx imagetools create \
+              -t "${IMAGE}:latest" \
+              "${IMAGE}:${VERSION}-amd64" \
+              "${IMAGE}:${VERSION}-arm64"
+          fi
+
+  # ============================================================
   # Security scanning
   # Security scan is informational only and does not block deployment
+  # ============================================================
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
-    needs: [determine-version, build-core, build-triggers, build-interactions, build-admin, build-actions]
-    if: always() && (needs.build-core.result == 'success' || needs.build-triggers.result == 'success' || needs.build-interactions.result == 'success' || needs.build-admin.result == 'success' || needs.build-actions.result == 'success')
+    needs: [determine-version, merge-core, merge-triggers, merge-interactions, merge-admin, merge-actions]
+    if: always() && (needs.merge-core.result == 'success' || needs.merge-triggers.result == 'success' || needs.merge-interactions.result == 'success' || needs.merge-admin.result == 'success' || needs.merge-actions.result == 'success')
     continue-on-error: true
     strategy:
       matrix:
@@ -672,11 +1260,13 @@ jobs:
         with:
           sarif_file: 'trivy-${{ matrix.image }}.sarif'
 
+  # ============================================================
   # Create GitHub Release (only on tagged push)
+  # ============================================================
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [determine-version, build-core, build-triggers, build-interactions, build-admin, build-actions]
+    needs: [determine-version, merge-core, merge-triggers, merge-interactions, merge-admin, merge-actions]
     if: needs.determine-version.outputs.is_release == 'true'
     permissions:
       contents: write
@@ -719,11 +1309,13 @@ jobs:
 
           echo "Created release $VERSION"
 
+  # ============================================================
   # Notify on completion
+  # ============================================================
   notify:
     name: Notify Build Status
     runs-on: ubuntu-latest
-    needs: [determine-version, build-core, build-triggers, build-interactions, build-admin, build-actions]
+    needs: [determine-version, merge-core, merge-triggers, merge-interactions, merge-admin, merge-actions]
     if: always()
     steps:
       - name: Build Status Summary
@@ -731,9 +1323,9 @@ jobs:
           echo "## Container Build Summary" >> $GITHUB_STEP_SUMMARY
           echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Core Modules | ${{ needs.build-core.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Trigger Modules | ${{ needs.build-triggers.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Interaction Modules | ${{ needs.build-interactions.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Admin Modules | ${{ needs.build-admin.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Action Modules | ${{ needs.build-actions.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Core Modules | ${{ needs.merge-core.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Trigger Modules | ${{ needs.merge-triggers.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Interaction Modules | ${{ needs.merge-interactions.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Admin Modules | ${{ needs.merge-admin.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Action Modules | ${{ needs.merge-actions.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Security Scan | ${{ needs.security-scan.result }} |" >> $GITHUB_STEP_SUMMARY
