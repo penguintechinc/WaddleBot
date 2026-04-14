@@ -2,7 +2,7 @@
 # Dependencies for the OAuth-like token management service
 
 # Core JWT library (already available in WaddleBot)
-pyjwt>=2.10.0
+pyjwt>=2.12.1
 
 # Testing dependencies (optional, for running tests)
 pytest>=7.0.0

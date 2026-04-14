@@ -43,7 +43,7 @@ pydantic==2.9.2
 pycparser==2.22
 penguin-dal>=0.3.0
 pydal>=20240601.1
-PyJWT==2.10.1
+PyJWT==2.12.1
 pyopenssl==25.0.0
 python-dateutil==2.9.0.post0
 requests==2.32.3
