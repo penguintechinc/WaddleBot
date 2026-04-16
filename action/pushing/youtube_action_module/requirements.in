@@ -12,9 +12,9 @@ google-auth==2.25.2
 google-auth-oauthlib==1.2.0
 google-auth-httplib2==0.2.0
 # JWT Authentication
-pyjwt==2.8.0
+pyjwt>=2.12.0
 # PostgreSQL support
 psycopg2-binary>=2.9.10
 # Utilities
 python-dotenv==1.0.0
-requests>=2.32.4
+requests>=2.33.0

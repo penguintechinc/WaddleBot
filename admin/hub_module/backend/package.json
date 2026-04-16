@@ -23,7 +23,7 @@
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2",
-    "nodemailer": "^7.0.11",
+    "nodemailer": "8.0.5",
     "pg": "^8.13.1",
     "socket.io": "^4.8.1",
     "uuid": "^11.0.3",
