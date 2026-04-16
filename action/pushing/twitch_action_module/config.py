@@ -18,6 +18,12 @@ class Config:
     TWITCH_CLIENT_ID: str = os.getenv("TWITCH_CLIENT_ID", "")
     TWITCH_CLIENT_SECRET: str = os.getenv("TWITCH_CLIENT_SECRET", "")
     TWITCH_API_BASE_URL: str = "https://api.twitch.tv/helix"
+    TWITCH_REDIRECT_URI: str = os.getenv("TWITCH_REDIRECT_URI", "")
+    TWITCH_OAUTH_SCOPES: str = os.getenv(
+        "TWITCH_OAUTH_SCOPES",
+        "chat:read chat:edit moderator:manage:banned_users channel:manage:polls "
+        "channel:manage:predictions channel:manage:raids channel:manage:schedule",
+    )
 
     # Database Configuration
     _raw_db_url = os.getenv(

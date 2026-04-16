@@ -205,6 +205,32 @@ class TokenManager:
             self.db.rollback()
             return False
 
+    async def force_refresh(self, broadcaster_id: str) -> Optional[str]:
+        """
+        Unconditionally refresh the token regardless of expiry.
+
+        Used by the service layer after a 401 response to recover
+        from tokens that passed the DB expiry check but were rejected
+        by the Twitch API.
+
+        Args:
+            broadcaster_id: Twitch broadcaster ID
+
+        Returns:
+            New access token or None on failure
+        """
+        token_record = self.db(
+            self.db.twitch_action_tokens.broadcaster_id == broadcaster_id
+        ).select().first()
+
+        if not token_record or not token_record.refresh_token:
+            logger.warning(
+                f"Cannot force-refresh: no refresh token for broadcaster {broadcaster_id}"
+            )
+            return None
+
+        return await self._refresh_token(broadcaster_id, token_record.refresh_token)
+
     def has_token(self, broadcaster_id: str) -> bool:
         """
         Check if token exists for broadcaster.

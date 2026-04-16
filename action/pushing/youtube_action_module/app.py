@@ -193,6 +193,45 @@ async def oauth_callback():
         return jsonify({"success": False, "message": str(e)}), 500
 
 
+@app.route("/oauth/force-reauth", methods=["POST"])
+@require_jwt
+async def force_reauth():
+    """
+    Clear a channel's stored token and return a fresh authorization URL.
+
+    Call this when a channel's token is permanently broken (e.g. Google
+    reports 'invalid_grant' because the refresh token was revoked or
+    rotated without being saved).  The caller should redirect the channel
+    owner to the returned authorization_url so they can re-consent.
+    """
+    try:
+        data = await request.get_json()
+        channel_id = data.get("channel_id")
+
+        if not channel_id:
+            return jsonify({"success": False, "message": "channel_id is required"}), 400
+
+        # Delete the existing (broken) credentials before generating a new
+        # authorization URL so there is no risk of the stale token being used.
+        oauth_manager.delete_credentials(channel_id)
+
+        state = data.get("state", channel_id)
+        auth_url = oauth_manager.get_authorization_url(state)
+
+        logger.info(f"Force re-auth initiated for channel: {channel_id}")
+
+        return jsonify({
+            "success": True,
+            "channel_id": channel_id,
+            "authorization_url": auth_url,
+            "message": "Existing credentials cleared. Redirect user to authorization_url to re-authorize.",
+        })
+
+    except Exception as e:
+        logger.error(f"Force re-auth error: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
 @app.route("/oauth/channels", methods=["GET"])
 @require_jwt
 async def list_authorized_channels():

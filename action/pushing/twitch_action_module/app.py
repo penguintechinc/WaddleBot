@@ -379,6 +379,57 @@ async def revoke_token():
             "error": str(e)
         }), 500
 
+@app.route("/api/v1/tokens/force-reauth", methods=["POST"])
+@require_auth
+async def force_reauth():
+    """
+    Clear stored token and return a Twitch OAuth authorization URL.
+
+    Call this when a broadcaster's token is permanently broken (e.g. revoked
+    by the user or failed to refresh with 'invalid_grant').  The caller should
+    redirect the broadcaster to the returned authorization_url so they can
+    re-consent and a fresh token can be stored via /api/v1/tokens/store.
+    """
+    try:
+        data = await request.get_json()
+        broadcaster_id = data.get("broadcaster_id")
+
+        if not broadcaster_id:
+            return jsonify({"error": "broadcaster_id is required"}), 400
+
+        if not Config.TWITCH_REDIRECT_URI:
+            return jsonify({"error": "TWITCH_REDIRECT_URI not configured"}), 500
+
+        # Delete the existing (broken) token so the system cannot keep
+        # failing silently on the stale credentials.
+        await token_manager.revoke_token(broadcaster_id)
+
+        # Build Twitch authorization URL.
+        from urllib.parse import urlencode
+        params = urlencode({
+            "client_id": Config.TWITCH_CLIENT_ID,
+            "redirect_uri": Config.TWITCH_REDIRECT_URI,
+            "response_type": "code",
+            "scope": Config.TWITCH_OAUTH_SCOPES,
+            "state": broadcaster_id,
+            "force_verify": "true",
+        })
+        auth_url = f"https://id.twitch.tv/oauth2/authorize?{params}"
+
+        logger.info(f"Force re-auth initiated for broadcaster {broadcaster_id}")
+
+        return jsonify({
+            "success": True,
+            "broadcaster_id": broadcaster_id,
+            "authorization_url": auth_url,
+            "message": "Existing token cleared. Redirect user to authorization_url to re-authorize.",
+        })
+
+    except Exception as e:
+        logger.error(f"Force re-auth failed: {e}", exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route("/api/v1/stats", methods=["GET"])
 @require_auth
 async def get_stats():

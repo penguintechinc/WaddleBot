@@ -234,8 +234,9 @@ class SpotifyOAuthService:
             access_token = result[0][0]
             expires_at = result[0][1]
 
-            # Check if token is expired (with 5 minute buffer)
-            if expires_at <= datetime.utcnow() + timedelta(minutes=5):
+            # Check if token is expired (with 5 minute buffer).
+            # Treat NULL expires_at as already expired — always refresh.
+            if expires_at is None or expires_at <= datetime.utcnow() + timedelta(minutes=5):
                 logger.info(
                     f"Token expired for community {community_id}, refreshing..."
                 )

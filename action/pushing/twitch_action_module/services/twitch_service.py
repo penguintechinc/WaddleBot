@@ -24,6 +24,26 @@ class TwitchService:
         self.base_url = Config.TWITCH_API_BASE_URL
         self.timeout = Config.REQUEST_TIMEOUT
 
+    async def _execute_request(
+        self,
+        session: aiohttp.ClientSession,
+        method: str,
+        url: str,
+        headers: Dict,
+        params: Optional[Dict],
+        json_data: Optional[Dict],
+    ) -> tuple[int, str]:
+        """Execute a single HTTP request and return (status, body)."""
+        async with session.request(
+            method,
+            url,
+            headers=headers,
+            params=params,
+            json=json_data,
+            timeout=aiohttp.ClientTimeout(total=self.timeout),
+        ) as resp:
+            return resp.status, await resp.text()
+
     async def _make_request(
         self,
         method: str,
@@ -34,6 +54,9 @@ class TwitchService:
     ) -> Dict[str, Any]:
         """
         Make authenticated request to Twitch API.
+
+        On a 401 response the token is force-refreshed and the request
+        is retried once.  All other 4xx/5xx errors raise immediately.
 
         Args:
             method: HTTP method (GET, POST, PATCH, DELETE)
@@ -53,33 +76,44 @@ class TwitchService:
         headers = {
             "Client-ID": self.client_id,
             "Authorization": f"Bearer {access_token}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
 
         url = f"{self.base_url}{endpoint}"
 
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.request(
-                    method,
-                    url,
-                    headers=headers,
-                    params=params,
-                    json=json_data,
-                    timeout=aiohttp.ClientTimeout(total=self.timeout)
-                ) as resp:
-                    response_text = await resp.text()
+                status, response_text = await self._execute_request(
+                    session, method, url, headers, params, json_data
+                )
 
-                    if resp.status >= 400:
-                        logger.error(
-                            f"Twitch API error: {method} {endpoint} - "
-                            f"Status {resp.status}: {response_text}"
+                if status == 401:
+                    # Token was rejected — force a refresh and retry once.
+                    logger.warning(
+                        f"Twitch API 401 for broadcaster {broadcaster_id} on "
+                        f"{method} {endpoint} — refreshing token and retrying"
+                    )
+                    new_token = await self.token_manager.force_refresh(broadcaster_id)
+                    if not new_token:
+                        raise Exception(
+                            f"Token refresh after 401 failed for broadcaster {broadcaster_id}"
                         )
-                        raise Exception(f"Twitch API error: {resp.status} - {response_text}")
+                    headers["Authorization"] = f"Bearer {new_token}"
+                    status, response_text = await self._execute_request(
+                        session, method, url, headers, params, json_data
+                    )
 
-                    if response_text:
-                        return await resp.json()
-                    return {"success": True}
+                if status >= 400:
+                    logger.error(
+                        f"Twitch API error: {method} {endpoint} - "
+                        f"Status {status}: {response_text}"
+                    )
+                    raise Exception(f"Twitch API error: {status} - {response_text}")
+
+                if response_text:
+                    import json as _json
+                    return _json.loads(response_text)
+                return {"success": True}
 
         except asyncio.TimeoutError:
             logger.error(f"Twitch API timeout: {method} {endpoint}")
