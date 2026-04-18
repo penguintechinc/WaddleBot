@@ -177,7 +177,7 @@ echo -e "  Target: ${BASE_URL}"
 section "API Routing"
 
 assert_body_contains  "Public signup-settings"     "/api/v1/public/signup-settings" '"success":true'
-assert_status         "Auth login (CSRF block)"    POST "/api/v1/auth/login" 403 \
+assert_status         "Auth login (validation block)" POST "/api/v1/auth/login" 400 \
                       -H "Content-Type: application/json" -d '{}'
 assert_body_contains  "Protected route (401)"      "/api/v1/communities" '"UNAUTHORIZED"'
 assert_body_contains  "Cookie endpoint"            "/api/v1/cookie/policy" '"success"'

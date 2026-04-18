@@ -21,9 +21,9 @@ import {
   CubeIcon,
   CodeBracketIcon,
 } from '@heroicons/react/24/outline';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import GlobalBanner from '../components/GlobalBanner';
-import { SidebarMenu } from '@penguintechinc/react-libs';
+import { SidebarMenu, SidebarMenuTrigger } from '@penguintechinc/react-libs';
 import UserDropdown from '../components/UserDropdown';
 
 function DashboardLayout() {
@@ -31,6 +31,7 @@ function DashboardLayout() {
   const location = useLocation();
   const { id: communityId } = useParams();
   const navigate = useNavigate();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const activeGroupKey = useMemo(() => {
     if (location.pathname.startsWith('/superadmin') || location.pathname.startsWith('/admin/platform')) {
@@ -144,10 +145,17 @@ function DashboardLayout() {
       {/* Top bar */}
       <header className="bg-navy-900 border-b border-navy-700 sticky top-0 z-50">
         <div className="flex justify-between items-center h-16 px-4 sm:px-6 lg:px-8">
-          <Link to="/" className="flex items-center space-x-2">
-            <img src="/waddlebot-logo.png" alt="Waddles" className="w-8 h-8" />
-            <span className="text-xl font-bold text-gold-400">Waddles</span>
-          </Link>
+          <div className="flex items-center space-x-3">
+            <SidebarMenuTrigger
+              onClick={() => setMobileOpen((o) => !o)}
+              isOpen={mobileOpen}
+              themeMode="dark"
+            />
+            <Link to="/" className="flex items-center space-x-2">
+              <img src="/waddlebot-logo.png" alt="Waddles" className="w-8 h-8" />
+              <span className="text-xl font-bold text-gold-400">Waddles</span>
+            </Link>
+          </div>
 
           <UserDropdown />
         </div>
@@ -163,6 +171,8 @@ function DashboardLayout() {
           activeGroupKey={activeGroupKey}
           width="w-64"
           themeMode="dark"
+          mobileOpen={mobileOpen}
+          onMobileClose={() => setMobileOpen(false)}
           footerItems={[
             { name: user?.displayName || user?.username || 'Account', href: '/dashboard/profile', icon: UserCircleIcon },
           ]}

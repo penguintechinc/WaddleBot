@@ -52,7 +52,7 @@ declare -A SERVICES=(
     [interactive-productivity]="${PROJECT_ROOT}/services/interactive-productivity/Dockerfile"
     # Admin & migrations
     [marketplace]="${PROJECT_ROOT}/admin/marketplace_module/Dockerfile"
-    [waddlebot-migrations]="${PROJECT_ROOT}/migrations/Dockerfile"
+    [migrations]="${PROJECT_ROOT}/migrations/Dockerfile"
 )
 
 # Deployment tool by environment:

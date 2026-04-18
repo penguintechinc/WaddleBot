@@ -1,14 +1,22 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Capture props passed to SidebarMenu
+// Capture props passed to SidebarMenu; SidebarMenuTrigger renders a real button
+// so we can test toggling behaviour without stubbing it out.
 let capturedProps = {};
 vi.mock('@penguintechinc/react-libs', () => ({
   SidebarMenu: (props) => {
     capturedProps = props;
-    return null;
+    return <div data-testid="sidebar-menu" />;
   },
+  SidebarMenuTrigger: ({ onClick, isOpen }) => (
+    <button
+      data-testid="sidebar-trigger"
+      aria-label={isOpen ? 'Close sidebar' : 'Open sidebar'}
+      onClick={onClick}
+    />
+  ),
 }));
 vi.mock('../../components/GlobalBanner', () => ({ default: () => null }));
 vi.mock('../../components/VendorRequestFooter', () => ({ default: () => null }));
@@ -254,5 +262,74 @@ describe('DashboardLayout — isAnalyticsConsumer branch', () => {
     const main = props.categories.find((c) => c.key === 'main');
     const hasAnalytics = main.items.some((i) => i.name === 'Platform Analytics');
     expect(hasAnalytics).toBe(true);
+  });
+});
+
+describe('DashboardLayout — renders SidebarMenu and SidebarMenuTrigger', () => {
+  beforeEach(() => {
+    mockAuth.isCommunityAdmin.mockReturnValue(false);
+    mockAuth.isSuperAdmin = false;
+    mockAuth.isVendor = false;
+    mockAuth.user = { username: 'testuser', displayName: 'Test User' };
+  });
+
+  it('renders SidebarMenu in the DOM', () => {
+    renderAt('/dashboard');
+    expect(screen.getByTestId('sidebar-menu')).toBeTruthy();
+  });
+
+  it('renders SidebarMenuTrigger in the DOM', () => {
+    renderAt('/dashboard');
+    expect(screen.getByTestId('sidebar-trigger')).toBeTruthy();
+  });
+
+  it('passes mobileOpen=false initially to SidebarMenu', () => {
+    const props = renderAt('/dashboard');
+    expect(props.mobileOpen).toBe(false);
+  });
+
+  it('passes onMobileClose function to SidebarMenu', () => {
+    const props = renderAt('/dashboard');
+    expect(typeof props.onMobileClose).toBe('function');
+  });
+});
+
+describe('DashboardLayout — mobile sidebar toggle', () => {
+  beforeEach(() => {
+    mockAuth.isCommunityAdmin.mockReturnValue(false);
+    mockAuth.isSuperAdmin = false;
+    mockAuth.isVendor = false;
+    mockAuth.user = { username: 'testuser', displayName: 'Test User' };
+    capturedProps = {};
+  });
+
+  it('SidebarMenuTrigger click sets mobileOpen to true', () => {
+    renderAt('/dashboard');
+    const trigger = screen.getByTestId('sidebar-trigger');
+    expect(trigger.getAttribute('aria-label')).toBe('Open sidebar');
+    fireEvent.click(trigger);
+    // capturedProps is updated on re-render
+    expect(capturedProps.mobileOpen).toBe(true);
+    expect(trigger.getAttribute('aria-label')).toBe('Close sidebar');
+  });
+
+  it('second trigger click closes the sidebar', () => {
+    renderAt('/dashboard');
+    const trigger = screen.getByTestId('sidebar-trigger');
+    fireEvent.click(trigger); // open
+    fireEvent.click(trigger); // close
+    expect(capturedProps.mobileOpen).toBe(false);
+  });
+
+  it('onMobileClose callback closes the sidebar when called', () => {
+    renderAt('/dashboard');
+    const trigger = screen.getByTestId('sidebar-trigger');
+    fireEvent.click(trigger); // open
+    expect(capturedProps.mobileOpen).toBe(true);
+    // Calling onMobileClose triggers a setState — must flush via act
+    act(() => {
+      capturedProps.onMobileClose();
+    });
+    expect(capturedProps.mobileOpen).toBe(false);
   });
 });
