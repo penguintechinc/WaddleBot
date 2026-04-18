@@ -79,7 +79,7 @@ services:
       start_period: 10s
 
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16-bookworm@sha256:7858a1a43bb2e3decc07650c8989ba526e0a8164f212c9bb88b622cdbd71c4be
     container_name: lambda-action-postgres
     environment:
       POSTGRES_USER: waddlebot

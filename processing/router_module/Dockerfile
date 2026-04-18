@@ -1,7 +1,7 @@
 # Build from parent directory: docker build -f processing/router_module/Dockerfile -t waddlebot/router:latest .
 
 # Use Python 3.12 for better fastText compatibility (C++17 issues with 3.13)
-FROM python:3.12-slim
+FROM python:3.13-slim-bookworm@sha256:01f42367a0a94ad4bc17111776fd66e3500c1d87c15bbd6055b7371d39c124fb
 
 WORKDIR /app
 
