@@ -11,8 +11,9 @@ Start: "Do I need to go fast?"
   ├─ No, I want readable code & rapid iteration → 🐍 Python 3.13
   ├─ Maybe, let me check my expected traffic...
   │   ├─ < 10K req/sec → 🐍 Python 3.13 (works great!)
-  │   └─ ≥ 10K req/sec with <10ms latency needed → 🦫 Go 1.24.x (time to switch)
-  └─ "100K+ packets/sec" or "zero-copy packet processing needed" → 🦫 Go 1.24.x
+  │   ├─ 10K-50K req/sec → 🐍 Python 3.13 (with async/optimization)
+  │   └─ > 50K req/sec → 🦫 Go 1.24.x (time to switch)
+  └─ "We need <10ms latency" or "50K+ packets/sec" → 🦫 Go 1.24.x
 ```
 
 ## 🐍 Python 3.13 (Your Default Weapon)
@@ -36,7 +37,7 @@ MVP/prototype? 🐍
 
 | Scenario | Choice | Why |
 |----------|--------|-----|
-| Building a REST API for a SaaS app | 🐍 Python | Flask + PyDAL = shipped in days |
+| Building a REST API for a SaaS app | 🐍 Python | Flask + SQLAlchemy = shipped in days |
 | Processing uploaded files in background | 🐍 Python | Celery/threads work smoothly |
 | Multi-tenant platform with teams | 🐍 Python | Flask-Security-Too handles complexity |
 | Reporting engine with 2K users | 🐍 Python | Totally fine, even with querying |
@@ -66,12 +67,12 @@ MVP/prototype? 🐍
 ### When Go Actually Matters
 
 ```
-10K+ requests/second with <10ms latency? 🦫
+50K+ requests/second? 🦫
+<10ms latency requirement? 🦫
 Processing 100K+ packets/sec? 🦫
 Zero-copy networking needed? 🦫
-Minimal memory footprint required? 🦫
+Minimal memory footprint? 🦫
 XDP/AF_XDP packet processing? 🦫
-High-performance networking critical? 🦫
 ```
 
 ### Real Scenarios
@@ -79,9 +80,9 @@ High-performance networking critical? 🦫
 | Scenario | Choice | Why |
 |----------|--------|-----|
 | High-frequency trading gateway | 🦫 Go | Sub-millisecond latency critical |
-| Network load balancer (10K+ conn/sec with <10ms latency) | 🦫 Go | Goroutines + low latency |
-| Real-time packet processing (100K+ packets/sec) | 🦫 Go | XDP/AF_XDP + zero-copy |
-| Kernel packet filtering with XDP | 🦫 Go | eBPF programs + networking |
+| Network load balancer (50K+ conn/sec) | 🦫 Go | Goroutines > thread overhead |
+| Real-time streaming with 100K events/sec | 🦫 Go | Memory efficient, built for concurrency |
+| Kernel packet filtering (XDP) | 🦫 Go | Only language that makes sense here |
 | Edge device with 50MB RAM limit | 🦫 Go | Binary ~20MB, minimal runtime overhead |
 
 ### Advantages of Go
@@ -107,38 +108,34 @@ High-performance networking critical? 🦫
 
 **Build flags:**
 ```bash
-# XDP enabled (default — application manages XDP/AF_XDP)
-go build -tags xdp -o app .
+# Default: XDP enabled (handles most cases)
+go build -tags xdp
 
-# XDP disabled (Cilium CNI handles XDP at cluster level)
-go build -tags noxdp -o app .
+# Cilium mode: XDP disabled (Cilium handles networking)
+go build -tags noxdp
 ```
 
-**NUMA-aware memory pools are mandatory** for all Go services. Allocate buffers per NUMA node to avoid cross-node memory traffic:
+**NUMA-aware memory pools are mandatory** for all Go services. Use package like `github.com/ebitengine/purego` or custom implementation:
 
 ```go
-// Example: NUMA-aware memory pool
-type BufferPool struct {
-    pools map[int]chan []byte  // per-NUMA-node pools
-}
+// Example: NUMA-aware memory allocation
+import (
+    "github.com/scylladb/go-set/u64set"
+)
 
-func NewBufferPool(cpus int, bufferSize int) *BufferPool {
-    // Detect NUMA topology via /proc/cpuinfo or runtime library
-    // Pre-allocate buffers on each NUMA node
+func AllocateNUMAPool(numCores int) {
+    // Detect NUMA topology via /proc/self/numa_maps
+    // Allocate memory local to each NUMA node
     // Return pools indexed by NUMA node ID
-    return &BufferPool{
-        pools: make(map[int]chan []byte),
-    }
 }
 
-func (p *BufferPool) Get(nodeID int) <-chan []byte {
-    // Return channel for this NUMA node's buffers
-    // Prevents expensive cross-node memory traffic
-    return p.pools[nodeID]
+func GetLocalMemory(nodeID int) *MemoryPool {
+    // Return pre-allocated pool for this NUMA node
+    // Prevents cross-node memory traffic
 }
 ```
 
-**Why:** NUMA awareness prevents expensive inter-node memory traffic on multi-socket systems. XDP/AF_XDP enables kernel-space (XDP) or user-space zero-copy (AF_XDP) packet processing.
+**Why:** NUMA awareness prevents expensive inter-node memory traffic on multi-socket systems. XDP/AF_XDP enables kernel-space packet processing with zero-copy semantics.
 
 ---
 
@@ -148,8 +145,8 @@ func (p *BufferPool) Get(nodeID int) <-chan []byte {
 |------|----------|---------|------------|
 | <1K req/sec | 🐍 Python | Content, newsletters, admin panels | Low |
 | 1-10K req/sec | 🐍 Python | SaaS, e-commerce, APIs | Low-Medium |
-| 10K+ req/sec WITH <10ms latency | 🦫 Go | High-performance networking required | High |
-| Packet-intensive (100K+/sec) | 🦫 Go | XDP/AF_XDP processing | High |
+| 10-50K req/sec | 🐍 Python (async) | Optimization needed, watch metrics | Medium |
+| 50K+ req/sec | 🦫 Go | Must use Go or redesign architecture | High |
 
 ---
 
@@ -177,7 +174,7 @@ func (p *BufferPool) Get(nodeID int) <-chan []byte {
 A: No. Use async for I/O-heavy services (REST clients, database reads). Regular Flask works great for most business logic. Quart (async Flask) when you need >100 concurrent requests.
 
 **Q: "Can Python handle 10K req/sec?"**
-A: Only if latency requirements allow (>10ms typical). For <10ms latency at 10K req/sec, use Go. Python with async and optimization can handle the throughput, but latency will be higher.
+A: Yes. With async, connection pooling, and load balancing. Load testing first—you might be surprised.
 
 **Q: "Go compiles to a single binary. Isn't that better?"**
 A: For edge deployments, yes. For most of us running containers? Doesn't matter. Both are equally portable.

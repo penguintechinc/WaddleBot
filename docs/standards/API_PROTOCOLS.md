@@ -29,16 +29,14 @@ Easy to curl, inspect in browser, test with Postman
 
 ### ⚡ gRPC (Internal Communication)
 **Use when**: Services talking to each other inside your cluster
-- **What it is**: Binary protocol over HTTP/2 using Protocol Buffers, like a super-efficient inter-process call
+- **What it is**: Binary protocol over HTTP/2, like a super-efficient inter-process call
 - **Speed**: 2-10x faster than REST, lower bandwidth
-- **Port**: 50051 (standard gRPC port)
-- **Format**: Protocol Buffers (.proto files)
 - **Example**: `teams-api` calling `go-backend` for analytics
 
 ```
-teams-api → (gRPC on port 50051) → go-backend
+teams-api → (gRPC) → go-backend
 ↓
-Fast, efficient, automatic serialization via Protobuf
+Fast, efficient, automatic serialization
 ```
 
 ## 📝 Creating Your First Endpoint
@@ -128,28 +126,14 @@ Client 2 (v2) → /api/v2/users → New format (enhanced metadata)
 ### Version Lifecycle (N-2 Model)
 - **Current (v2)**: Fully supported, active development
 - **Previous (v1)**: Bug fixes and security patches only
-- **Two Back (v0)**: Security patches only
-- **Older (v-1+)**: Deprecated with warning headers, then shut down
+- **Two Back**: Security patches only
+- **Older**: Sunset warning headers, then deleted
 
 **Timeline Example**:
 - Month 0: Release v2 alongside v1
-- Months 1-12: Both fully supported (minimum 12-month deprecation timeline)
-- Month 13: v1 returns deprecation headers (`Sunset`, `Deprecated` headers)
-- Month 14+: v1 shut down
-
-**Deprecation Headers Example**:
-```bash
-# Old API endpoint returning deprecation headers
-HTTP/1.1 200 OK
-Sunset: Wed, 22 Jan 2026 00:00:00 GMT
-Deprecation: true
-Warning: 299 - "API v1 is deprecated. Migrate to /api/v2/ before 2026-01-22"
-
-{
-  "status": "success",
-  "data": {...}
-}
-```
+- Months 1-12: Both fully supported
+- Month 13: v1 returns deprecation headers
+- Month 14: v1 shut down
 
 ## 📊 Request/Response Examples
 
@@ -167,7 +151,6 @@ GET /api/v2/users?limit=10&offset=0
   ],
   "meta": {
     "version": 2,
-    "timestamp": "2025-01-22T10:30:00Z",
     "total": 2,
     "limit": 10,
     "offset": 0
@@ -194,10 +177,6 @@ Content-Type: application/json
     "name": "Charlie",
     "email": "charlie@company.com",
     "created_at": "2025-01-22T10:30:00Z"
-  },
-  "meta": {
-    "version": 2,
-    "timestamp": "2025-01-22T10:30:00Z"
   }
 }
 ```
@@ -220,10 +199,6 @@ Content-Type: application/json
     "id": 1,
     "name": "Alice Updated",
     "email": "alice.new@company.com"
-  },
-  "meta": {
-    "version": 2,
-    "timestamp": "2025-01-22T10:30:00Z"
   }
 }
 ```
@@ -242,7 +217,7 @@ def user_detail(user_id):
             'status': 'error',
             'error': 'user_not_found',
             'message': f'User {user_id} does not exist',
-            'meta': {'version': 2, 'timestamp': datetime.utcnow().isoformat() + 'Z'}
+            'meta': {'version': 2}
         }), 404
 
     if not user.is_active:
@@ -250,7 +225,7 @@ def user_detail(user_id):
             'status': 'error',
             'error': 'user_inactive',
             'message': 'This user account is inactive',
-            'meta': {'version': 2, 'timestamp': datetime.utcnow().isoformat() + 'Z'}
+            'meta': {'version': 2}
         }), 403
 
     return jsonify({'status': 'success', 'data': user})

@@ -99,7 +99,7 @@ Here's what it checks:
 - [ ] Version updated if needed
 - [ ] Docker builds successfully with debian-slim
 
-Run this script and verify all checks pass before committing. Fix any failures before proceeding.
+> **Important**: Only commit when explicitly asked. Run this script, verify everything passes, then request approval. No shortcuts!
 
 [Full pre-commit guide](PRE_COMMIT.md)
 
@@ -108,7 +108,9 @@ Run this script and verify all checks pass before committing. Fix any failures b
 Files have limits for a reason (keeps things maintainable and fast):
 
 - **Code and markdown**: Max 25,000 characters
+- **CLAUDE.md**: Max 39,000 characters (only exception)
 - **When you hit the limit**: Split into modules, separate documents, or a new file
+- **Documentation strategy**: Detailed docs live in `docs/`, high-level context in CLAUDE.md
 
 ## App-Specific Standards
 
