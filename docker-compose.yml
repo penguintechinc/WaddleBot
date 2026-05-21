@@ -410,6 +410,8 @@ services:
     build:
       context: .
       dockerfile: admin/hub_module/Dockerfile
+      args:
+        NPM_TOKEN: ${NPM_TOKEN}
     container_name: hub-api
     environment:
       NODE_ENV: ${NODE_ENV:-development}
