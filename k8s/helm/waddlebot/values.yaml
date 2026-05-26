@@ -860,7 +860,7 @@ modules:
 
 # Ingress Configuration
 ingress:
-  enabled: true
+  enabled: false
   className: "nginx"
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
@@ -1168,6 +1168,14 @@ monitoring:
     enabled: false
     dashboards:
       enabled: false
+
+# HTTPRoute Configuration (Cilium Gateway API)
+httproute:
+  enabled: false
+  gatewayName: shared
+  gatewayNamespace: gateway
+  hostnames: []
+  rules: []
 
 # Network Policies — namespace-level ingress isolation
 # When enabled, denies all cross-namespace ingress and allows only

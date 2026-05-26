@@ -24,7 +24,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
       - name: Determine version
         id: version
@@ -36,7 +36,7 @@ jobs:
           fi
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
         with:
           path: artifacts
 
@@ -127,7 +127,7 @@ jobs:
           EOF
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda  # v3
         with:
           tag_name: ${{ steps.version.outputs.version }}
           name: Desktop Bridge ${{ steps.version.outputs.version }}

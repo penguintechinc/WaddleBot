@@ -27,10 +27,10 @@ jobs:
         working-directory: Premium/Desktop
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c  # v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -52,10 +52,10 @@ jobs:
         working-directory: Premium/Desktop
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c  # v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -65,7 +65,7 @@ jobs:
         run: go test -v -race -coverprofile=coverage.out ./...
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2  # v6
         with:
           files: Premium/Desktop/coverage.out
           flags: desktop-macos
@@ -83,10 +83,10 @@ jobs:
         working-directory: Premium/Desktop
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c  # v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -103,7 +103,7 @@ jobs:
         run: file waddlebot-bridge-darwin-${{ matrix.arch }}
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         with:
           name: waddlebot-bridge-darwin-${{ matrix.arch }}
           path: Premium/Desktop/waddlebot-bridge-darwin-${{ matrix.arch }}

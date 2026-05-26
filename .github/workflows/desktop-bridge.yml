@@ -26,15 +26,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c  # v6
         with:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Cache Go modules
-        uses: actions/cache@v3
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
         with:
           path: |
             ~/.cache/go-build
@@ -75,7 +75,7 @@ jobs:
         continue-on-error: true
 
       - name: Upload gosec results
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@95e58e9a2cdfd71adc6e0353d5c52f41a045d225  # v4
         if: always()
         with:
           sarif_file: Premium/Desktop/gosec-report.sarif
@@ -96,15 +96,15 @@ jobs:
         go-version: ['1.21', '1.22']
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c  # v6
         with:
           go-version: ${{ matrix.go-version }}
 
       - name: Cache Go modules
-        uses: actions/cache@v3
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
         with:
           path: |
             ~/.cache/go-build
@@ -139,7 +139,7 @@ jobs:
         shell: bash
 
       - name: Upload test results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         if: always()
         with:
           name: test-results-${{ matrix.os }}-go${{ matrix.go-version }}
@@ -150,7 +150,7 @@ jobs:
             Premium/Desktop/coverage.out
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2  # v6
         with:
           file: Premium/Desktop/coverage.out
           flags: ${{ matrix.os }}-go${{ matrix.go-version }}
@@ -167,15 +167,15 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c  # v6
         with:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Cache Go modules
-        uses: actions/cache@v3
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
         with:
           path: |
             ~/.cache/go-build
@@ -194,7 +194,7 @@ jobs:
         shell: bash
 
       - name: Upload integration test results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         if: always()
         with:
           name: integration-test-results-${{ matrix.os }}
@@ -231,15 +231,15 @@ jobs:
             binary_name: waddlebot-bridge-darwin-arm64
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c  # v6
         with:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Cache Go modules
-        uses: actions/cache@v3
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
         with:
           path: |
             ~/.cache/go-build
@@ -275,7 +275,7 @@ jobs:
         shell: bash
 
       - name: Upload binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         with:
           name: binary-${{ matrix.goos }}-${{ matrix.goarch }}
           path: Premium/Desktop/build/${{ matrix.binary_name }}
@@ -288,13 +288,13 @@ jobs:
     needs: unit-tests
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd  # v4
 
       - name: Log in to Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121  # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -302,7 +302,7 @@ jobs:
 
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf  # v6
         with:
           images: ghcr.io/${{ github.repository }}/desktop-bridge
           tags: |
@@ -312,7 +312,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f  # v7
         with:
           context: Premium/Desktop
           file: Premium/Desktop/Dockerfile
@@ -335,15 +335,15 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c  # v6
         with:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Cache Go modules
-        uses: actions/cache@v3
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
         with:
           path: |
             ~/.cache/go-build
@@ -363,7 +363,7 @@ jobs:
         working-directory: Premium/Desktop
 
       - name: Upload benchmark results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         with:
           name: benchmark-results
           path: |
@@ -379,15 +379,15 @@ jobs:
     needs: unit-tests
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c  # v6
         with:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Cache Go modules
-        uses: actions/cache@v3
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
         with:
           path: |
             ~/.cache/go-build
@@ -412,7 +412,7 @@ jobs:
         working-directory: Premium/Desktop
 
       - name: Upload documentation
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         with:
           name: documentation
           path: Premium/Desktop/documentation.html
@@ -426,10 +426,10 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
 
       - name: Create release directory
         run: mkdir -p release
@@ -462,7 +462,7 @@ jobs:
 
       - name: Create pre-release
         if: contains(github.ref, 'develop')
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda  # v3
         with:
           tag_name: v${{ github.run_number }}-pre
           name: Pre-release v${{ github.run_number }}
@@ -474,7 +474,7 @@ jobs:
 
       - name: Create release
         if: github.ref == 'refs/heads/main'
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda  # v3
         with:
           tag_name: v${{ github.run_number }}
           name: Release v${{ github.run_number }}
@@ -492,15 +492,15 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
       - name: Download benchmark results
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
         with:
           name: benchmark-results
 
       - name: Store benchmark results
-        uses: benchmark-action/github-action-benchmark@v1
+        uses: benchmark-action/github-action-benchmark@a60cea5bc7b49e15c1f58f411161f99e0df48372  # v1.22.0
         with:
           name: Go Benchmarks
           tool: 'go'
@@ -530,7 +530,7 @@ jobs:
 
       - name: Comment PR
         if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9
         with:
           script: |
             const summary = `## 🖥️ Desktop Bridge Build Results
