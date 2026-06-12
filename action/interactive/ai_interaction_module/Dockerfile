@@ -28,4 +28,4 @@ RUN chown -R waddlebot:waddlebot /app /var/log/waddlebotlog
 
 USER waddlebot
 
-CMD ["hypercorn", "app:app", "--bind", "0.0.0.0:8005", "--workers", "4"]
+CMD ["sh", "-c", "exec hypercorn app:app --bind 0.0.0.0:${MODULE_PORT:-8005} --workers ${HYPERCORN_WORKERS:-1}"]

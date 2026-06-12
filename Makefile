@@ -1,6 +1,6 @@
 .PHONY: dev test test-unit test-integration test-e2e test-functional test-security \
         smoke-test lint build docker-build docker-push deploy-dev deploy-prod \
-        seed-mock-data clean pre-commit
+        seed-mock-data clean pre-commit run-ai-local
 
 dev:
 	docker-compose up
@@ -64,6 +64,16 @@ deploy-dev:
 
 deploy-prod:
 	@echo "Deploy to production environment"
+
+run-ai-local: ## Run ai_interaction_module container locally (standalone, 1 worker)
+	docker build -f action/interactive/ai_interaction_module/Dockerfile -t waddlebot/ai-interaction:local . && \
+	docker run --rm \
+	  --name ai-interaction-local \
+	  --add-host=host.docker.internal:host-gateway \
+	  --env-file action/interactive/ai_interaction_module/.env.local \
+	  -e HYPERCORN_WORKERS=1 \
+	  -p 8005:8005 \
+	  waddlebot/ai-interaction:local
 
 pre-commit:
 	@echo "=== Pre-commit checks ==="

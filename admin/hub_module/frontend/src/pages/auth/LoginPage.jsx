@@ -10,8 +10,8 @@ import { useState } from 'react';
 // The LoginPageBuilder appends client_id/state params to the authUrl,
 // but the backend ignores them and generates its own state UUID.
 const SOCIAL_PROVIDERS = [
-  { provider: 'discord', clientId: 'server-side' },
-  { provider: 'twitch',  clientId: 'server-side' },
+  { provider: 'discord', clientId: 'server-side', authUrl: '/api/v1/auth/oauth/discord' },
+  { provider: 'twitch',  clientId: 'server-side', authUrl: '/api/v1/auth/oauth/twitch' },
   {
     provider: 'oauth2',
     clientId: 'server-side',

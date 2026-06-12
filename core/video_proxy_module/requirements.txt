@@ -3,13 +3,13 @@ quart==0.20.0
 hypercorn==0.17.3
 
 # gRPC
-grpcio==1.63.0
-grpcio-tools==1.63.0
+grpcio==1.68.1
+grpcio-tools==1.68.1
 protobuf>=5.29.6
 
 # Database
 pydal==20241111.1
-psycopg2-binary==2.9.9
+psycopg2-binary==2.9.12
 
 # HTTP Client
 aiohttp>=3.13.4

@@ -35,7 +35,7 @@ numpy==1.26.4
 openpyxl==3.1.2
 pandas==2.2.2
 psycopg2==2.9.9
-psycopg2-binary==2.9.9
+psycopg2-binary==2.9.12
 pycparser==2.22
 pydal==20240428.2
 python-dateutil==2.9.0.post0
