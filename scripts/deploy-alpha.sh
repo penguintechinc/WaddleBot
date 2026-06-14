@@ -208,19 +208,12 @@ build_and_import() {
 
     local image_name="${IMAGE_PREFIX}/${service}:${tag}"
 
-    # Pass build args if set in environment
-    local build_args=()
-    if [[ -n "${NPM_TOKEN:-}" ]]; then
-        build_args+=(--build-arg "NPM_TOKEN=${NPM_TOKEN}")
-    fi
-
     print_info "Building image: ${image_name}"
     if ! docker build \
         --file "${dockerfile}" \
         --tag "${image_name}" \
         --label "environment=alpha" \
         --label "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-        "${build_args[@]}" \
         "${PROJECT_ROOT}"; then
         print_error "Failed to build ${service}"
         return 1

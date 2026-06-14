@@ -124,7 +124,6 @@ jobs:
           build-args: |
             MODULE_NAME=${{ inputs.module_name }}
             MODULE_PORT=${{ inputs.module_port }}
-            NPM_TOKEN=${{ secrets.GITHUB_TOKEN }}
 
   # Merge amd64 + arm64 into a single multi-arch OCI index manifest
   merge:

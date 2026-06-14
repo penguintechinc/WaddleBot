@@ -2,17 +2,13 @@
 # Stage 1: Build frontend
 FROM node:20-bookworm-slim@sha256:1e85773c98c31d4fe5b545e4cb17379e617b348832fb3738b22a08f68dec30f3 AS frontend-build
 
-ARG NPM_TOKEN
-
 WORKDIR /build/admin/hub_module/frontend
 
 # Copy frontend package files
 COPY admin/hub_module/frontend/package*.json ./
 
-# Configure GitHub Packages auth and install dependencies
-RUN printf '@penguintechinc:registry=https://npm.pkg.github.com\n//npm.pkg.github.com/:_authToken=%s\n' "${NPM_TOKEN}" > .npmrc && \
-    npm install && \
-    rm -f .npmrc
+# Install dependencies (packages are public on npm)
+RUN npm install
 
 # Copy frontend source
 COPY admin/hub_module/frontend/ ./

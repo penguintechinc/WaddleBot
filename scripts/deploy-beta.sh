@@ -250,20 +250,6 @@ check_prerequisites() {
         log_success "Kubernetes context: $current_context"
     fi
 
-    # Check for NPM_TOKEN
-    if [ -z "${NPM_TOKEN:-}" ]; then
-        if [ -f "$HOME/code/.gh-token" ]; then
-            read -r NPM_TOKEN < <(sed -n '2p' "$HOME/code/.gh-token")
-            export NPM_TOKEN
-            log_info "Loaded NPM_TOKEN from ~/code/.gh-token"
-        else
-            log_error "NPM_TOKEN is not set and ~/code/.gh-token not found"
-            log_error "Set NPM_TOKEN env var with a GitHub token that has read:packages scope"
-            exit 1
-        fi
-    fi
-    log_success "NPM_TOKEN configured"
-
     # Log in to ghcr.io for image push
     if [ "$SKIP_BUILD" = false ]; then
         if [ -f "$HOME/code/.gh-token" ]; then
@@ -291,7 +277,6 @@ _build_and_push_one() {
         # Build locally (never use buildx --push against beta registry)
         if ! docker build \
             -f "${dockerfile}" \
-            --build-arg NPM_TOKEN="${NPM_TOKEN}" \
             -t "waddlebot-${service}:latest" \
             "${PROJECT_ROOT}" 2>&1; then
             echo "[FAIL] ${service}: docker build failed"
