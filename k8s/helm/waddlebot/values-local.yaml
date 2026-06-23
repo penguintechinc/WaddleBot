@@ -333,8 +333,8 @@ redis:
 
 # MinIO credentials
 minio:
-  rootUser: "minioadmin"
-  rootPassword: "minioadmin"
+  rootUser: "REPLACE_ME"
+  rootPassword: "REPLACE_ME"
 
 # AWS credentials (for Lambda)
 aws:

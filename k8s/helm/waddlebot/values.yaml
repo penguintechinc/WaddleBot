@@ -22,11 +22,12 @@ global:
   # Default storage class for persistent volumes
   storageClass: "standard"
 
+  # OVERRIDE REQUIRED: override via --set or values override file
   # Security secrets (set via kubectl create secret or values override)
   # Defaults match docker-compose.yml for local development consistency
-  jwtSecret: "changeme_jwt_secret"
-  moduleSecretKey: "changeme_module_secret"
-  serviceApiKey: "changeme_service_key"
+  jwtSecret: "REPLACE_ME_jwt_secret"
+  moduleSecretKey: "REPLACE_ME_module_secret"
+  serviceApiKey: "REPLACE_ME_service_key"
 
   # Logging
   logLevel: "INFO"
@@ -67,7 +68,7 @@ infrastructure:
     enabled: true
     username: "waddlebot"
     database: "waddlebot"
-    password: "changeme"  # Only used for secrets, actual DB already running
+    password: "REPLACE_ME"  # Only used for secrets, actual DB already running
     image: postgres:16
     service:
       name: "infra-postgres"
@@ -101,22 +102,22 @@ infrastructure:
     enabled: true
     image: redis:7-bookworm  # Use Debian instead of Alpine for compatibility
     port: 6379
-    password: "changeme"  # Only used for secrets, actual Redis already running
+    password: "REPLACE_ME"  # Only used for secrets, actual Redis already running
     # Module-specific Redis passwords (matches docker-compose.yml ACL setup)
     modulePasswords:
-      admin: "changeme"
-      router: "changeme"
-      hub: "changeme"
-      workflow: "changeme"
-      ai: "changeme"
-      analytics: "changeme"
-      security: "changeme"
-      loyalty: "changeme"
-      spotify: "changeme"
-      ytmusic: "changeme"
-      twitch: "changeme"
-      discord: "changeme"
-      slack: "changeme"
+      admin: "REPLACE_ME"
+      router: "REPLACE_ME"
+      hub: "REPLACE_ME"
+      workflow: "REPLACE_ME"
+      ai: "REPLACE_ME"
+      analytics: "REPLACE_ME"
+      security: "REPLACE_ME"
+      loyalty: "REPLACE_ME"
+      spotify: "REPLACE_ME"
+      ytmusic: "REPLACE_ME"
+      twitch: "REPLACE_ME"
+      discord: "REPLACE_ME"
+      slack: "REPLACE_ME"
     maxMemory: "256mb"
     maxMemoryPolicy: "allkeys-lru"
     service:
@@ -146,8 +147,8 @@ infrastructure:
     consolePort: 9001
     bucketName: "waddlebot-assets"
     # Default credentials (matches docker-compose.yml)
-    rootUser: "minioadmin"
-    rootPassword: "minioadmin"
+    rootUser: "REPLACE_ME"
+    rootPassword: "REPLACE_ME"
     service:
       name: "infra-minio"
       apiPort: 9000
