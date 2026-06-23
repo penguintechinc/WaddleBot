@@ -35,7 +35,7 @@ spec:
     spec:
       containers:
       - name: postgres
-        image: postgres:16-alpine
+        image: postgres:16-bookworm@sha256:a0fd72825431f4b7fd3f9d5def9f370b9c22012f1a9e37ece1a5749b95333fb7
         imagePullPolicy: IfNotPresent
         env:
         - name: POSTGRES_DB

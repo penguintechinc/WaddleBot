@@ -69,7 +69,7 @@ infrastructure:
     username: "waddlebot"
     database: "waddlebot"
     password: "REPLACE_ME"  # Only used for secrets, actual DB already running
-    image: postgres:16
+    image: postgres:16-bookworm@sha256:a0fd72825431f4b7fd3f9d5def9f370b9c22012f1a9e37ece1a5749b95333fb7
     service:
       name: "infra-postgres"
       port: 5432
@@ -100,7 +100,7 @@ infrastructure:
   # Redis Cache & Sessions
   redis:
     enabled: true
-    image: redis:7-bookworm  # Use Debian instead of Alpine for compatibility
+    image: redis:7-bookworm@sha256:33d7c9a245edd95e6703a0addbeaa48fe40c3b3b4783627a72085155462ebfdb  # Use Debian instead of Alpine for compatibility
     port: 6379
     password: "REPLACE_ME"  # Only used for secrets, actual Redis already running
     # Module-specific Redis passwords (matches docker-compose.yml ACL setup)
@@ -142,7 +142,7 @@ infrastructure:
   # MinIO Object Storage
   minio:
     enabled: true
-    image: minio/minio:latest
+    image: minio/minio:latest@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
     apiPort: 9000
     consolePort: 9001
     bucketName: "waddlebot-assets"
@@ -170,7 +170,7 @@ infrastructure:
   # Ollama AI Backend
   ollama:
     enabled: true
-    image: ollama/ollama:latest
+    image: ollama/ollama:latest@sha256:bfc9c6d53cc6989aa5131a6fde6b162b2802d4d337657f3253b5f69579bddeee
     port: 11434
     defaultProvider: "ollama"
     defaultModel: "tinyllama"
@@ -195,7 +195,7 @@ infrastructure:
   # Qdrant Vector Database
   qdrant:
     enabled: true
-    image: qdrant/qdrant:latest
+    image: qdrant/qdrant:latest@sha256:75eab8c4ba42096724fdcfde8b4de0b5713d529dde32f285a1f86fdcb2c9e50c
     port: 6333
     grpcPort: 6334
     service:

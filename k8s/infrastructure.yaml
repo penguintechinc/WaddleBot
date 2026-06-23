@@ -55,7 +55,7 @@ spec:
     spec:
       containers:
         - name: postgres
-          image: postgres:15-alpine
+          image: postgres:15-bookworm@sha256:b395c9b05a57a43c079691104bc8468ea336a42e6148f44095e66d0c056cdd1c
           ports:
             - containerPort: 5432
           env:
@@ -118,7 +118,7 @@ spec:
     spec:
       containers:
         - name: redis
-          image: redis:7-alpine
+          image: redis:7-bookworm@sha256:33d7c9a245edd95e6703a0addbeaa48fe40c3b3b4783627a72085155462ebfdb
           command:
             - redis-server
             - --requirepass
