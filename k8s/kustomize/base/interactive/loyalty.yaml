@@ -58,7 +58,7 @@ spec:
           value: "8032"
         securityContext:
           allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: false
+          readOnlyRootFilesystem: true
         livenessProbe:
           httpGet:
             path: /health
@@ -87,10 +87,14 @@ spec:
           mountPath: /var/log/waddlebotlog
         - name: databases
           mountPath: /app/databases
+        - name: tmp
+          mountPath: /tmp
       volumes:
       - name: logs
         emptyDir: {}
       - name: databases
+        emptyDir: {}
+      - name: tmp
         emptyDir: {}
 ---
 apiVersion: v1

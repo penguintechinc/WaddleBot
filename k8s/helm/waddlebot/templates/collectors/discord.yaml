@@ -73,6 +73,16 @@ spec:
             failureThreshold: 3
           resources:
             {{- toYaml .Values.modules.collectors.discord.resources | nindent 12 }}
+          volumeMounts:
+          - name: logs
+            mountPath: /var/log/waddlebotlog
+          - name: tmp
+            mountPath: /tmp
+      volumes:
+      - name: logs
+        emptyDir: {}
+      - name: tmp
+        emptyDir: {}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

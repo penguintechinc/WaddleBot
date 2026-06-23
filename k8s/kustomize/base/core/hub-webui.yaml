@@ -27,7 +27,7 @@ spec:
         imagePullPolicy: Always
         securityContext:
           allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: false
+          readOnlyRootFilesystem: true
         ports:
         - name: http
           containerPort: 8080
@@ -67,8 +67,12 @@ spec:
         volumeMounts:
         - name: logs
           mountPath: /var/log/waddlebotlog
+        - name: tmp
+          mountPath: /tmp
       volumes:
       - name: logs
+        emptyDir: {}
+      - name: tmp
         emptyDir: {}
 ---
 apiVersion: v1

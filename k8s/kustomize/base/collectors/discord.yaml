@@ -58,7 +58,7 @@ spec:
           value: "8003"
         securityContext:
           allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: false
+          readOnlyRootFilesystem: true
         resources:
           requests:
             cpu: 100m
@@ -87,10 +87,14 @@ spec:
           mountPath: /var/log/waddlebotlog
         - name: databases
           mountPath: /app/databases
+        - name: tmp
+          mountPath: /tmp
       volumes:
       - name: logs
         emptyDir: {}
       - name: databases
+        emptyDir: {}
+      - name: tmp
         emptyDir: {}
 ---
 apiVersion: v1

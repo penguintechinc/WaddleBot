@@ -50,7 +50,7 @@ spec:
           protocol: TCP
         securityContext:
           allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: false
+          readOnlyRootFilesystem: true
         envFrom:
         - configMapRef:
             name: waddlebot-config
@@ -92,10 +92,14 @@ spec:
           mountPath: /var/log/waddlebotlog
         - name: databases
           mountPath: /app/databases
+        - name: tmp
+          mountPath: /tmp
       volumes:
       - name: logs
         emptyDir: {}
       - name: databases
+        emptyDir: {}
+      - name: tmp
         emptyDir: {}
 ---
 apiVersion: v1
