@@ -245,7 +245,38 @@ class PaymentController {
         });
       }
 
-      // TODO: Add authorization check - only admins or original purchaser
+      // Authorization check - only admins or original purchaser
+      if (!req.user) {
+        return res.status(403).json({
+          success: false,
+          error: 'Authentication required to create refunds',
+        });
+      }
+
+      // Retrieve original payment to check ownership
+      const paymentResult = await paymentService.getPayment(provider, paymentId);
+      if (!paymentResult || !paymentResult.session) {
+        return res.status(404).json({
+          success: false,
+          error: 'Payment not found',
+        });
+      }
+
+      const payment = paymentResult.session;
+      const paymentOwnerId = payment.metadata?.userId;
+
+      // Check authorization: admin or payment owner
+      const isAdmin = req.user?.roles?.includes('super_admin') ||
+                      req.user?.roles?.includes('platform-admin') ||
+                      req.user?.isSuperAdmin;
+      const isOwner = req.user?.id === paymentOwnerId;
+
+      if (!isAdmin && !isOwner) {
+        return res.status(403).json({
+          success: false,
+          error: 'Not authorized to refund this payment',
+        });
+      }
 
       const result = await paymentService.createRefund({
         provider,
