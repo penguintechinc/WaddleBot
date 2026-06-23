@@ -10,6 +10,6 @@
     "test:all": "npm run test:api && npm run test:pages"
   },
   "dependencies": {
-    "playwright": "^1.40.0"
+    "playwright": "1.40.0"
   }
 }

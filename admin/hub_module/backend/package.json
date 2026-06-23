@@ -11,27 +11,27 @@
     "test": "node --test"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1051.0",
-    "axios": "^1.15.2",
-    "bcrypt": "^6.0.0",
-    "cookie-parser": "^1.4.6",
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.7",
-    "express": "^4.21.2",
-    "express-rate-limit": "^7.5.0",
-    "express-validator": "^7.0.1",
-    "helmet": "^8.0.0",
-    "jsonwebtoken": "^9.0.2",
-    "multer": "^2.0.2",
+    "@aws-sdk/client-s3": "3.1051.0",
+    "axios": "1.16.1",
+    "bcrypt": "6.0.0",
+    "cookie-parser": "1.4.7",
+    "cors": "2.8.6",
+    "dotenv": "16.6.1",
+    "express": "4.22.1",
+    "express-rate-limit": "7.5.1",
+    "express-validator": "7.3.1",
+    "helmet": "8.1.0",
+    "jsonwebtoken": "9.0.3",
+    "multer": "2.1.1",
     "nodemailer": "8.0.5",
-    "pg": "^8.13.1",
-    "socket.io": "^4.8.1",
-    "uuid": "^14.0.0",
-    "xss": "^1.0.15",
-    "@simplewebauthn/server": "^13.0.0"
+    "pg": "8.17.2",
+    "socket.io": "4.8.3",
+    "uuid": "14.0.0",
+    "xss": "1.0.15",
+    "@simplewebauthn/server": "13.2.3"
   },
   "devDependencies": {
-    "eslint": "^8.56.0"
+    "eslint": "8.57.1"
   },
   "engines": {
     "node": ">=20.0.0"
