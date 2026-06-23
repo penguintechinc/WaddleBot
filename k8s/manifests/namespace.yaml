@@ -1,8 +1,0 @@
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: waddlebot
-  labels:
-    app.kubernetes.io/name: waddlebot
-    app.kubernetes.io/instance: waddlebot
-    app.kubernetes.io/component: namespace
