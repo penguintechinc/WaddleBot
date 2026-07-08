@@ -14,6 +14,14 @@ from services.ai_chatter_config_cache import AiChatterConfigCache
 
 logger = logging.getLogger(__name__)
 
+# Non-disableable core modules (docs/APP_STANDARDS.md; migration 051_fix_is_core_flags.sql).
+# Only ``identity`` and ``workflow`` are ``is_core = TRUE`` — they can never be blocked by
+# the module-enable toggle or the feature-flag gate. A module-level frozenset is used rather
+# than a DB ``is_core`` lookup because the set is fixed by the standards/migration, is checked
+# on the command hot-path, and the exact names are guaranteed by the ``commands.module_name``
+# column (LEFT JOIN hub_modules ON name). This keeps dispatch free of an extra cached query.
+CORE_MODULE_NAMES: frozenset[str] = frozenset({"identity", "workflow"})
+
 
 class CommandProcessor:
     def __init__(
@@ -25,6 +33,7 @@ class CommandProcessor:
         command_registry: CommandRegistry,
         stream_pipeline=None,
         ai_chatter_config_cache=None,
+        feature_flag_service=None,
     ):
         self.dal = dal
         self.cache = cache_manager
@@ -36,6 +45,7 @@ class CommandProcessor:
         self._grpc_manager = get_grpc_manager() if Config.GRPC_ENABLED else None
         self.stream_pipeline = stream_pipeline  # Optional Redis streams pipeline
         self.ai_chatter_config_cache = ai_chatter_config_cache  # AIChatter config cache
+        self.feature_flag_service = feature_flag_service  # Feature-flag evaluator (fail-open)
 
         # Context service: per-user community context overrides
         self.context_service = ContextService(dal, cache_manager)
@@ -158,7 +168,10 @@ class CommandProcessor:
                 asyncio.create_task(self._record_reputation_event(cmd_event))
 
                 # Execute command
-                result = await self.execute_command(command, entity_id, user_id, message, session_id)
+                result = await self.execute_command(
+                    command, entity_id, user_id, message, session_id,
+                    platform=event_data.get('platform'),
+                )
 
                 # Check for workflows triggered by this command
                 await self._check_and_trigger_workflows(command, entity_id, user_id, message, session_id, event_data)
@@ -209,7 +222,7 @@ class CommandProcessor:
 
         # Execute as regular command
         result = await self.execute_command(
-            command, entity_id, user_id, message, session_id
+            command, entity_id, user_id, message, session_id, platform=platform
         )
 
         # Add interaction metadata for deferred responses
@@ -254,6 +267,14 @@ class CommandProcessor:
 
         # Resolve community for this entity
         community_id = await self._get_community_for_entity(entity_id)
+
+        # Gate the interaction dispatch the same way execute_command does: the
+        # module enable-toggle + the feature-flag system, with core modules
+        # (identity, workflow) bypassing both. Historically the interaction path
+        # POSTed to the module with no enable check at all.
+        gate = await self._dispatch_gate(module_name, community_id, platform)
+        if gate is not None:
+            return {**gate, "session_id": session_id}
 
         # Look up the module's HTTP URL from the command registry (fast) or DB (fallback)
         module_url: Optional[str] = None
@@ -589,6 +610,53 @@ class CommandProcessor:
         except Exception as e:
             logger.warning(f"Failed to record reputation event: {e}")
 
+    async def _dispatch_gate(
+        self,
+        module_name: str,
+        community_id: Optional[int],
+        platform: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Gate a module dispatch behind the enable-toggle and feature-flag system.
+
+        Returns an error-response dict (without ``session_id`` — the caller adds
+        it) when the module must be blocked, or ``None`` when dispatch may proceed.
+
+        Core modules (``identity``, ``workflow``) are never blocked: per
+        docs/APP_STANDARDS.md they are ``is_core = TRUE`` and bypass BOTH the
+        module-disabled toggle and the feature-flag gate.
+
+        The feature-flag check is fail-open: an absent flag (or any Redis/DB
+        error inside the service) resolves to enabled.
+        """
+        # Core modules can never be blocked.
+        if module_name in CORE_MODULE_NAMES:
+            return None
+
+        # Callers use 'unknown' as the missing-platform sentinel; normalize to
+        # None so flag lookups cache under a single key per (flag, community).
+        if not platform or platform == 'unknown':
+            platform = None
+
+        # 1) Community module enable/disable toggle.
+        if community_id and not await self._is_module_enabled(module_name, community_id):
+            return {
+                "success": False,
+                "error": f"The '{module_name}' module is disabled for this community",
+            }
+
+        # 2) Feature-flag gate: flag key "module.<name>", fail-open when absent.
+        if self.feature_flag_service is not None:
+            flag_key = f"module.{module_name}"
+            if not await self.feature_flag_service.is_enabled(
+                flag_key, community_id=community_id, platform=platform
+            ):
+                return {
+                    "success": False,
+                    "error": f"The '{module_name}' feature is currently disabled",
+                }
+
+        return None
+
     async def _is_module_enabled(self, module_name: str, community_id: int) -> bool:
         """Check if a module is enabled for a community. Cached in Redis."""
         if not community_id:
@@ -699,6 +767,7 @@ class CommandProcessor:
         user_id: str,
         message: str,
         session_id: str,
+        platform: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Execute command asynchronously"""
         try:
@@ -722,13 +791,13 @@ class CommandProcessor:
                     "help_url": f"/commands"
                 }
 
-            # Check if module is enabled for this community
-            if not await self._is_module_enabled(cmd_info.module_name, community_id):
-                return {
-                    "success": False,
-                    "error": f"The '{cmd_info.module_name}' module is disabled for this community",
-                    "session_id": session_id
-                }
+            # Gate dispatch behind the module enable-toggle and feature-flag
+            # system. Core modules (identity, workflow) bypass both gates.
+            gate = await self._dispatch_gate(
+                cmd_info.module_name, community_id, platform
+            )
+            if gate is not None:
+                return {**gate, "session_id": session_id}
 
             # Check if command is enabled
             if not cmd_info.is_enabled:
