@@ -31,6 +31,7 @@ import analyticsRoutes from './analytics.js';
 import raffleCustomizationRoutes from './raffleCustomization.js';
 import githubSyncRoutes from './githubSync.js';
 import aiKnowledgeRoutes from './aiKnowledge.js';
+import featureFlagRoutes from './featureFlags.js';
 
 const router = Router();
 
@@ -121,6 +122,9 @@ router.use('/', githubSyncRoutes);
 
 // AI knowledge base + ticket suggestion routes (admin)
 router.use('/admin', aiKnowledgeRoutes);
+
+// Feature flag routes (community-admin — manage this community's flag overrides)
+router.use('/admin', featureFlagRoutes);
 
 // Interaction routes (hub channels, forums — admin + member)
 router.use('/admin', interactionAdminRoutes);

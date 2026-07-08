@@ -20,6 +20,7 @@ import {
   TicketIcon,
   CubeIcon,
   CodeBracketIcon,
+  FlagIcon,
 } from '@heroicons/react/24/outline';
 import { useMemo, useState } from 'react';
 import GlobalBanner from '../components/GlobalBanner';
@@ -132,6 +133,7 @@ function DashboardLayout() {
           { name: 'Vendor Requests', href: '/superadmin/vendor-requests', icon: ShoppingCartIcon },
           { name: 'Analytics', href: '/superadmin/analytics', icon: ChartBarIcon },
           { name: 'Platform Config', href: '/superadmin/platform-config', icon: Cog6ToothIcon },
+          { name: 'Feature Flags', href: '/superadmin/feature-flags', icon: FlagIcon },
         ],
       });
     }

@@ -1,7 +1,7 @@
 user default off
 user admin on >REDIS_ADMIN_PASSWORD_PLACEHOLDER ~* +@all
-user router on >REDIS_ROUTER_PASSWORD_PLACEHOLDER ~router:* ~waddlebot:session:* ~waddlebot:rate:* ~waddlebot:cmd:* +@read +@write +@keyspace +@string +@hash +@list +@set +@sortedset +@stream +expire +expireat +ttl +pttl +ping +select +info
-user hub on >REDIS_HUB_PASSWORD_PLACEHOLDER ~hub:* ~waddlebot:session:* ~waddlebot:auth:* +@read +@write +@keyspace +@string +@hash +expire +expireat +ttl +pttl +ping +select +info
+user router on >REDIS_ROUTER_PASSWORD_PLACEHOLDER ~router:* ~waddlebot:session:* ~waddlebot:rate:* ~waddlebot:cmd:* &command:reload &feature_flags:reload +@read +@write +@keyspace +@string +@hash +@list +@set +@sortedset +@stream +expire +expireat +ttl +pttl +ping +select +info +subscribe +unsubscribe +psubscribe +punsubscribe
+user hub on >REDIS_HUB_PASSWORD_PLACEHOLDER ~hub:* ~waddlebot:session:* ~waddlebot:auth:* &feature_flags:reload +@read +@write +@keyspace +@string +@hash +expire +expireat +ttl +pttl +ping +select +info +publish
 user workflow on >REDIS_WORKFLOW_PASSWORD_PLACEHOLDER ~workflow:* ~waddlebot:jobs:* ~waddlebot:schedule:* ~waddlebot:lock:* +@read +@write +@keyspace +@string +@hash +@list +@set +@sortedset +expire +expireat +ttl +pttl +ping +select +info +setnx +getset
 user ai_researcher on >REDIS_AI_PASSWORD_PLACEHOLDER ~ai:* ~waddlebot:ai:* ~waddlebot:rate:ai:* +@read +@write +@keyspace +@string +@hash +expire +expireat +ttl +pttl +ping +select +info
 user analytics on >REDIS_ANALYTICS_PASSWORD_PLACEHOLDER ~analytics:* ~waddlebot:metrics:* ~waddlebot:counters:* +@read +@write +@keyspace +@string +@hash +@sortedset +expire +expireat +ttl +pttl +ping +select +info +incr +incrby +incrbyfloat +decr +decrby
