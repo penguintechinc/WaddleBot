@@ -216,6 +216,8 @@ Complete inventory of all tables in WaddleBot, organized by owning module, with 
 | `user_presence_settings` | Presence Sync | `mod_core_engagement` | All | Engagement | — | 060 |
 | `presence_events_log` | Presence Sync | `mod_core_engagement` | All | Engagement | — | 060 |
 | `data_deletion_requests` | GDPR (Privacy) | `hub_admin` | Hub Admin, Security Core | Privacy | — | 062 |
+| `feature_flags` | Feature Flags | `hub_admin` | All | Hub Admin | — | 068 |
+| `feature_flag_audit` | Feature Flags | `hub_admin` | Hub Admin, Security Core | Hub Admin | — | 068 |
 
 ---
 
