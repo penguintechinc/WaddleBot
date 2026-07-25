@@ -41,6 +41,7 @@ import {
   ClipboardDocumentListIcon,
   UserPlusIcon,
   AcademicCapIcon,
+  FlagIcon,
 } from '@heroicons/react/24/outline';
 
 function AdminLayout() {
@@ -160,6 +161,7 @@ function AdminLayout() {
             { to: `/admin/${communityId}/translation`, icon: LanguageIcon, label: 'Translation' },
             { to: `/admin/${communityId}/support`, icon: TicketIcon, label: 'Support Tickets' },
             { to: `/admin/${communityId}/tokens`, icon: Cog6ToothIcon, label: 'Tokens' },
+            { to: `/admin/${communityId}/feature-flags`, icon: FlagIcon, label: 'Feature Flags' },
             { to: `/admin/${communityId}/inventory`, icon: InboxStackIcon, label: 'Inventory' },
           ],
         },
@@ -197,6 +199,7 @@ function AdminLayout() {
     { to: '/superadmin/modules', icon: BuildingStorefrontIcon, label: 'Module Registry' },
     { to: '/superadmin/analytics', icon: ChartBarIcon, label: 'Analytics' },
     { to: '/superadmin/platform-config', icon: Cog6ToothIcon, label: 'Platform Config' },
+    { to: '/superadmin/feature-flags', icon: FlagIcon, label: 'Feature Flags' },
     { to: '/superadmin/tenants', icon: ServerStackIcon, label: 'Tenants' },
   ];
 

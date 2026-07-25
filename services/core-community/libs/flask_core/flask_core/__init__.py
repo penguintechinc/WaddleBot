@@ -36,6 +36,7 @@ from .api_utils import (
     record_request_metrics
 )
 from .cache import CacheManager, create_cache_manager
+from .feature_flags import FeatureFlagService, create_feature_flag_service
 from .rate_limiter import RateLimiter, RateLimitExceeded, create_rate_limiter
 from .message_queue import MessageQueue, Message, create_message_queue
 from .stream_pipeline import StreamPipeline, StreamEvent, create_stream_pipeline
@@ -148,6 +149,9 @@ __all__ = [
     # Cache
     "CacheManager",
     "create_cache_manager",
+    # Feature Flags
+    "FeatureFlagService",
+    "create_feature_flag_service",
     # Rate Limiting
     "RateLimiter",
     "RateLimitExceeded",

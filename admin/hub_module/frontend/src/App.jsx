@@ -90,6 +90,7 @@ import AdminInventory from './pages/admin/AdminInventory';
 import AdminRconServers from './pages/admin/AdminRconServers';
 import AdminCommunityTokens from './pages/admin/AdminCommunityTokens';
 import AdminCommands from './pages/admin/AdminCommands';
+import AdminFeatureFlags from './pages/admin/AdminFeatureFlags';
 import AdminPlatformSettings from './pages/admin/AdminPlatformSettings';
 import AdminLfgConfig from './pages/admin/AdminLfgConfig';
 import AdminClipConfig from './pages/admin/AdminClipConfig';
@@ -136,6 +137,7 @@ import SuperAdminVendorRequests from './pages/superadmin/SuperAdminVendorRequest
 import SuperAdminUsers from './pages/superadmin/SuperAdminUsers';
 import SuperAdminAnalytics from './pages/superadmin/SuperAdminAnalytics';
 import SuperAdminTenants from './pages/superadmin/SuperAdminTenants';
+import SuperAdminFeatureFlags from './pages/superadmin/SuperAdminFeatureFlags';
 
 // Tenant admin pages
 import TenantDashboard from './pages/tenant/TenantDashboard';
@@ -338,6 +340,7 @@ function App() {
         <Route path="/admin/:communityId/rcon" element={<AdminRconServers />} />
         <Route path="/admin/:communityId/tokens" element={<AdminCommunityTokens />} />
         <Route path="/admin/:communityId/commands" element={<AdminCommands />} />
+        <Route path="/admin/:communityId/feature-flags" element={<AdminFeatureFlags />} />
         <Route path="/admin/:communityId/platform-settings" element={<AdminPlatformSettings />} />
         <Route path="/admin/:communityId/interaction-channels" element={<AdminInteractionChannels />} />
         <Route path="/admin/:communityId/roles" element={<AdminCommunityRoles />} />
@@ -389,6 +392,7 @@ function App() {
         <Route path="/superadmin/services" element={<SuperAdminServiceDiscovery />} />
         <Route path="/superadmin/analytics" element={<SuperAdminAnalytics />} />
         <Route path="/superadmin/tenants" element={<SuperAdminTenants />} />
+        <Route path="/superadmin/feature-flags" element={<SuperAdminFeatureFlags />} />
         <Route path="/superadmin/marketplace-settings" element={<SuperAdminMarketplaceSettings />} />
       </Route>
 

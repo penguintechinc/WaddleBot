@@ -558,6 +558,14 @@ export const adminApi = {
     api.post(`/api/v1/admin/${communityId}/support/tickets/${ticketId}/comments`, { content, is_internal: isInternal }),
   getSupportStats: (communityId) =>
     api.get(`/api/v1/admin/${communityId}/support/stats`),
+  // Feature flags (community-scoped overrides)
+  getFeatureFlags: (communityId) => api.get(`/api/v1/admin/${communityId}/feature-flags`),
+  createFeatureFlagOverride: (communityId, data) =>
+    api.post(`/api/v1/admin/${communityId}/feature-flags`, data),
+  updateFeatureFlagOverride: (communityId, id, data) =>
+    api.put(`/api/v1/admin/${communityId}/feature-flags/${id}`, data),
+  deleteFeatureFlagOverride: (communityId, id) =>
+    api.delete(`/api/v1/admin/${communityId}/feature-flags/${id}`),
   // Commands (read-only)
   getCommands: (communityId) => api.get(`/api/v1/admin/${communityId}/commands`),
   // Server link requests (community-initiated)
@@ -653,6 +661,12 @@ export const superAdminApi = {
     api.post(`/api/v1/superadmin/users/${userId}/verify-email`, { verified }),
   generatePasswordReset: (userId) =>
     api.post(`/api/v1/superadmin/users/${userId}/password-reset`),
+  // Feature flags (global) + audit trail
+  getFeatureFlags: (params) => api.get('/api/v1/superadmin/feature-flags', { params }),
+  createFeatureFlag: (data) => api.post('/api/v1/superadmin/feature-flags', data),
+  updateFeatureFlag: (id, data) => api.put(`/api/v1/superadmin/feature-flags/${id}`, data),
+  deleteFeatureFlag: (id) => api.delete(`/api/v1/superadmin/feature-flags/${id}`),
+  getFeatureFlagAudit: (params) => api.get('/api/v1/superadmin/feature-flags/audit', { params }),
 };
 
 // Marketplace API

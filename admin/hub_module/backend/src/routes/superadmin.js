@@ -6,8 +6,11 @@ import * as superadminController from '../controllers/superadminController.js';
 import * as analyticsController from '../controllers/analyticsController.js';
 import PlatformConfigController from '../controllers/platformConfigController.js';
 import * as userManagementController from '../controllers/userManagementController.js';
+import * as featureFlagAdminController from '../controllers/featureFlagAdminController.js';
 import { requireAuth, requireSuperAdmin } from '../middleware/auth.js';
 import { validators, validationRules, validateRequest } from '../middleware/validation.js';
+import { body } from 'express-validator';
+import { PLATFORM_ALLOWLIST } from '../services/featureFlagService.js';
 
 const router = Router();
 
@@ -129,6 +132,31 @@ router.post('/users/:userId/verify-email',
 router.post('/users/:userId/password-reset', userManagementController.generatePasswordReset);
 router.post('/users/:userId/analytics-consumer-role', userManagementController.assignAnalyticsConsumerRole);
 router.get('/users/:userId/deletion-request', userManagementController.getUserDeletionRequest);
+
+// Feature flag management (global flags + audit trail)
+// NOTE: /audit is declared before /:id so it is not swallowed by the param route.
+router.get('/feature-flags', featureFlagAdminController.listGlobalFlags);
+router.get('/feature-flags/audit', featureFlagAdminController.listAudit);
+router.post('/feature-flags',
+  body('flag_key').isString().bail().isLength({ min: 1, max: 100 })
+    .matches(/^[a-z0-9_.-]+$/).withMessage('flag_key may only contain lowercase letters, digits, dot, dash and underscore'),
+  body('platform').optional({ nullable: true })
+    .custom((v) => v === null || v === '' || v === 'all' || PLATFORM_ALLOWLIST.includes(v))
+    .withMessage(`platform must be null/all or one of: ${PLATFORM_ALLOWLIST.join(', ')}`),
+  body('rollout_pct').optional().isInt({ min: 0, max: 100 }),
+  body('is_enabled').optional().isBoolean(),
+  body('description').optional({ nullable: true }).isString().isLength({ max: 5000 }),
+  validateRequest,
+  featureFlagAdminController.createGlobalFlag
+);
+router.put('/feature-flags/:id',
+  body('rollout_pct').optional().isInt({ min: 0, max: 100 }),
+  body('is_enabled').optional().isBoolean(),
+  body('description').optional({ nullable: true }).isString().isLength({ max: 5000 }),
+  validateRequest,
+  featureFlagAdminController.updateGlobalFlag
+);
+router.delete('/feature-flags/:id', featureFlagAdminController.deleteGlobalFlag);
 
 // Tenant management
 router.get('/tenants', superadminController.listTenants);

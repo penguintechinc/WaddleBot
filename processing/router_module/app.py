@@ -11,6 +11,7 @@ from flask_core import (  # noqa: E402
     init_database,
     setup_aaa_logging,
     StreamPipeline,
+    FeatureFlagService,
 )
 from config import Config  # noqa: E402
 
@@ -29,12 +30,13 @@ cache_manager = None
 rate_limiter = None
 session_manager = None
 stream_pipeline = None
+feature_flag_service = None
 stream_consumers_tasks = []
 
 
 @app.before_serving
 async def startup():
-    global dal, command_processor, cache_manager, rate_limiter, session_manager, stream_pipeline, stream_consumers_tasks
+    global dal, command_processor, cache_manager, rate_limiter, session_manager, stream_pipeline, feature_flag_service, stream_consumers_tasks
     from services.command_processor import CommandProcessor
     from services.cache_manager import CacheManager
     from services.rate_limiter import RateLimiter
@@ -58,6 +60,9 @@ async def startup():
     command_registry = CommandRegistry(dal, cache_manager)
     await command_registry.initialize()  # Load initial commands from database
     ai_chatter_config_cache = AiChatterConfigCache(cache_manager.redis, dal)
+    # Feature-flag evaluator: shares the Router's raw Redis client (same object
+    # AiChatterConfigCache uses) so it can SCAN+DEL its own cache keys on reload.
+    feature_flag_service = FeatureFlagService(cache_manager.redis, dal)
     command_processor = CommandProcessor(
         dal,
         cache_manager,
@@ -65,12 +70,14 @@ async def startup():
         session_manager,
         command_registry,
         ai_chatter_config_cache=ai_chatter_config_cache,
+        feature_flag_service=feature_flag_service,
     )
 
     app.config['command_processor'] = command_processor
     app.config['cache_manager'] = cache_manager
     app.config['rate_limiter'] = rate_limiter
     app.config['session_manager'] = session_manager
+    app.config['feature_flag_service'] = feature_flag_service
 
     # Start command reload listener (background task for marketplace module updates)
     task = asyncio.create_task(_command_reload_listener(
@@ -79,6 +86,15 @@ async def startup():
     ))
     stream_consumers_tasks.append(task)
     logger.system("Started command reload listener", action="command_reload_listener_start")
+
+    # Start feature-flag reload listener (invalidates cached flag decisions when
+    # the admin hub mutates a flag and publishes on 'feature_flags:reload').
+    task = asyncio.create_task(_feature_flag_reload_listener(
+        feature_flag_service,
+        Config.REDIS_URL
+    ))
+    stream_consumers_tasks.append(task)
+    logger.system("Started feature flag reload listener", action="feature_flag_reload_listener_start")
 
     # Initialize StreamPipeline if enabled
     if Config.STREAM_PIPELINE_ENABLED:
@@ -221,6 +237,51 @@ async def _command_reload_listener(command_registry, redis_url):
             pass
     except Exception as e:
         logger.error(f"Command reload listener error: {e}")
+
+
+async def _feature_flag_reload_listener(feature_flag_service, redis_url):
+    """Listen for feature_flags:reload events from the admin hub.
+
+    Subscribes to the Redis pub/sub channel 'feature_flags:reload' and asks the
+    FeatureFlagService to invalidate every cached decision for the mutated flag.
+    The admin hub publishes {"flag_key": ..., "community_id": ...|null} after
+    every flag mutation. handle_reload accepts the raw pub/sub envelope directly.
+    """
+    # Try to use redis.asyncio (newer), fall back to aioredis (legacy)
+    aioredis_lib = None
+    try:
+        import redis.asyncio as aioredis_lib
+    except ImportError:
+        try:
+            import aioredis as aioredis_lib
+        except ImportError:
+            logger.warning("No async Redis library available for feature_flags:reload listener")
+            return
+
+    try:
+        redis = await aioredis_lib.from_url(redis_url or 'redis://redis:6379')
+        pubsub = redis.pubsub()
+        await pubsub.subscribe('feature_flags:reload')
+        logger.system("Subscribed to feature_flags:reload Redis channel", action="pubsub_subscribe")
+
+        async for message in pubsub.listen():
+            if message['type'] == 'message':
+                try:
+                    # handle_reload accepts a raw pub/sub envelope (extracts and
+                    # JSON-decodes 'data') and SCAN+DELs the flag's cache keys.
+                    await feature_flag_service.handle_reload(message)
+                    logger.debug("Feature flag cache invalidated", data=message.get('data'))
+                except Exception as e:
+                    logger.error(f"Error processing feature_flags:reload event: {e}")
+    except asyncio.CancelledError:
+        logger.system("Feature flag reload listener shutting down", action="feature_flag_reload_listener_stop")
+        try:
+            await pubsub.unsubscribe('feature_flags:reload')
+            await redis.close()
+        except Exception:
+            pass
+    except Exception as e:
+        logger.error(f"Feature flag reload listener error: {e}")
 
 
 @app.after_serving
