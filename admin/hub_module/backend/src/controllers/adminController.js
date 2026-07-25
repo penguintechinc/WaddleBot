@@ -72,11 +72,12 @@ function decryptData(encrypted) {
  * Get community members
  */
 export async function getMembers(req, res, next) {
+  const page = Math.max(1, parseInt(req.query.page || '1', 10));
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '25', 10)));
+  const offset = (page - 1) * limit;
+
   try {
     const communityId = parseInt(req.params.communityId, 10);
-    const page = Math.max(1, parseInt(req.query.page || '1', 10));
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '25', 10)));
-    const offset = (page - 1) * limit;
     const search = req.query.search || '';
     const role = req.query.role;
 
@@ -714,12 +715,13 @@ export async function removeDomain(req, res, next) {
  * Get pending join requests for community
  */
 export async function getJoinRequests(req, res, next) {
+  const page = Math.max(1, parseInt(req.query.page || '1', 10));
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit || '20', 10)));
+  const offset = (page - 1) * limit;
+
   try {
     const communityId = parseInt(req.params.communityId, 10);
     const status = req.query.status || 'pending';
-    const page = Math.max(1, parseInt(req.query.page || '1', 10));
-    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit || '20', 10)));
-    const offset = (page - 1) * limit;
 
     const countResult = await query(
       `SELECT COUNT(*) as count FROM join_requests
@@ -2171,10 +2173,11 @@ export async function getAtRiskUsers(req, res, next) {
  * Get reputation leaderboard for community
  */
 export async function getReputationLeaderboard(req, res, next) {
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '25', 10)));
+  const offset = Math.max(0, parseInt(req.query.offset || '0', 10));
+
   try {
     const communityId = parseInt(req.params.communityId, 10);
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '25', 10)));
-    const offset = Math.max(0, parseInt(req.query.offset || '0', 10));
 
     const result = await query(
       `SELECT cm.user_id, u.username, u.avatar_url, cm.reputation,

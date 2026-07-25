@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 # Multi-stage Dockerfile for WaddleBot Hub Module
 # Stage 1: Build frontend
 FROM node:20-bookworm-slim@sha256:1e85773c98c31d4fe5b545e4cb17379e617b348832fb3738b22a08f68dec30f3 AS frontend-build
@@ -7,8 +8,15 @@ WORKDIR /build/admin/hub_module/frontend
 # Copy frontend package files
 COPY admin/hub_module/frontend/package*.json ./
 
-# Install dependencies (packages are public on npm)
-RUN npm install
+# Install locked dependencies. GitHub Packages' npm registry requires
+# authentication even for public packages; the token is supplied as a BuildKit
+# secret and removed in the same layer so it is never persisted in the image.
+RUN --mount=type=secret,id=npm_token,required=true \
+    NPM_TOKEN="$(cat /run/secrets/npm_token)" && \
+    printf '@penguintechinc:registry=https://npm.pkg.github.com\n//npm.pkg.github.com/:_authToken=%s\n' "${NPM_TOKEN}" > /tmp/.npmrc && \
+    NPM_CONFIG_USERCONFIG=/tmp/.npmrc npm ci --ignore-scripts && \
+    NPM_CONFIG_USERCONFIG=/tmp/.npmrc npm rebuild esbuild && \
+    rm -f /tmp/.npmrc
 
 # Copy frontend source
 COPY admin/hub_module/frontend/ ./
@@ -34,8 +42,9 @@ RUN groupadd -g 1001 nodejs && \
 # Copy backend package files
 COPY admin/hub_module/backend/package*.json ./
 
-# Install production dependencies only
-RUN npm install --only=production
+# Install the exact production dependency graph without running arbitrary
+# lifecycle scripts, then rebuild the one approved native dependency.
+RUN npm ci --omit=dev --ignore-scripts && npm rebuild bcrypt
 
 # Remove build tools to reduce image size (keep curl for healthcheck)
 RUN apt-get purge -y make g++ && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*

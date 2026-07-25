@@ -79,12 +79,8 @@ Waddles uses a sophisticated multi-workflow CI/CD pipeline that automates:
 ├── build-spotify-interaction.yml
 ├── build-loyalty-interaction.yml
 │
-├── android.yml                        # Mobile/Desktop builds
-├── desktop-bridge.yml
-├── desktop-linux.yml
-├── desktop-macos.yml
-├── desktop-windows.yml
-└── desktop-release.yml
+├── android.yml                        # Android validation
+└── pr-validation.yml                  # Pull request and merge-queue tests
 ```
 
 ### Workflow Trigger Strategy
@@ -154,15 +150,13 @@ The comprehensive pipeline that runs security checks, builds containers, and dep
      - Upload artifacts
    ```
 
-4. **Desktop Bridge Build** (parallel, multi-OS)
+4. **Pull Request Validation**
    ```yaml
-   desktop-bridge:
-     strategy:
-       matrix:
-         os: [ubuntu-latest, windows-latest, macos-latest]
-     - Go tests with coverage
-     - Integration tests
-     - Cross-platform binary builds
+   pr-validation:
+     - Python unit tests
+     - Marketplace refund authorization tests
+     - Hub frontend tests and build
+     - Website build
    ```
 
 5. **Performance Tests** (main branch only)
@@ -950,12 +944,7 @@ identity-core-xxxxx          2/2     Running   0          2m
 - Upload artifacts
 ```
 
-**Desktop Bridge** (`desktop-bridge.yml`):
-- Multi-OS matrix (Ubuntu, Windows, macOS)
-- Go 1.21+ with tests and coverage
-- Integration tests
-- Cross-platform binary builds
-- Upload to artifacts
+Legacy desktop workflows were removed when their source projects were retired.
 
 ---
 

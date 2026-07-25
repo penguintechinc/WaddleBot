@@ -641,7 +641,6 @@ export async function broadcastAnnouncement(req, res, next) {
         announcementId,
         platforms,
         results: broadcastResults,
-        message: 'Broadcast completed. Check broadcast status for details.',
         status: 'initiated',
         message: 'Broadcast initiated. Use broadcast status endpoint to check progress.',
       },

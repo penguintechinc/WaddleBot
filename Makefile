@@ -28,7 +28,7 @@ test:
 
 test-unit:
 	@echo "Running unit tests..."
-	@if [ -f tests/k8s/alpha/05-unit-tests.sh ]; then bash tests/k8s/alpha/05-unit-tests.sh; fi
+	@bash tests/k8s/alpha/05-unit-tests.sh
 
 test-integration:
 	@echo "Running integration tests..."

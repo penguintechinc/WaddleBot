@@ -20,7 +20,10 @@ on:
       - '.version'
       - '.github/workflows/containers.yml'
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop, 'v*']
+  merge_group:
+    types: [checks_requested]
+    branches: [main, develop, 'v*']
   workflow_dispatch:
 
 permissions:
@@ -427,14 +430,14 @@ jobs:
             condition: ${{ needs.detect-changes.outputs.hub == 'true' || needs.detect-changes.outputs.libs == 'true' }}
             dockerfile: ./admin/hub_module/Dockerfile
             context: .
-            port: 3000
+            port: 8060
           - module: hub-api
             platform: linux/arm64
             runner: ubuntu-24.04-arm
             condition: ${{ needs.detect-changes.outputs.hub == 'true' || needs.detect-changes.outputs.libs == 'true' }}
             dockerfile: ./admin/hub_module/Dockerfile
             context: .
-            port: 3000
+            port: 8060
 
           - module: hub-webui
             platform: linux/amd64
@@ -442,14 +445,14 @@ jobs:
             condition: ${{ needs.detect-changes.outputs.hub == 'true' || needs.detect-changes.outputs.libs == 'true' }}
             dockerfile: ./admin/hub_module/Dockerfile.webui
             context: .
-            port: 5173
+            port: 8080
           - module: hub-webui
             platform: linux/arm64
             runner: ubuntu-24.04-arm
             condition: ${{ needs.detect-changes.outputs.hub == 'true' || needs.detect-changes.outputs.libs == 'true' }}
             dockerfile: ./admin/hub_module/Dockerfile.webui
             context: .
-            port: 5173
+            port: 8080
 
           # Action modules
           - module: action-platforms
@@ -495,7 +498,10 @@ jobs:
 
       - name: Log in to Container Registry
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121  # v4
-        if: matrix.condition == 'true' || github.event_name == 'workflow_dispatch'
+        if: >
+          (matrix.condition == 'true' || github.event_name == 'workflow_dispatch') &&
+          github.event_name != 'pull_request' &&
+          github.event_name != 'merge_group'
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -513,7 +519,8 @@ jobs:
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
-          push: true
+          push: ${{ github.event_name != 'pull_request' && github.event_name != 'merge_group' }}
+          load: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && matrix.platform == 'linux/amd64' }}
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.module }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}-${{ steps.platform-suffix.outputs.suffix }}
           platforms: ${{ matrix.platform }}
           cache-from: type=gha,scope=${{ matrix.module }}-${{ steps.platform-suffix.outputs.suffix }}
@@ -521,9 +528,15 @@ jobs:
           build-args: |
             MODULE_NAME=${{ matrix.module }}
             MODULE_PORT=${{ matrix.port }}
+          secrets: |
+            npm_token=${{ secrets.GITHUB_TOKEN }}
 
       - name: Run container tests
-        if: (matrix.condition == 'true' || github.event_name == 'workflow_dispatch') && matrix.port != 0
+        if: >
+          (matrix.condition == 'true' || github.event_name == 'workflow_dispatch') &&
+          matrix.port != 0 &&
+          ((github.event_name != 'pull_request' && github.event_name != 'merge_group') ||
+          matrix.platform == 'linux/amd64')
         run: |
           docker run --rm --name test-${{ matrix.module }} -d -p ${{ matrix.port }}:${{ matrix.port }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.module }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}-${{ steps.platform-suffix.outputs.suffix }}
           sleep 10
@@ -543,7 +556,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: [determine-version, detect-changes, build-platform]
     if: >
-      needs.detect-changes.outputs.router == 'true' ||
+      github.event_name != 'pull_request' &&
+      github.event_name != 'merge_group' &&
+      (needs.detect-changes.outputs.router == 'true' ||
       needs.detect-changes.outputs.marketplace == 'true' ||
       needs.detect-changes.outputs.migrations == 'true' ||
       needs.detect-changes.outputs.core-data == 'true' ||
@@ -559,7 +574,7 @@ jobs:
       needs.detect-changes.outputs.action-platforms == 'true' ||
       needs.detect-changes.outputs.action-serverless == 'true' ||
       needs.detect-changes.outputs.libs == 'true' ||
-      github.event_name == 'workflow_dispatch'
+      github.event_name == 'workflow_dispatch')
     strategy:
       fail-fast: false
       matrix:

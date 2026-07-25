@@ -5,7 +5,7 @@ grpcio-tools>=1.67.0,<2.0.0
 google-auth>=2.25.0,<3.0.0
 google-auth-httplib2>=0.2.0,<1.0.0
 google-api-python-client>=2.100.0,<3.0.0
-pyjwt==2.8.0
+pyjwt==2.12.1
 psycopg2-binary>=2.9.10
 asyncio==3.4.3
 python-dotenv>=1.0.0

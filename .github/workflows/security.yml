@@ -2,13 +2,17 @@ name: Security & Code Quality
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop, 'v*']
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop, 'v*']
+  merge_group:
+    types: [checks_requested]
+    branches: [main, develop, 'v*']
   workflow_dispatch:
 
 permissions:
   contents: read
+  packages: read
   security-events: write
   actions: read
 
@@ -38,22 +42,81 @@ jobs:
         with:
           sarif_file: 'trivy-results.sarif'
 
-      - name: Run pip-audit
-        run: |
-          pip install pip-audit
-          find . -name requirements.txt -exec pip-audit -r {} \; || true
-
-      - name: Run npm audit
-        run: |
-          cd admin/hub_module/backend && npm audit --production --audit-level=moderate || true
-          cd ../frontend && npm audit --production --audit-level=moderate || true
-          cd ../../.. && npm audit --production --audit-level=moderate || true
-
       - name: Dependency Review
         uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48  # v4
         if: github.event_name == 'pull_request'
         with:
           fail-on-severity: high
+
+  node-audit:
+    name: Node audit (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Hub backend
+            path: admin/hub_module/backend
+          - name: Hub frontend
+            path: admin/hub_module/frontend
+            # No patched stable React Router release exists for this advisory.
+            # Remove this allowance as soon as react-router-dom >=8.3.0 is published.
+            audit_allow: GHSA-qwww-vcr4-c8h2
+          - name: Marketplace
+            path: admin/marketplace_module/backend
+          - name: Website
+            path: website
+          - name: API tests
+            path: tests/api/hub-backend
+          - name: End-to-end tests
+            path: tests/e2e
+          - name: Integration tests
+            path: tests/integration
+          - name: Smoke tests
+            path: tests/smoke
+    defaults:
+      run:
+        working-directory: ${{ matrix.path }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ${{ matrix.path }}/package-lock.json
+          registry-url: https://npm.pkg.github.com
+          scope: '@penguintechinc'
+
+      - name: Install dependencies
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm ci --ignore-scripts
+
+      - name: Audit production dependencies
+        env:
+          NPM_AUDIT_ALLOW: ${{ matrix.audit_allow }}
+        run: node "$GITHUB_WORKSPACE/.github/scripts/npm-audit.mjs"
+
+  python-audit:
+    name: Python dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: '3.12'
+
+      - name: Install pip-audit
+        run: python -m pip install --disable-pip-version-check pip-audit
+
+      - name: Audit changed Python dependency set
+        run: python -m pip_audit -r action/pushing/googlechat_action_module/requirements.txt
 
   # Slow static analysis (~17-21 min): CodeQL on go/javascript/python.
   # Runs in parallel with builds -- does NOT gate container builds or any other jobs.

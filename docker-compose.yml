@@ -33,6 +33,10 @@ volumes:
   ollama-data:
   qdrant-data:
 
+secrets:
+  npm_token:
+    environment: NPM_TOKEN
+
 services:
   # =============================================================================
   # INFRASTRUCTURE SERVICES (Internal Only - NOT exposed to host)
@@ -377,6 +381,8 @@ services:
     build:
       context: .
       dockerfile: admin/hub_module/Dockerfile
+      secrets:
+        - npm_token
     container_name: hub-api
     environment:
       NODE_ENV: ${NODE_ENV:-development}

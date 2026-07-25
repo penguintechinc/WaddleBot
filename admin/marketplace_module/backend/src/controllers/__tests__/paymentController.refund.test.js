@@ -1,310 +1,186 @@
+import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import express from 'express';
 import request from 'supertest';
 
-// Simple mock implementation
-class MockPaymentService {
-  async getPayment() {
-    return null;
-  }
+import paymentController from '../paymentController.js';
+import paymentService from '../../services/paymentService.js';
 
-  async createRefund() {
-    return { success: true };
-  }
-}
-
-const mockPaymentService = new MockPaymentService();
-
-// Create a mock controller for testing
-class TestPaymentController {
-  async createRefund(req, res) {
-    try {
-      const {
-        provider,
-        paymentId,
-        amount,
-        currency = 'USD',
-        reason = 'requested_by_customer',
-        note = '',
-        metadata = {},
-      } = req.body;
-
-      if (!provider || !paymentId) {
-        return res.status(400).json({
-          success: false,
-          error: 'Provider and payment ID are required',
-        });
-      }
-
-      // Authorization check - only admins or original purchaser
-      if (!req.user) {
-        return res.status(403).json({
-          success: false,
-          error: 'Authentication required to create refunds',
-        });
-      }
-
-      // Retrieve original payment to check ownership
-      const paymentResult = await mockPaymentService.getPayment(provider, paymentId);
-      if (!paymentResult || !paymentResult.session) {
-        return res.status(404).json({
-          success: false,
-          error: 'Payment not found',
-        });
-      }
-
-      const payment = paymentResult.session;
-      const paymentOwnerId = payment.metadata?.userId;
-
-      // Check authorization: admin or payment owner
-      const isAdmin = req.user?.roles?.includes('super_admin') ||
-                      req.user?.roles?.includes('platform-admin') ||
-                      req.user?.isSuperAdmin;
-      const isOwner = req.user?.id === paymentOwnerId;
-
-      if (!isAdmin && !isOwner) {
-        return res.status(403).json({
-          success: false,
-          error: 'Not authorized to refund this payment',
-        });
-      }
-
-      const result = await mockPaymentService.createRefund({
-        provider,
-        paymentId,
-        amount,
-        currency,
-        reason,
-        note,
-        metadata: {
-          ...metadata,
-          refundedBy: req.user?.id,
-        },
-      });
-
-      res.json(result);
-    } catch (error) {
-      console.error('Refund creation error:', error);
-      res.status(500).json({
-        success: false,
-        error: error.message,
-      });
-    }
-  }
-}
-
-describe('PaymentController - createRefund', () => {
+describe('PaymentController.createRefund', () => {
   let app;
-  let controller;
+  let authenticatedUser;
+  let createRefundSpy;
+  let getPaymentSpy;
+
+  const refundRequest = {
+    provider: 'stripe',
+    paymentId: 'pi_test123',
+    amount: 100,
+    metadata: {
+      requestId: 'request-123',
+    },
+  };
 
   beforeEach(() => {
+    authenticatedUser = null;
+    getPaymentSpy = jest.spyOn(paymentService, 'getPayment');
+    createRefundSpy = jest.spyOn(paymentService, 'createRefund');
+
     app = express();
     app.use(express.json());
-    controller = new TestPaymentController();
 
-    app.post('/refunds', controller.createRefund.bind(controller));
+    // Authentication must run before the route under test.
+    app.use((req, _res, next) => {
+      if (authenticatedUser) {
+        req.user = authenticatedUser;
+      }
+      next();
+    });
+
+    app.post(
+      '/refunds',
+      paymentController.createRefund.bind(paymentController),
+    );
   });
 
-  describe('Authorization checks', () => {
-    it('should return 403 when user is not authenticated', async () => {
-      const res = await request(app)
-        .post('/refunds')
-        .send({
-          provider: 'stripe',
-          paymentId: 'pi_test123',
-          amount: 100,
-        });
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
 
-      if (res.status !== 403) {
-        console.error('FAIL: Expected 403, got', res.status, 'body:', res.body);
-      }
-      process.stdout.write(`Test 1: ${res.status === 403 ? 'PASS' : 'FAIL'}\n`);
+  it('rejects an unauthenticated refund request', async () => {
+    const response = await request(app).post('/refunds').send(refundRequest);
+
+    expect(response.status).toBe(403);
+    expect(response.body).toEqual({
+      success: false,
+      error: 'Authentication required to create refunds',
     });
+    expect(getPaymentSpy).not.toHaveBeenCalled();
+    expect(createRefundSpy).not.toHaveBeenCalled();
+  });
 
-    it('should return 403 when authenticated user is neither owner nor admin', async () => {
-      const testUserId = 'user-123';
-      const paymentOwnerId = 'user-456';
-
-      // Mock payment lookup
-      mockPaymentService.getPayment = async () => ({
-        session: {
-          id: 'ch_test123',
-          metadata: {
-            userId: paymentOwnerId,
-          },
+  it('rejects a user who is neither the payment owner nor an admin', async () => {
+    authenticatedUser = {
+      id: 'user-123',
+      roles: [],
+      isSuperAdmin: false,
+    };
+    getPaymentSpy.mockResolvedValue({
+      session: {
+        id: 'ch_test123',
+        metadata: {
+          userId: 'user-456',
         },
-      });
-
-      app.use((req, res, next) => {
-        if (!req.user) {
-          req.user = {
-            id: testUserId,
-            userId: testUserId,
-            roles: [],
-            isSuperAdmin: false,
-          };
-        }
-        next();
-      });
-
-      const res = await request(app)
-        .post('/refunds')
-        .send({
-          provider: 'stripe',
-          paymentId: 'pi_test123',
-          amount: 100,
-        });
-
-      process.stdout.write(`Test 2: ${res.status === 403 ? 'PASS' : 'FAIL'}\n`);
+      },
     });
 
-    it('should allow refund when authenticated user is the payment owner', async () => {
-      const testUserId = 'user-123';
+    const response = await request(app).post('/refunds').send(refundRequest);
 
-      mockPaymentService.getPayment = async () => ({
-        session: {
-          id: 'ch_test123',
-          metadata: {
-            userId: testUserId,
-          },
+    expect(response.status).toBe(403);
+    expect(response.body).toEqual({
+      success: false,
+      error: 'Not authorized to refund this payment',
+    });
+    expect(getPaymentSpy).toHaveBeenCalledWith('stripe', 'pi_test123');
+    expect(createRefundSpy).not.toHaveBeenCalled();
+  });
+
+  it('allows the payment owner and records who initiated the refund', async () => {
+    authenticatedUser = {
+      id: 'user-123',
+      roles: [],
+      isSuperAdmin: false,
+    };
+    getPaymentSpy.mockResolvedValue({
+      session: {
+        id: 'ch_test123',
+        metadata: {
+          userId: authenticatedUser.id,
         },
-      });
-
-      mockPaymentService.createRefund = async () => ({
-        success: true,
-        refundId: 'ref_test123',
-      });
-
-      app.use((req, res, next) => {
-        if (!req.user) {
-          req.user = {
-            id: testUserId,
-            userId: testUserId,
-            roles: [],
-            isSuperAdmin: false,
-          };
-        }
-        next();
-      });
-
-      const res = await request(app)
-        .post('/refunds')
-        .send({
-          provider: 'stripe',
-          paymentId: 'pi_test123',
-          amount: 100,
-        });
-
-      process.stdout.write(`Test 3: ${res.status === 200 && res.body.success ? 'PASS' : 'FAIL'}\n`);
+      },
+    });
+    createRefundSpy.mockResolvedValue({
+      success: true,
+      refundId: 'ref_test123',
     });
 
-    it('should allow refund when user has super_admin role', async () => {
-      const testUserId = 'user-123';
-      const paymentOwnerId = 'user-456';
+    const response = await request(app).post('/refunds').send(refundRequest);
 
-      mockPaymentService.getPayment = async () => ({
-        session: {
-          id: 'ch_test123',
-          metadata: {
-            userId: paymentOwnerId,
-          },
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      success: true,
+      refundId: 'ref_test123',
+    });
+    expect(createRefundSpy).toHaveBeenCalledWith({
+      provider: 'stripe',
+      paymentId: 'pi_test123',
+      amount: 100,
+      currency: 'USD',
+      reason: 'requested_by_customer',
+      note: '',
+      metadata: {
+        requestId: 'request-123',
+        refundedBy: authenticatedUser.id,
+      },
+    });
+  });
+
+  it.each([
+    ['super_admin role', { roles: ['super_admin'], isSuperAdmin: false }],
+    ['platform-admin role', { roles: ['platform-admin'], isSuperAdmin: false }],
+    ['super-admin flag', { roles: [], isSuperAdmin: true }],
+  ])('allows an admin identified by %s', async (_description, adminClaims) => {
+    authenticatedUser = {
+      id: 'admin-123',
+      ...adminClaims,
+    };
+    getPaymentSpy.mockResolvedValue({
+      session: {
+        id: 'ch_test123',
+        metadata: {
+          userId: 'user-456',
         },
-      });
-
-      mockPaymentService.createRefund = async () => ({
-        success: true,
-        refundId: 'ref_test123',
-      });
-
-      app.use((req, res, next) => {
-        if (!req.user) {
-          req.user = {
-            id: testUserId,
-            userId: testUserId,
-            roles: ['super_admin'],
-            isSuperAdmin: false,
-          };
-        }
-        next();
-      });
-
-      const res = await request(app)
-        .post('/refunds')
-        .send({
-          provider: 'stripe',
-          paymentId: 'pi_test123',
-          amount: 100,
-        });
-
-      process.stdout.write(`Test 4: ${res.status === 200 && res.body.success ? 'PASS' : 'FAIL'}\n`);
+      },
+    });
+    createRefundSpy.mockResolvedValue({
+      success: true,
+      refundId: 'ref_test123',
     });
 
-    it('should allow refund when user has platform-admin role', async () => {
-      const testUserId = 'user-123';
-      const paymentOwnerId = 'user-456';
+    const response = await request(app).post('/refunds').send(refundRequest);
 
-      mockPaymentService.getPayment = async () => ({
-        session: {
-          id: 'ch_test123',
-          metadata: {
-            userId: paymentOwnerId,
-          },
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      success: true,
+      refundId: 'ref_test123',
+    });
+    expect(createRefundSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'stripe',
+        paymentId: 'pi_test123',
+        metadata: {
+          requestId: 'request-123',
+          refundedBy: authenticatedUser.id,
         },
-      });
+      }),
+    );
+  });
 
-      mockPaymentService.createRefund = async () => ({
-        success: true,
-        refundId: 'ref_test123',
-      });
+  it('returns not found when the referenced payment does not exist', async () => {
+    authenticatedUser = {
+      id: 'user-123',
+      roles: [],
+      isSuperAdmin: false,
+    };
+    getPaymentSpy.mockResolvedValue(null);
 
-      app.use((req, res, next) => {
-        if (!req.user) {
-          req.user = {
-            id: testUserId,
-            userId: testUserId,
-            roles: ['platform-admin'],
-            isSuperAdmin: false,
-          };
-        }
-        next();
-      });
+    const response = await request(app).post('/refunds').send(refundRequest);
 
-      const res = await request(app)
-        .post('/refunds')
-        .send({
-          provider: 'stripe',
-          paymentId: 'pi_test123',
-          amount: 100,
-        });
-
-      process.stdout.write(`Test 5: ${res.status === 200 && res.body.success ? 'PASS' : 'FAIL'}\n`);
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual({
+      success: false,
+      error: 'Payment not found',
     });
-
-    it('should return 404 when payment not found', async () => {
-      const testUserId = 'user-123';
-
-      mockPaymentService.getPayment = async () => null;
-
-      app.use((req, res, next) => {
-        if (!req.user) {
-          req.user = {
-            id: testUserId,
-            userId: testUserId,
-            roles: [],
-            isSuperAdmin: false,
-          };
-        }
-        next();
-      });
-
-      const res = await request(app)
-        .post('/refunds')
-        .send({
-          provider: 'stripe',
-          paymentId: 'pi_nonexistent',
-          amount: 100,
-        });
-
-      process.stdout.write(`Test 6: ${res.status === 404 ? 'PASS' : 'FAIL'}\n`);
-    });
+    expect(getPaymentSpy).toHaveBeenCalledWith('stripe', 'pi_test123');
+    expect(createRefundSpy).not.toHaveBeenCalled();
   });
 });
