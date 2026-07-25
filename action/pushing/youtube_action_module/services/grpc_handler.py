@@ -5,18 +5,7 @@ import logging
 import grpc
 from concurrent import futures
 
-# Import generated protobuf code (will be generated from proto file)
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'proto'))
-
-try:
-    import youtube_action_pb2
-    import youtube_action_pb2_grpc
-except ImportError:
-    # Will be available after protobuf compilation
-    youtube_action_pb2 = None
-    youtube_action_pb2_grpc = None
+from proto import youtube_action_pb2, youtube_action_pb2_grpc
 
 from services.youtube_service import YouTubeService
 from config import Config
@@ -365,10 +354,6 @@ class GRPCServer:
 
     def start(self) -> None:
         """Start gRPC server"""
-        if youtube_action_pb2_grpc is None:
-            logger.error("gRPC protobuf files not generated. Run: python -m grpc_tools.protoc")
-            raise RuntimeError("gRPC protobuf files not available")
-
         self.server = grpc.server(
             futures.ThreadPoolExecutor(max_workers=Config.MAX_WORKERS)
         )

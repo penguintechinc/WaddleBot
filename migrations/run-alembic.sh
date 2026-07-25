@@ -16,15 +16,25 @@ if [ -z "${DATABASE_URL:-}" ]; then
     export DATABASE_URL
 fi
 
-echo "Database: ${DATABASE_URL%%@*}@***"
+python3 - <<'PY'
+import os
+from sqlalchemy.engine import make_url
+
+url = make_url(os.environ["DATABASE_URL"])
+print(
+    "Database: "
+    f"driver={url.drivername} host={url.host or '<local>'} "
+    f"port={url.port or '<default>'} database={url.database or '<default>'}"
+)
+PY
 
 # ── Wait for PostgreSQL ──────────────────────────────────────────────────────
 echo "Waiting for database..."
 i=0
 while ! python3 -c "
-import sqlalchemy, sys
+import os, sqlalchemy, sys
 try:
-    url = '${DATABASE_URL}'.replace('postgresql://', 'postgresql+psycopg2://', 1)
+    url = os.environ['DATABASE_URL'].replace('postgresql://', 'postgresql+psycopg2://', 1)
     e = sqlalchemy.create_engine(url)
     with e.connect() as c:
         c.execute(sqlalchemy.text('SELECT 1'))
@@ -42,9 +52,57 @@ except Exception:
 done
 echo "Database ready."
 
+# Missing tables are expected on a fresh or partially migrated database. Report
+# them before migration so persisted-volume repairs are visible in the logs.
+python3 - <<'PY'
+import os
+import sqlalchemy
+
+required = {"commands", "platform_integrations"}
+url = os.environ["DATABASE_URL"].replace(
+    "postgresql://", "postgresql+psycopg2://", 1
+)
+engine = sqlalchemy.create_engine(url)
+with engine.connect() as connection:
+    present = set(connection.execute(sqlalchemy.text(
+        "SELECT table_name FROM information_schema.tables "
+        "WHERE table_schema = 'public' AND table_name IN "
+        "('commands', 'platform_integrations')"
+    )).scalars())
+missing = sorted(required - present)
+print("Pre-migration schema: " + (
+    f"missing {', '.join(missing)}" if missing else "required tables present"
+))
+PY
+
 # ── Run Alembic ──────────────────────────────────────────────────────────────
 echo "Running Alembic upgrade head..."
 cd /app
 alembic upgrade head
+
+# A zero exit from Alembic is insufficient if the minimum schema is incomplete.
+python3 - <<'PY'
+import os
+import sqlalchemy
+
+required = {"commands", "platform_integrations"}
+url = os.environ["DATABASE_URL"].replace(
+    "postgresql://", "postgresql+psycopg2://", 1
+)
+engine = sqlalchemy.create_engine(url)
+with engine.connect() as connection:
+    present = set(connection.execute(sqlalchemy.text(
+        "SELECT table_name FROM information_schema.tables "
+        "WHERE table_schema = 'public' AND table_name IN "
+        "('commands', 'platform_integrations')"
+    )).scalars())
+missing = sorted(required - present)
+if missing:
+    raise SystemExit(
+        "ERROR: migration completed with required tables missing: "
+        + ", ".join(missing)
+    )
+print("Post-migration schema: required tables present")
+PY
 
 echo "=== All migrations complete ==="

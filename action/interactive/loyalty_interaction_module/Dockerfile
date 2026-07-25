@@ -17,8 +17,11 @@ COPY action/interactive/loyalty_interaction_module /app/
 COPY scripts/healthcheck.py /usr/local/bin/healthcheck.py
 RUN chmod 755 /usr/local/bin/healthcheck.py
 
-# Create non-root user
-RUN useradd -m -u 1000 waddlebot && chown -R waddlebot:waddlebot /app
+# Create the non-root user and default file-log directory before dropping
+# privileges.
+RUN useradd -m -u 1000 waddlebot \
+    && mkdir -p /var/log/waddlebotlog \
+    && chown -R waddlebot:waddlebot /app /var/log/waddlebotlog
 USER waddlebot
 
 EXPOSE 8032

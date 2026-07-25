@@ -154,7 +154,6 @@ class ContextService:
                    WHERE cs.platform = %s
                      AND cs.platform_server_id = %s
                      AND cs.status = 'approved'
-                     AND cs.is_active = TRUE
                    ORDER BY cs.is_primary DESC, c.name ASC""",
                 [platform, entity_id],
             )

@@ -16,11 +16,24 @@ class Config:
     MODULE_VERSION = '2.0.0'
     MODULE_PORT = int(os.getenv('MODULE_PORT', '8050'))
     GRPC_PORT = int(os.getenv('GRPC_PORT', '50030'))
-    DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://waddlebot:password@localhost:5432/waddlebot')
+    DATABASE_URL = os.getenv(
+        'DATABASE_URL',
+        'postgresql://mod_core_identity:mod_core_identity_dev_changeme@localhost:5432/waddlebot',
+    )
     CORE_API_URL = os.getenv('CORE_API_URL', 'http://router-service:8000')
     ROUTER_API_URL = os.getenv('ROUTER_API_URL', 'http://router-service:8000/api/v1/router')
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
-    SECRET_KEY = os.getenv('SECRET_KEY', 'change-me-in-production')
+    # Hub and internal services must use the same signing key. SECRET_KEY is
+    # retained as a compatibility alias while deployments move to JWT_SECRET.
+    JWT_SECRET = os.getenv('JWT_SECRET') or os.getenv('SECRET_KEY')
+    ALLOWED_SERVICES = frozenset(
+        service.strip()
+        for service in os.getenv(
+            'IDENTITY_ALLOWED_SERVICES',
+            'router,router_module',
+        ).split(',')
+        if service.strip()
+    )
 
     # Redis Configuration (for credential refresh notifications)
     REDIS_URL: str = os.getenv('REDIS_URL', '')

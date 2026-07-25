@@ -45,6 +45,9 @@ spec:
         - name: http
           containerPort: 8050
           protocol: TCP
+        - name: grpc
+          containerPort: 50030
+          protocol: TCP
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true
@@ -59,6 +62,8 @@ spec:
           value: "core-identity"
         - name: MODULE_PORT
           value: "8050"
+        - name: GRPC_PORT
+          value: "50030"
         livenessProbe:
           httpGet:
             path: /health
@@ -112,4 +117,8 @@ spec:
   - name: http
     port: 8050
     targetPort: http
+    protocol: TCP
+  - name: grpc
+    port: 50030
+    targetPort: grpc
     protocol: TCP

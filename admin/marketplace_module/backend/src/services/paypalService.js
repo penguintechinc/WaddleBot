@@ -84,7 +84,10 @@ class PayPalService {
           quantity: item.quantity || 1,
           category: 'DIGITAL_GOODS',
         })),
-        custom_id: metadata.orderId || '',
+        // custom_id is returned by OrdersGet and is used for ownership checks.
+        // Keep the internal order reference separately for reconciliation.
+        custom_id: metadata.userId ? String(metadata.userId) : '',
+        invoice_id: metadata.orderId || undefined,
       }];
 
       request.requestBody({

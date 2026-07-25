@@ -9,11 +9,11 @@ describe('PaymentController.createRefund', () => {
   let app;
   let authenticatedUser;
   let createRefundSpy;
-  let getPaymentSpy;
+  let getRefundablePaymentSpy;
 
   const refundRequest = {
     provider: 'stripe',
-    paymentId: 'pi_test123',
+    paymentId: 'cs_test123',
     amount: 100,
     metadata: {
       requestId: 'request-123',
@@ -22,7 +22,7 @@ describe('PaymentController.createRefund', () => {
 
   beforeEach(() => {
     authenticatedUser = null;
-    getPaymentSpy = jest.spyOn(paymentService, 'getPayment');
+    getRefundablePaymentSpy = jest.spyOn(paymentService, 'getRefundablePayment');
     createRefundSpy = jest.spyOn(paymentService, 'createRefund');
 
     app = express();
@@ -54,7 +54,7 @@ describe('PaymentController.createRefund', () => {
       success: false,
       error: 'Authentication required to create refunds',
     });
-    expect(getPaymentSpy).not.toHaveBeenCalled();
+    expect(getRefundablePaymentSpy).not.toHaveBeenCalled();
     expect(createRefundSpy).not.toHaveBeenCalled();
   });
 
@@ -64,13 +64,15 @@ describe('PaymentController.createRefund', () => {
       roles: [],
       isSuperAdmin: false,
     };
-    getPaymentSpy.mockResolvedValue({
-      session: {
+    getRefundablePaymentSpy.mockResolvedValue({
+      payment: {
         id: 'ch_test123',
         metadata: {
           userId: 'user-456',
         },
       },
+      ownerId: 'user-456',
+      refundablePaymentId: 'pi_test123',
     });
 
     const response = await request(app).post('/refunds').send(refundRequest);
@@ -80,7 +82,7 @@ describe('PaymentController.createRefund', () => {
       success: false,
       error: 'Not authorized to refund this payment',
     });
-    expect(getPaymentSpy).toHaveBeenCalledWith('stripe', 'pi_test123');
+    expect(getRefundablePaymentSpy).toHaveBeenCalledWith('stripe', 'cs_test123');
     expect(createRefundSpy).not.toHaveBeenCalled();
   });
 
@@ -90,13 +92,15 @@ describe('PaymentController.createRefund', () => {
       roles: [],
       isSuperAdmin: false,
     };
-    getPaymentSpy.mockResolvedValue({
-      session: {
+    getRefundablePaymentSpy.mockResolvedValue({
+      payment: {
         id: 'ch_test123',
         metadata: {
           userId: authenticatedUser.id,
         },
       },
+      ownerId: authenticatedUser.id,
+      refundablePaymentId: 'pi_test123',
     });
     createRefundSpy.mockResolvedValue({
       success: true,
@@ -133,13 +137,15 @@ describe('PaymentController.createRefund', () => {
       id: 'admin-123',
       ...adminClaims,
     };
-    getPaymentSpy.mockResolvedValue({
-      session: {
+    getRefundablePaymentSpy.mockResolvedValue({
+      payment: {
         id: 'ch_test123',
         metadata: {
           userId: 'user-456',
         },
       },
+      ownerId: 'user-456',
+      refundablePaymentId: 'pi_test123',
     });
     createRefundSpy.mockResolvedValue({
       success: true,
@@ -171,7 +177,7 @@ describe('PaymentController.createRefund', () => {
       roles: [],
       isSuperAdmin: false,
     };
-    getPaymentSpy.mockResolvedValue(null);
+    getRefundablePaymentSpy.mockResolvedValue(null);
 
     const response = await request(app).post('/refunds').send(refundRequest);
 
@@ -180,7 +186,142 @@ describe('PaymentController.createRefund', () => {
       success: false,
       error: 'Payment not found',
     });
-    expect(getPaymentSpy).toHaveBeenCalledWith('stripe', 'pi_test123');
+    expect(getRefundablePaymentSpy).toHaveBeenCalledWith('stripe', 'cs_test123');
     expect(createRefundSpy).not.toHaveBeenCalled();
+  });
+
+  it('resolves a PayPal order to its capture before refunding', async () => {
+    authenticatedUser = {
+      id: 'user-123',
+      roles: [],
+      isSuperAdmin: false,
+    };
+    getRefundablePaymentSpy.mockResolvedValue({
+      payment: {
+        id: 'PAYPAL-ORDER-123',
+        purchase_units: [{
+          custom_id: authenticatedUser.id,
+          payments: {
+            captures: [{ id: 'PAYPAL-CAPTURE-123', status: 'COMPLETED' }],
+          },
+        }],
+      },
+      ownerId: authenticatedUser.id,
+      refundablePaymentId: 'PAYPAL-CAPTURE-123',
+    });
+    createRefundSpy.mockResolvedValue({
+      success: true,
+      refundId: 'PAYPAL-REFUND-123',
+    });
+
+    const response = await request(app).post('/refunds').send({
+      ...refundRequest,
+      provider: 'paypal',
+      paymentId: 'PAYPAL-ORDER-123',
+    });
+
+    expect(response.status).toBe(200);
+    expect(getRefundablePaymentSpy).toHaveBeenCalledWith('paypal', 'PAYPAL-ORDER-123');
+    expect(createRefundSpy).toHaveBeenCalledWith(expect.objectContaining({
+      provider: 'paypal',
+      paymentId: 'PAYPAL-CAPTURE-123',
+    }));
+  });
+
+  it('rejects a checkout that has not produced a refundable payment', async () => {
+    authenticatedUser = {
+      id: 'admin-123',
+      roles: ['super_admin'],
+      isSuperAdmin: false,
+    };
+    getRefundablePaymentSpy.mockResolvedValue({
+      payment: { id: 'cs_test123' },
+      ownerId: undefined,
+      refundablePaymentId: undefined,
+    });
+
+    const response = await request(app).post('/refunds').send(refundRequest);
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      success: false,
+      error: 'Payment has not been captured and cannot be refunded',
+    });
+    expect(createRefundSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not treat missing ownership metadata as payment ownership', async () => {
+    authenticatedUser = {
+      id: 'user-123',
+      roles: [],
+      isSuperAdmin: false,
+    };
+    getRefundablePaymentSpy.mockResolvedValue({
+      payment: { id: 'cs_test123' },
+      ownerId: undefined,
+      refundablePaymentId: 'pi_test123',
+    });
+
+    const response = await request(app).post('/refunds').send(refundRequest);
+
+    expect(response.status).toBe(403);
+    expect(response.body).toEqual({
+      success: false,
+      error: 'Not authorized to refund this payment',
+    });
+    expect(createRefundSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('PaymentService.getRefundablePayment', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('extracts the PaymentIntent and owner from a Stripe Checkout Session', async () => {
+    jest.spyOn(paymentService, 'getPayment').mockResolvedValue({
+      success: true,
+      session: {
+        id: 'cs_test123',
+        metadata: { userId: 'user-123' },
+        payment_intent: { id: 'pi_test123' },
+      },
+    });
+
+    await expect(
+      paymentService.getRefundablePayment('Stripe', 'cs_test123'),
+    ).resolves.toEqual({
+      payment: expect.objectContaining({ id: 'cs_test123' }),
+      ownerId: 'user-123',
+      refundablePaymentId: 'pi_test123',
+    });
+    expect(paymentService.getPayment).toHaveBeenCalledWith('stripe', 'cs_test123');
+  });
+
+  it('extracts the completed capture and owner from a PayPal Order', async () => {
+    jest.spyOn(paymentService, 'getPayment').mockResolvedValue({
+      success: true,
+      order: {
+        id: 'PAYPAL-ORDER-123',
+        purchase_units: [{
+          custom_id: 'user-123',
+          payments: {
+            captures: [
+              { id: 'CAPTURE-PENDING', status: 'PENDING' },
+              { id: 'CAPTURE-COMPLETED', status: 'COMPLETED' },
+            ],
+          },
+        }],
+      },
+    });
+
+    await expect(
+      paymentService.getRefundablePayment('PayPal', 'PAYPAL-ORDER-123'),
+    ).resolves.toEqual({
+      payment: expect.objectContaining({ id: 'PAYPAL-ORDER-123' }),
+      ownerId: 'user-123',
+      refundablePaymentId: 'CAPTURE-COMPLETED',
+    });
+    expect(paymentService.getPayment).toHaveBeenCalledWith('paypal', 'PAYPAL-ORDER-123');
   });
 });

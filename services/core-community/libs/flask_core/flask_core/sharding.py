@@ -186,9 +186,10 @@ class ChannelShardManager:
         try:
             # Get all channels for platform
             result = self.dal.executesql(
-                """SELECT id, server_id, server_name, community_id
-                   FROM servers
-                   WHERE platform = %s AND is_active = true""",
+                """SELECT id, platform_server_id, platform_server_name,
+                          community_id
+                   FROM community_servers
+                   WHERE platform = %s AND status = 'approved'""",
                 [platform]
             )
 

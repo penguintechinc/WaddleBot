@@ -35,6 +35,9 @@ spec:
         - name: http
           containerPort: 8050
           protocol: TCP
+        - name: grpc
+          containerPort: 50030
+          protocol: TCP
         envFrom:
         - configMapRef:
             name: {{ include "waddlebot.fullname" . }}-config
@@ -45,6 +48,8 @@ spec:
           value: "core-identity"
         - name: MODULE_PORT
           value: "8050"
+        - name: GRPC_PORT
+          value: "50030"
         livenessProbe:
           httpGet:
             path: /health
@@ -88,6 +93,10 @@ spec:
     targetPort: http
     protocol: TCP
     name: http
+  - port: 50030
+    targetPort: grpc
+    protocol: TCP
+    name: grpc
   selector:
     {{- include "waddlebot.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: core-identity

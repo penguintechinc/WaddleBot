@@ -159,25 +159,25 @@ async function loginWithPassword(page, email, password, retries = 3) {
 }
 
 test.describe('Authentication Workflow', () => {
-  test('Register toggle shows username field when signup enabled', async ({ page }) => {
+  test('Registration page shows username field when signup is enabled', async ({ page }) => {
     await addConsentInitScript(page);
     await page.goto('/login', { waitUntil: 'networkidle' });
 
     // Check if signup is enabled on this instance
-    const registerToggle = page.locator('[data-testid="register-toggle"]');
-    const isVisible = await registerToggle.isVisible({ timeout: 5000 }).catch(() => false);
+    const registerLink = page.locator('[data-testid="register-link"]');
+    const isVisible = await registerLink.isVisible({ timeout: 5000 }).catch(() => false);
 
     if (!isVisible) {
       test.skip(true, 'Signup is disabled on this instance');
       return;
     }
 
-    // Click register toggle to switch to registration mode
-    await registerToggle.click();
+    await registerLink.click();
+    await expect(page).toHaveURL(/\/register/);
 
     // Username field should appear
     await expect(
-      page.locator('[data-testid="username-input"], input[placeholder="Choose a username"]')
+      page.locator('[data-testid="username-input"]')
     ).toBeVisible({ timeout: 3000 });
 
     // Submit button should say "Create Account"

@@ -23,7 +23,8 @@ RUN python -m grpc_tools.protoc \
     --python_out=./proto \
     --grpc_python_out=./proto \
     ./proto/youtube_action.proto && \
-    sed -i 's/^import youtube_action_pb2/from proto import youtube_action_pb2/' ./proto/youtube_action_pb2_grpc.py
+    sed -i 's/^import youtube_action_pb2/from . import youtube_action_pb2/' ./proto/youtube_action_pb2_grpc.py && \
+    python -c "from proto import youtube_action_pb2, youtube_action_pb2_grpc; assert youtube_action_pb2_grpc.YouTubeActionStub"
 
 # Create log directory
 RUN mkdir -p /var/log/waddlebotlog

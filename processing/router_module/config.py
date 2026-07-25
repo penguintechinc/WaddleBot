@@ -47,7 +47,9 @@ class Config:
     OPENWHISK_NAMESPACE = os.getenv('OPENWHISK_NAMESPACE', 'waddlebot')
 
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
-    SECRET_KEY = os.getenv('SECRET_KEY', 'change-me-in-production')
+    # Use the same signing key consumed by Hub and downstream gRPC services.
+    # SECRET_KEY remains a compatibility alias for older deployments.
+    SECRET_KEY = os.getenv('JWT_SECRET') or os.getenv('SECRET_KEY')
 
     # Hub integration for activity tracking
     HUB_API_URL = os.getenv('HUB_API_URL', 'http://hub-module:8060')

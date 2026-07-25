@@ -23,6 +23,19 @@ depends_on = None
 def upgrade() -> None:
     conn = op.get_bind()
 
+    # Older deployments could have 0001 stamped even though its legacy SQL
+    # baseline skipped missing tables. The forward repair revision handles
+    # that state after this compatibility guard.
+    has_roles = conn.execute(sa.text(
+        "SELECT to_regclass('public.community_roles') IS NOT NULL"
+    )).scalar()
+    if not has_roles:
+        print(
+            "[channel-creation] community_roles missing; "
+            "deferring channel policy setup"
+        )
+        return
+
     # Re-create the seed function with the new communicator role.
     # Uses CREATE OR REPLACE + ON CONFLICT DO NOTHING so this is fully
     # idempotent — safe to run even if 062 was already applied via psql.

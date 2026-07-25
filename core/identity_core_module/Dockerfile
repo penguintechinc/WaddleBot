@@ -13,9 +13,23 @@ RUN cd /app/libs/flask_core && pip install --no-cache-dir .
 # Copy module files
 COPY core/identity_core_module/requirements.txt /app/
 COPY core/identity_core_module /app/
+COPY libs/grpc_protos /tmp/grpc_protos
 
 # Install module dependencies
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Generate and validate the shared Identity gRPC contract in a real Python
+# package. Relative imports prevent collisions with the third-party `proto`
+# package.
+RUN python -m grpc_tools.protoc \
+    -I/tmp/grpc_protos \
+    --python_out=/app/proto \
+    --grpc_python_out=/app/proto \
+    /tmp/grpc_protos/common.proto \
+    /tmp/grpc_protos/identity.proto && \
+    sed -i 's/^import common_pb2/from . import common_pb2/' /app/proto/identity_pb2.py && \
+    sed -i 's/^import identity_pb2/from . import identity_pb2/' /app/proto/identity_pb2_grpc.py && \
+    python -c "from proto import identity_pb2, identity_pb2_grpc; assert identity_pb2_grpc.IdentityServiceStub"
 
 # Create log directory
 RUN mkdir -p /var/log/waddlebotlog
@@ -28,4 +42,8 @@ RUN chown -R appuser:appuser /app /var/log/waddlebotlog
 
 USER appuser
 
-CMD ["hypercorn", "app:app", "--bind", "0.0.0.0:8050", "--workers", "4"]
+EXPOSE 8050 50030
+
+# The gRPC listener is process-local, so the HTTP and gRPC servers must share
+# one worker unless gRPC is split into a separate deployment.
+CMD ["hypercorn", "app:app", "--bind", "0.0.0.0:8050", "--workers", "1"]

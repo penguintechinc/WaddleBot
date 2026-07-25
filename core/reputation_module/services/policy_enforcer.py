@@ -289,10 +289,11 @@ class PolicyEnforcer:
         try:
             # Get server info for this community and platform
             server_result = self.dal.executesql(
-                """SELECT s.platform_server_id
-                   FROM servers s
-                   JOIN community_servers cs ON cs.platform_server_id = s.platform_server_id
-                   WHERE cs.community_id = %s AND s.platform = %s AND s.is_active = true
+                """SELECT cs.platform_server_id
+                   FROM community_servers cs
+                   WHERE cs.community_id = %s
+                     AND cs.platform = %s
+                     AND cs.status = 'approved'
                    LIMIT 1""",
                 [community_id, platform]
             )

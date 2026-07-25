@@ -84,6 +84,20 @@ services:
       retries: 5
     restart: unless-stopped
 
+  db-migrations:
+    build:
+      context: .
+      dockerfile: migrations/Dockerfile
+    container_name: db-migrations
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-waddlebot}:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/${POSTGRES_DB:-waddlebot}
+    networks:
+      - waddlebot-internal
+    depends_on:
+      infra-postgres:
+        condition: service_healthy
+    restart: "no"
+
   # PostgreSQL Read Replica - routes SELECT queries here to reduce primary load
   infra-postgres-replica:
     image: postgres:16-bookworm@sha256:7858a1a43bb2e3decc07650c8989ba526e0a8164f212c9bb88b622cdbd71c4be
@@ -360,6 +374,7 @@ services:
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_ROUTER_PASSWORD:-changeme}
       REDIS_KEY_PREFIX: "router:"
+      JWT_SECRET: ${JWT_SECRET:-changeme_jwt_secret}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:
       - waddlebot-internal
@@ -368,6 +383,8 @@ services:
         condition: service_healthy
       infra-redis:
         condition: service_healthy
+      db-migrations:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
@@ -433,6 +450,8 @@ services:
         condition: service_healthy
       infra-minio:
         condition: service_healthy
+      db-migrations:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:8060/health"]
       interval: 30s
@@ -966,7 +985,9 @@ services:
     environment:
       MODULE_NAME: identity-core
       MODULE_PORT: 8050
-      DATABASE_URL: postgresql://identity:mod_identity_dev_changeme@infra-postgres:5432/waddlebot
+      GRPC_PORT: 50030
+      DATABASE_URL: postgresql://mod_core_identity:${DB_PASS_CORE_IDENTITY:-mod_core_identity_dev_changeme}@infra-postgres:5432/waddlebot
+      JWT_SECRET: ${JWT_SECRET:-changeme_jwt_secret}
       SECRETS_BACKEND: kubernetes
       SECRETS_PATH: /secrets/db-passwords
       REDIS_URL: redis://hub:${REDIS_HUB_PASSWORD:-changeme}@infra-redis:6379/0
@@ -1020,6 +1041,8 @@ services:
         condition: service_healthy
       infra-searxng:
         condition: service_healthy
+      db-migrations:
+        condition: service_completed_successfully
     # Port removed - access via ingress
     # ports:
     #   - "8070:8070"
@@ -1054,6 +1077,8 @@ services:
         condition: service_healthy
       infra-redis:
         condition: service_healthy
+      db-migrations:
+        condition: service_completed_successfully
       core-router:
         condition: service_started
     healthcheck:
@@ -1137,6 +1162,8 @@ services:
         condition: service_healthy
       infra-redis:
         condition: service_healthy
+      db-migrations:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8040/health')"]
       interval: 30s
@@ -1166,6 +1193,8 @@ services:
         condition: service_healthy
       infra-redis:
         condition: service_healthy
+      db-migrations:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8041/health')"]
       interval: 30s
@@ -1326,6 +1355,8 @@ services:
         condition: service_healthy
       infra-minio:
         condition: service_healthy
+      db-migrations:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8092/health"]
       interval: 30s
@@ -1353,6 +1384,8 @@ services:
     depends_on:
       infra-postgres:
         condition: service_healthy
+      db-migrations:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8091/health"]
       interval: 30s
@@ -1382,6 +1415,8 @@ services:
     depends_on:
       infra-postgres:
         condition: service_healthy
+      db-migrations:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8093/health"]
       interval: 30s
@@ -1433,6 +1468,8 @@ services:
         condition: service_healthy
       infra-redis:
         condition: service_healthy
+      db-migrations:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8095/health"]
       interval: 30s

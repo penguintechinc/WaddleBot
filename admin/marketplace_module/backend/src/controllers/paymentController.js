@@ -253,23 +253,34 @@ class PaymentController {
         });
       }
 
-      // Retrieve original payment to check ownership
-      const paymentResult = await paymentService.getPayment(provider, paymentId);
-      if (!paymentResult || !paymentResult.session) {
+      // Retrieve the original checkout/order both to check ownership and to
+      // resolve the provider-specific refundable ID.
+      const paymentResult = await paymentService.getRefundablePayment(provider, paymentId);
+      if (!paymentResult) {
         return res.status(404).json({
           success: false,
           error: 'Payment not found',
         });
       }
 
-      const payment = paymentResult.session;
-      const paymentOwnerId = payment.metadata?.userId;
+      if (!paymentResult.refundablePaymentId) {
+        return res.status(400).json({
+          success: false,
+          error: 'Payment has not been captured and cannot be refunded',
+        });
+      }
+
+      const paymentOwnerId = paymentResult.ownerId;
 
       // Check authorization: admin or payment owner
       const isAdmin = req.user?.roles?.includes('super_admin') ||
                       req.user?.roles?.includes('platform-admin') ||
                       req.user?.isSuperAdmin;
-      const isOwner = req.user?.id === paymentOwnerId;
+      const isOwner = Boolean(
+        req.user?.id &&
+        paymentOwnerId &&
+        String(req.user.id) === String(paymentOwnerId)
+      );
 
       if (!isAdmin && !isOwner) {
         return res.status(403).json({
@@ -280,7 +291,7 @@ class PaymentController {
 
       const result = await paymentService.createRefund({
         provider,
-        paymentId,
+        paymentId: paymentResult.refundablePaymentId,
         amount,
         currency,
         reason,

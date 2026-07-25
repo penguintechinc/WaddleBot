@@ -9,7 +9,9 @@ Tests cover:
 from __future__ import annotations
 
 import pytest
+import grpc
 from unittest.mock import MagicMock, patch, AsyncMock
+from proto import identity_pb2_grpc
 
 from identity_core_module.services.grpc_handler import (
     IdentityServiceServicer,
@@ -18,6 +20,7 @@ from identity_core_module.services.grpc_handler import (
     LookupIdentityResponse,
     GetLinkedPlatformsResponse,
     PlatformIdentity,
+    Config,
 )
 
 
@@ -29,25 +32,27 @@ class TestVerifyToken:
         """Test that empty token is rejected."""
         servicer = IdentityServiceServicer()
         result = await servicer.verify_token("")
-        assert result is False
+        assert result is None
 
     @pytest.mark.asyncio
     async def test_none_token_rejected(self):
         """Test that None token is rejected."""
         servicer = IdentityServiceServicer()
         result = await servicer.verify_token(None)
-        assert result is False
+        assert result is None
 
     @pytest.mark.asyncio
     async def test_valid_token_accepted(self):
-        """Test that valid token with tenant claim is accepted."""
+        """Test that an approved internal service token is accepted."""
         servicer = IdentityServiceServicer()
-        valid_payload = {"sub": "123", "tenant": "acme", "exp": 9999999999}
+        valid_payload = {"service": "router", "exp": 9999999999}
 
-        with patch("identity_core_module.services.grpc_handler.verify_jwt_token") as mock_verify:
+        with patch.object(Config, "JWT_SECRET", "test-secret"), patch(
+            "identity_core_module.services.grpc_handler.verify_jwt_token"
+        ) as mock_verify:
             mock_verify.return_value = valid_payload
             result = await servicer.verify_token("valid.jwt.token")
-            assert result is True
+            assert result == valid_payload
             mock_verify.assert_called_once()
 
     @pytest.mark.asyncio
@@ -55,42 +60,50 @@ class TestVerifyToken:
         """Test that tampered token (verification returns None) is rejected."""
         servicer = IdentityServiceServicer()
 
-        with patch("identity_core_module.services.grpc_handler.verify_jwt_token") as mock_verify:
+        with patch.object(Config, "JWT_SECRET", "test-secret"), patch(
+            "identity_core_module.services.grpc_handler.verify_jwt_token"
+        ) as mock_verify:
             mock_verify.return_value = None
             result = await servicer.verify_token("bad.token")
-            assert result is False
+            assert result is None
 
     @pytest.mark.asyncio
     async def test_expired_token_rejected(self):
         """Test that expired token (verification returns None) is rejected."""
         servicer = IdentityServiceServicer()
 
-        with patch("identity_core_module.services.grpc_handler.verify_jwt_token") as mock_verify:
+        with patch.object(Config, "JWT_SECRET", "test-secret"), patch(
+            "identity_core_module.services.grpc_handler.verify_jwt_token"
+        ) as mock_verify:
             mock_verify.return_value = None
             result = await servicer.verify_token("expired.token")
-            assert result is False
+            assert result is None
 
     @pytest.mark.asyncio
-    async def test_missing_tenant_claim_rejected(self):
-        """Test that token without tenant claim is rejected."""
+    async def test_token_without_identity_rejected(self):
+        """Test that a token without a user or service identity is rejected."""
         servicer = IdentityServiceServicer()
-        payload_without_tenant = {"sub": "123", "exp": 9999999999}
+        unidentified_payload = {"exp": 9999999999}
 
-        with patch("identity_core_module.services.grpc_handler.verify_jwt_token") as mock_verify:
-            mock_verify.return_value = payload_without_tenant
+        with patch.object(Config, "JWT_SECRET", "test-secret"), patch(
+            "identity_core_module.services.grpc_handler.verify_jwt_token"
+        ) as mock_verify:
+            mock_verify.return_value = unidentified_payload
             result = await servicer.verify_token("no.tenant.token")
-            assert result is False
+            assert result is None
 
     @pytest.mark.asyncio
-    async def test_empty_tenant_claim_rejected(self):
-        """Test that token with empty tenant claim is rejected."""
+    async def test_unapproved_service_rejected(self):
+        """Test that arbitrary internal service identities are rejected."""
         servicer = IdentityServiceServicer()
-        payload_empty_tenant = {"sub": "123", "tenant": "", "exp": 9999999999}
+        unapproved_payload = {"service": "unknown-module", "exp": 9999999999}
 
-        with patch("identity_core_module.services.grpc_handler.verify_jwt_token") as mock_verify:
-            mock_verify.return_value = payload_empty_tenant
+        with patch.object(Config, "JWT_SECRET", "test-secret"), patch(
+            "identity_core_module.services.grpc_handler.verify_jwt_token"
+        ) as mock_verify:
+            mock_verify.return_value = unapproved_payload
             result = await servicer.verify_token("empty.tenant.token")
-            assert result is False
+            assert result is None
 
 
 class TestLookupIdentity:
@@ -103,12 +116,12 @@ class TestLookupIdentity:
         servicer = IdentityServiceServicer(dal=mock_dal)
 
         with patch.object(servicer, "verify_token", new_callable=AsyncMock) as mock_verify:
-            mock_verify.return_value = True
-            request = LookupIdentityRequest(token="valid.token", platform=None, platform_user_id="pid123")
+            mock_verify.return_value = {"service": "router"}
+            request = LookupIdentityRequest(token="valid.token", platform="", platform_user_id="pid123")
             response = await servicer.LookupIdentity(request)
 
             assert response.success is False
-            assert "required" in response.error.lower()
+            assert "required" in response.error.message.lower()
 
     @pytest.mark.asyncio
     async def test_missing_platform_user_id_returns_error(self):
@@ -117,12 +130,12 @@ class TestLookupIdentity:
         servicer = IdentityServiceServicer(dal=mock_dal)
 
         with patch.object(servicer, "verify_token", new_callable=AsyncMock) as mock_verify:
-            mock_verify.return_value = True
-            request = LookupIdentityRequest(token="valid.token", platform="twitch", platform_user_id=None)
+            mock_verify.return_value = {"service": "router"}
+            request = LookupIdentityRequest(token="valid.token", platform="twitch", platform_user_id="")
             response = await servicer.LookupIdentity(request)
 
             assert response.success is False
-            assert "required" in response.error.lower()
+            assert "required" in response.error.message.lower()
 
     @pytest.mark.asyncio
     async def test_invalid_token_returns_error(self):
@@ -131,12 +144,12 @@ class TestLookupIdentity:
         servicer = IdentityServiceServicer(dal=mock_dal)
 
         with patch.object(servicer, "verify_token", new_callable=AsyncMock) as mock_verify:
-            mock_verify.return_value = False
+            mock_verify.return_value = None
             request = LookupIdentityRequest(token="invalid.token", platform="twitch", platform_user_id="tw123")
             response = await servicer.LookupIdentity(request)
 
             assert response.success is False
-            assert response.error == "Invalid authentication token"
+            assert response.error.message == "Invalid authentication token"
 
     @pytest.mark.asyncio
     async def test_identity_not_found_returns_error(self):
@@ -146,12 +159,12 @@ class TestLookupIdentity:
         servicer = IdentityServiceServicer(dal=mock_dal)
 
         with patch.object(servicer, "verify_token", new_callable=AsyncMock) as mock_verify:
-            mock_verify.return_value = True
+            mock_verify.return_value = {"service": "router"}
             request = LookupIdentityRequest(token="valid.token", platform="twitch", platform_user_id="tw_nonexistent")
             response = await servicer.LookupIdentity(request)
 
             assert response.success is False
-            assert response.error == "Identity not found"
+            assert response.error.message == "Identity not found"
 
     @pytest.mark.asyncio
     async def test_valid_lookup_returns_db_data(self):
@@ -166,7 +179,7 @@ class TestLookupIdentity:
         servicer = IdentityServiceServicer(dal=mock_dal)
 
         with patch.object(servicer, "verify_token", new_callable=AsyncMock) as mock_verify:
-            mock_verify.return_value = True
+            mock_verify.return_value = {"service": "router"}
             request = LookupIdentityRequest(token="valid.token", platform="twitch", platform_user_id="tw123")
             response = await servicer.LookupIdentity(request)
 
@@ -181,6 +194,27 @@ class TestLookupIdentity:
             assert response.linked_platforms[1].platform_user_id == "dc456"
             assert response.linked_platforms[1].platform_username == "alice_dc"
 
+    @pytest.mark.asyncio
+    async def test_user_token_cannot_lookup_another_user(self):
+        mock_dal = MagicMock()
+        mock_dal.executesql.return_value = [(42, "alice")]
+        servicer = IdentityServiceServicer(dal=mock_dal)
+
+        with patch.object(servicer, "verify_token", new_callable=AsyncMock) as mock_verify:
+            mock_verify.return_value = {"userId": 7}
+            response = await servicer.LookupIdentity(
+                LookupIdentityRequest(
+                    token="valid.token",
+                    platform="twitch",
+                    platform_user_id="tw123",
+                )
+            )
+
+        assert response.success is False
+        assert response.error.message == "Not authorized to access this identity"
+        assert mock_dal.executesql.call_count == 1
+        assert mock_dal.executesql.call_args.args[1] == ["twitch", "tw123", 7]
+
 
 class TestGetLinkedPlatforms:
     """Test GetLinkedPlatforms gRPC method."""
@@ -192,12 +226,12 @@ class TestGetLinkedPlatforms:
         servicer = IdentityServiceServicer(dal=mock_dal)
 
         with patch.object(servicer, "verify_token", new_callable=AsyncMock) as mock_verify:
-            mock_verify.return_value = False
+            mock_verify.return_value = None
             request = GetLinkedPlatformsRequest(token="invalid.token", hub_user_id=42)
             response = await servicer.GetLinkedPlatforms(request)
 
             assert response.success is False
-            assert response.error == "Invalid authentication token"
+            assert response.error.message == "Invalid authentication token"
 
     @pytest.mark.asyncio
     async def test_no_platforms_returns_empty_list(self):
@@ -207,7 +241,7 @@ class TestGetLinkedPlatforms:
         servicer = IdentityServiceServicer(dal=mock_dal)
 
         with patch.object(servicer, "verify_token", new_callable=AsyncMock) as mock_verify:
-            mock_verify.return_value = True
+            mock_verify.return_value = {"userId": 42}
             request = GetLinkedPlatformsRequest(token="valid.token", hub_user_id=42)
             response = await servicer.GetLinkedPlatforms(request)
 
@@ -225,7 +259,7 @@ class TestGetLinkedPlatforms:
         servicer = IdentityServiceServicer(dal=mock_dal)
 
         with patch.object(servicer, "verify_token", new_callable=AsyncMock) as mock_verify:
-            mock_verify.return_value = True
+            mock_verify.return_value = {"userId": 42}
             request = GetLinkedPlatformsRequest(token="valid.token", hub_user_id=42)
             response = await servicer.GetLinkedPlatforms(request)
 
@@ -237,6 +271,55 @@ class TestGetLinkedPlatforms:
             assert response.platforms[1].platform == "discord"
             assert response.platforms[1].platform_user_id == "dc2"
             assert response.platforms[1].platform_username == "alice_d"
+
+    @pytest.mark.asyncio
+    async def test_user_token_cannot_list_another_user_platforms(self):
+        mock_dal = MagicMock()
+        servicer = IdentityServiceServicer(dal=mock_dal)
+
+        with patch.object(servicer, "verify_token", new_callable=AsyncMock) as mock_verify:
+            mock_verify.return_value = {"userId": 7}
+            response = await servicer.GetLinkedPlatforms(
+                GetLinkedPlatformsRequest(token="valid.token", hub_user_id=42)
+            )
+
+        assert response.success is False
+        assert response.error.message == "Not authorized to access this identity"
+        mock_dal.executesql.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_servicer_registration_and_wire_round_trip():
+    """Exercise the generated registration function and protobuf serializers."""
+    mock_dal = MagicMock()
+    mock_dal.executesql.side_effect = [
+        [(42, "alice")],
+        [("twitch", "tw123", "alice_tw")],
+    ]
+    servicer = IdentityServiceServicer(dal=mock_dal)
+    servicer.verify_token = AsyncMock(return_value={"service": "router"})
+
+    server = grpc.aio.server()
+    identity_pb2_grpc.add_IdentityServiceServicer_to_server(servicer, server)
+    port = server.add_insecure_port("127.0.0.1:0")
+    await server.start()
+
+    channel = grpc.aio.insecure_channel(f"127.0.0.1:{port}")
+    try:
+        stub = identity_pb2_grpc.IdentityServiceStub(channel)
+        response = await stub.LookupIdentity(
+            LookupIdentityRequest(
+                token="valid.token",
+                platform="twitch",
+                platform_user_id="tw123",
+            )
+        )
+        assert response.success is True
+        assert response.hub_user_id == 42
+        assert response.linked_platforms[0].platform_username == "alice_tw"
+    finally:
+        await channel.close()
+        await server.stop(grace=0)
 
 
 if __name__ == "__main__":

@@ -420,15 +420,15 @@ test.describe('Auth - Redirects', () => {
 // Test Suite: Register Mode Toggle
 // ---------------------------------------------------------------------------
 
-test.describe('Auth - Register Mode', () => {
-  test('register toggle button appears when signup is enabled', async ({ page }) => {
+test.describe('Auth - Registration', () => {
+  test('registration link appears when signup is enabled', async ({ page }) => {
     await addConsentInitScript(page);
     await page.goto('/login', { waitUntil: 'networkidle' });
     await dismissOverlays(page);
 
     // Wait for signup settings to load (button only shows if signupEnabled=true)
-    const registerToggle = page.locator('[data-testid="register-toggle"]');
-    const isVisible = await registerToggle.isVisible({ timeout: 5000 }).catch(() => false);
+    const registerLink = page.locator('[data-testid="register-link"]');
+    const isVisible = await registerLink.isVisible({ timeout: 5000 }).catch(() => false);
 
     if (!isVisible) {
       // Signup is disabled on this instance — skip gracefully
@@ -436,31 +436,31 @@ test.describe('Auth - Register Mode', () => {
       return;
     }
 
-    await registerToggle.click();
+    await registerLink.click();
+    await expect(page).toHaveURL(/\/register/);
 
     // Register mode: username field should appear, button should say "Create Account"
     await expect(page.locator('[data-testid="username-input"]')).toBeVisible({ timeout: 3000 });
     await expect(page.locator('[data-testid="auth-submit"]')).toHaveText(/Create Account/i);
   });
 
-  test('switching back to login mode hides username field', async ({ page }) => {
+  test('registration page links back to sign in', async ({ page }) => {
     await addConsentInitScript(page);
     await page.goto('/login', { waitUntil: 'networkidle' });
     await dismissOverlays(page);
 
-    const registerToggle = page.locator('[data-testid="register-toggle"]');
-    const isVisible = await registerToggle.isVisible({ timeout: 5000 }).catch(() => false);
+    const registerLink = page.locator('[data-testid="register-link"]');
+    const isVisible = await registerLink.isVisible({ timeout: 5000 }).catch(() => false);
     if (!isVisible) {
       test.skip(true, 'Signup is disabled on this instance');
       return;
     }
 
-    await registerToggle.click();
+    await registerLink.click();
     await expect(page.locator('[data-testid="username-input"]')).toBeVisible({ timeout: 3000 });
 
-    // Switch back to login
-    await page.getByRole('button', { name: /Sign in/i }).last().click();
+    await page.getByRole('link', { name: /Sign in/i }).click();
+    await expect(page).toHaveURL(/\/login/);
     await expect(page.locator('[data-testid="username-input"]')).not.toBeVisible();
-    await expect(page.locator('[data-testid="auth-submit"]')).toHaveText(/Sign In/i);
   });
 });

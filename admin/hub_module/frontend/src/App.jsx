@@ -15,6 +15,8 @@ import UserPublicProfile from './pages/public/UserPublicProfile';
 
 // Auth pages
 import LoginPage from './pages/auth/LoginPage';
+import RegisterPage from './pages/auth/RegisterPage';
+import PasswordRecoveryUnavailablePage from './pages/auth/PasswordRecoveryUnavailablePage';
 import OAuthCallback from './pages/auth/OAuthCallback';
 
 // Cookie Policy page
@@ -212,6 +214,8 @@ function App() {
         <Route path="/users/:userId" element={<UserPublicProfile />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/login/:tenantSlug" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/forgot-password" element={<PasswordRecoveryUnavailablePage />} />
         <Route path="/auth/callback" element={<OAuthCallback />} />
         <Route path="/cookie-policy" element={<CookiePolicy />} />
 
