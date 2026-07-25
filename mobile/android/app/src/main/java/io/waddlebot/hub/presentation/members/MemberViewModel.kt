@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import io.waddlebot.hub.data.models.ApiResult
 import io.waddlebot.hub.data.models.Member
 import io.waddlebot.hub.data.repository.CommunityRepository
 import kotlinx.coroutines.FlowPreview
@@ -71,28 +72,29 @@ class MemberViewModel @Inject constructor(
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
 
-            communityRepository.getMembers(communityId)
-                .onSuccess { members ->
+            when (val result = communityRepository.getCommunityMembers(communityId)) {
+                is ApiResult.Success -> {
                     _state.update {
                         it.copy(
-                            members = members,
+                            members = result.data,
                             filteredMembers = if (it.searchQuery.isEmpty()) {
-                                members
+                                result.data
                             } else {
-                                it.filteredMembers
+                                filterMembers(result.data, it.searchQuery)
                             },
                             isLoading = false
                         )
                     }
                 }
-                .onFailure { throwable ->
+                is ApiResult.Error -> {
                     _state.update {
                         it.copy(
                             isLoading = false,
-                            error = throwable.message ?: "Failed to load members"
+                            error = result.message
                         )
                     }
                 }
+            }
         }
     }
 
@@ -107,31 +109,19 @@ class MemberViewModel @Inject constructor(
     }
 
     private fun searchMembers(query: String) {
-        viewModelScope.launch {
-            communityRepository.getMembers(communityId, search = query)
-                .onSuccess { members ->
-                    _state.update {
-                        it.copy(
-                            filteredMembers = members,
-                            isSearching = false
-                        )
-                    }
-                }
-                .onFailure {
-                    // Fall back to local filtering
-                    val filtered = _state.value.members.filter { member ->
-                        member.username.contains(query, ignoreCase = true) ||
-                            member.displayName?.contains(query, ignoreCase = true) == true
-                    }
-                    _state.update {
-                        it.copy(
-                            filteredMembers = filtered,
-                            isSearching = false
-                        )
-                    }
-                }
+        _state.update {
+            it.copy(
+                filteredMembers = filterMembers(it.members, query),
+                isSearching = false
+            )
         }
     }
+
+    private fun filterMembers(members: List<Member>, query: String): List<Member> =
+        members.filter { member ->
+            member.username.contains(query, ignoreCase = true) ||
+                member.displayName?.contains(query, ignoreCase = true) == true
+        }
 
     fun clearSearch() {
         _state.update {

@@ -11,6 +11,7 @@ val Indigo300 = Color(0xFFA5B4FC)
 val Indigo200 = Color(0xFFC7D2FE)
 val Indigo100 = Color(0xFFE0E7FF)
 val Indigo50 = Color(0xFFEEF2FF)
+val Indigo950 = Color(0xFF1E1B4B)
 
 val Emerald500 = Color(0xFF10B981)
 val Emerald600 = Color(0xFF059669)
@@ -20,6 +21,7 @@ val Emerald300 = Color(0xFF6EE7B7)
 val Emerald200 = Color(0xFFA7F3D0)
 val Emerald100 = Color(0xFFD1FAE5)
 val Emerald50 = Color(0xFFECFDF5)
+val Emerald950 = Color(0xFF022C22)
 
 // Neutral Colors
 val Gray50 = Color(0xFFF9FAFB)
@@ -96,7 +98,3 @@ val DarkOnErrorContainer = ErrorRedLight
 
 val DarkOutline = Gray600
 val DarkOutlineVariant = Gray700
-
-// Additional Dark Theme Colors
-val Indigo950 = Color(0xFF1E1B4B)
-val Emerald950 = Color(0xFF022C22)
