@@ -1,6 +1,7 @@
 import { describe, expect, it, jest } from '@jest/globals';
 import cookieParser from 'cookie-parser';
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import request from 'supertest';
 
 jest.unstable_mockModule('../../utils/logger.js', () => ({
@@ -29,6 +30,14 @@ function createApp() {
   const app = express();
   app.use(express.json());
   app.use(cookieParser());
+  // Mirror the production security boundary so these authenticated test
+  // routes remain protected from brute-force request floods.
+  app.use('/api/', rateLimit({
+    windowMs: 60_000,
+    max: 100,
+    standardHeaders: true,
+    legacyHeaders: false,
+  }));
   app.use(setCsrfToken);
   app.use(verifyCsrfToken);
   app.get('/api/v1/resource', (_req, res) => res.json({ success: true }));

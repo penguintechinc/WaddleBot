@@ -50,6 +50,10 @@ jobs:
         if: github.event_name == 'pull_request'
         with:
           fail-on-severity: high
+          # The affected React Router code is limited to unstable RSC APIs,
+          # which this Vite SPA does not use. react-router-dom 8.3.0 is not
+          # published yet; keep this aligned with the npm-audit allowance above.
+          allow-ghsas: GHSA-qwww-vcr4-c8h2
 
   node-audit:
     name: Node audit (${{ matrix.name }})
