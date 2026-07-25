@@ -188,3 +188,12 @@ config/kong/ssl/*.pem
 # Node.js
 node_modules/
 
+# Android and Gradle build outputs
+**/.gradle/
+mobile/android/app/build/
+mobile/android/.cxx/
+mobile/android/local.properties
+mobile/flutter_gazer/android/build/
+*.apk
+*.aab
+
