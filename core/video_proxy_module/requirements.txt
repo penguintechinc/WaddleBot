@@ -15,7 +15,7 @@ psycopg2-binary==2.9.12
 aiohttp>=3.13.4
 
 # Authentication & Security
-pyjwt==2.12.1
+pyjwt>=2.13.0
 cryptography>=46.0.6
 
 # Storage
