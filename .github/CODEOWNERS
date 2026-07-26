@@ -1,0 +1,9 @@
+# Code owners for penguintechinc/waddlebot
+#
+# The org default-branch ruleset sets require_code_owner_review, so every PR
+# into the default branch needs an approving review from someone listed here.
+#
+# Owner is @Chromeninja. PenguinzTech authors PRs here, so a different owner
+# is what makes the review requirement satisfiable.
+
+*   @Chromeninja
