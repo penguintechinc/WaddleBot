@@ -2,5 +2,5 @@
 pub mod api;
 pub mod error;
 
-pub use api::ApiClient;
+pub use api::{ApiProxy, ApiRequest, ApiResponse, TokenStore, InMemoryKeychain, OsKeychain};
 pub use error::ApiError;
