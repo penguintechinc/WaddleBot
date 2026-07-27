@@ -14,7 +14,7 @@ import {
   ExternalLink,
   Loader2,
 } from 'lucide-react';
-import { FormModalBuilder } from '@penguin/react_libs';
+import { FormModalBuilder } from '@penguintechinc/react-libs';
 
 // WaddleBot theme colors matching the existing UI
 const waddlebotColors = {

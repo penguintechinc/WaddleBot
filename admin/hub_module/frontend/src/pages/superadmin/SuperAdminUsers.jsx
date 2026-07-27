@@ -8,7 +8,7 @@ import {
   ShoppingCartIcon,
 } from '@heroicons/react/24/outline';
 import { superAdminApi } from '../../services/api';
-import { FormModalBuilder } from '@penguin/react_libs';
+import { FormModalBuilder } from '@penguintechinc/react-libs';
 
 function SuperAdminUsers() {
   const [users, setUsers] = useState([]);

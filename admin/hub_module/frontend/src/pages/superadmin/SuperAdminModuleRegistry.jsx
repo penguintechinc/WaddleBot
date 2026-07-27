@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { superAdminApi } from '../../services/api';
 import { Search, Plus, Edit2, Trash2, Eye, EyeOff, Star, Download, Package } from 'lucide-react';
-import { FormModalBuilder } from '@penguin/react_libs';
+import { FormModalBuilder } from '@penguintechinc/react-libs';
 
 // WaddleBot theme colors matching the existing UI
 const waddlebotColors = {
