@@ -1,0 +1,48 @@
+[package]
+name = "waddlebot-desktop"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.97"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+path = "src/main.rs"
+name = "waddlebot-desktop"
+
+[build-dependencies]
+tauri-build = "2.0.3"
+
+[dependencies]
+tauri = { version = "2.0.5", features = ["shell-open", "window-create"] }
+tauri-plugin-deep-link = "0.1.1"
+tauri-plugin-updater = "0.2.0"
+tauri-plugin-opener = "1.0.0"
+serde = { version = "1.0.210", features = ["derive"] }
+serde_json = "1.0.128"
+reqwest = { version = "0.12.10", default-features = false, features = ["rustls-tls", "json"] }
+tokio = { version = "1.41.1", features = ["full"] }
+async-trait = "0.1.83"
+keyring = "3.1.1"
+uuid = { version = "1.11.0", features = ["v4", "serde"] }
+thiserror = "1.0.65"
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["json"] }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+opt-level = 3
+
+[profile.dev]
+opt-level = 0
+
+[package.metadata.tauri.bundle]
+appimage = "AppImage"
+deb = "Deb"
