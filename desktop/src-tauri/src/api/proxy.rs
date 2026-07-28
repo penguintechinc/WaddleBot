@@ -102,7 +102,7 @@ impl ApiProxy {
     /// Log in with email and password — makes unauthenticated request, stores token
     pub async fn login(&self, email: String, password: String) -> Result<Value, ApiError> {
         let url = format!("{}/api/v1/auth/login", self.hub_base);
-        let body = json!({ "email": email, "password": "***" });
+        let _body = json!({ "email": email, "password": "***" });
         tracing::debug!("[ApiProxy.login] POST /auth/login");
 
         let payload = json!({ "email": email, "password": password });

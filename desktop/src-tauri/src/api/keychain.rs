@@ -45,7 +45,7 @@ impl TokenStore for OsKeychain {
     async fn clear_token(&self) -> Result<(), ApiError> {
         match keyring::Entry::new(KEYCHAIN_SERVICE, TOKEN_KEY) {
             Ok(entry) => entry
-                .delete_password()
+                .delete_credential()
                 .map_err(|e| ApiError::KeychainError(format!("delete failed: {}", e))),
             Err(e) => Err(ApiError::KeychainError(format!("init failed: {}", e))),
         }

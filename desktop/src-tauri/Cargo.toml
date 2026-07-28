@@ -12,13 +12,13 @@ path = "src/main.rs"
 name = "waddlebot-desktop"
 
 [build-dependencies]
-tauri-build = "2.0.3"
+tauri-build = { version = "2.0.3", optional = true }
 
 [dependencies]
-tauri = { version = "2.0.5", features = ["shell-open", "window-create"] }
-tauri-plugin-deep-link = "0.1.1"
-tauri-plugin-updater = "0.2.0"
-tauri-plugin-opener = "1.0.0"
+tauri = { version = "2.0.5", features = ["custom-protocol"], optional = true }
+tauri-plugin-deep-link = { version = "2.0.1", optional = true }
+tauri-plugin-updater = { version = "2.10.1", optional = true }
+tauri-plugin-opener = { version = "2.0.0", optional = true }
 serde = { version = "1.0.210", features = ["derive"] }
 serde_json = "1.0.128"
 reqwest = { version = "0.12.10", default-features = false, features = ["rustls-tls", "json"] }
@@ -34,8 +34,9 @@ tracing-subscriber = { version = "0.3.18", features = ["json"] }
 wiremock = "0.6.2"
 
 [features]
-default = ["custom-protocol"]
-custom-protocol = ["tauri/custom-protocol"]
+default = ["desktop-tauri", "custom-protocol"]
+desktop-tauri = ["dep:tauri", "dep:tauri-plugin-deep-link", "dep:tauri-plugin-updater", "dep:tauri-plugin-opener"]
+custom-protocol = ["tauri?/custom-protocol"]
 
 [profile.release]
 strip = true

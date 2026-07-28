@@ -1,0 +1,31 @@
+{
+  "productName": "Waddlebot Desktop",
+  "version": "0.1.0",
+  "identifier": "io.penguintech.waddlebot.desktop",
+  "build": {
+    "beforeDevCommand": "npm run build:frontend",
+    "beforeBuildCommand": "npm run build:frontend",
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../../admin/hub_module/frontend/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Waddlebot Desktop",
+        "width": 1400,
+        "height": 900,
+        "minWidth": 400,
+        "minHeight": 300,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https:; connect-src 'self' https://waddles.app https://*.penguintech.cloud wss: https:;"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["deb", "appimage"]
+  }
+}
