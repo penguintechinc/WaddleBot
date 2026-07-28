@@ -24,6 +24,14 @@
       "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https:; connect-src 'self' https://waddles.app https://*.penguintech.cloud wss: https:;"
     }
   },
+  "deepLinkProtocols": {
+    "schemes": [
+      {
+        "scheme": "waddles",
+        "role": "Viewer"
+      }
+    ]
+  },
   "bundle": {
     "active": true,
     "targets": [
