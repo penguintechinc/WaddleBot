@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { isDesktopMode, desktopRequest, desktopGetToken } from './desktopAdapter';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '',
@@ -10,7 +11,13 @@ const api = axios.create({
 
 // Request interceptor to add auth token
 api.interceptors.request.use(
-  (config) => {
+  async (config) => {
+    // Desktop mode: token injected server-side, no need to add here
+    if (isDesktopMode()) {
+      return config;
+    }
+
+    // Browser mode: add token from localStorage
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -20,6 +27,19 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+// Custom adapter for desktop mode
+const desktopAdapter = async (config) => {
+  if (!isDesktopMode()) {
+    throw new Error('desktopAdapter called outside desktop mode');
+  }
+  return desktopRequest(config);
+};
+
+// Set adapter based on mode
+if (isDesktopMode()) {
+  api.defaults.adapter = desktopAdapter;
+}
+
 // Response interceptor for error handling
 api.interceptors.response.use(
   (response) => response,
@@ -27,10 +47,17 @@ api.interceptors.response.use(
     const originalRequest = error.config;
 
     // Handle 401 errors (token expired)
+    // TODO: In desktop mode, 401 → token refresh should be handled by Rust proxy (M3)
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
       try {
+        // Desktop mode: token refresh handled server-side; just retry
+        if (isDesktopMode()) {
+          return api(originalRequest);
+        }
+
+        // Browser mode: refresh via HTTP
         const response = await api.post('/api/v1/auth/refresh');
         if (response.data.success) {
           localStorage.setItem('token', response.data.token);
@@ -38,8 +65,15 @@ api.interceptors.response.use(
           return api(originalRequest);
         }
       } catch (refreshError) {
-        localStorage.removeItem('token');
-        window.location.href = '/login';
+        if (isDesktopMode()) {
+          // Desktop: redirect to login (token is invalid in keychain)
+          // TODO: Emit a logout event so AuthContext can clear state (M3)
+          window.location.href = '/login';
+        } else {
+          // Browser: clear localStorage and redirect
+          localStorage.removeItem('token');
+          window.location.href = '/login';
+        }
         return Promise.reject(refreshError);
       }
     }
