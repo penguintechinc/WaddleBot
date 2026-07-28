@@ -9,7 +9,7 @@ import {
   ClockIcon,
 } from '@heroicons/react/24/outline';
 import api from '../../services/api';
-import { FormModalBuilder } from '@penguin/react_libs';
+import { FormModalBuilder } from '@penguintechinc/react-libs';
 
 // WaddleBot theme colors for FormModalBuilder
 const waddlebotColors = {

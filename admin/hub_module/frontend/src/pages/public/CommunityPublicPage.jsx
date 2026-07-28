@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { publicApi, communityApi } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
-import { FormModalBuilder } from '@penguin/react_libs';
+import { FormModalBuilder } from '@penguintechinc/react-libs';
 import {
   GlobeAltIcon,
   LockClosedIcon,
