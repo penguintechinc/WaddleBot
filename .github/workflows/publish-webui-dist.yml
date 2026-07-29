@@ -1,0 +1,163 @@
+name: Publish WebUI Dist
+
+# Publishes the built hub webui (admin/hub_module/frontend) `dist/` output as
+# versioned GitHub Release assets:
+#
+#   waddlebot-webui-<version>.tar.gz          # gzip tarball of dist/'s contents
+#   waddlebot-webui-<version>.tar.gz.sha256   # sha256 of the tarball
+#
+# <version> is the git tag for `release: published` runs (or an explicit
+# `release_tag` on manual dispatch), falling back to the frontend
+# package.json version otherwise.
+#
+# Consumer: the `penguin` repo's desktop build pins an exact version + sha256
+# in `desktop/webui.lock` and fetches/verifies this artifact at build time
+# (see desktop/scripts/fetch-webui.sh there). Any change to the artifact name,
+# contents, or checksum format here is a breaking change for that contract.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: >-
+          Existing GitHub Release tag to (re-)publish the webui dist to.
+          Leave empty to just build + upload as a workflow artifact for
+          inspection, without touching any Release (useful for validating
+          this workflow before a real release exists).
+        required: false
+        type: string
+
+# Default: read-only. The one job that uploads Release assets elevates to
+# `contents: write` itself (least privilege).
+permissions:
+  contents: read
+
+jobs:
+  publish-webui-dist:
+    name: Build + publish webui dist artifact
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      # SECURITY: github.event.release.tag_name and inputs.release_tag are
+      # attacker-influenceable (anyone who can push a tag/release). They are
+      # passed through `env:` and read as `$VARS`, never interpolated with
+      # `${{ }}` inside a `run:` script — that would let a crafted tag name
+      # break out of the string and execute arbitrary shell.
+      - name: Determine version
+        id: version
+        env:
+          RELEASE_TAG_NAME: ${{ github.event.release.tag_name }}
+          DISPATCH_RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "${RELEASE_TAG_NAME}" ]; then
+            VERSION="${RELEASE_TAG_NAME}"
+          elif [ -n "${DISPATCH_RELEASE_TAG}" ]; then
+            VERSION="${DISPATCH_RELEASE_TAG}"
+          else
+            VERSION="$(node -p "require('./admin/hub_module/frontend/package.json').version")"
+          fi
+
+          # Defense in depth: the resolved version becomes part of a
+          # filename and a tar/release-asset name, so reject anything but a
+          # conservative tag/semver-ish character set before it's used.
+          case "${VERSION}" in
+            '')
+              echo "::error::Resolved version is empty" >&2
+              exit 1
+              ;;
+            *[!A-Za-z0-9._-]*)
+              echo "::error::Resolved version '${VERSION}' contains unexpected characters" >&2
+              exit 1
+              ;;
+          esac
+
+          echo "Resolved version: ${VERSION}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js
+        # zizmor: ignore[cache-poisoning] -- no `cache:` input is set below,
+        # so setup-node's opt-in dependency caching is not actually enabled.
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '20' # matches admin/hub_module/Dockerfile.webui's node:20-bookworm-slim
+
+      # admin/hub_module/frontend depends on @penguin/react_libs via a local
+      # `file:../../../shared/react_libs` reference (not yet the public
+      # @penguintechinc/react-libs package — see PR #159). That package has
+      # no committed lockfile, so this uses `npm install` rather than
+      # `npm ci`. Guarded so this step is a no-op if/when that dependency is
+      # migrated away and the directory disappears.
+      - name: Build shared/react_libs (frontend's local dependency)
+        run: |
+          set -euo pipefail
+          if [ -d shared/react_libs ]; then
+            cd shared/react_libs
+            npm install
+            npm run build
+          else
+            echo "shared/react_libs not present — skipping (frontend dependency likely migrated)."
+          fi
+
+      - name: Install frontend dependencies
+        working-directory: admin/hub_module/frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: admin/hub_module/frontend
+        run: npm run build
+
+      - name: Package dist as tarball
+        id: package
+        working-directory: admin/hub_module/frontend
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          TARBALL="waddlebot-webui-${VERSION}.tar.gz"
+
+          # Tar dist/'s CONTENTS (not a wrapping `dist/` directory) so the
+          # penguin desktop build can extract straight into its frontendDist
+          # dir.
+          tar -czf "${TARBALL}" -C dist .
+          sha256sum "${TARBALL}" > "${TARBALL}.sha256"
+
+          echo "Packaged:"
+          ls -la "${TARBALL}" "${TARBALL}.sha256"
+          cat "${TARBALL}.sha256"
+
+          echo "tarball=${TARBALL}" >> "$GITHUB_OUTPUT"
+          echo "checksum=${TARBALL}.sha256" >> "$GITHUB_OUTPUT"
+
+      # Always uploaded (even without a Release) so this workflow can be
+      # validated end-to-end via workflow_dispatch before any real release
+      # exists.
+      - name: Upload build artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: waddlebot-webui-${{ steps.version.outputs.version }}
+          path: |
+            admin/hub_module/frontend/${{ steps.package.outputs.tarball }}
+            admin/hub_module/frontend/${{ steps.package.outputs.checksum }}
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Upload to GitHub Release
+        if: github.event_name == 'release' || inputs.release_tag != ''
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          files: |
+            admin/hub_module/frontend/${{ steps.package.outputs.tarball }}
+            admin/hub_module/frontend/${{ steps.package.outputs.checksum }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
