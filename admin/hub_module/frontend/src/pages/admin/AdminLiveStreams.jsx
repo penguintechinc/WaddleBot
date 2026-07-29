@@ -11,7 +11,7 @@ import {
   SignalIcon,
 } from '@heroicons/react/24/outline';
 import { adminApi } from '../../services/api';
-import { FormModalBuilder } from '@penguin/react_libs';
+import { FormModalBuilder } from '@penguintechinc/react-libs';
 
 // WaddleBot theme colors matching the existing UI
 const waddlebotColors = {
