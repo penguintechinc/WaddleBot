@@ -167,6 +167,7 @@ cython_debug/
 .PLAN*
 .TODO
 .REQUIREMENTS
+.worktrees/
 
 # Kong API Gateway secrets
 config/kong/jwt-secrets.yml
