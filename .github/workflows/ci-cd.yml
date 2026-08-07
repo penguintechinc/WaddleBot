@@ -201,147 +201,11 @@ jobs:
             Premium/Android/app/build/reports/tests/
             Premium/Android/app/build/reports/lint-results.html
 
-  # Golang Desktop Bridge Build
-  desktop-bridge:
-    name: Desktop Bridge Build
-    runs-on: ${{ matrix.os }}
-    needs: security
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        go-version: ['1.21']
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: ${{ matrix.go-version }}
-
-      - name: Cache Go modules
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
-      - name: Download dependencies
-        run: go mod download
-        working-directory: Premium/Desktop
-
-      - name: Run Go vet
-        run: go vet ./...
-        working-directory: Premium/Desktop
-
-      - name: Run Go fmt check
-        run: |
-          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
-            echo "Code is not formatted properly"
-            gofmt -s -l .
-            exit 1
-          fi
-        shell: bash
-        working-directory: Premium/Desktop
-
-      - name: Install test dependencies
-        run: |
-          go install github.com/jstemmer/go-junit-report/v2@latest
-          go install github.com/axw/gocov/gocov@latest
-          go install github.com/AlekSi/gocov-xml@latest
-        shell: bash
-
-      - name: Run unit tests with coverage
-        run: |
-          go test -v -race -coverprofile=coverage.out -covermode=atomic ./... 2>&1 | tee test-output.txt
-          go-junit-report -in test-output.txt -out test-results.xml
-          gocov convert coverage.out | gocov-xml > coverage.xml
-        working-directory: Premium/Desktop
-        shell: bash
-
-      - name: Run integration tests
-        run: go test -v -race -tags=integration ./... 2>&1 | tee integration-test-output.txt
-        working-directory: Premium/Desktop
-        shell: bash
-
-      - name: Upload test results
-        uses: actions/upload-artifact@v3
-        if: always()
-        with:
-          name: test-results-${{ matrix.os }}
-          path: |
-            Premium/Desktop/test-results.xml
-            Premium/Desktop/coverage.xml
-            Premium/Desktop/coverage.out
-            Premium/Desktop/integration-test-output.txt
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
-        with:
-          file: Premium/Desktop/coverage.out
-          flags: ${{ matrix.os }}
-          name: codecov-${{ matrix.os }}
-
-      - name: Build for current platform
-        run: |
-          mkdir -p build
-          go build -ldflags="-s -w -X main.version=${{ github.sha }}" -o build/waddlebot-bridge-${{ runner.os }}-${{ runner.arch }} ./cmd/
-        working-directory: Premium/Desktop
-        shell: bash
-
-      - name: Build cross-platform binaries (Linux only)
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          # Windows
-          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X main.version=${{ github.sha }}" -o build/waddlebot-bridge-windows-amd64.exe ./cmd/
-          # macOS
-          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X main.version=${{ github.sha }}" -o build/waddlebot-bridge-darwin-amd64 ./cmd/
-          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X main.version=${{ github.sha }}" -o build/waddlebot-bridge-darwin-arm64 ./cmd/
-          # Linux
-          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.version=${{ github.sha }}" -o build/waddlebot-bridge-linux-amd64 ./cmd/
-          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X main.version=${{ github.sha }}" -o build/waddlebot-bridge-linux-arm64 ./cmd/
-        working-directory: Premium/Desktop
-        shell: bash
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: desktop-bridge-${{ matrix.os }}
-          path: Premium/Desktop/build/
-
-  # Performance Tests
-  performance:
-    name: Performance Tests
-    runs-on: ubuntu-latest
-    needs: [containers, desktop-bridge]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: '1.21'
-
-      - name: Run benchmarks
-        run: go test -bench=. -benchmem ./... | tee benchmark-results.txt
-        working-directory: Premium/Desktop
-
-      - name: Upload benchmark results
-        uses: actions/upload-artifact@v3
-        with:
-          name: benchmark-results
-          path: Premium/Desktop/benchmark-results.txt
-
   # Deployment (only on main branch)
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
-    needs: [containers, android, desktop-bridge]
+    needs: [containers, android]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     environment: production
     steps:
@@ -474,17 +338,17 @@ jobs:
   notify:
     name: Notify
     runs-on: ubuntu-latest
-    needs: [containers, android, desktop-bridge, deploy, deploy-k8s]
+    needs: [containers, android, deploy, deploy-k8s]
     if: always()
     steps:
       - name: Notify on success
-        if: needs.containers.result == 'success' && needs.android.result == 'success' && needs.desktop-bridge.result == 'success'
+        if: needs.containers.result == 'success' && needs.android.result == 'success'
         run: |
           echo "✅ All builds completed successfully!"
           # Add notification logic here (Slack, Discord, etc.)
 
       - name: Notify on failure
-        if: needs.containers.result == 'failure' || needs.android.result == 'failure' || needs.desktop-bridge.result == 'failure'
+        if: needs.containers.result == 'failure' || needs.android.result == 'failure'
         run: |
           echo "❌ Some builds failed!"
           # Add notification logic here (Slack, Discord, etc.)
