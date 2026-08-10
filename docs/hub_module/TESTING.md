@@ -719,16 +719,17 @@ jobs:
 
 ### Pre-commit Hooks
 
+Hooks are managed repo-wide by the `pre-commit` framework (`.pre-commit-config.yaml` at
+the repo root) — not husky, and not a hand-written `.husky/` script. Install once:
+
 ```bash
-# Install husky
-npm install --save-dev husky
-
-# Add pre-commit hook
-npx husky add .husky/pre-commit "npm test"
-
-# Add pre-push hook
-npx husky add .husky/pre-push "./test-api.sh"
+make install-hooks   # installs the pre-commit framework + registers pre-commit/pre-push hooks
+make verify-hooks    # confirms both hooks are installed and non-empty
 ```
+
+`pre-commit` then runs automatically on `git commit` (lint + secrets, <30s) and
+`git push` (heavier security scans). See `.pre-commit-config.yaml` for the full hook
+list, including the ESLint hook scoped to `admin/hub_module/frontend`.
 
 ---
 

@@ -1,6 +1,15 @@
-.PHONY: dev test test-unit test-integration test-e2e test-functional test-security \
-        smoke-test lint build docker-build docker-push deploy-dev deploy-prod \
-        seed-mock-data clean pre-commit
+.PHONY: dev setup install-hooks verify-hooks test test-unit test-integration test-e2e \
+        test-functional test-security smoke-test lint build docker-build docker-push \
+        deploy-dev deploy-prod seed-mock-data clean pre-commit
+
+setup: install-hooks
+	@echo "Setup complete"
+
+install-hooks: ## Install pre-commit framework + register pre-commit and pre-push hooks
+	@./scripts/install-pre-commit.sh
+
+verify-hooks: ## Report whether pre-commit/pre-push hooks are installed and non-empty
+	@./scripts/install-pre-commit.sh --verify
 
 dev:
 	docker-compose up

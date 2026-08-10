@@ -1,0 +1,17 @@
+# Repo-wide tool configuration only — this is not a distributable Python
+# package (the repo is a multi-service monorepo with per-module
+# requirements.txt files, see core/*/requirements.txt), so there is no
+# [build-system]/[project] table here.
+#
+# Canonical [tool.ruff] block — see backend-python.md. Keep identical to
+# every other PenguinTech repo's pyproject.toml; the git hook (ruff-pre-commit
+# in .pre-commit-config.yaml) and this config must agree.
+[tool.ruff]
+target-version = "py313"     # matches python:3.13 base image used by nearly all services
+line-length = 100            # matches Prettier printWidth + dart format
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "N", "D", "UP", "B", "ASYNC", "S"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"

@@ -1,0 +1,88 @@
+# PenguinTech standard git hooks.
+#
+# Install:  make install-hooks
+# Run all:  pre-commit run --all-files
+#
+# Two stages, matching devops.md "Git Hooks (Mandatory)":
+#   pre-commit — fast checks only (<30s), blocks the commit
+#   pre-push   — heavier security scans, blocks the push
+#
+# Revs are pinned. Update deliberately via `pre-commit autoupdate` or Renovate,
+# never by floating to a branch.
+default_install_hook_types: [pre-commit, pre-push]
+default_stages: [pre-commit]
+
+repos:
+  # ── Hygiene ────────────────────────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: check-json
+      - id: check-executables-have-shebangs
+      - id: detect-private-key
+
+  # ── Secrets (mandatory, every repo) ────────────────────────────────────────
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+
+  # ── Shell (Bash must stay 3.2-compatible — see general.md) ─────────────────
+  - repo: https://github.com/koalaman/shellcheck-precommit
+    rev: v0.10.0
+    hooks:
+      - id: shellcheck
+        args: [--severity=warning]
+
+  # ── Python — ruff ONLY, never alongside flake8/black/isort ─────────────────
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # ── Node/TS — NOT wired up yet, see PR description ──────────────────────────
+  # Of the 8 package.json dirs in the repo, only admin/hub_module/frontend has
+  # both an eslint.config.js and a "lint" script. Its committed node_modules/
+  # install is broken (eslint 8.57.1 present per package.json but missing
+  # lib/cli.js — `npx eslint .` fails with MODULE_NOT_FOUND before it can lint
+  # anything), so an ESLint hook here would fail on every touch regardless of
+  # code quality. Fix the install (and stop committing node_modules/ — see PR
+  # description) before adding this section back.
+
+  # ── Dockerfiles ────────────────────────────────────────────────────────────
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.13.1-beta
+    hooks:
+      - id: hadolint-docker
+
+  # ── GitHub Actions ─────────────────────────────────────────────────────────
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.4
+    hooks:
+      - id: actionlint
+
+  # ── Security (pre-push — heavier, keeps commits fast) ──────────────────────
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.8.0
+    hooks:
+      - id: bandit
+        stages: [pre-push]
+
+  - repo: local
+    hooks:
+      - id: dockerfile-rootless
+        name: Dockerfile runs as non-root
+        entry: scripts/hooks/check-dockerfile-rootless.sh
+        language: script
+        files: (^|/)Dockerfile[^/]*$
+        stages: [pre-push]
