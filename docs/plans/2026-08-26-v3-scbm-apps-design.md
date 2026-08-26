@@ -11,6 +11,10 @@ layered platform: a mandatory **Core**, four globally-toggleable **Modules** (So
 Customer, Bot, Marketing), **Features** that Modules group, and **Apps** that implement
 those Features and can be swapped per tenant or per community through the marketplace.
 
+Deployment collapses to **seven containers** along an ingest → process → action pipeline.
+The logical hierarchy and the container topology are deliberately independent — conflating
+them is what produced the ~40.
+
 The model is Nextcloud's: a core platform plus an app store, where the shipped defaults
 are themselves apps. Nothing is a privileged built-in, because a built-in that cannot be
 replaced makes the extension point decorative.
@@ -40,14 +44,16 @@ The scoping ladder narrows at each level, and each level uses a different mechan
 | Level | Enable/disable scope | Mechanism | Who decides |
 |-------|---------------------|-----------|-------------|
 | Core | always on | mandatory dependency | nobody — it is not optional |
-| Module | global / cluster-wide | Helm `enabled:` + global toggle | cluster operator |
+| Module | global / cluster-wide | values flag; pipeline containers load its App bundles | cluster operator |
 | Feature | per tenant | license tier × PostHog flag | licensing + rollout |
 | App | per tenant and/or community | marketplace binding | tenant admin / community admin |
 
-A Module is either deployed or it is not. There is deliberately no per-tenant Module
-toggle: that would mean running Social's services while denying them to a tenant, paying
-the operational cost of a Module nobody can reach. Per-tenant variation belongs one level
-down, at Features.
+A Module is either on or off for the whole cluster. There is deliberately no per-tenant
+Module toggle: per-tenant variation belongs one level down, at Features, where it costs a
+flag lookup rather than a deployment topology.
+
+Note that "off" means its Apps are not loaded, not that a pod disappears — containers are
+organised by role rather than by Module. See Deployment.
 
 ## Identity and data scoping
 
@@ -130,7 +136,7 @@ v3 splits these:
 | **Module** | one of four product surfaces, a grouping of Features | Social, Customer, Bot, Marketing |
 | **Feature** | a versioned capability contract inside a Module | `bot.shoutout`, `social.polls` |
 | **App** | an implementation of a Feature, installable and bindable | `shoutout-default`, `acme-shoutout-pro` |
-| **Service** | a deployable container | `social-api`, `bot-router` |
+| **Service** | a deployable container, a pipeline stage or a supporting role | `svc-ingest`, `svc-process` |
 
 Renaming `hub_module_installations` to `app_installations` is part of P1. The existing
 column meaning does not change; only the name stops lying.
@@ -219,12 +225,18 @@ extension point is real rather than nominal.
 ```yaml
 id: shoutout-default
 module: bot
+stages: [process, action]       # which pipeline containers load it
 provides: [bot.shoutout@1]      # Feature contracts, versioned
 requires_core: [identity, event-bus, tenancy]
+requires_scopes: [bot.command:write]
 min_tier: free
 flag: waddles.bot.shoutout
 vendor: penguintech             # first-party
 ```
+
+`stages` is what lets a container decide, at load time, whether an App is its concern.
+A first-party App may span stages; a third-party App never does — it is reached over the
+network from whichever stage invokes it, so its manifest declares the calling stage only.
 
 ### Binding resolution
 
@@ -253,6 +265,34 @@ These are separate and both already half-exist:
 A third-party App may implement a Feature the tenant's tier does not entitle. The Feature
 gate wins: buying an App does not buy the Feature slot it plugs into.
 
+### Third-party Apps never run in our process
+
+A third-party App is always reached across a network boundary, in one of exactly two
+shapes. Both are already implemented in `vendorExecutionService.executeCommand()`:
+
+| Model | Direction | Transport | Auth |
+|-------|-----------|-----------|------|
+| `webhook_push` | we call out to them | POST to the App's `webhook_url`, response is the result | HMAC-SHA256 over the payload, `webhook_secret` |
+| `rest_pull` | our API to their API | POST to `api_base_url + /execute` | `api_key` bearer, `oauth2_client_credentials` bearer, or HMAC fallback via `X-WaddleBot-Signature` |
+
+`webhook_push` covers external ecosystems and serverless targets — Lambda, GCP Functions,
+OpenWhisk, or any vendor endpoint. `rest_pull` covers standing third-party integrations
+with their own API surface.
+
+We never execute vendor code in-process, and vendors never execute ours. Three consequences
+worth stating, because they shape decisions elsewhere in this design:
+
+- **Container consolidation is safe.** Collapsing first-party services into seven role
+  containers puts no untrusted code in a shared process, because untrusted code was never
+  in-process to begin with.
+- **Every third-party App is a network hop**, so a Feature served by one inherits a timeout
+  and a failure mode a first-party App does not. Feature contracts must therefore specify
+  timeout and fallback behaviour, not just a signature — `webhook_timeout_ms` already
+  exists per module and defaults to 5000ms.
+- **Egress is a policy surface.** Per `security.md`, outbound is deny-by-default with an
+  allowlist; each installed App's endpoint becomes an allowlist entry scoped to the
+  installing tenant, not a blanket open egress.
+
 ### What already exists
 
 More of this is built than the naming suggests:
@@ -267,18 +307,118 @@ between community and default.
 
 ## Deployment
 
-Each Module is a Helm sub-chart with an `enabled:` condition, defaulting off except Core.
-Turning a Module off removes its services entirely rather than leaving them running behind
-a flag — an unreachable Module should cost nothing.
+**Container topology is a packaging decision, deliberately decoupled from the logical
+model.** Modules, Features and Apps are code and configuration; they do not each get a pod.
+v2.2.x's ~40 co-equal containers are the cost of having conflated the two.
+
+The spine is a **pipeline**, which is already the shape of the system — `trigger/receiver`
+→ `processing/router` → `action/*` — just spread across forty containers instead of three:
+
+```
+        ┌──────────────┐      ┌──────────────┐      ┌──────────────┐
+inbound │  svc-ingest  │ ───▶ │ svc-process  │ ───▶ │  svc-action  │ outbound
+        └──────────────┘      └──────────────┘      └──────────────┘
+         platform events       event bus, routing,    actions, interactions,
+         + webhooks            command dispatch,      third-party App calls
+                               workflow
+```
+
+Each stage scales on a different axis, which is the reason they are separate and the test
+for whether a future split is justified:
+
+| Container | Carries | Scales on |
+|-----------|---------|-----------|
+| `svc-ingest` | platform receivers (Twitch, Discord, Slack, Teams, YouTube, Kick, GoogleChat, Mattermost), inbound webhooks | count of long-lived inbound connections |
+| `svc-process` | Core event bus, routing, Bot command dispatch, workflow | event volume |
+| `svc-action` | outbound actions, interaction Apps, third-party App calls | outbound throughput and remote latency |
+
+### Modules cut across stages
+
+A Module is a **vertical**; the pipeline is **horizontal**. A Module is not assigned to a
+stage — it contributes code to however many stages it needs, from one to all three:
+
+| Module | `svc-ingest` | `svc-process` | `svc-action` | also |
+|--------|-------------|---------------|--------------|------|
+| **Bot** | platform receivers | command dispatch, cooldowns | outbound actions, interactions | — |
+| **Social** | chat/presence inbound | presence fan-out, routing | chat outbound, browser sources | `svc-rtc` |
+| **Marketing** | platform analytics webhooks | scheduling | publishing to X/FB/IG | — |
+| **Customer** | — | pipeline automation | notifications | mostly `hub-api` CRUD |
+
+Three consequences:
+
+- **"Module off" is a per-stage operation.** Disabling Social means not loading its bundles
+  in ingest *and* process *and* action, and not scheduling `svc-rtc`. A flag honoured in
+  only some stages is a half-disabled Module, which is worse than either state.
+- **An App declares its stage.** An App belongs to one Module and targets one or more
+  pipeline stages; the manifest carries both, and the stage determines which container
+  loads it.
+- **Splitting a stage per Module may mean splitting several.** Giving Bot its own action
+  container does not isolate Bot — its ingest and process code still shares. Isolating a
+  Module properly means splitting every stage it touches, which is why the escape hatch is
+  reserved for evidence rather than anticipation.
+
+Four more containers, each for a specific reason rather than by default:
+
+| Container | Why it is not in the pipeline |
+|-----------|-------------------------------|
+| `hub-webui` | static SPA assets; different cache and scaling profile entirely |
+| `hub-api` | admin + marketplace + tenant management; low-volume admin traffic |
+| `svc-core` | identity, security, credentials, entitlement — every stage depends on it, so it must not redeploy on an admin-UI change |
+| `svc-rtc` | WebRTC/SFU media; UDP transport and media scaling share nothing with HTTP request handling |
+
+Seven, from ~40.
+
+`svc-core` is deliberately not folded into `hub-api`: doing so would put every service's
+auth path on the admin API's deploy cadence, so a webui change could take down
+authentication. `svc-rtc` cannot co-locate at all — media transport constrains and is
+constrained by anything sharing its pod.
+
+The router split is a **code and dependency-direction** split, not a deployment one. Both
+halves ship in `svc-process`; "Modules never import each other" is enforced at package
+level, where it is actually checkable, not by pod boundaries.
+
+### What Module toggling means now
+
+This is the honest trade-off of consolidation, and it is a real change from a
+pod-per-Module design:
 
 ```yaml
-core:      { enabled: true }   # not overridable
 modules:
   bot:       { enabled: true }
   social:    { enabled: true }
-  customer:  { enabled: false }
+  customer:  { enabled: false }   # its Apps are not loaded; no pod disappears
   marketing: { enabled: false }
 ```
+
+Turning a Module off stops the containers from loading that Module's App bundles. It
+does **not** remove a workload. Consequences to accept knowingly:
+
+- A disabled Module costs approximately nothing at runtime if its packages are never
+  imported, but the container is still shared.
+- A crash in one Module's first-party App can take down the others sharing that pod. This
+  is the price of seven containers instead of forty.
+
+### When to split a container
+
+Container count is a values decision, not an architectural fact. A pipeline stage can be
+run per Module when a Module earns it:
+
+```yaml
+svcAction:
+  replicaSets:
+    - name: svc-action-bot     ; modules: [bot]
+    - name: svc-action-social  ; modules: [social]
+```
+
+The pipeline stages are the natural split points because their scaling axes already
+differ; splitting *within* a stage by Module is the exception that needs evidence.
+
+Reach for this on evidence, not anticipation — a Module whose crashes are hurting others,
+or whose scaling profile genuinely diverges. Starting split is how the ~40 happened.
+
+Third-party Apps need none of this: they are always reached across a network boundary
+(`webhook_push` or `rest_pull` — see Apps), so vendor code never shares a process with ours
+regardless of topology.
 
 ## Open decisions
 
@@ -300,7 +440,7 @@ Detail lives in the companion plan. Summary:
 
 | Phase | Work | Gate to exit |
 |-------|------|--------------|
-| P0 | Extract Core; resolve the `services/` tree; **propagate tenant scoping into the Python fleet** | Core deploys alone; one tree only; cross-tenant isolation test passes after first being made to fail |
+| P0 | Extract Core; resolve the `services/` tree; **propagate tenant scoping into the Python fleet**; collapse to seven containers | Core deploys alone; one tree only; cross-tenant isolation test passes after first being made to fail |
 | P1 | App manifest, registry, binding resolution; rename to `app_installations`; convert 2–3 Bot units as proof | A community can rebind a Feature to a non-default App |
 | P2 | Bot — all triggers/actions/interactions become Apps | v2.2.x Bot parity, all as Apps |
 | P3 | Social — community, presence, RTC, browser-source as Apps | v2.2.x Social parity |
@@ -315,5 +455,7 @@ Detail lives in the companion plan. Summary:
 | Feature contracts churn after third-party Apps exist | Version interfaces from P1; never ship an unversioned contract |
 | The two trees (`action/` + `services/`) diverge further during migration | Resolve in P0, before any App conversion touches them |
 | "Lightweight CRM" expands under its own gravity | Customer's v3.0.0 scope is fixed at accounts/contacts/opportunities; anything more is 3.x |
-| Per-community App execution becomes an untrusted-code surface | Already true via `vendorExecutionService`; P1 must carry an explicit sandboxing decision |
-| Module count multiplies CI build time | Modules are sub-charts with path-filtered workflows, as `build-*.yml` already does |
+| Per-community App execution becomes an untrusted-code surface | Not in-process — `webhook_push`/`rest_pull` keep vendors across a network boundary. P1 must instead carry per-App egress allowlisting and timeout policy |
+| Seven shared containers widen blast radius vs. ~40 isolated ones | Accepted knowingly; pipeline stages are the split points when a Module earns one on evidence |
+| Consolidation loses per-module health signal | Each App reports its own health through the stage's health endpoint, not one liveness probe per Module |
+| CI rebuilds everything on any change | Seven images with path-filtered workflows, as `build-*.yml` already does per module |
