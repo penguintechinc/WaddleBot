@@ -663,6 +663,63 @@ Third-party Apps need none of this: they are always reached across a network bou
 (`webhook_push` or `rest_pull` — see Apps), so vendor code never shares a process with ours
 regardless of topology.
 
+## Documentation
+
+`docs/` is 435 files and 615,000 words across 60 directories, **43 of which are one-per-module**
+and dissolve entirely in v3. 277 files reference the old module and path names.
+
+The staleness has already started and nothing catches it: of 61 repository paths referenced
+in docs, **26 no longer exist** — a whole family of `*_interaction_module_flask/` directories
+among them. There is no docs check in CI of any kind.
+
+That is the failure mode to design against. Docs do not go stale because nobody cares; they
+go stale because nothing fails when they do.
+
+### Docs are a per-phase gate, not a final phase
+
+The obvious plan — migrate the code, then fix the docs at P5 — is what produces a 615k-word
+corpus describing a system that no longer exists. Instead, **every phase's exit gate includes
+its own documentation**, and a phase is not done until its docs are.
+
+### A docs check that can actually fail
+
+A gate nobody can fail is not a gate. CI grows a reference validator:
+
+- extract every repository path referenced in `docs/**/*.md`
+- assert each exists
+- fail on any that does not
+
+Seed it at the current baseline of **26 dead references** and ratchet the allowed count down,
+never up. That makes the existing debt visible without blocking P0 on it, and makes any *new*
+dead reference an immediate failure. Report the count of paths examined alongside the count
+of failures — a validator that finds zero references is broken, not clean.
+
+### Structure follows the hierarchy
+
+The 43 per-module directories are replaced by the layering this design introduces:
+
+```
+docs/
+  core/           one page per Core service
+  modules/        social · customer · bot · marketing
+    <module>/features/    one page per Feature contract, versioned with it
+  apps/           first-party App manifests and how to write a third-party one
+  deployment/     the seven containers, streams, tenancy, SPIFFE
+```
+
+A Feature's documentation is versioned with its contract. That is the page a third-party App
+author reads, so letting it drift is a public-API problem, not an internal tidiness one.
+
+### Delete, do not migrate
+
+Much of 615k words describes modules that will not exist in the same shape. Carrying it
+forward unexamined is worse than deleting it — a wrong page costs more than a missing one,
+because it is trusted. Each phase's docs work explicitly includes deletions, and the count of
+pages deleted is reported alongside pages written.
+
+`README.md` and `docs/index.md` are rewritten last, at P5, once the structure beneath them is
+true.
+
 ## Open decisions
 
 These need a call before the phases they block:
@@ -687,7 +744,7 @@ Detail lives in the companion plan. Summary:
 
 | Phase | Work | Gate to exit |
 |-------|------|--------------|
-| P0 | Extract Core; resolve the `services/` tree; **propagate tenant scoping into the Python fleet**; Valkey + Streams as the stage transport; SPIFFE/SPIRE workload identity; collapse to seven containers | One tree only; cross-tenant isolation, redelivery, DLQ and idempotency tests all pass after first being made to fail; zero Alpine or unpinned images; gRPC call sites classified with counts |
+| P0 | Extract Core; resolve the `services/` tree; **propagate tenant scoping into the Python fleet**; Valkey + Streams as the stage transport; SPIFFE/SPIRE workload identity; collapse to seven containers; docs gate + restructure | One tree only; cross-tenant isolation, redelivery, DLQ and idempotency tests all pass after first being made to fail; zero Alpine or unpinned images; gRPC call sites classified with counts |
 | P1 | App manifest, registry, binding resolution; rename to `app_installations`; convert 2–3 Bot units as proof | A community can rebind a Feature to a non-default App |
 | P2 | Bot — all triggers/actions/interactions become Apps | v2.2.x Bot parity, all as Apps |
 | P3 | Social — community, presence, RTC, browser-source as Apps | v2.2.x Social parity |
@@ -713,4 +770,6 @@ Detail lives in the companion plan. Summary:
 | mTLS is treated as replacing the inter-service JWT | `security.md` requires both regardless of transport; the SVID-required test does not assert the JWT, so both need their own gate |
 | mTLS is enabled without a peer SPIFFE ID allowlist, so any workload in the trust domain is accepted | Per-service accepted-peer lists, with a test asserting a valid-but-unlisted SVID is rejected |
 | Middleware layers get reordered during refactoring, and the happy path still passes | The ordering contract has its own test that reverses the layers and confirms the reversal is caught |
+| Docs are deferred to P5 and end up describing a system that no longer exists | Docs are a per-phase exit gate, backed by a reference validator that ratchets from a measured baseline of 26 dead references to zero |
+| 615k words are migrated unexamined, so wrong pages outlive the modules they describe | Each phase reports pages deleted alongside pages written; a wrong page costs more than a missing one |
 | CI rebuilds everything on any change | Seven images with path-filtered workflows, as `build-*.yml` already does per module |
