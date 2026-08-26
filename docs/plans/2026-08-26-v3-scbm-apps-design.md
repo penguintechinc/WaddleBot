@@ -80,6 +80,11 @@ is scoped to the token's tenant **at the ORM layer** — never from a request bo
 parameter. Data containerization follows the same three levels, so a community's data is
 addressable only through its tenant.
 
+**Everything today lives in the default tenant, and continues to.** The default tenant is a
+tenant like any other, not a bypass — the same claim, the same middleware, the same key
+namespace. That is what keeps the migration non-breaking while preventing an untenanted code
+path surviving as a backdoor.
+
 ### Consequences for Features and Apps
 
 - A Feature contract declares the scopes it requires. An App implementing that Feature
@@ -344,14 +349,16 @@ The stages are joined by **Valkey Streams consumer groups**, not by synchronous 
 This is what makes the pipeline a pipeline rather than three services phoning each other:
 
 ```
-svc-ingest ──XADD──▶ waddles.ingest ──XREADGROUP──▶ svc-process
-                                                        │
-                                          XADD ─────────┘
-                                            ▼
-                                     waddles.action ──XREADGROUP──▶ svc-action
-                                                                        │
-                                          poison events ────XADD───▶ waddles.dlq
+svc-ingest ──XADD──▶ waddles:t:{tenant}:ingest ──XREADGROUP──▶ svc-process
+                                                                    │
+                                              XADD ────────────────┘
+                                                ▼
+                              waddles:t:{tenant}:action ──XREADGROUP──▶ svc-action
+                                                                            │
+                                  poison ────XADD───▶ waddles:t:{tenant}:dlq
 ```
+
+Streams are per tenant — see Tenant isolation below.
 
 What consumer groups buy, all of which the current point-to-point design lacks:
 
@@ -388,19 +395,66 @@ At-least-once delivery means **consumers must be idempotent**. Every event envel
 an id, and consumers dedupe on it. This is not optional — it is the cost of the redelivery
 guarantee above, and getting it wrong produces duplicate posts and double-charged actions.
 
-#### Naming and tenancy
+#### Tenant isolation inside Valkey
 
-One stream per stage, with module and tenant in the envelope rather than the stream name:
+Tenancy is a segment of the key, not a field in the payload. **Every key carries its tenant**,
+and the default tenant is simply one of them:
 
 ```
-waddles.ingest · waddles.process · waddles.action · waddles.dlq
+waddles:t:{tenant}:{concern}:...        keys, cache, sessions, rate limits
+waddles:t:{tenant}:{stage}              streams — ingest · process · action · dlq
 ```
 
-Stream-per-tenant would isolate noisy neighbours but multiplies stream count by the tenant
-roster, and Valkey consumer groups are per-stream. The tenant travels in the envelope and
-consumers scope on it — the same tenant claim P0 propagates through the Python fleet. A
-large tenant that genuinely needs isolation can be split onto its own stream later; that is
-a per-tenant escape hatch, not the default.
+Everything today lives in the default tenant and continues to, so the migration is a rename
+rather than a re-partition: `waddlebot:cache:*` becomes `waddles:t:default:cache:*`. The
+default tenant is not a special case in the code — it is a tenant like any other, which is
+what stops the untenanted path from surviving as a backdoor.
+
+**Streams are per tenant.** A shared stream would let every stage consumer read every
+tenant's events, which would defeat the key-level isolation entirely — the ACL below would
+guard the cache while the event path leaked. This supersedes a shared-stream design: the
+cost is real (see limits) but a transport that ignores the tenant boundary is not worth the
+saving.
+
+##### ACL users
+
+`docs/architecture/redis-architecture.md` already specifies per-service ACL users
+(`cache_user`, `ratelimit_user`, `queue_user`) with key-prefix patterns. It is marked
+"Advanced - Optional" and implemented nowhere. v3 implements it and composes it with
+tenancy — a user per **(tenant, stage)**:
+
+```
+ACL SETUSER waddles-t-{tenant}-ingest on >{secret} \
+    ~waddles:t:{tenant}:* +@read +@write +@stream -@dangerous
+```
+
+Stages are few, so user count is tenants × ~4 rather than tenants × services. Credentials
+live in `credential_manager_module` and rotate there.
+
+**What this actually buys**, stated precisely so it is not oversold: a stage container still
+holds credentials for every tenant it serves, so this is not a containment boundary against
+a compromised stage. What it is, is **defense in depth against our own bugs** — a connection
+authenticated as tenant A cannot read tenant B's keys, so a tenant-scoping mistake surfaces
+as a Valkey `NOPERM` error instead of a silent cross-tenant read. That is the exact
+datastore-level mirror of the ORM-layer tenant scoping in P0, and the two fail independently.
+
+##### Limits, and where this stops working
+
+Per-tenant separation has a cost that scales with the tenant roster:
+
+| Quantity | Grows as |
+|----------|----------|
+| Streams | tenants × 4 stages |
+| ACL users | tenants × 4 stages |
+| Connections | tenants × stages × replicas |
+
+Connections are the binding constraint. Pool per tenant with idle eviction, and keep an
+active-tenant set so a stage maintains readers only for tenants with traffic. This holds
+comfortably into the hundreds of tenants and needs revisiting in the low thousands.
+
+The escape hatch at that point is not to abandon isolation but to shard it: Valkey Cluster
+with per-tenant hash tags, or a dedicated Valkey for a large tenant. Dedicated infrastructure
+per tenant also maps naturally onto the Enterprise tier if it becomes a commercial line.
 
 #### What exists today
 
@@ -550,4 +604,6 @@ Detail lives in the companion plan. Summary:
 | Consolidation loses per-module health signal | Each App reports its own health through the stage's health endpoint, not one liveness probe per Module |
 | Streams add an at-least-once duplicate-delivery failure mode the current synchronous calls do not have | Envelope ids and consumer-side dedupe are mandatory from P0, with a redelivery test that has been made to fail |
 | Valkey becomes a single point of failure for the whole event path | It already is for cache and sessions; P0 sizes it for stream retention and configures persistence deliberately rather than inheriting cache defaults |
+| Per-tenant streams and ACL users grow linearly with the tenant roster | Pool per tenant with idle eviction and an active-tenant set; revisit in the low thousands, then shard via Cluster hash tags or dedicated Valkey rather than dropping isolation |
+| A "missing tenant means default" fallback outlives the migration and becomes a bypass | The fallback has a recorded cutoff date, after which unclaimed tokens are rejected |
 | CI rebuilds everything on any change | Seven images with path-filtered workflows, as `build-*.yml` already does per module |
