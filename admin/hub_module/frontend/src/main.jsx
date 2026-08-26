@@ -5,6 +5,7 @@ import App from './App';
 import { AuthProvider } from './contexts/AuthContext';
 import { SocketProvider } from './contexts/SocketContext';
 import { CookieConsentProvider } from './contexts/CookieConsentContext';
+import CookieBanner from './components/CookieBanner';
 import CookiePreferencesModal from './components/CookiePreferencesModal';
 import './index.css';
 
@@ -15,6 +16,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <SocketProvider>
           <BrowserRouter>
             <App />
+            <CookieBanner />
             <CookiePreferencesModal />
           </BrowserRouter>
         </SocketProvider>
