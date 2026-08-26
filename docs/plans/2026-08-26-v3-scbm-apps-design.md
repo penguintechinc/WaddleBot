@@ -124,6 +124,64 @@ hold global admin scope and still not swap a community's App platform-wide.
 The two ladders look alike and must not be collapsed into one mechanism: one answers *who
 may act on what*, the other answers *which implementation serves this slot here*.
 
+## Service identity: SPIFFE/SPIRE
+
+User identity answers *who is acting*. Service identity answers *which workload is calling*.
+Both are required; neither substitutes for the other.
+
+Every pod gets an X.509-SVID from a SPIRE agent over the Workload API. SPIFFE IDs follow
+the house pattern from `penguintech.md`:
+
+```
+spiffe://penguintech.io/{env}/{service}
+```
+
+Collapsing to seven containers makes this tractable: seven registration entries per
+environment instead of forty.
+
+### Two deployment modes, one values flip apart
+
+SkausWatch already ships `skauswatch-spire` — a nested SPIFFE/SPIRE trust authority for the
+single `penguintech.io` trust domain, root plus per-cluster child servers. v3 adopts its
+topology rather than inventing one:
+
+| Mode | Configuration | When |
+|------|---------------|------|
+| **Independent** | `topology.role: child`, `topology.upstreamRoot.enabled: false` | a standalone Waddles deployment; the child runs its own self-signed CA |
+| **Centralized** | `topology.role: child`, `topology.upstreamRoot.enabled: true` | nested under an external root such as SkausWatch, sharing the `penguintech.io` trust domain |
+
+Deploy as `child` with the upstream disabled, **not** as `standalone`. The chart is written
+so a child promotes to nested mode without a `topology.role` change — it needs only a join
+token and the root's trust bundle. Choosing `standalone` would buy nothing now and force a
+topology change to federate later.
+
+### How it composes with the rest of this design
+
+SPIFFE is one of three identity mechanisms here, and they answer different questions:
+
+| Mechanism | Answers | Scope |
+|-----------|---------|-------|
+| X.509-SVID | which *workload* is calling | per service |
+| Machine JWT | what that call is *allowed to do* | per service, scoped |
+| Valkey ACL user | which *tenant's* data it may touch | per (tenant, stage) |
+
+An SVID does not carry tenancy, so it complements the per-tenant ACL users rather than
+replacing them. A compromised stage still authenticates as itself; what the tenant ACL
+constrains is which keys it can reach.
+
+Per `security.md`, mTLS does **not** remove the JWT requirement: every inter-service call
+carries a short-lived signed JWT regardless of transport, whether or not SPIFFE is live for
+that call. The two remaining call shapes after consolidation:
+
+- **stage → `svc-core` gRPC** — mTLS with SVIDs, plus the machine JWT.
+- **stage → Valkey** — Valkey speaks TLS with client certificates, so the SVID can
+  authenticate the connection while the per-tenant ACL user authorizes the keyspace.
+
+Being SPIFFE-*ready* is the requirement even where SPIRE is not deployed: services accept an
+mTLS/X.509-SVID identity as a first-class mechanism, so enabling SPIRE in an environment is
+configuration rather than a rewrite. Nothing in waddlebot implements this today — the
+codebase has zero SPIFFE references outside standards documents.
+
 ## Vocabulary
 
 The word "module" currently means three different things in this repo, which is why the
@@ -568,13 +626,17 @@ regardless of topology.
 
 These need a call before the phases they block:
 
-1. **`core/module_rtc` is Go.** It is the seed of Social's conferencing story — precisely
+1. **Which SPIRE root, if any.** Independent (self-signed child) is the default and needs no
+   decision. Nesting under SkausWatch's root needs a join token minted there and its trust
+   bundle published to this cluster — a cross-team coordination, not a code change. Blocks
+   nothing; decide per environment.
+2. **`core/module_rtc` is Go.** It is the seed of Social's conferencing story — precisely
    where it would need to grow, which the Go phase-out rule says it should not. Rewrite in
    Rust during P3, or grant a documented exception. Blocks P3.
-2. **The `services/` tree is a half-finished consolidation** with documented orphaned
+3. **The `services/` tree is a half-finished consolidation** with documented orphaned
    duplicates (`docs/MODULE_CANONICAL_SOURCES.md`). v3 either completes it or deletes it;
    keeping both trees is what produced the divergence. Blocks P0.
-3. **Tier mapping is not yet set.** Which Features land in Free vs Professional vs
+4. **Tier mapping is not yet set.** Which Features land in Free vs Professional vs
    Enterprise is a commercial decision, not an architectural one. Blocks the
    `seeds/waddles.py` definition in P1.
 
@@ -584,7 +646,7 @@ Detail lives in the companion plan. Summary:
 
 | Phase | Work | Gate to exit |
 |-------|------|--------------|
-| P0 | Extract Core; resolve the `services/` tree; **propagate tenant scoping into the Python fleet**; Valkey + Streams as the stage transport; collapse to seven containers | One tree only; cross-tenant isolation, redelivery, DLQ and idempotency tests all pass after first being made to fail; zero Alpine or unpinned images; gRPC call sites classified with counts |
+| P0 | Extract Core; resolve the `services/` tree; **propagate tenant scoping into the Python fleet**; Valkey + Streams as the stage transport; SPIFFE/SPIRE workload identity; collapse to seven containers | One tree only; cross-tenant isolation, redelivery, DLQ and idempotency tests all pass after first being made to fail; zero Alpine or unpinned images; gRPC call sites classified with counts |
 | P1 | App manifest, registry, binding resolution; rename to `app_installations`; convert 2–3 Bot units as proof | A community can rebind a Feature to a non-default App |
 | P2 | Bot — all triggers/actions/interactions become Apps | v2.2.x Bot parity, all as Apps |
 | P3 | Social — community, presence, RTC, browser-source as Apps | v2.2.x Social parity |
@@ -606,4 +668,6 @@ Detail lives in the companion plan. Summary:
 | Valkey becomes a single point of failure for the whole event path | It already is for cache and sessions; P0 sizes it for stream retention and configures persistence deliberately rather than inheriting cache defaults |
 | Per-tenant streams and ACL users grow linearly with the tenant roster | Pool per tenant with idle eviction and an active-tenant set; revisit in the low thousands, then shard via Cluster hash tags or dedicated Valkey rather than dropping isolation |
 | A "missing tenant means default" fallback outlives the migration and becomes a bypass | The fallback has a recorded cutoff date, after which unclaimed tokens are rejected |
+| SPIRE deployed standalone, then federation with SkausWatch needs a topology change | Deploy as `child` with the upstream disabled from the start; promotion is a values flip plus a join token |
+| mTLS is treated as replacing the inter-service JWT | `security.md` requires both regardless of transport; the SVID-required test does not assert the JWT, so both need their own gate |
 | CI rebuilds everything on any change | Seven images with path-filtered workflows, as `build-*.yml` already does per module |
