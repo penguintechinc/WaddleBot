@@ -796,7 +796,7 @@ its source; rows sourced from "this design" are proposals, not standards.
 Waddles ships in two shapes, and they differ in *who owns the deployment* — which changes
 where entitlement attaches:
 
-| | Self-hosted | SaaS (`waddles.app`) |
+| | Self-hosted | SaaS (`app.waddles.app`) |
 |---|---|---|
 | Owner | the customer | PenguinTech |
 | Tenants | 1 (Free/Pro) or many (Enterprise) | many — one per Enterprise customer, plus PenguinTech's default |
@@ -833,33 +833,71 @@ gets, not what a deployment contains:
 PenguinTech's SaaS deployment holds many tenants because PenguinTech operates it, not because
 it holds an Enterprise licence. Deployment size and customer tier are unrelated.
 
-#### The domain is a mode switch, not a bypass
+#### The domain selects a mode and a bypass depth
 
-SaaS mode activates on **`waddles.app`** or **`waddles.penguincloud.tech`**. The hostname
-therefore selects one of three modes, rather than toggling licensing on and off:
+The hostname does two things: it turns SaaS mode on, and it sets **how far down the
+`global → tenant → community` ladder the licence bypass reaches**.
 
-| Domain | Mode | Entitlement |
-|--------|------|-------------|
-| `waddles.app`, `waddles.penguincloud.tech` | **SaaS** | per tenant *or* per community, from billing — **never bypassed** |
-| `*.penguintech.cloud`, `*.penguincloud.io` | internal (beta/dev) | bypassed — PenguinTech's own non-production |
-| anything else | self-hosted | per-tenant licence validated against `license.penguintech.io` |
+| Host | SaaS | Bypass depth | Why |
+|------|------|--------------|-----|
+| `waddles*.penguintech.cloud` — `waddles`, `waddles-alpha`, `waddles-beta`, `waddles-gamma` | on | **global + community** — Pro and Enterprise free in every community | so Enterprise features are actually exercisable in alpha/beta |
+| **`app.waddles.app`** | on | **global only** — communities pay | the production SaaS deployment; PenguinTech's platform needs no licence, customers do |
+| `waddles.app` (apex) | n/a | n/a | the marketing site, not the product — no entitlement decision happens here |
+| anything else | off — self-hosted | none; licence validated against `license.penguintech.io` | |
 
-Reading the domain as a mode rather than a bypass is what keeps the SaaS chargeable. The two
-questions collapse into one in self-hosted deployments and separate in SaaS:
+The product runs at **`app.waddles.app`**; the apex is the marketing site. Only the former
+ever resolves entitlement.
 
-| Question | Answered by | In SaaS |
-|----------|-------------|---------|
-| Is this *deployment* licensed to run? | the mode | yes — PenguinTech owns it |
-| What tier is this *customer*? | the entitlement lookup | **never by the hostname** |
+"Bypassed at global scale" is not "everything is free". It means the **global** level of the
+ladder is fully entitled — PenguinTech's own platform needs no licence to run — while tenant
+and community entitlement still restricts beneath it. That is the ladder's existing rule doing
+its job: narrower levels restrict what a broader level granted, never expand it.
 
-**A standards conflict to settle before launch.** `penguintech.md` lists product-specific
-`.app` domains as hardcoded licence-bypass domains, and `waddles.app` is the product domain
-per `penguintech-reference`. Applied literally, every paying SaaS customer would get full
-entitlement free. Today's code happens to be correct — `PREMIUM_BYPASS_DOMAINS` in
-`video_proxy_module` lists only `waddlebot.penguintech.io`, `waddles.penguintech.cloud` and
-`waddles.penguincloud.io` — but that is luck rather than design. Raise the wording with the
-standards owner; `waddles.penguincloud.tech` is also outside every current bypass pattern and
-needs adding to the mode list explicitly.
+The pre-production domains go one level deeper for a specific reason: **you cannot test an
+Enterprise feature in an environment where nothing holds an Enterprise entitlement.** Without
+the community-level bypass, alpha and beta would exercise only the Free path, and every
+Enterprise code path would first run in production.
+
+##### Bypass satisfies the licence gate, never the flag gate
+
+A Feature needs **tier AND flag**. A domain bypass satisfies only the tier half — hence "all
+licensed features on *unless turned off*". PostHog still governs exposure, so a feature can be
+dark on a fully-bypassed domain, and a never-seen flag still defaults OFF.
+
+Keeping the two gates independent is what makes a bypassed domain safe to deploy to: it
+removes the commercial gate, not the rollout control.
+
+##### The bypass makes features testable and gating untestable
+
+This is the cost of the mechanism and it needs its own answer. In an environment where every
+community is entitled to everything, **the negative case never runs**: nothing there can show
+that a Free community is correctly *denied* an Enterprise feature. Alpha and beta would prove
+the features work and prove nothing about the gate that sells them.
+
+Both halves need coverage, in different places:
+
+| What | Where |
+|------|-------|
+| Enterprise features function | alpha/beta, via the community-level bypass |
+| Free and Pro are correctly *restricted* | integration tests against the entitlement resolver, with the domain injected — never inherited from the environment |
+| The bypass depth itself is correct per domain | a table-driven test over the domain classes, asserting resolved depth |
+
+The entitlement resolver must therefore take the domain as an **argument**, not read it from
+ambient config. A resolver that reads its own hostname cannot be tested for any environment it
+is not currently running in.
+
+##### Match full hostnames, not substrings
+
+Today's implementation is `if any(d in domain_lower for d in PREMIUM_BYPASS_DOMAINS)` — a
+substring test. With the product at `app.waddles.app`, a naive entry of `waddles.app` matches
+the real host *and* `waddles.app.attacker.example`, `evil-waddles.app.example.net`, and
+anything else containing the string. A licence bypass matched by substring is a bypass anyone
+can claim by controlling a hostname, and in SaaS mode that is a revenue and data-isolation
+issue rather than a cosmetic one.
+
+Match full hostnames from an explicit allowlist — `app.waddles.app` exactly — and handle the
+`waddles*` prefix as a validated pattern anchored to the `penguintech.cloud` suffix. Never
+`in`.
 
 #### Where community-scoped entitlement lives
 
@@ -951,7 +989,9 @@ Detail lives in the companion plan. Summary:
 | Per-tenant streams and ACL users grow linearly with the tenant roster | Pool per tenant with idle eviction and an active-tenant set; revisit in the low thousands, then shard via Cluster hash tags or dedicated Valkey rather than dropping isolation |
 | A "missing tenant means default" fallback outlives the migration and becomes a bypass | The fallback has a recorded cutoff date, after which unclaimed tokens are rejected |
 | The multi-tenant path rots because Free and Professional never exercise it | Single-tenant runs the identical code with N=1; no `if tenant == "default"` shortcut is permitted anywhere |
-| `waddles.app` is added to the bypass list per the standard, and the SaaS becomes free for every customer | The hostname selects a mode, never an entitlement; a test asserts a Free community on `waddles.app` resolves to Free |
+| `app.waddles.app` is given the deep bypass, and every paying SaaS customer becomes free | Bypass depth is per-host and table-tested; `app.waddles.app` is global-only |
+| Alpha and beta prove features work but never prove gating works | A restriction suite runs the denial cases with the domain injected, outside any bypassed environment |
+| The substring bypass match is spoofable by a controlled hostname | Full-hostname allowlist with the `waddles*` prefix validated against the `penguintech.cloud` suffix |
 | The marketplace becomes load-bearing for revenue but is sized as an extension catalogue | Stated deliberately in the design; its availability requirements are set for the billing path, not the browse path |
 | SPIRE deployed standalone, then federation with SkausWatch needs a topology change | Deploy as `child` with the upstream disabled from the start; promotion is a values flip plus a join token |
 | mTLS is treated as replacing the inter-service JWT | `security.md` requires both regardless of transport; the SVID-required test does not assert the JWT, so both need their own gate |
