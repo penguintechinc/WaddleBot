@@ -141,9 +141,14 @@ environment instead of forty.
 
 ### Two deployment modes, one values flip apart
 
-SkausWatch already ships `skauswatch-spire` — a nested SPIFFE/SPIRE trust authority for the
-single `penguintech.io` trust domain, root plus per-cluster child servers. v3 adopts its
-topology rather than inventing one:
+SkausWatch is itself a modular platform, and its **authentication module** provides this —
+`skauswatch-auth` (JWT claims and scope authz), `skauswatch-identity` (SPIFFE Workload API),
+`skauswatch-spire-entry`, plus the `spire`, `pki`, `sshca` and `vault` charts. The
+`skauswatch-spire` chart is a nested SPIFFE/SPIRE trust authority for the single
+`penguintech.io` trust domain: root plus per-cluster child servers.
+
+That module has already solved this problem in Rust. Waddles is Python, so it mirrors the
+shape rather than reusing the crates:
 
 | Mode | Configuration | When |
 |------|---------------|------|
@@ -168,6 +173,22 @@ SPIFFE is one of three identity mechanisms here, and they answer different quest
 An SVID does not carry tenancy, so it complements the per-tenant ACL users rather than
 replacing them. A compromised stage still authenticates as itself; what the tenant ACL
 constrains is which keys it can reach.
+
+#### Holding an SVID is not checking one
+
+`skauswatch-identity` splits this into two responsibilities, and the second is the one easy
+to omit:
+
+- `IdentityProvider` attests to the local Workload API socket (`SPIFFE_ENDPOINT_SOCKET`),
+  holds the X.509-SVID and trust bundle set, and builds mTLS configs from them.
+- `SpiffeIdMatcher` is a **caller-supplied allowlist enforced against the peer's SPIFFE ID**,
+  and is what admits federated trust domains.
+
+Presenting an identity and verifying the other end's are different things. Without the
+matcher, mTLS proves only that the peer holds *some* valid SVID in the trust domain — every
+workload in the mesh would pass. Each of the seven services declares which peer SPIFFE IDs
+it accepts; `svc-core` accepting calls from the three stages is not the same as accepting
+calls from anything holding a `penguintech.io` SVID.
 
 Per `security.md`, mTLS does **not** remove the JWT requirement: every inter-service call
 carries a short-lived signed JWT regardless of transport, whether or not SPIFFE is live for
@@ -278,6 +299,26 @@ A Feature is available to a tenant when **both** hold:
 
 New flags default OFF. If either the license server or PostHog is unreachable, fall back
 to the last-known cached value; never crash, and never fail open on a never-seen flag.
+
+#### Middleware ordering is a contract, not a preference
+
+`skauswatch-auth` states it explicitly, and v3 adopts the same ordering:
+
+```
+tenant check  →  scope check  →  feature / licensing check
+```
+
+The order is load-bearing in both directions:
+
+- **Tenant before scope.** A scope check against an unverified tenant answers the wrong
+  question — it establishes what the caller may do, without establishing whose data they are
+  doing it to. `security.md` requires tenant middleware to run first for exactly this reason.
+- **Scope before feature.** A feature gate consulted before authorization leaks entitlement
+  information to callers who have no business asking, and burns a licensing round-trip on
+  requests that were going to 403 anyway.
+
+Authorization decisions use `scope` only. `roles` is informational and audit-only and is
+never branched on — roles are bundles expanded into scopes at token issuance.
 
 This mirrors the WaddleAI product definition in `license-server` — see
 `api/app/seeds/waddleai.py`, where each feature carries `tier_requirements` per tier plus
@@ -670,4 +711,6 @@ Detail lives in the companion plan. Summary:
 | A "missing tenant means default" fallback outlives the migration and becomes a bypass | The fallback has a recorded cutoff date, after which unclaimed tokens are rejected |
 | SPIRE deployed standalone, then federation with SkausWatch needs a topology change | Deploy as `child` with the upstream disabled from the start; promotion is a values flip plus a join token |
 | mTLS is treated as replacing the inter-service JWT | `security.md` requires both regardless of transport; the SVID-required test does not assert the JWT, so both need their own gate |
+| mTLS is enabled without a peer SPIFFE ID allowlist, so any workload in the trust domain is accepted | Per-service accepted-peer lists, with a test asserting a valid-but-unlisted SVID is rejected |
+| Middleware layers get reordered during refactoring, and the happy path still passes | The ordering contract has its own test that reverses the layers and confirms the reversal is caught |
 | CI rebuilds everything on any change | Seven images with path-filtered workflows, as `build-*.yml` already does per module |
