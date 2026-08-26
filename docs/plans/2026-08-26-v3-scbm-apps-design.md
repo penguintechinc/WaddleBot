@@ -677,6 +677,108 @@ Third-party Apps need none of this: they are always reached across a network bou
 (`webhook_push` or `rest_pull` — see Apps), so vendor code never shares a process with ours
 regardless of topology.
 
+## Compliance
+
+Waddles must satisfy **GDPR**, **CCPA/CPRA**, the **EU AI Act**, and **CRA**. This section
+covers what the *architecture* has to provide; scope and legal interpretation need counsel,
+and the obligations below are the engineering consequences, not a compliance opinion.
+
+> **CRA is ambiguous in this list.** Read as the EU **Cyber Resilience Act** it is a product-
+> security regulation — SBOM, coordinated vulnerability disclosure, a security-update
+> commitment across a support period. Read as the **Colorado Privacy Act** it is closer to
+> CCPA/CPRA. Confirm which before scoping; they imply different work.
+
+### Where this collides with decisions already made
+
+Four places, and they are the reason this cannot be bolted on at P5.
+
+#### PostHog is both the flag plane and an analytics tool
+
+This design uses PostHog for feature-flag evaluation. PostHog is *also* product analytics, and
+its browser SDK does both from one initialisation. Under GDPR/ePrivacy, flag evaluation needed
+to render the product is arguably strictly necessary; behavioural analytics is not and needs
+prior consent.
+
+They must therefore be separable in the client: **flags evaluate before consent, analytics
+capture does not.** Server-side flag evaluation for the webui avoids the question entirely and
+is the safer default — the browser never gets an analytics-capable SDK it has to be trusted to
+keep quiet.
+
+Getting this wrong is the classic finding in a cookie audit: a consent banner that blocks
+nothing because the analytics SDK initialised to fetch flags before the user answered.
+
+#### Streams are append-only, and erasure is not
+
+`waddles:t:{tenant}:{stage}` and the DLQ are logs. A GDPR erasure request against data sitting
+in a stream has no natural answer, because streams do not support selective deletion in the way
+a row does.
+
+Two disciplines make this tractable, and both are already required elsewhere in this design:
+
+- **Envelopes carry UUIDs, never PII** — `critical-rules.md`'s PII tokenization rule is what
+  makes stream erasure a non-problem: delete or anonymise the row in the single identity table
+  and the stream's references become inert.
+- **Streams have bounded retention.** An unbounded stream is an unbounded retention period,
+  which is a lawful-basis problem regardless of tokenization. Set `MAXLEN`/`MINID` per stream
+  deliberately; the DLQ especially, since poison events are exactly the ones that sit longest.
+
+#### Third-party Apps are sub-processors
+
+An App reached over `webhook_push` or `rest_pull` receives data about a community's users. That
+is a processor relationship, and the marketplace is what creates it.
+
+The architecture has to support: disclosing to a community what an App receives before install,
+recording that a community's admin accepted it, a DPA per vendor, and the App's endpoint on the
+tenant-scoped egress allowlist. The last of these is already in the design for security reasons;
+here it doubles as the enforcement point for "data goes only where disclosed".
+
+#### AI features carry transparency obligations
+
+`ai_interaction_module`, `ai_researcher_module` and the WaddleAI integration put Waddles in EU
+AI Act scope. Two consequences that touch the design rather than the policy:
+
+- **Disclosure**: users interacting with an AI system must be told. In Social and Bot that is a
+  per-message or per-surface marker, which is a Feature-contract concern rather than an
+  afterthought in one App.
+- **Automated assessment of people**: `bad_actor_detection` and `reputation_module` score users.
+  Whether that reaches a regulated risk tier needs legal input, but the architecture should
+  assume it might — meaning logged inputs, an explanation path, and human review — because
+  retrofitting explainability into a scoring system is far harder than designing for it.
+
+### Webui obligations
+
+The webui carries most of the visible surface:
+
+| Requirement | Source | Shape |
+|---|---|---|
+| Consent before non-essential cookies, granular by category, refusable as easily as accepted | GDPR/ePrivacy | consent gate in `hub-webui`; nothing non-essential initialises before it |
+| "Do Not Sell or Share My Personal Information" | CCPA/CPRA | opt-out link and a respected Global Privacy Control signal |
+| Access, deletion, correction, portability | GDPR + CCPA/CPRA | self-service DSAR flows, not a support ticket |
+| AI interaction disclosure | EU AI Act | visible marker wherever AI generates or scores |
+
+Consent state is per **user**, and users belong to communities within tenants — so consent
+records follow the same `global → tenant → community` scoping as everything else, and land in
+whichever regional deployment holds that user.
+
+### What already helps
+
+Three decisions in this design were made for other reasons and pay off here:
+
+- **Regional deployments** give data residency for real, since nothing crosses at the data layer.
+- **PII tokenization** (an existing standard) makes erasure a single-row operation.
+- **Per-tenant Valkey isolation** means a tenant's cached data is separable, not commingled.
+
+### What this adds to the plan
+
+Compliance is a **P0 concern for the plumbing** and a per-phase concern for surfaces:
+
+- P0: stream retention bounds; consent-safe flag evaluation; SBOM generation if CRA is the
+  Cyber Resilience Act.
+- P1: App install discloses what data an App receives; egress allowlist enforces it.
+- P3: AI disclosure markers land with Social's Features.
+- P5: DSAR flows, consent UI, and the CCPA opt-out are user-facing and belong with the webui
+  rewrite — but they cannot be *designed* at P5 if the data model does not already support them.
+
 ## Documentation
 
 `docs/` is 435 files and 615,000 words across 60 directories, **43 of which are one-per-module**
@@ -796,10 +898,10 @@ its source; rows sourced from "this design" are proposals, not standards.
 Waddles ships in two shapes, and they differ in *who owns the deployment* — which changes
 where entitlement attaches:
 
-| | Self-hosted | SaaS (`app.waddles.app`) |
+| | Self-hosted | SaaS (`app.waddles.app`, `{region}-app.waddles.app`) |
 |---|---|---|
 | Owner | the customer | PenguinTech |
-| Tenants | 1 (Free/Pro) or many (Enterprise) | many — one per Enterprise customer, plus PenguinTech's default |
+| Tenants | 1 (Free/Pro) or many (Enterprise) | many per deployment — one per Enterprise customer, plus that deployment's default |
 | Customer buys | a licence for their deployment | **a tenant**, or **an upgrade to their community inside our default tenant** |
 | Entitlement attaches at | the tenant | the tenant *or* the community |
 
@@ -841,12 +943,52 @@ The hostname does two things: it turns SaaS mode on, and it sets **how far down 
 | Host | SaaS | Bypass depth | Why |
 |------|------|--------------|-----|
 | `waddles*.penguintech.cloud` — `waddles`, `waddles-alpha`, `waddles-beta`, `waddles-gamma` | on | **global + community** — Pro and Enterprise free in every community | so Enterprise features are actually exercisable in alpha/beta |
-| **`app.waddles.app`** | on | **global only** — communities pay | the production SaaS deployment; PenguinTech's platform needs no licence, customers do |
+| **`app.waddles.app`, `{region}-app.waddles.app`** | on | **global only** — communities pay | the production SaaS deployments; PenguinTech's platform needs no licence, customers do |
 | `waddles.app` (apex) | n/a | n/a | the marketing site, not the product — no entitlement decision happens here |
 | anything else | off — self-hosted | none; licence validated against `license.penguintech.io` | |
 
-The product runs at **`app.waddles.app`**; the apex is the marketing site. Only the former
-ever resolves entitlement.
+The product runs at **`app.waddles.app`** and regional siblings such as
+**`eu-app.waddles.app`**; the apex is the marketing site. Only the product hosts resolve
+entitlement.
+
+##### Regional deployments are independent instances
+
+There is more than one production SaaS deployment, and the reason regions exist at all is
+**data residency** — an EU deployment is only meaningful if EU data stays inside it. That
+forces the boundary:
+
+| | Scope |
+|---|---|
+| Core, the seven containers, Valkey, Postgres | **per deployment** |
+| Tenants, communities — including the **default tenant** | **per deployment** |
+| Streams (`waddles:t:{tenant}:{stage}`) | **per deployment**; never cross-region |
+| Licence server (`license.penguintech.io`) | shared, external |
+| SPIRE | one child server per regional cluster, all nesting under the same `penguintech.io` root |
+
+A customer lives in exactly one deployment. "PenguinTech's default tenant" is therefore
+**per-region** — a self-serve EU customer joins the EU deployment's default tenant, not a
+global one. Nothing at the data layer is shared or replicated between regions, which is
+precisely what makes the residency claim true rather than aspirational.
+
+The nested SPIRE topology already handles this: each regional cluster is another `child`
+under the shared root, which is what that design is for. The SPIFFE ID pattern needs a region
+component so IDs stay unique across clusters — settle whether that is
+`spiffe://penguintech.io/{env}/{region}/{service}` or whether `{env}` absorbs the region.
+
+##### Open questions regional deployment raises
+
+None of these block P0, but all three need answers before a second region exists:
+
+- **Is the marketplace catalogue shared or per-deployment?** Community entitlement lives in
+  marketplace subscriptions, so a per-deployment marketplace fragments billing across regions
+  — the same customer could hold unrelated subscriptions in two regions. A shared catalogue
+  with per-deployment installations is the likely split, but it needs deciding rather than
+  emerging.
+- **Where does "which region is this customer in" live?** DNS alone does not answer it for a
+  user who arrives at the wrong host. A global directory mapping identity to region is a
+  cross-region service, which is in tension with residency.
+- **Is cross-region migration supported?** If yes it needs a documented procedure and an
+  export path; if no, say so plainly, because customers will ask.
 
 "Bypassed at global scale" is not "everything is free". It means the **global** level of the
 ladder is fully entitled — PenguinTech's own platform needs no licence to run — while tenant
@@ -895,9 +1037,11 @@ anything else containing the string. A licence bypass matched by substring is a 
 can claim by controlling a hostname, and in SaaS mode that is a revenue and data-isolation
 issue rather than a cosmetic one.
 
-Match full hostnames from an explicit allowlist — `app.waddles.app` exactly — and handle the
-`waddles*` prefix as a validated pattern anchored to the `penguintech.cloud` suffix. Never
-`in`.
+Match on parsed hostname structure, not string containment: an exact allowlist for the
+pre-production hosts, and for production a validated `{region-}app.waddles.app` pattern
+anchored to the full `waddles.app` suffix. Regional siblings mean the production match cannot
+be a fixed string either — `eu-app.waddles.app` must resolve, `eu-app.waddles.app.evil.net`
+must not. Never `in`.
 
 #### Where community-scoped entitlement lives
 
@@ -966,7 +1110,7 @@ Detail lives in the companion plan. Summary:
 
 | Phase | Work | Gate to exit |
 |-------|------|--------------|
-| P0 | Extract Core; delete `services/`'s 21 dead subdirs and harvest its aggregators; **propagate tenant scoping into the Python fleet**; Valkey + Streams as the stage transport; SPIFFE/SPIRE workload identity; collapse to seven containers; docs gate + restructure | Orphaned subdirs gone and every image still builds; cross-tenant isolation, redelivery, DLQ and idempotency tests all pass after first being made to fail; zero Alpine or unpinned images; gRPC call sites classified with counts |
+| P0 | Extract Core; delete `services/`'s 21 dead subdirs and harvest its aggregators; **propagate tenant scoping into the Python fleet**; Valkey + Streams as the stage transport; SPIFFE/SPIRE workload identity; collapse to seven containers; docs gate + restructure; compliance plumbing | Orphaned subdirs gone and every image still builds; cross-tenant isolation, redelivery, DLQ and idempotency tests all pass after first being made to fail; zero Alpine or unpinned images; gRPC call sites classified with counts |
 | P1 | App manifest, registry, binding resolution; rename to `app_installations`; convert 2–3 Bot units as proof | A community can rebind a Feature to a non-default App |
 | P2 | Bot — all triggers/actions/interactions become Apps | v2.2.x Bot parity, all as Apps |
 | P3 | Social — community, presence, RTC, browser-source as Apps | v2.2.x Social parity |
@@ -989,10 +1133,13 @@ Detail lives in the companion plan. Summary:
 | Per-tenant streams and ACL users grow linearly with the tenant roster | Pool per tenant with idle eviction and an active-tenant set; revisit in the low thousands, then shard via Cluster hash tags or dedicated Valkey rather than dropping isolation |
 | A "missing tenant means default" fallback outlives the migration and becomes a bypass | The fallback has a recorded cutoff date, after which unclaimed tokens are rejected |
 | The multi-tenant path rots because Free and Professional never exercise it | Single-tenant runs the identical code with N=1; no `if tenant == "default"` shortcut is permitted anywhere |
-| `app.waddles.app` is given the deep bypass, and every paying SaaS customer becomes free | Bypass depth is per-host and table-tested; `app.waddles.app` is global-only |
+| A production SaaS host is given the deep bypass, and every paying customer becomes free | Bypass depth is per-host-class and table-tested, covering every regional sibling |
 | Alpha and beta prove features work but never prove gating works | A restriction suite runs the denial cases with the domain injected, outside any bypassed environment |
 | The substring bypass match is spoofable by a controlled hostname | Full-hostname allowlist with the `waddles*` prefix validated against the `penguintech.cloud` suffix |
 | The marketplace becomes load-bearing for revenue but is sized as an extension catalogue | Stated deliberately in the design; its availability requirements are set for the billing path, not the browse path |
+| A consent banner blocks nothing because the analytics SDK initialised early to fetch feature flags | Flags resolve server-side for the webui; verified by loading with consent refused and asserting no analytics request |
+| Personal data accumulates in append-only streams with no retention bound and no erasure path | Bounded `MAXLEN`/`MINID` per stream, and envelopes carry UUIDs only, enforced by a field allowlist |
+| Third-party Apps receive user data without the community knowing what they receive | Install-time disclosure recorded against the community, plus the tenant-scoped egress allowlist as the enforcement point |
 | SPIRE deployed standalone, then federation with SkausWatch needs a topology change | Deploy as `child` with the upstream disabled from the start; promotion is a values flip plus a join token |
 | mTLS is treated as replacing the inter-service JWT | `security.md` requires both regardless of transport; the SVID-required test does not assert the JWT, so both need their own gate |
 | mTLS is enabled without a peer SPIFFE ID allowlist, so any workload in the trust domain is accepted | Per-service accepted-peer lists, with a test asserting a valid-but-unlisted SVID is rejected |
