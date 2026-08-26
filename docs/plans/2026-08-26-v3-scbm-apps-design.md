@@ -23,6 +23,34 @@ v3.0.0 ships **feature parity with v2.2.x** — Social and Bot fully populated �
 lightweight Customer and Marketing. It does not attempt a complete CRM or a full
 conferencing suite; those are 3.x work with their own specs.
 
+## Reuse is the default; rewriting needs a reason
+
+v2.2.x is not a first draft to be replaced. It is a working system carrying years of fixes
+that are invisible until they are missing — healthcheck timings that were tuned after a
+flapping probe, `securityContext` blocks that were added after a rootless failure, retry and
+backoff values that came from a real outage, the `grpc.aio` patterns, hash-pinned lockfiles,
+digest-pinned images.
+
+**A restructure is the most efficient possible way to lose all of it**, because nothing fails
+when a tuned value is replaced by a plausible default. The regression appears weeks later and
+looks unrelated.
+
+So the standing rule for every phase:
+
+- **Move code, do not retype it.** A file that lands in a new place should arrive by `git mv`
+  or copy, then be edited — not rewritten from its docstring.
+- **Rewriting is a decision that gets stated.** "Reuse" needs no justification; "rewrite"
+  needs one in the PR description. `module_rtc` has one (Go phase-out). Most things will not.
+- **Port the operational details explicitly.** Health checks, `securityContext`, resource
+  limits, image digests, timeouts and retry policy are carried across as a checklist item, not
+  as an afterthought — they encode fixes whose original bug reports are long gone.
+- **Where v2.2.x is already correct, v3 inherits it unchanged**, including things this design
+  did not think to mention.
+
+The corollary matters too: where v2.2.x is *wrong*, fix it there rather than carrying the
+defect into v3 behind a migration. The consent-persistence defect in Compliance is an example
+— it is a live bug today, and v3 is not a reason to leave it.
+
 ## Hierarchy
 
 ```
@@ -745,20 +773,46 @@ AI Act scope. Two consequences that touch the design rather than the policy:
   assume it might — meaning logged inputs, an explanation path, and human review — because
   retrofitting explainability into a scoring system is far harder than designing for it.
 
-### Webui obligations
+### Webui obligations — most of this already exists
 
-The webui carries most of the visible surface:
+`hub-webui` already carries the machinery, and v3 **carries it forward rather than rebuilding
+it**:
 
-| Requirement | Source | Shape |
-|---|---|---|
-| Consent before non-essential cookies, granular by category, refusable as easily as accepted | GDPR/ePrivacy | consent gate in `hub-webui`; nothing non-essential initialises before it |
-| "Do Not Sell or Share My Personal Information" | CCPA/CPRA | opt-out link and a respected Global Privacy Control signal |
-| Access, deletion, correction, portability | GDPR + CCPA/CPRA | self-service DSAR flows, not a support ticket |
-| AI interaction disclosure | EU AI Act | visible marker wherever AI generates or scores |
+| Piece | State |
+|---|---|
+| Cookie banner, preferences modal, cookie policy page | built — `CookieBanner.jsx`, `CookiePreferencesModal.jsx`, `CookiePolicy.jsx` |
+| Consent context + hook | built — `CookieConsentContext.jsx`, `useCookieConsent.js` |
+| Server-side consent record with versioning, expiry, `requiresUpdate` | built — `cookieConsentService.js` |
+| Four categories: necessary / functional / analytics / marketing | built, correct granularity |
+| Erasure | built — `dataPrivacyController.requestDataDeletion` |
+| Access, correction, portability | **missing** — `dataPrivacyController` exports deletion only |
+| CCPA/CPRA "Do Not Sell or Share", Global Privacy Control | **missing** |
+| Analytics actually gated on the `analytics` consent | **not wired** |
 
-Consent state is per **user**, and users belong to communities within tenants — so consent
-records follow the same `global → tenant → community` scoping as everything else, and land in
-whichever regional deployment holds that user.
+#### A verified defect to fix before carrying it forward
+
+Consent is **never persisted server-side**, and the failure is silent. Two independent faults
+stack:
+
+1. **Body shape.** `CookieConsentContext.jsx` posts the consent object directly —
+   `api.post('/api/v1/cookie', newConsent)` — while `cookieConsentController` destructures
+   `const { preferences } = req.body` and rejects a missing `preferences` with a 400. Every
+   save request therefore fails.
+2. **Key names.** Even wrapped correctly it would not work: the frontend sends
+   `analytics_cookies` / `functional_cookies` / `marketing_cookies`, the backend reads
+   `preferences.analytics` / `.functional` / `.marketing`. `Boolean(undefined)` is `false`, so
+   every choice would record as denied.
+
+The 400 is swallowed by `console.debug('Could not save consent to API:', ...)`, so the banner
+looks like it works. Consent lives only in `localStorage`.
+
+That matters beyond tidiness: GDPR Art. 7(1) requires being able to **demonstrate** that a
+subject consented, and a record that was never written cannot demonstrate anything. It is also
+the exact silent-failure shape this project's own standards call out — a `catch` that logs at
+debug and continues.
+
+Fix it in v2.2.x rather than carrying it into v3; it is a live defect today, not a migration
+concern.
 
 ### What already helps
 
@@ -1140,6 +1194,7 @@ Detail lives in the companion plan. Summary:
 | A consent banner blocks nothing because the analytics SDK initialised early to fetch feature flags | Flags resolve server-side for the webui; verified by loading with consent refused and asserting no analytics request |
 | Personal data accumulates in append-only streams with no retention bound and no erasure path | Bounded `MAXLEN`/`MINID` per stream, and envelopes carry UUIDs only, enforced by a field allowlist |
 | Third-party Apps receive user data without the community knowing what they receive | Install-time disclosure recorded against the community, plus the tenant-scoped egress allowlist as the enforcement point |
+| The restructure silently drops tuned healthcheck timings, securityContext blocks and retry values | Reuse is the default and rewriting is a stated decision; operational details are ported as an explicit checklist, not re-derived |
 | SPIRE deployed standalone, then federation with SkausWatch needs a topology change | Deploy as `child` with the upstream disabled from the start; promotion is a values flip plus a join token |
 | mTLS is treated as replacing the inter-service JWT | `security.md` requires both regardless of transport; the SVID-required test does not assert the JWT, so both need their own gate |
 | mTLS is enabled without a peer SPIFFE ID allowlist, so any workload in the trust domain is accepted | Per-service accepted-peer lists, with a test asserting a valid-but-unlisted SVID is rejected |
