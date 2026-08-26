@@ -85,6 +85,15 @@ tenant like any other, not a bypass — the same claim, the same middleware, the
 namespace. That is what keeps the migration non-breaking while preventing an untenanted code
 path surviving as a backdoor.
 
+It is also the **permanent** shape for most deployments, not a migration artifact: Free and
+Professional are both capped at the single default tenant, and only Enterprise is
+multi-tenant. That cuts both ways and is worth being deliberate about:
+
+- The single-tenant path is the *common* path, so it must not be the slow or awkward one.
+- The multi-tenant path is exercised only by Enterprise deployments, so it will rot unless
+  the single-tenant case runs the identical code with N=1. A `if tenant == "default": ...`
+  shortcut would leave the multi-tenant branch effectively untested in most environments.
+
 ### Consequences for Features and Apps
 
 - A Feature contract declares the scopes it requires. An App implementing that Feature
@@ -551,6 +560,11 @@ Connections are the binding constraint. Pool per tenant with idle eviction, and 
 active-tenant set so a stage maintains readers only for tenants with traffic. This holds
 comfortably into the hundreds of tenants and needs revisiting in the low thousands.
 
+**In practice this curve only applies to Enterprise.** Free and Professional are capped at the
+single default tenant, so their multipliers are all 1 — four streams, four ACL users, one
+connection pool. The isolation machinery is built for Enterprise and exercised everywhere at
+N=1, which is exactly the property that keeps the multi-tenant path from rotting.
+
 The escape hatch at that point is not to abandon isolation but to shard it: Valkey Cluster
 with per-tenant hash tags, or a dedicated Valkey for a large tenant. Dedicated infrastructure
 per tenant also maps naturally onto the Enterprise tier if it becomes a commercial line.
@@ -765,6 +779,7 @@ its source; rows sourced from "this design" are proposals, not standards.
 | Customer: accounts, contacts, opportunities | Free | lightweight by v3.0.0 scope |
 | Marketing: manual posting | Free | lightweight by v3.0.0 scope |
 | More than one admin | Professional | `critical-rules.md` — Free is capped at 1 admin |
+| **More than one tenant** | **Enterprise** | Free and Professional are both capped at the single default tenant; matches WaddleAI, where multi-tenancy is Enterprise |
 | Whitelabelling | Professional | `critical-rules.md` |
 | Google OAuth2 SSO | Professional | `critical-rules.md` |
 | Analytics: `community_health`, `bad_actor_detection`, `user_journey`, `retention_cohorts`, `engagement_funnels` | Professional | v2.2.x `analytics_core_module` `PREMIUM_FEATURES` |
@@ -775,6 +790,21 @@ its source; rows sourced from "this design" are proposals, not standards.
 | WaddleAI integration | Enterprise | `critical-rules.md` |
 | Advanced analytics | Enterprise | `critical-rules.md` |
 | Dedicated Valkey / per-tenant infrastructure isolation | Enterprise | this design — see Transport limits |
+
+### Structural caps
+
+Two caps are structural rather than feature flags — they limit how many of a thing exists,
+not what it can do:
+
+| Cap | Free | Professional | Enterprise |
+|-----|------|--------------|------------|
+| Admins | 1 | many | many |
+| **Tenants** | **1 (default)** | **1 (default)** | **many** |
+
+Enforce tenant creation the way `critical-rules.md` enforces seats, not nodes: **block
+creation of a second tenant with an upgrade path, and never touch the existing one.** Tenant
+creation is a deliberate administrative act, so blocking it is safe; degrading an existing
+tenant would not be.
 
 **The residual commercial decision:** v2.2.x is effectively **two-tier** (free vs `premium`,
 with 83 `premium` references and `PREMIUM_BYPASS_DOMAINS`). The standard mandates three. Every
@@ -830,6 +860,7 @@ Detail lives in the companion plan. Summary:
 | Valkey becomes a single point of failure for the whole event path | It already is for cache and sessions; P0 sizes it for stream retention and configures persistence deliberately rather than inheriting cache defaults |
 | Per-tenant streams and ACL users grow linearly with the tenant roster | Pool per tenant with idle eviction and an active-tenant set; revisit in the low thousands, then shard via Cluster hash tags or dedicated Valkey rather than dropping isolation |
 | A "missing tenant means default" fallback outlives the migration and becomes a bypass | The fallback has a recorded cutoff date, after which unclaimed tokens are rejected |
+| The multi-tenant path rots because Free and Professional never exercise it | Single-tenant runs the identical code with N=1; no `if tenant == "default"` shortcut is permitted anywhere |
 | SPIRE deployed standalone, then federation with SkausWatch needs a topology change | Deploy as `child` with the upstream disabled from the start; promotion is a values flip plus a join token |
 | mTLS is treated as replacing the inter-service JWT | `security.md` requires both regardless of transport; the SVID-required test does not assert the JWT, so both need their own gate |
 | mTLS is enabled without a peer SPIFFE ID allowlist, so any workload in the trust domain is accepted | Per-service accepted-peer lists, with a test asserting a valid-but-unlisted SVID is rejected |
