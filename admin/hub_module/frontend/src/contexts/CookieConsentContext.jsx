@@ -14,6 +14,40 @@ const DEFAULT_CONSENT = {
   consent_version: '1.0',
 };
 
+/**
+ * Translate the context's consent shape into the API's request body.
+ *
+ * The API groups the categories under `preferences` and names them without the
+ * `_cookies` suffix; `necessary` is server-enforced and never sent.
+ */
+function toApiPayload(consent, consentMethod) {
+  return {
+    preferences: {
+      functional: Boolean(consent.functional_cookies),
+      analytics: Boolean(consent.analytics_cookies),
+      marketing: Boolean(consent.marketing_cookies),
+    },
+    consentMethod,
+  };
+}
+
+/**
+ * Translate an API consent record back into the context's consent shape.
+ *
+ * Returns null when the payload has no preferences, so callers can tell an
+ * absent record from one that genuinely denies every category.
+ */
+function fromApiConsent(data) {
+  if (!data?.preferences) return null;
+  return {
+    essential_cookies: true,
+    functional_cookies: Boolean(data.preferences.functional),
+    analytics_cookies: Boolean(data.preferences.analytics),
+    marketing_cookies: Boolean(data.preferences.marketing),
+    consent_version: data.version ?? DEFAULT_CONSENT.consent_version,
+  };
+}
+
 export function CookieConsentProvider({ children }) {
   const [consent, setConsent] = useState(null);
   const [showBanner, setShowBanner] = useState(false);
@@ -52,19 +86,18 @@ export function CookieConsentProvider({ children }) {
           setShowBanner(true);
         }
 
-        // If authenticated, try to load consent from API
-        const token = localStorage.getItem('token');
-        if (token) {
-          try {
-            const userConsentResponse = await api.get('/api/v1/cookie');
-            if (userConsentResponse.data?.consent) {
-              setConsent(userConsentResponse.data.consent);
-              setConsentId(userConsentResponse.data.id);
-            }
-          } catch (err) {
-            // User consent endpoint may not be available for unauthenticated users
-            console.debug('Could not load user cookie consent:', err.message);
+        // The consent endpoint is public: it resolves an anonymous visitor via
+        // the waddlebot_consent_id cookie, so this is not gated on a token.
+        try {
+          const userConsentResponse = await api.get('/api/v1/cookie');
+          const serverConsent = fromApiConsent(userConsentResponse.data?.data);
+          if (serverConsent) {
+            setConsent(serverConsent);
+            setConsentId(userConsentResponse.data?.data?.consentId ?? null);
+            setShowBanner(serverConsent.consent_version !== currentVersion);
           }
+        } catch (err) {
+          console.warn('Could not load cookie consent from API:', err.message);
         }
       } catch (err) {
         console.error('Error loading cookie consent:', err);
@@ -80,6 +113,33 @@ export function CookieConsentProvider({ children }) {
   }, []);
 
   /**
+   * Persist a consent decision to the API.
+   *
+   * The endpoint is public, so anonymous visitors are recorded too — GDPR
+   * Art. 7(1) requires being able to demonstrate consent, and the majority of
+   * banner interactions are unauthenticated. A failure surfaces through `error`
+   * rather than being swallowed: a consent record that silently failed to save
+   * is indistinguishable from one that was never given.
+   */
+  const persistConsent = useCallback(async (newConsent, consentMethod) => {
+    try {
+      const response = await api.post(
+        '/api/v1/cookie',
+        toApiPayload(newConsent, consentMethod),
+      );
+      const saved = response.data?.data;
+      if (saved?.consentId) {
+        setConsentId(saved.consentId);
+      }
+      return true;
+    } catch (err) {
+      console.error('Could not save cookie consent to API:', err.message);
+      setError('Your cookie preferences could not be saved. Please try again.');
+      return false;
+    }
+  }, []);
+
+  /**
    * Accept all cookie categories
    */
   const acceptAll = useCallback(async () => {
@@ -92,18 +152,7 @@ export function CookieConsentProvider({ children }) {
         marketing_cookies: true,
       };
 
-      // Try to save to API if authenticated
-      const token = localStorage.getItem('token');
-      if (token) {
-        try {
-          const response = await api.post('/api/v1/cookie', newConsent);
-          if (response.data?.id) {
-            setConsentId(response.data.id);
-          }
-        } catch (err) {
-          console.debug('Could not save consent to API:', err.message);
-        }
-      }
+      await persistConsent(newConsent, 'banner');
 
       // Save to localStorage
       localStorage.setItem('cookie_consent', JSON.stringify(newConsent));
@@ -113,7 +162,7 @@ export function CookieConsentProvider({ children }) {
       console.error('Error accepting all cookies:', err);
       setError(err.message);
     }
-  }, []);
+  }, [persistConsent]);
 
   /**
    * Reject all non-essential cookies
@@ -128,18 +177,7 @@ export function CookieConsentProvider({ children }) {
         marketing_cookies: false,
       };
 
-      // Try to save to API if authenticated
-      const token = localStorage.getItem('token');
-      if (token) {
-        try {
-          const response = await api.post('/api/v1/cookie', newConsent);
-          if (response.data?.id) {
-            setConsentId(response.data.id);
-          }
-        } catch (err) {
-          console.debug('Could not save consent to API:', err.message);
-        }
-      }
+      await persistConsent(newConsent, 'banner');
 
       // Save to localStorage
       localStorage.setItem('cookie_consent', JSON.stringify(newConsent));
@@ -149,7 +187,7 @@ export function CookieConsentProvider({ children }) {
       console.error('Error rejecting non-essential cookies:', err);
       setError(err.message);
     }
-  }, []);
+  }, [persistConsent]);
 
   /**
    * Save custom preference selections
@@ -163,18 +201,7 @@ export function CookieConsentProvider({ children }) {
         essential_cookies: true, // Essential is always required
       };
 
-      // Try to save to API if authenticated
-      const token = localStorage.getItem('token');
-      if (token) {
-        try {
-          const response = await api.post('/api/v1/cookie', newConsent);
-          if (response.data?.id) {
-            setConsentId(response.data.id);
-          }
-        } catch (err) {
-          console.debug('Could not save consent to API:', err.message);
-        }
-      }
+      await persistConsent(newConsent, 'preferences');
 
       // Save to localStorage
       localStorage.setItem('cookie_consent', JSON.stringify(newConsent));
@@ -185,7 +212,7 @@ export function CookieConsentProvider({ children }) {
       console.error('Error saving preferences:', err);
       setError(err.message);
     }
-  }, []);
+  }, [persistConsent]);
 
   /**
    * Open the preferences modal
