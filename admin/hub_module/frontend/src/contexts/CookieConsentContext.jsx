@@ -97,7 +97,7 @@ export function CookieConsentProvider({ children }) {
             setShowBanner(serverConsent.consent_version !== currentVersion);
           }
         } catch (err) {
-          console.warn('Could not load cookie consent from API:', err.message);
+          console.warn('[CookieConsent] Load failed', { reason: err.message });
         }
       } catch (err) {
         console.error('Error loading cookie consent:', err);
@@ -133,7 +133,7 @@ export function CookieConsentProvider({ children }) {
       }
       return true;
     } catch (err) {
-      console.error('Could not save cookie consent to API:', err.message);
+      console.error('[CookieConsent] Save failed', { consentMethod, reason: err.message });
       setError('Your cookie preferences could not be saved. Please try again.');
       return false;
     }
