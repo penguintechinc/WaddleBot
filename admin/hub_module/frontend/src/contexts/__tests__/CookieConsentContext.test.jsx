@@ -51,8 +51,30 @@ const serverConsent = (preferences) => ({
   },
 });
 
+/**
+ * An explicit in-memory localStorage.
+ *
+ * jsdom does not reliably expose one across Node majors — this suite passed on
+ * Node 24 and failed on Node 26 with `localStorage` undefined — and a test that
+ * depends on ambient browser storage is at the mercy of the runtime anyway.
+ * Providing it here keeps the suite hermetic and the failure mode obvious.
+ */
+function installLocalStorage() {
+  const store = new Map();
+  vi.stubGlobal('localStorage', {
+    getItem: (key) => (store.has(key) ? store.get(key) : null),
+    setItem: (key, value) => store.set(key, String(value)),
+    removeItem: (key) => store.delete(key),
+    clear: () => store.clear(),
+    key: (i) => Array.from(store.keys())[i] ?? null,
+    get length() {
+      return store.size;
+    },
+  });
+}
+
 beforeEach(() => {
-  localStorage.clear();
+  installLocalStorage();
   api.get.mockImplementation((url) => {
     if (url === '/api/v1/cookie/policy') return Promise.resolve({ data: { version: '1.0' } });
     return Promise.resolve(serverConsent({ functional: false, analytics: false, marketing: false }));
@@ -64,6 +86,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.clearAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe('cookie consent persistence', () => {
