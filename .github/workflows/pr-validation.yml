@@ -2,10 +2,10 @@ name: Pull Request Validation
 
 on:
   pull_request:
-    branches: [main, develop, 'v*']
+    branches: [main, 'v*', 'release/**', 'feature/**', 'fix/**', 'chore/**', 'hotfix/**', 'docs/**', 'refactor/**']
   merge_group:
     types: [checks_requested]
-    branches: [main, develop, 'v*']
+    branches: [main, 'v*', 'release/**', 'feature/**', 'fix/**', 'chore/**', 'hotfix/**', 'docs/**', 'refactor/**']
   workflow_dispatch:
 
 permissions:
@@ -27,7 +27,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
-          python-version: '3.12'
+          python-version: '3.13'
           cache: pip
           cache-dependency-path: |
             core/identity_core_module/requirements.txt
@@ -57,7 +57,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
         with:
-          node-version: '22'
+          node-version: '26'
           cache: npm
           cache-dependency-path: admin/marketplace_module/backend/package-lock.json
 
@@ -92,15 +92,11 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
         with:
-          node-version: '22'
+          node-version: '26'
           cache: npm
           cache-dependency-path: ${{ matrix.path }}/package-lock.json
-          registry-url: https://npm.pkg.github.com
-          scope: '@penguintechinc'
 
       - name: Install dependencies
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm ci --ignore-scripts
 
       - name: Rebuild approved native dependency

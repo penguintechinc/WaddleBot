@@ -1,14 +1,17 @@
 FROM python:3.13-slim-bookworm@sha256:01f42367a0a94ad4bc17111776fd66e3500c1d87c15bbd6055b7371d39c124fb
 
+# uv replaces pip for dependency installation (pinned by digest)
+COPY --from=ghcr.io/astral-sh/uv:0.11.28@sha256:0f36cb9361a3346885ca3677e3767016687b5a170c1a6b88465ec14aefec90aa /uv /usr/local/bin/uv
+
 WORKDIR /app
 
 # Copy and install shared library
 COPY libs/flask_core /app/libs/flask_core
-RUN pip install --no-cache-dir /app/libs/flask_core
+RUN uv pip install --system --no-cache /app/libs/flask_core
 
 # Install dependencies
 COPY action/interactive/loyalty_interaction_module/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN uv pip install --system --no-cache -r requirements.txt
 
 # Copy application
 COPY action/interactive/loyalty_interaction_module /app/

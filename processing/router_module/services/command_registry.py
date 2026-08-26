@@ -7,7 +7,7 @@ from dataclasses import dataclass, asdict
 logger = logging.getLogger(__name__)
 
 
-@dataclass
+@dataclass(slots=True)
 class CommandInfo:
     """Command registration information"""
     command: str

@@ -13,6 +13,7 @@ import asyncio
 import logging
 import os
 import time
+from dataclasses import dataclass
 from typing import List, Optional
 
 import httpx
@@ -37,6 +38,25 @@ SEVENTV_CHANNEL_URL = "https://7tv.io/v3/users/twitch/{channel_id}"
 
 # Request timeout in seconds
 REQUEST_TIMEOUT = 10
+
+# Refresh the app access token this many seconds before it actually expires
+TOKEN_REFRESH_MARGIN = 60
+
+
+@dataclass(slots=True)
+class CachedToken:
+    """A Twitch app access token together with the wall-clock time it expires.
+
+    Kept as a value object rather than a bare tuple so the expiry check reads
+    explicitly and cannot be unpacked in the wrong order.
+    """
+
+    token: str
+    expires_at: float
+
+    def is_fresh(self, margin: float = TOKEN_REFRESH_MARGIN) -> bool:
+        """Return True while the token has more than ``margin`` seconds left."""
+        return self.expires_at - time.time() > margin
 
 
 class TwitchEmoteProvider(BaseEmoteProvider):
@@ -66,8 +86,7 @@ class TwitchEmoteProvider(BaseEmoteProvider):
 
         self._client_id = client_id
 
-        # Token cache: (token_string, expiry_timestamp)
-        self._cached_token: Optional[tuple[str, float]] = None
+        self._cached_token: Optional[CachedToken] = None
 
         if self._client_id:
             logger.info("TwitchEmoteProvider initialized with official API support")
@@ -250,12 +269,9 @@ class TwitchEmoteProvider(BaseEmoteProvider):
             )
             return ""
 
-        # Check if cached token is still valid (refresh if < 60s remaining)
-        if self._cached_token is not None:
-            token_str, expiry_ts = self._cached_token
-            time_remaining = expiry_ts - time.time()
-            if time_remaining > 60:  # Token still valid for > 60s
-                return token_str
+        # Reuse the cached token until it is inside the refresh margin
+        if self._cached_token is not None and self._cached_token.is_fresh():
+            return self._cached_token.token
 
         # Fetch new token
         try:
@@ -279,9 +295,9 @@ class TwitchEmoteProvider(BaseEmoteProvider):
             token = data.get("access_token", "")
             expires_in = data.get("expires_in", 3600)
 
-            # Cache token with expiry time
-            expiry_timestamp = time.time() + expires_in
-            self._cached_token = (token, expiry_timestamp)
+            self._cached_token = CachedToken(
+                token=token, expires_at=time.time() + expires_in
+            )
 
             logger.debug(
                 f"Fetched Twitch app access token (expires in {expires_in}s)"

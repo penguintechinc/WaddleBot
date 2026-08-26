@@ -3,6 +3,9 @@
 
 FROM python:3.13-slim-bookworm@sha256:01f42367a0a94ad4bc17111776fd66e3500c1d87c15bbd6055b7371d39c124fb
 
+# uv replaces pip for dependency installation (pinned by digest)
+COPY --from=ghcr.io/astral-sh/uv:0.11.28@sha256:0f36cb9361a3346885ca3677e3767016687b5a170c1a6b88465ec14aefec90aa /uv /usr/local/bin/uv
+
 # Set working directory
 WORKDIR /app
 
@@ -16,7 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy requirements and install Python dependencies
 COPY action/pushing/teams_action_module/requirements.txt /app/
-RUN pip install --no-cache-dir -r requirements.txt
+RUN uv pip install --system --no-cache -r requirements.txt
 
 # Copy proto files and generate gRPC code
 COPY action/pushing/teams_action_module/proto /app/proto
@@ -49,15 +52,22 @@ RUN useradd -m -u 1000 waddlebot && \
 # Switch to non-root user
 USER waddlebot
 
-# Expose REST API port
-EXPOSE 8074
+# Ports and worker count are build-time overridable and runtime-overridable.
+# The names match config.py so container env drives the app's own settings.
+ARG REST_PORT=8074
+ARG GRPC_PORT=50057
+ARG HYPERCORN_WORKERS=4
+ENV REST_PORT=${REST_PORT} \
+    GRPC_PORT=${GRPC_PORT} \
+    HYPERCORN_WORKERS=${HYPERCORN_WORKERS}
 
-# Expose gRPC port
-EXPOSE 50057
+# Expose REST API and gRPC ports
+EXPOSE ${REST_PORT}
+EXPOSE ${GRPC_PORT}
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python3 /usr/local/bin/healthcheck.py http://localhost:8074/healthz
+    CMD python3 /usr/local/bin/healthcheck.py http://localhost:${REST_PORT}/healthz
 
 # Run with Hypercorn
-CMD ["hypercorn", "app:app", "--bind", "0.0.0.0:8074", "--workers", "4"]
+CMD ["sh", "-c", "exec hypercorn app:app --bind 0.0.0.0:${REST_PORT} --workers ${HYPERCORN_WORKERS}"]

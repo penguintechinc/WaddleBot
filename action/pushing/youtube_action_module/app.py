@@ -3,8 +3,6 @@ YouTube Action Module - Main Application
 Stateless container for pushing YouTube actions via gRPC and REST
 """
 import logging
-import asyncio
-import threading
 from datetime import datetime
 from typing import Optional
 
@@ -526,15 +524,6 @@ async def generate_jwt():
 # ========== Application Startup ==========
 
 
-def start_grpc_server():
-    """Start gRPC server in background thread"""
-    try:
-        grpc_server.start()
-        grpc_server.wait_for_termination()
-    except Exception as e:
-        logger.error(f"gRPC server error: {e}")
-
-
 @app.before_serving
 async def startup():
     """Application startup tasks"""
@@ -542,9 +531,8 @@ async def startup():
     logger.info(f"gRPC port: {Config.GRPC_PORT}")
     logger.info(f"REST port: {Config.REST_PORT}")
 
-    # Start gRPC server in background thread
-    grpc_thread = threading.Thread(target=start_grpc_server, daemon=True)
-    grpc_thread.start()
+    # The gRPC server runs on this app's event loop, not a background thread
+    await grpc_server.start()
 
     logger.info("YouTube Action Module started successfully")
 
@@ -553,7 +541,7 @@ async def startup():
 async def shutdown():
     """Application shutdown tasks"""
     logger.info("Shutting down YouTube Action Module")
-    grpc_server.stop()
+    await grpc_server.stop()
     db.close()
 
 

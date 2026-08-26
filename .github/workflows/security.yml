@@ -2,12 +2,12 @@ name: Security & Code Quality
 
 on:
   push:
-    branches: [main, develop, 'v*']
+    branches: [main, 'v*', 'release/**', 'feature/**', 'fix/**', 'chore/**', 'hotfix/**', 'docs/**', 'refactor/**']
   pull_request:
-    branches: [main, develop, 'v*']
+    branches: [main, 'v*', 'release/**', 'feature/**', 'fix/**', 'chore/**', 'hotfix/**', 'docs/**', 'refactor/**']
   merge_group:
     types: [checks_requested]
-    branches: [main, develop, 'v*']
+    branches: [main, 'v*', 'release/**', 'feature/**', 'fix/**', 'chore/**', 'hotfix/**', 'docs/**', 'refactor/**']
   workflow_dispatch:
 
 permissions:
@@ -17,7 +17,8 @@ permissions:
   actions: read
 
 jobs:
-  # Fast checks (~2-3 min): Trivy fs, pip-audit, npm audit, Dependency Review
+  # Fast checks (~2-3 min): Trivy fs + Dependency Review.
+  # Python (pip-audit, bandit) and Node audits run as their own jobs below.
   # This is the check that matters for day-to-day development velocity.
   security-fast:
     name: Security & Code Quality
@@ -88,18 +89,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
+      # This job only reads and audits; it publishes no artifacts, so the
+      # cache-poisoning audit does not apply. It fires only because release/**
+      # now appears in the trigger list.
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0  # zizmor: ignore[cache-poisoning]
         with:
-          node-version: '22'
+          node-version: '26'
           cache: npm
           cache-dependency-path: ${{ matrix.path }}/package-lock.json
-          registry-url: https://npm.pkg.github.com
-          scope: '@penguintechinc'
 
       - name: Install dependencies
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm ci --ignore-scripts
 
       - name: Audit production dependencies
@@ -108,22 +108,76 @@ jobs:
         run: node "$GITHUB_WORKSPACE/.github/scripts/npm-audit.mjs"
 
   python-audit:
-    name: Python dependency audit
+    name: Python security checks
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
+      # Must match the runtime images. The lockfiles are resolved per Python
+      # version, so auditing on an older interpreter reports phantom missing
+      # dependencies for markers like `python_version < "3.13"`.
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
-          python-version: '3.12'
+          python-version: '3.13'
 
-      - name: Install pip-audit
-        run: python -m pip install --disable-pip-version-check pip-audit
+      - name: Install audit tooling
+        run: python -m pip install --disable-pip-version-check pip-audit bandit
 
-      - name: Audit changed Python dependency set
-        run: python -m pip_audit -r action/pushing/googlechat_action_module/requirements.txt
+      # Two scopes, deliberately. Hash-pinned lockfiles are what the images
+      # actually install and they gate this job. The remaining requirement
+      # files are unhashed and carry known pre-existing CVEs; they are reported
+      # loudly but do not gate yet, so a green run here never means "the whole
+      # repo is clean". Move a file into the gated scope by compiling it with
+      # `uv pip compile --generate-hashes`. Note some unhashed files still
+      # claim a pip-compile header, so detection keys on the hashes themselves.
+      - name: Audit pinned Python dependencies
+        run: |
+          set -euo pipefail
+          # PYSEC-2022-252 is the 2022 deep-translator PyPI account takeover.
+          # OSV records no fixed version, so every release from 1.8.5 onward is
+          # flagged forever. Only the yanked 1.8.5 carried the malicious
+          # payload, and our pins are hash-verified against the audited
+          # artifact. Drop this once upstream publishes a fixed range.
+          IGNORES="--ignore-vuln PYSEC-2022-252"
+
+          gated=0; ungated=0; gated_bad=0; ungated_bad=0
+          for f in $(find . -name requirements.txt \
+                       -not -path './node_modules/*' \
+                       -not -path './.worktrees/*' | sort); do
+            if grep -q -- '--hash=sha256' "$f"; then
+              gated=$((gated + 1))
+              echo "::group::[gated] $f"
+              pip-audit -r "$f" --no-deps --progress-spinner off $IGNORES \
+                || gated_bad=$((gated_bad + 1))
+              echo "::endgroup::"
+            else
+              ungated=$((ungated + 1))
+              echo "::group::[report-only] $f"
+              pip-audit -r "$f" --no-deps --progress-spinner off $IGNORES \
+                || ungated_bad=$((ungated_bad + 1))
+              echo "::endgroup::"
+            fi
+          done
+
+          echo "Gated (hash-pinned lockfiles): $gated examined, $gated_bad with findings"
+          echo "Report-only (unhashed): $ungated examined, $ungated_bad with findings"
+
+          if [ "$gated" -eq 0 ]; then
+            echo "::error::No hash-pinned lockfiles found - audit scope is wrong, failing closed"
+            exit 1
+          fi
+          if [ "$ungated_bad" -gt 0 ]; then
+            echo "::warning::$ungated_bad unhashed requirement file(s) have known vulnerabilities (pre-existing, not gating)"
+          fi
+          [ "$gated_bad" -eq 0 ]
+
+      - name: Bandit SAST
+        run: |
+          set -euo pipefail
+          bandit -r . -lll -iii \
+            --exclude ./node_modules,./.worktrees,./tests,./.venv,./mobile
 
   # Slow static analysis (~17-21 min): CodeQL on go/javascript/python.
   # Runs in parallel with builds -- does NOT gate container builds or any other jobs.

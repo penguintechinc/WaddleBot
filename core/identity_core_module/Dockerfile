@@ -2,13 +2,16 @@
 
 FROM python:3.13-slim-bookworm@sha256:01f42367a0a94ad4bc17111776fd66e3500c1d87c15bbd6055b7371d39c124fb
 
+# uv replaces pip for dependency installation (pinned by digest)
+COPY --from=ghcr.io/astral-sh/uv:0.11.28@sha256:0f36cb9361a3346885ca3677e3767016687b5a170c1a6b88465ec14aefec90aa /uv /usr/local/bin/uv
+
 WORKDIR /app
 
 # Copy shared library
 COPY libs/flask_core /app/libs/flask_core
 
 # Install shared library
-RUN cd /app/libs/flask_core && pip install --no-cache-dir .
+RUN uv pip install --system --no-cache /app/libs/flask_core
 
 # Copy module files
 COPY core/identity_core_module/requirements.txt /app/
@@ -16,7 +19,7 @@ COPY core/identity_core_module /app/
 COPY libs/grpc_protos /tmp/grpc_protos
 
 # Install module dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN uv pip install --system --no-cache -r requirements.txt
 
 # Generate and validate the shared Identity gRPC contract in a real Python
 # package. Relative imports prevent collisions with the third-party `proto`

@@ -2,7 +2,7 @@ name: Container Builds
 
 on:
   push:
-    branches: [ main, 'v*', develop, 'feature/**', 'bugfix/**' ]
+    branches: [main, 'v*', 'release/**', 'feature/**', 'fix/**', 'chore/**', 'hotfix/**', 'docs/**', 'refactor/**']
     tags: [ 'v*' ]
     paths:
       - 'processing/router_module/**'
@@ -20,10 +20,10 @@ on:
       - '.version'
       - '.github/workflows/containers.yml'
   pull_request:
-    branches: [main, develop, 'v*']
+    branches: [main, 'v*', 'release/**', 'feature/**', 'fix/**', 'chore/**', 'hotfix/**', 'docs/**', 'refactor/**']
   merge_group:
     types: [checks_requested]
-    branches: [main, develop, 'v*']
+    branches: [main, 'v*', 'release/**', 'feature/**', 'fix/**', 'chore/**', 'hotfix/**', 'docs/**', 'refactor/**']
   workflow_dispatch:
 
 permissions:
@@ -528,8 +528,6 @@ jobs:
           build-args: |
             MODULE_NAME=${{ matrix.module }}
             MODULE_PORT=${{ matrix.port }}
-          secrets: |
-            npm_token=${{ secrets.GITHUB_TOKEN }}
 
       - name: Run container tests
         if: >

@@ -35,8 +35,14 @@ class ConsistentHashRing:
         self.nodes: set = set()
 
     def _hash(self, key: str) -> int:
-        """Generate hash for key."""
-        return int(hashlib.md5(key.encode()).hexdigest(), 16)
+        """Map a key onto the ring.
+
+        MD5 is used purely to spread keys evenly across virtual nodes, never
+        to protect anything, so it is flagged as not-for-security.
+        """
+        return int(
+            hashlib.md5(key.encode(), usedforsecurity=False).hexdigest(), 16
+        )
 
     def add_node(self, node_id: str):
         """

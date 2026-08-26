@@ -15,7 +15,7 @@ from typing import Optional, Tuple
 logger = logging.getLogger(__name__)
 
 
-@dataclass
+@dataclass(slots=True)
 class TranslationResult:
     """
     Result of a translation operation.

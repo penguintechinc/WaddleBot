@@ -2,7 +2,7 @@ name: Build memories-interaction
 
 on:
   push:
-    branches: [ main, develop, 'feature/**', 'bugfix/**' ]
+    branches: [main, 'v*', 'release/**', 'feature/**', 'fix/**', 'chore/**', 'hotfix/**', 'docs/**', 'refactor/**']
     paths:
       - 'action/interactive/memories_interaction_module/**'
       - 'libs/flask_core/**'
@@ -10,7 +10,7 @@ on:
       - '.github/workflows/build-memories-interaction.yml'
       - '.github/workflows/build-container.yml'
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, 'v*', 'release/**', 'feature/**', 'fix/**', 'chore/**', 'hotfix/**', 'docs/**', 'refactor/**']
     paths:
       - 'action/interactive/memories_interaction_module/**'
       - 'libs/flask_core/**'

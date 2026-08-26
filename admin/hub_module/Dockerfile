@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1.7
 # Multi-stage Dockerfile for WaddleBot Hub Module
 # Stage 1: Build frontend
 FROM node:20-bookworm-slim@sha256:1e85773c98c31d4fe5b545e4cb17379e617b348832fb3738b22a08f68dec30f3 AS frontend-build
@@ -8,15 +7,11 @@ WORKDIR /build/admin/hub_module/frontend
 # Copy frontend package files
 COPY admin/hub_module/frontend/package*.json ./
 
-# Install locked dependencies. GitHub Packages' npm registry requires
-# authentication even for public packages; the token is supplied as a BuildKit
-# secret and removed in the same layer so it is never persisted in the image.
-RUN --mount=type=secret,id=npm_token,required=true \
-    NPM_TOKEN="$(cat /run/secrets/npm_token)" && \
-    printf '@penguintechinc:registry=https://npm.pkg.github.com\n//npm.pkg.github.com/:_authToken=%s\n' "${NPM_TOKEN}" > /tmp/.npmrc && \
-    NPM_CONFIG_USERCONFIG=/tmp/.npmrc npm ci --ignore-scripts && \
-    NPM_CONFIG_USERCONFIG=/tmp/.npmrc npm rebuild esbuild && \
-    rm -f /tmp/.npmrc
+# Install the exact locked dependency graph from public npm without running
+# arbitrary lifecycle scripts, then rebuild the one approved native dependency.
+# @penguintechinc packages are published to npmjs.com, so no registry auth is
+# needed and no token ever enters the build.
+RUN npm ci --ignore-scripts && npm rebuild esbuild
 
 # Copy frontend source
 COPY admin/hub_module/frontend/ ./
