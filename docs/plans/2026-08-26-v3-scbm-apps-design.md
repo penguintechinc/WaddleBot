@@ -720,31 +720,95 @@ pages deleted is reported alongside pages written.
 `README.md` and `docs/index.md` are rewritten last, at P5, once the structure beneath them is
 true.
 
-## Open decisions
+## Decisions
 
-These need a call before the phases they block:
+### Resolved
 
-1. **Which SPIRE root, if any.** Independent (self-signed child) is the default and needs no
-   decision. Nesting under SkausWatch's root needs a join token minted there and its trust
-   bundle published to this cluster — a cross-team coordination, not a code change. Blocks
-   nothing; decide per environment.
-2. **`core/module_rtc` is Go.** It is the seed of Social's conferencing story — precisely
-   where it would need to grow, which the Go phase-out rule says it should not. Rewrite in
-   Rust during P3, or grant a documented exception. Blocks P3.
-3. **The `services/` tree is a half-finished consolidation** with documented orphaned
-   duplicates (`docs/MODULE_CANONICAL_SOURCES.md`). v3 either completes it or deletes it;
-   keeping both trees is what produced the divergence. Blocks P0.
-4. **Tier mapping is not yet set.** Which Features land in Free vs Professional vs
-   Enterprise is a commercial decision, not an architectural one. Blocks the
-   `seeds/waddles.py` definition in P1.
+**`services/` is deleted — in two parts, at two different times.** Analysis of every
+`services/*/Dockerfile` shows the tree is two unrelated things:
 
-## Migration phases
+| Part | State | When |
+|------|-------|------|
+| 21 `*_module/` subdirectories | **provably dead** — each shadowed at build time by a `COPY` from the canonical tree | deleted in P0 |
+| 11 aggregator `app.py` / `config.py` / `requirements.txt` | **live**, and the prototype for the seven containers | harvested in P0, removed at P5 |
+
+Deleting only once we have confirmed nothing needs it — the standing condition — is satisfied
+for the 21 by proof rather than by waiting: nothing builds from them, so removing them cannot
+affect parity. The aggregators genuinely do need parity confirmed first, so they go at P5.
+
+`docs/MODULE_CANONICAL_SOURCES.md` documents **3** orphans. The real number is **21**, which
+is a reasonable measure of how quickly an undocumented duplicate tree drifts out of anyone's
+model of the system. Diverged config is ported out of all 21 before deletion, not just the
+three that were noticed.
+
+`services/interactive-social/app.py` is 846 lines already merging four modules into one Quart
+app. The seven-container consolidation is therefore partly prototyped rather than green-field
+— harvest it, but replace its `sys.path.insert` imports with real packaging.
+
+**`core/module_rtc` is rewritten in Rust** during P3, per the Go phase-out rule. It stays
+`svc-rtc` either way — UDP media transport cannot share a pod with HTTP stages — so the
+decision is language, not placement.
+
+**Tier mapping** — see below. The starting mapping is derived; the residual split is
+commercial.
+
+### Tier mapping
+
+Derived from `critical-rules.md`'s tier table and what v2.2.x already gates. Every row cites
+its source; rows sourced from "this design" are proposals, not standards.
+
+| Capability | Tier | Source |
+|------------|------|--------|
+| All four Modules, core functionality | Free | `critical-rules.md` — "Core product, no license-gated functionality" |
+| Bot: platform connectors, commands, interactions | Free | ungated in v2.2.x |
+| Social: chat, presence, communities | Free | ungated in v2.2.x |
+| Customer: accounts, contacts, opportunities | Free | lightweight by v3.0.0 scope |
+| Marketing: manual posting | Free | lightweight by v3.0.0 scope |
+| More than one admin | Professional | `critical-rules.md` — Free is capped at 1 admin |
+| Whitelabelling | Professional | `critical-rules.md` |
+| Google OAuth2 SSO | Professional | `critical-rules.md` |
+| Analytics: `community_health`, `bad_actor_detection`, `user_journey`, `retention_cohorts`, `engagement_funnels` | Professional | v2.2.x `analytics_core_module` `PREMIUM_FEATURES` |
+| Video proxy: 10 destinations, 5×2K, 15 Mbps, 90-day retention | Professional | v2.2.x `video_proxy_module` `PREMIUM_LIMITS` |
+| Marketing: scheduling and cross-platform publishing | Professional | this design — the paid half of Marketing |
+| SAML 2.0 / OIDC SSO | Enterprise | `critical-rules.md` |
+| Audit logs, external KMS | Enterprise | `critical-rules.md` |
+| WaddleAI integration | Enterprise | `critical-rules.md` |
+| Advanced analytics | Enterprise | `critical-rules.md` |
+| Dedicated Valkey / per-tenant infrastructure isolation | Enterprise | this design — see Transport limits |
+
+**The residual commercial decision:** v2.2.x is effectively **two-tier** (free vs `premium`,
+with 83 `premium` references and `PREMIUM_BYPASS_DOMAINS`). The standard mandates three. Every
+capability currently marked `premium` therefore has to land in Professional *or* Enterprise,
+and the rows above are a proposal for that split, not a reading of it. Confirm before P1
+seeds `waddles.py`.
+
+### A tier-name collision to settle
+
+The license server's tier enum is `("community", "professional", "enterprise")` — see
+`api/app/seeds/waddleai.py`. `critical-rules.md`'s table names the same tier **Free**.
+
+For most products that inconsistency is cosmetic. For Waddles it is not: **community is a
+first-class entity here** — the team/org level of `global → tenant → community`. A tier named
+`community` and an entity named `community` in the same codebase will produce exactly the
+kind of ambiguity the Vocabulary section exists to prevent.
+
+Use `free` in `seeds/waddles.py` and raise the mismatch with the license-server team rather
+than adopting `community` locally.
+
+### Still open
+
+**Which SPIRE root, per environment.** Independent (self-signed child) is the default and
+needs no decision. Nesting under SkausWatch's root needs a join token minted there and its
+trust bundle published to this cluster — cross-team coordination, not a code change. Blocks
+nothing; alpha can run self-signed while beta nests.
+
+## Migration phases## Migration phases
 
 Detail lives in the companion plan. Summary:
 
 | Phase | Work | Gate to exit |
 |-------|------|--------------|
-| P0 | Extract Core; resolve the `services/` tree; **propagate tenant scoping into the Python fleet**; Valkey + Streams as the stage transport; SPIFFE/SPIRE workload identity; collapse to seven containers; docs gate + restructure | One tree only; cross-tenant isolation, redelivery, DLQ and idempotency tests all pass after first being made to fail; zero Alpine or unpinned images; gRPC call sites classified with counts |
+| P0 | Extract Core; delete `services/`'s 21 dead subdirs and harvest its aggregators; **propagate tenant scoping into the Python fleet**; Valkey + Streams as the stage transport; SPIFFE/SPIRE workload identity; collapse to seven containers; docs gate + restructure | Orphaned subdirs gone and every image still builds; cross-tenant isolation, redelivery, DLQ and idempotency tests all pass after first being made to fail; zero Alpine or unpinned images; gRPC call sites classified with counts |
 | P1 | App manifest, registry, binding resolution; rename to `app_installations`; convert 2–3 Bot units as proof | A community can rebind a Feature to a non-default App |
 | P2 | Bot — all triggers/actions/interactions become Apps | v2.2.x Bot parity, all as Apps |
 | P3 | Social — community, presence, RTC, browser-source as Apps | v2.2.x Social parity |
@@ -757,7 +821,7 @@ Detail lives in the companion plan. Summary:
 |------|------------|
 | Tenant scoping lands late, so Feature/App gating is built on an untrustworthy claim | It is P0, before any App conversion; nothing above it is sound until it passes |
 | Feature contracts churn after third-party Apps exist | Version interfaces from P1; never ship an unversioned contract |
-| The two trees (`action/` + `services/`) diverge further during migration | Resolve in P0, before any App conversion touches them |
+| The two trees (`action/` + `services/`) diverge further during migration | The 21 dead subdirs are deleted in P0, before any App conversion touches them; only the aggregators survive, and they are build inputs so drift is visible |
 | "Lightweight CRM" expands under its own gravity | Customer's v3.0.0 scope is fixed at accounts/contacts/opportunities; anything more is 3.x |
 | Per-community App execution becomes an untrusted-code surface | Not in-process — `webhook_push`/`rest_pull` keep vendors across a network boundary. P1 must instead carry per-App egress allowlisting and timeout policy |
 | Seven shared containers widen blast radius vs. ~40 isolated ones | Accepted knowingly; pipeline stages are the split points when a Module earns one on evidence |
