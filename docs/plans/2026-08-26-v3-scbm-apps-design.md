@@ -152,7 +152,7 @@ needs it, it belongs in Core, and if only one does, it does not.
 | security | `core/security_core_module` | authz enforcement, audit |
 | credentials | `core/credential_manager_module` | per-tenant secret custody |
 | tenancy | `core/community_module` | tenants, communities, membership |
-| event bus | **split from** `processing/router_module` | pub/sub spine all Modules emit to |
+| event bus | `flask_core.stream_pipeline`, consolidated | **a shared library over Valkey Streams, not a service** — see Transport |
 | workflow | `core/workflow_core_module` | cross-Module automation |
 | analytics | `core/analytics_core_module` | shared telemetry sink |
 | marketplace | `admin/marketplace_module` | catalog, vendors, subscriptions, App installs + bindings |
@@ -164,9 +164,15 @@ needs it, it belongs in Core, and if only one does, it does not.
 `processing/router_module` today mixes two concerns: generic event routing, and
 Twitch/Discord command semantics (command registry, cooldowns, emote handling).
 
-The generic half becomes the Core **event bus**. The command half stays in Bot. Without
-this split, Social, Customer and Marketing would each have to depend on Bot to emit an
-event — which would make the Modules interdependent and defeat global toggling.
+The generic half becomes the Core **event bus** — which is a *library*, not a service. It is
+the consolidated `StreamPipeline` that every stage links against to publish and consume on
+Valkey Streams. Putting a gRPC service in front of Valkey would add a hop and a failure
+domain to buy nothing; the stream broker is already the shared component.
+
+The command half stays in Bot, as a consumer of `waddles.process`.
+
+Without this split, Social, Customer and Marketing would each have to depend on Bot to emit
+an event — which would make the Modules interdependent and defeat global toggling.
 
 ## Modules
 
@@ -332,6 +338,90 @@ for whether a future split is justified:
 | `svc-process` | Core event bus, routing, Bot command dispatch, workflow | event volume |
 | `svc-action` | outbound actions, interaction Apps, third-party App calls | outbound throughput and remote latency |
 
+### Transport between stages: Valkey Streams
+
+The stages are joined by **Valkey Streams consumer groups**, not by synchronous calls.
+This is what makes the pipeline a pipeline rather than three services phoning each other:
+
+```
+svc-ingest ──XADD──▶ waddles.ingest ──XREADGROUP──▶ svc-process
+                                                        │
+                                          XADD ─────────┘
+                                            ▼
+                                     waddles.action ──XREADGROUP──▶ svc-action
+                                                                        │
+                                          poison events ────XADD───▶ waddles.dlq
+```
+
+What consumer groups buy, all of which the current point-to-point design lacks:
+
+| Property | Consequence |
+|----------|-------------|
+| Backpressure | a slow `svc-action` queues rather than timing out `svc-ingest` |
+| At-least-once + ack | a crashed consumer's in-flight events are redelivered, not lost |
+| Horizontal scale per stage | replicas join one group and split the partition — this is *why* stages scale independently |
+| Replay | a stream is a log; a bad deploy can be reprocessed from an offset |
+| DLQ | poison events are parked, not retried forever |
+
+#### Most of the gRPC mesh disappears
+
+The existing gRPC surface — 21 client call sites, a port registry, per-module `.proto`
+files — exists because two dozen containers had to talk to each other. It is a *symptom* of
+the container sprawl, not an independent design choice, and collapsing to seven removes
+most of what it was solving:
+
+| Call shape today | After consolidation |
+|------------------|---------------------|
+| module → module inside the same stage | **an in-process function call** — no network, no proto, no port |
+| stage → stage (event path) | a Valkey Stream |
+| stage → `svc-core` (entitlement, identity) | **stays gRPC** — genuinely cross-container and synchronous |
+
+`backend.md` mandates gRPC for service-to-service communication, and that still holds for
+the third row. The first row simply stops being service-to-service, so the mandate no longer
+applies to it — this is a reduction in surface, not an exception to the rule.
+
+The rule of thumb for what remains: if the caller does not need the result to continue, it
+belongs on a stream; if it does and the callee is in another container, gRPC; if it does and
+the callee is in the same container, call it.
+
+At-least-once delivery means **consumers must be idempotent**. Every event envelope carries
+an id, and consumers dedupe on it. This is not optional — it is the cost of the redelivery
+guarantee above, and getting it wrong produces duplicate posts and double-charged actions.
+
+#### Naming and tenancy
+
+One stream per stage, with module and tenant in the envelope rather than the stream name:
+
+```
+waddles.ingest · waddles.process · waddles.action · waddles.dlq
+```
+
+Stream-per-tenant would isolate noisy neighbours but multiplies stream count by the tenant
+roster, and Valkey consumer groups are per-stream. The tenant travels in the envelope and
+consumers scope on it — the same tenant claim P0 propagates through the Python fleet. A
+large tenant that genuinely needs isolation can be split onto its own stream later; that is
+a per-tenant escape hatch, not the default.
+
+#### What exists today
+
+`flask_core.stream_pipeline.StreamPipeline` already implements this — `XADD`,
+`XREADGROUP`, `XGROUP CREATE`, acking, and a DLQ. It is used by **exactly one service**
+(`processing/router_module`), behind an off-by-default flag. There is also a second,
+overlapping implementation in `flask_core.message_queue.MessageQueue`.
+
+So the capability is built and unused. v3's work is adoption and consolidation, not
+invention: pick one abstraction, delete the other, and make it the default path between
+stages rather than an opt-in extra.
+
+The infrastructure is also still Redis, and Alpine, and unpinned. Eight manifest entries
+break the base-image rules — `redis:7-alpine` (4) and `postgres:15/16-alpine` (4) — against
+three standing requirements: Valkey over Redis, Debian bookworm over Alpine, and SHA256
+digest pinning. Postgres is also split across two majors (15 and 16) with no digest on any
+of them.
+
+Correcting all eight to `valkey/valkey:8-bookworm@sha256:<digest>` and
+`postgres:17-bookworm@sha256:<digest>` is P0 work.
+
 ### Modules cut across stages
 
 A Module is a **vertical**; the pipeline is **horizontal**. A Module is not assigned to a
@@ -440,7 +530,7 @@ Detail lives in the companion plan. Summary:
 
 | Phase | Work | Gate to exit |
 |-------|------|--------------|
-| P0 | Extract Core; resolve the `services/` tree; **propagate tenant scoping into the Python fleet**; collapse to seven containers | Core deploys alone; one tree only; cross-tenant isolation test passes after first being made to fail |
+| P0 | Extract Core; resolve the `services/` tree; **propagate tenant scoping into the Python fleet**; Valkey + Streams as the stage transport; collapse to seven containers | One tree only; cross-tenant isolation, redelivery, DLQ and idempotency tests all pass after first being made to fail; zero Alpine or unpinned images; gRPC call sites classified with counts |
 | P1 | App manifest, registry, binding resolution; rename to `app_installations`; convert 2–3 Bot units as proof | A community can rebind a Feature to a non-default App |
 | P2 | Bot — all triggers/actions/interactions become Apps | v2.2.x Bot parity, all as Apps |
 | P3 | Social — community, presence, RTC, browser-source as Apps | v2.2.x Social parity |
@@ -458,4 +548,6 @@ Detail lives in the companion plan. Summary:
 | Per-community App execution becomes an untrusted-code surface | Not in-process — `webhook_push`/`rest_pull` keep vendors across a network boundary. P1 must instead carry per-App egress allowlisting and timeout policy |
 | Seven shared containers widen blast radius vs. ~40 isolated ones | Accepted knowingly; pipeline stages are the split points when a Module earns one on evidence |
 | Consolidation loses per-module health signal | Each App reports its own health through the stage's health endpoint, not one liveness probe per Module |
+| Streams add an at-least-once duplicate-delivery failure mode the current synchronous calls do not have | Envelope ids and consumer-side dedupe are mandatory from P0, with a redelivery test that has been made to fail |
+| Valkey becomes a single point of failure for the whole event path | It already is for cache and sessions; P0 sizes it for stream retention and configures persistence deliberately rather than inheriting cache defaults |
 | CI rebuilds everything on any change | Seven images with path-filtered workflows, as `build-*.yml` already does per module |
