@@ -253,7 +253,7 @@ the consolidated `StreamPipeline` that every stage links against to publish and 
 Valkey Streams. Putting a gRPC service in front of Valkey would add a hop and a failure
 domain to buy nothing; the stream broker is already the shared component.
 
-The command half stays in Bot, as a consumer of `waddles.process`.
+The command half stays in Bot, as a consumer of `waddles:t:{tenant}:process`.
 
 Without this split, Social, Customer and Marketing would each have to depend on Bot to emit
 an event — which would make the Modules interdependent and defeat global toggling.
