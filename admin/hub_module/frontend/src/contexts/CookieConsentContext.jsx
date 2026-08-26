@@ -11,6 +11,10 @@ const DEFAULT_CONSENT = {
   functional_cookies: false,
   analytics_cookies: false,
   marketing_cookies: false,
+  // CCPA/CPRA opt-out from the sale or sharing of personal information. Distinct
+  // from the cookie categories: it is a statutory right rather than a consent
+  // choice, and a Global Privacy Control signal can set it without the UI.
+  do_not_sell: false,
   consent_version: '1.0',
 };
 
@@ -26,6 +30,7 @@ function toApiPayload(consent, consentMethod) {
       functional: Boolean(consent.functional_cookies),
       analytics: Boolean(consent.analytics_cookies),
       marketing: Boolean(consent.marketing_cookies),
+      doNotSell: Boolean(consent.do_not_sell),
     },
     consentMethod,
   };
@@ -44,6 +49,7 @@ function fromApiConsent(data) {
     functional_cookies: Boolean(data.preferences.functional),
     analytics_cookies: Boolean(data.preferences.analytics),
     marketing_cookies: Boolean(data.preferences.marketing),
+    do_not_sell: Boolean(data.preferences.doNotSell),
     consent_version: data.version ?? DEFAULT_CONSENT.consent_version,
   };
 }
@@ -146,10 +152,14 @@ export function CookieConsentProvider({ children }) {
     try {
       const newConsent = {
         ...DEFAULT_CONSENT,
+        ...consent,
         essential_cookies: true,
         functional_cookies: true,
         analytics_cookies: true,
-        marketing_cookies: true,
+        // "Accept all" is a cookie choice and does not revoke a CCPA opt-out;
+        // sharing stays off while the opt-out stands.
+        marketing_cookies: !consent?.do_not_sell,
+        do_not_sell: Boolean(consent?.do_not_sell),
       };
 
       await persistConsent(newConsent, 'banner');
@@ -162,7 +172,7 @@ export function CookieConsentProvider({ children }) {
       console.error('Error accepting all cookies:', err);
       setError(err.message);
     }
-  }, [persistConsent]);
+  }, [persistConsent, consent]);
 
   /**
    * Reject all non-essential cookies
@@ -215,6 +225,32 @@ export function CookieConsentProvider({ children }) {
   }, [persistConsent]);
 
   /**
+   * Set the CCPA/CPRA "Do Not Sell or Share" opt-out.
+   *
+   * Opting out also turns marketing off, since that is the mechanism sharing
+   * happens through — leaving it on would make the opt-out cosmetic.
+   */
+  const setDoNotSell = useCallback(async (optedOut) => {
+    try {
+      const newConsent = {
+        ...DEFAULT_CONSENT,
+        ...consent,
+        essential_cookies: true,
+        do_not_sell: Boolean(optedOut),
+        marketing_cookies: optedOut ? false : Boolean(consent?.marketing_cookies),
+      };
+
+      await persistConsent(newConsent, 'do_not_sell');
+
+      localStorage.setItem('cookie_consent', JSON.stringify(newConsent));
+      setConsent(newConsent);
+    } catch (err) {
+      console.error('[CookieConsent] Opt-out failed', { reason: err.message });
+      setError(err.message);
+    }
+  }, [consent, persistConsent]);
+
+  /**
    * Open the preferences modal
    */
   const openPreferences = useCallback(() => {
@@ -238,6 +274,7 @@ export function CookieConsentProvider({ children }) {
     acceptAll,
     rejectNonEssential,
     savePreferences,
+    setDoNotSell,
     openPreferences,
     closeBanner,
     setShowPreferences,

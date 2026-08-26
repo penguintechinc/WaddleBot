@@ -21,6 +21,7 @@ import OAuthCallback from './pages/auth/OAuthCallback';
 
 // Cookie Policy page
 import CookiePolicy from './pages/CookiePolicy';
+import PrivacyRights from './pages/PrivacyRights';
 
 // Calendar pages
 import CalendarSettings from './pages/calendar/CalendarSettings';
@@ -218,6 +219,7 @@ function App() {
         <Route path="/forgot-password" element={<PasswordRecoveryUnavailablePage />} />
         <Route path="/auth/callback" element={<OAuthCallback />} />
         <Route path="/cookie-policy" element={<CookiePolicy />} />
+        <Route path="/privacy-rights" element={<PrivacyRights />} />
 
         {/* Public booking page (no auth required) */}
         <Route path="/book/:slug" element={<BookingPagePublic />} />

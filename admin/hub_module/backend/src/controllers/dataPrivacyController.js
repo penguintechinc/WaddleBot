@@ -1,14 +1,19 @@
 /**
- * Data Privacy Controller - GDPR Article 17 Right to Erasure
+ * Data Privacy Controller - GDPR data subject rights and CCPA/CPRA opt-out.
  *
- * Minimum required: erase personal data that identifies the user.
- * Retained (legitimate interest): user ID, linked identities (account reclaim),
- * reputation scores/events (anti-gaming, explicitly disclosed).
+ * Art. 15 access and Art. 20 portability: exportUserData.
+ * Art. 16 rectification: profileController.updateMyProfile (PUT /user/profile).
+ * Art. 17 erasure: requestDataDeletion.
+ *
+ * Erasure retains, on legitimate interest: user ID, linked identities (account
+ * reclaim), reputation scores/events (anti-gaming, explicitly disclosed).
+ * Retained data is still personal data, so the export discloses it.
  */
 import bcrypt from 'bcrypt';
 import { query, transaction } from '../config/database.js';
 import { logger } from '../utils/logger.js';
 import { errors } from '../middleware/errorHandler.js';
+import { collectUserData } from '../utils/userDataExport.js';
 
 /**
  * DELETE /api/v1/user/me/data
@@ -125,6 +130,46 @@ export async function requestDataDeletion(req, res, next) {
 
   } catch (err) {
     logger.error('Data deletion failed', { userId, error: err.message });
+    next(err);
+  }
+}
+
+
+/**
+ * GET /api/v1/user/me/data
+ * Export the authenticated user's personal data (GDPR Art. 15 and Art. 20).
+ *
+ * Served as JSON so it satisfies portability's "structured, commonly used and
+ * machine-readable" requirement rather than access alone.
+ */
+export async function exportUserData(req, res, next) {
+  const userId = req.user.userId;
+
+  try {
+    const exists = await query('SELECT id FROM hub_users WHERE id = $1', [userId]);
+    if (!exists.rows.length) {
+      return next(errors.notFound('User not found'));
+    }
+
+    const { data, failures } = await collectUserData(query, userId);
+
+    logger.audit('Data export completed', {
+      user: userId,
+      action: 'data_export',
+      result: failures.length ? 'partial' : 'success',
+      community: 'platform',
+    });
+
+    res.setHeader('Content-Disposition', `attachment; filename="waddles-data-${userId}.json"`);
+    return res.json({
+      success: true,
+      exported_at: new Date().toISOString(),
+      subject_id: userId,
+      data,
+      ...(failures.length ? { incomplete: failures } : {}),
+    });
+  } catch (err) {
+    logger.error('Data export failed', { userId, error: err.message });
     next(err);
   }
 }

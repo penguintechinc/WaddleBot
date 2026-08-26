@@ -76,7 +76,7 @@ describe('cookie consent persistence', () => {
     });
 
     expect(api.post).toHaveBeenCalledWith('/api/v1/cookie', {
-      preferences: { functional: true, analytics: true, marketing: true },
+      preferences: { functional: true, analytics: true, marketing: true, doNotSell: false },
       consentMethod: 'banner',
     });
 
@@ -95,7 +95,7 @@ describe('cookie consent persistence', () => {
     });
 
     expect(api.post).toHaveBeenCalledWith('/api/v1/cookie', {
-      preferences: { functional: false, analytics: false, marketing: false },
+      preferences: { functional: false, analytics: false, marketing: false, doNotSell: false },
       consentMethod: 'banner',
     });
   });
@@ -121,7 +121,7 @@ describe('cookie consent persistence', () => {
     });
 
     expect(api.post).toHaveBeenCalledWith('/api/v1/cookie', {
-      preferences: { functional: false, analytics: true, marketing: false },
+      preferences: { functional: false, analytics: true, marketing: false, doNotSell: false },
       consentMethod: 'preferences',
     });
   });
@@ -144,6 +144,40 @@ describe('cookie consent persistence', () => {
       marketing_cookies: false,
     });
     expect(ctx.consentId).toBe('consent-abc');
+  });
+
+  it('records a CCPA opt-out and turns sharing off with it', async () => {
+    const ctx = harness();
+    await screen.findByTestId('ready');
+
+    await act(async () => {
+      await ctx.setDoNotSell(true);
+    });
+
+    const [, body] = api.post.mock.calls[0];
+    expect(body.preferences.doNotSell).toBe(true);
+    // Marketing is the mechanism sharing happens through; leaving it on would
+    // make the opt-out cosmetic.
+    expect(body.preferences.marketing).toBe(false);
+    expect(body.consentMethod).toBe('do_not_sell');
+  });
+
+  it('does not revoke a standing opt-out when the user later accepts all cookies', async () => {
+    const ctx = harness();
+    await screen.findByTestId('ready');
+
+    await act(async () => {
+      await ctx.setDoNotSell(true);
+    });
+    await act(async () => {
+      await ctx.acceptAll();
+    });
+
+    const [, body] = api.post.mock.calls[1];
+    // "Accept all" is a cookie choice; it is not consent to sale or sharing.
+    expect(body.preferences.doNotSell).toBe(true);
+    expect(body.preferences.marketing).toBe(false);
+    expect(body.preferences.analytics).toBe(true);
   });
 
   it('surfaces a save failure instead of swallowing it', async () => {

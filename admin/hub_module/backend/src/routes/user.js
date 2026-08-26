@@ -56,6 +56,7 @@ router.get('/identities/link/:platform/callback', identityController.identityLin
 router.delete('/identities/:platform', identityController.unlinkIdentity);
 
 // GDPR: data deletion (auth already required at top via router.use(requireAuth))
+router.get('/me/data', dataPrivacyController.exportUserData);
 router.delete('/me/data', dataPrivacyController.requestDataDeletion);
 
 export default router;
