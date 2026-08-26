@@ -791,6 +791,96 @@ its source; rows sourced from "this design" are proposals, not standards.
 | Advanced analytics | Enterprise | `critical-rules.md` |
 | Dedicated Valkey / per-tenant infrastructure isolation | Enterprise | this design — see Transport limits |
 
+### Two deployment topologies
+
+Waddles ships in two shapes, and they differ in *who owns the deployment* — which changes
+where entitlement attaches:
+
+| | Self-hosted | SaaS (`waddles.app`) |
+|---|---|---|
+| Owner | the customer | PenguinTech |
+| Tenants | 1 (Free/Pro) or many (Enterprise) | many — one per Enterprise customer, plus PenguinTech's default |
+| Customer buys | a licence for their deployment | **a tenant**, or **an upgrade to their community inside our default tenant** |
+| Entitlement attaches at | the tenant | the tenant *or* the community |
+
+The second SaaS shape is the one that breaks an assumption elsewhere in this design.
+Self-serve customers do not get a tenant at all — they get a **community inside PenguinTech's
+default tenant**, and they pay to upgrade *that community*. Many paying customers at different
+tiers therefore share one tenant.
+
+#### Entitlement resolves narrowest-first, like App binding
+
+Tier can no longer be a property of the tenant alone:
+
+```
+community entitlement  →  tenant entitlement
+```
+
+The same shape as App binding (`community → tenant → default`), and for the same reason: the
+narrower scope is where the specific answer lives. In self-hosted deployments entitlement is
+set at the tenant and communities inherit it; in SaaS shape two it is set per community and
+overrides the default tenant's Free baseline.
+
+This makes the structural caps clearer rather than murkier — they describe what a *customer*
+gets, not what a deployment contains:
+
+| Customer tier | Self-hosted | SaaS |
+|---------------|-------------|------|
+| Free | one deployment, the default tenant | a community in PenguinTech's default tenant |
+| Professional | one deployment, the default tenant | a community in PenguinTech's default tenant |
+| Enterprise | own deployment, many tenants | **their own tenant** |
+
+PenguinTech's SaaS deployment holds many tenants because PenguinTech operates it, not because
+it holds an Enterprise licence. Deployment size and customer tier are unrelated.
+
+#### The domain is a mode switch, not a bypass
+
+SaaS mode activates on **`waddles.app`** or **`waddles.penguincloud.tech`**. The hostname
+therefore selects one of three modes, rather than toggling licensing on and off:
+
+| Domain | Mode | Entitlement |
+|--------|------|-------------|
+| `waddles.app`, `waddles.penguincloud.tech` | **SaaS** | per tenant *or* per community, from billing — **never bypassed** |
+| `*.penguintech.cloud`, `*.penguincloud.io` | internal (beta/dev) | bypassed — PenguinTech's own non-production |
+| anything else | self-hosted | per-tenant licence validated against `license.penguintech.io` |
+
+Reading the domain as a mode rather than a bypass is what keeps the SaaS chargeable. The two
+questions collapse into one in self-hosted deployments and separate in SaaS:
+
+| Question | Answered by | In SaaS |
+|----------|-------------|---------|
+| Is this *deployment* licensed to run? | the mode | yes — PenguinTech owns it |
+| What tier is this *customer*? | the entitlement lookup | **never by the hostname** |
+
+**A standards conflict to settle before launch.** `penguintech.md` lists product-specific
+`.app` domains as hardcoded licence-bypass domains, and `waddles.app` is the product domain
+per `penguintech-reference`. Applied literally, every paying SaaS customer would get full
+entitlement free. Today's code happens to be correct — `PREMIUM_BYPASS_DOMAINS` in
+`video_proxy_module` lists only `waddlebot.penguintech.io`, `waddles.penguintech.cloud` and
+`waddles.penguincloud.io` — but that is luck rather than design. Raise the wording with the
+standards owner; `waddles.penguincloud.tech` is also outside every current bypass pattern and
+needs adding to the mode list explicitly.
+
+#### Where community-scoped entitlement lives
+
+The licence server has no sub-tenant entitlement scope — entitlement is licence-level. SaaS
+shape two needs entitlement *below* the tenant, so it does not belong there:
+
+| Entitlement | System | Covers |
+|-------------|--------|--------|
+| Deployment / tenant tier | licence server | self-hosted licences; Enterprise tenants in SaaS |
+| **Community tier within a shared tenant** | **marketplace subscriptions** | SaaS self-serve customers |
+| Third-party App access | marketplace subscriptions | both topologies |
+
+The marketplace is already a billing system — `subscriptionController`, `premiumController`,
+seat limits, overage pricing. Extending it to carry first-party Feature entitlement for a
+community is a smaller change than adding a sub-tenant scope to the licence server for the
+only two products that need it.
+
+That does widen the marketplace's role: it currently gates third-party Apps, and in SaaS it
+would also gate first-party Features for communities. State that deliberately rather than
+letting it happen — it makes the marketplace load-bearing for revenue, not just for extensions.
+
 ### Structural caps
 
 Two caps are structural rather than feature flags — they limit how many of a thing exists,
@@ -861,6 +951,8 @@ Detail lives in the companion plan. Summary:
 | Per-tenant streams and ACL users grow linearly with the tenant roster | Pool per tenant with idle eviction and an active-tenant set; revisit in the low thousands, then shard via Cluster hash tags or dedicated Valkey rather than dropping isolation |
 | A "missing tenant means default" fallback outlives the migration and becomes a bypass | The fallback has a recorded cutoff date, after which unclaimed tokens are rejected |
 | The multi-tenant path rots because Free and Professional never exercise it | Single-tenant runs the identical code with N=1; no `if tenant == "default"` shortcut is permitted anywhere |
+| `waddles.app` is added to the bypass list per the standard, and the SaaS becomes free for every customer | The hostname selects a mode, never an entitlement; a test asserts a Free community on `waddles.app` resolves to Free |
+| The marketplace becomes load-bearing for revenue but is sized as an extension catalogue | Stated deliberately in the design; its availability requirements are set for the billing path, not the browse path |
 | SPIRE deployed standalone, then federation with SkausWatch needs a topology change | Deploy as `child` with the upstream disabled from the start; promotion is a values flip plus a join token |
 | mTLS is treated as replacing the inter-service JWT | `security.md` requires both regardless of transport; the SVID-required test does not assert the JWT, so both need their own gate |
 | mTLS is enabled without a peer SPIFFE ID allowlist, so any workload in the trust domain is accepted | Per-service accepted-peer lists, with a test asserting a valid-but-unlisted SVID is rejected |
