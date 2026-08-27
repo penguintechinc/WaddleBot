@@ -3,8 +3,9 @@ package io.waddlebot.hub.presentation.communities
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import io.waddlebot.hub.data.models.ApiResult
 import io.waddlebot.hub.data.models.Community
-import io.waddlebot.hub.data.models.CommunityDetail
+import io.waddlebot.hub.data.models.CommunityDashboard
 import io.waddlebot.hub.data.repository.CommunityRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,7 +22,7 @@ data class CommunityListState(
 )
 
 data class CommunityDetailState(
-    val detail: CommunityDetail? = null,
+    val detail: CommunityDashboard? = null,
     val isLoading: Boolean = false,
     val error: String? = null
 )
@@ -45,25 +46,26 @@ class CommunityViewModel @Inject constructor(
         viewModelScope.launch {
             _listState.update { it.copy(isLoading = true, error = null) }
 
-            communityRepository.getCommunities()
-                .onSuccess { communities ->
+            when (val result = communityRepository.getMyCommunities()) {
+                is ApiResult.Success -> {
                     _listState.update {
                         it.copy(
-                            communities = communities,
+                            communities = result.data,
                             isLoading = false,
                             isRefreshing = false
                         )
                     }
                 }
-                .onFailure { throwable ->
+                is ApiResult.Error -> {
                     _listState.update {
                         it.copy(
                             isLoading = false,
                             isRefreshing = false,
-                            error = throwable.message ?: "Failed to load communities"
+                            error = result.message
                         )
                     }
                 }
+            }
         }
     }
 
@@ -71,23 +73,24 @@ class CommunityViewModel @Inject constructor(
         viewModelScope.launch {
             _listState.update { it.copy(isRefreshing = true, error = null) }
 
-            communityRepository.getCommunities()
-                .onSuccess { communities ->
+            when (val result = communityRepository.getMyCommunities()) {
+                is ApiResult.Success -> {
                     _listState.update {
                         it.copy(
-                            communities = communities,
+                            communities = result.data,
                             isRefreshing = false
                         )
                     }
                 }
-                .onFailure { throwable ->
+                is ApiResult.Error -> {
                     _listState.update {
                         it.copy(
                             isRefreshing = false,
-                            error = throwable.message ?: "Failed to refresh"
+                            error = result.message
                         )
                     }
                 }
+            }
         }
     }
 
@@ -95,23 +98,24 @@ class CommunityViewModel @Inject constructor(
         viewModelScope.launch {
             _detailState.update { it.copy(isLoading = true, error = null) }
 
-            communityRepository.getCommunityDetail(communityId)
-                .onSuccess { detail ->
+            when (val result = communityRepository.getCommunityDashboard(communityId)) {
+                is ApiResult.Success -> {
                     _detailState.update {
                         it.copy(
-                            detail = detail,
+                            detail = result.data,
                             isLoading = false
                         )
                     }
                 }
-                .onFailure { throwable ->
+                is ApiResult.Error -> {
                     _detailState.update {
                         it.copy(
                             isLoading = false,
-                            error = throwable.message ?: "Failed to load community"
+                            error = result.message
                         )
                     }
                 }
+            }
         }
     }
 

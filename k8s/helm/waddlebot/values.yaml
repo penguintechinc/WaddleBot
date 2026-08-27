@@ -22,11 +22,12 @@ global:
   # Default storage class for persistent volumes
   storageClass: "standard"
 
+  # OVERRIDE REQUIRED: override via --set or values override file
   # Security secrets (set via kubectl create secret or values override)
   # Defaults match docker-compose.yml for local development consistency
-  jwtSecret: "changeme_jwt_secret"
-  moduleSecretKey: "changeme_module_secret"
-  serviceApiKey: "changeme_service_key"
+  jwtSecret: "REPLACE_ME_jwt_secret"
+  moduleSecretKey: "REPLACE_ME_module_secret"
+  serviceApiKey: "REPLACE_ME_service_key"
 
   # Logging
   logLevel: "INFO"
@@ -67,8 +68,8 @@ infrastructure:
     enabled: true
     username: "waddlebot"
     database: "waddlebot"
-    password: "changeme"  # Only used for secrets, actual DB already running
-    image: postgres:16
+    password: "REPLACE_ME"  # Only used for secrets, actual DB already running
+    image: postgres:16-bookworm@sha256:a0fd72825431f4b7fd3f9d5def9f370b9c22012f1a9e37ece1a5749b95333fb7
     service:
       name: "infra-postgres"
       port: 5432
@@ -99,24 +100,24 @@ infrastructure:
   # Redis Cache & Sessions
   redis:
     enabled: true
-    image: redis:7-bookworm  # Use Debian instead of Alpine for compatibility
+    image: redis:7-bookworm@sha256:33d7c9a245edd95e6703a0addbeaa48fe40c3b3b4783627a72085155462ebfdb  # Use Debian instead of Alpine for compatibility
     port: 6379
-    password: "changeme"  # Only used for secrets, actual Redis already running
+    password: "REPLACE_ME"  # Only used for secrets, actual Redis already running
     # Module-specific Redis passwords (matches docker-compose.yml ACL setup)
     modulePasswords:
-      admin: "changeme"
-      router: "changeme"
-      hub: "changeme"
-      workflow: "changeme"
-      ai: "changeme"
-      analytics: "changeme"
-      security: "changeme"
-      loyalty: "changeme"
-      spotify: "changeme"
-      ytmusic: "changeme"
-      twitch: "changeme"
-      discord: "changeme"
-      slack: "changeme"
+      admin: "REPLACE_ME"
+      router: "REPLACE_ME"
+      hub: "REPLACE_ME"
+      workflow: "REPLACE_ME"
+      ai: "REPLACE_ME"
+      analytics: "REPLACE_ME"
+      security: "REPLACE_ME"
+      loyalty: "REPLACE_ME"
+      spotify: "REPLACE_ME"
+      ytmusic: "REPLACE_ME"
+      twitch: "REPLACE_ME"
+      discord: "REPLACE_ME"
+      slack: "REPLACE_ME"
     maxMemory: "256mb"
     maxMemoryPolicy: "allkeys-lru"
     service:
@@ -141,13 +142,13 @@ infrastructure:
   # MinIO Object Storage
   minio:
     enabled: true
-    image: minio/minio:latest
+    image: minio/minio:latest@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
     apiPort: 9000
     consolePort: 9001
     bucketName: "waddlebot-assets"
     # Default credentials (matches docker-compose.yml)
-    rootUser: "minioadmin"
-    rootPassword: "minioadmin"
+    rootUser: "REPLACE_ME"
+    rootPassword: "REPLACE_ME"
     service:
       name: "infra-minio"
       apiPort: 9000
@@ -169,7 +170,7 @@ infrastructure:
   # Ollama AI Backend
   ollama:
     enabled: true
-    image: ollama/ollama:latest
+    image: ollama/ollama:latest@sha256:bfc9c6d53cc6989aa5131a6fde6b162b2802d4d337657f3253b5f69579bddeee
     port: 11434
     defaultProvider: "ollama"
     defaultModel: "tinyllama"
@@ -194,7 +195,7 @@ infrastructure:
   # Qdrant Vector Database
   qdrant:
     enabled: true
-    image: qdrant/qdrant:latest
+    image: qdrant/qdrant:latest@sha256:75eab8c4ba42096724fdcfde8b4de0b5713d529dde32f285a1f86fdcb2c9e50c
     port: 6333
     grpcPort: 6334
     service:
@@ -1149,7 +1150,7 @@ podSecurityContext:
 # Container Security Context
 securityContext:
   allowPrivilegeEscalation: false
-  readOnlyRootFilesystem: false
+  readOnlyRootFilesystem: true
   runAsNonRoot: true
   runAsUser: 1000
   capabilities:

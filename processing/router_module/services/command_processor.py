@@ -495,7 +495,8 @@ class CommandProcessor:
         try:
             result = self.dal.executesql(
                 """SELECT cs.community_id FROM community_servers cs
-                   WHERE cs.platform_server_id = %s AND cs.is_active = true
+                   WHERE cs.platform_server_id = %s
+                     AND cs.status = 'approved'
                    ORDER BY cs.is_primary DESC NULLS LAST
                    LIMIT 1""",
                 [entity_id],

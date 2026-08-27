@@ -6,3 +6,4 @@ slack-sdk==3.26.1
 pyjwt>=2.12.0
 psycopg2-binary>=2.9.10
 asyncio==3.4.3
+setuptools>=83.0.0

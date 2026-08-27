@@ -1,0 +1,2 @@
+# Unix launchers must retain an executable POSIX shebang in Linux CI.
+/mobile/android/gradlew text eol=lf

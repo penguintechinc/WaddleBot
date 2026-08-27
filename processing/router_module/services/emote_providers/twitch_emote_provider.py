@@ -11,6 +11,9 @@ Fetches emotes from:
 
 import asyncio
 import logging
+import os
+import time
+from dataclasses import dataclass
 from typing import List, Optional
 
 import httpx
@@ -35,6 +38,25 @@ SEVENTV_CHANNEL_URL = "https://7tv.io/v3/users/twitch/{channel_id}"
 
 # Request timeout in seconds
 REQUEST_TIMEOUT = 10
+
+# Refresh the app access token this many seconds before it actually expires
+TOKEN_REFRESH_MARGIN = 60
+
+
+@dataclass(slots=True)
+class CachedToken:
+    """A Twitch app access token together with the wall-clock time it expires.
+
+    Kept as a value object rather than a bare tuple so the expiry check reads
+    explicitly and cannot be unpacked in the wrong order.
+    """
+
+    token: str
+    expires_at: float
+
+    def is_fresh(self, margin: float = TOKEN_REFRESH_MARGIN) -> bool:
+        """Return True while the token has more than ``margin`` seconds left."""
+        return self.expires_at - time.time() > margin
 
 
 class TwitchEmoteProvider(BaseEmoteProvider):
@@ -63,6 +85,9 @@ class TwitchEmoteProvider(BaseEmoteProvider):
                 pass
 
         self._client_id = client_id
+
+        self._cached_token: Optional[CachedToken] = None
+
         if self._client_id:
             logger.info("TwitchEmoteProvider initialized with official API support")
         else:
@@ -217,15 +242,71 @@ class TwitchEmoteProvider(BaseEmoteProvider):
 
     def _get_app_access_token(self) -> str:
         """
-        Get Twitch app access token for API calls.
+        Get Twitch app access token using client-credentials OAuth flow.
 
-        Note: In production, this should cache the token and refresh when needed.
-        For now, returns empty string - API calls will work with just Client-ID
-        for public endpoints, or you can implement OAuth flow.
+        Implements caching with expiry refresh (~60s before expiration).
+        Note: This file is intentionally duplicated in router_module and
+        translate_interaction_module across separate container build trees.
+        Keep both files synchronized when updating this method.
+
+        Returns:
+            Access token string, or empty string if creds missing or request fails.
         """
-        # TODO: Implement proper OAuth app access token flow
-        # For now, many emote endpoints work with just Client-ID
-        return ""
+        # Get client secret from environment or config (read fresh each time)
+        client_secret = os.getenv('TWITCH_CLIENT_SECRET', '')
+        if not client_secret:
+            try:
+                from config import Config
+                client_secret = getattr(Config, 'TWITCH_CLIENT_SECRET', '')
+            except ImportError:
+                pass
+
+        # Check if credentials are configured
+        if not self._client_id or not client_secret:
+            logger.warning(
+                "Twitch app credentials not configured; official emotes unavailable. "
+                "Set TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET environment variables."
+            )
+            return ""
+
+        # Reuse the cached token until it is inside the refresh margin
+        if self._cached_token is not None and self._cached_token.is_fresh():
+            return self._cached_token.token
+
+        # Fetch new token
+        try:
+            response = httpx.post(
+                "https://id.twitch.tv/oauth2/token",
+                params={
+                    "client_id": self._client_id,
+                    "client_secret": client_secret,
+                    "grant_type": "client_credentials"
+                }
+            )
+
+            if response.status_code != 200:
+                logger.error(
+                    f"Failed to fetch Twitch app access token: "
+                    f"status {response.status_code}: {response.text}"
+                )
+                return ""
+
+            data = response.json()
+            token = data.get("access_token", "")
+            expires_in = data.get("expires_in", 3600)
+
+            self._cached_token = CachedToken(
+                token=token, expires_at=time.time() + expires_in
+            )
+
+            logger.debug(
+                f"Fetched Twitch app access token (expires in {expires_in}s)"
+            )
+            return token
+
+        except Exception as e:
+            logger.error(f"Failed to fetch Twitch app access token: {e}")
+            return ""
 
     async def _fetch_bttv_global(self) -> List[Emote]:
         """Fetch global BTTV emotes."""

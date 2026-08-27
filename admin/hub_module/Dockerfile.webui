@@ -1,20 +1,22 @@
+# syntax=docker/dockerfile:1.7
 # Dockerfile for WaddleBot Hub WebUI
 # Builds and serves the React frontend with Nginx
 
 # Stage 1: Build frontend
 FROM node:20-bookworm-slim@sha256:1e85773c98c31d4fe5b545e4cb17379e617b348832fb3738b22a08f68dec30f3 AS builder
 
-ARG NPM_TOKEN
-
 WORKDIR /build/admin/hub_module/frontend
 
 # Copy package files
 COPY admin/hub_module/frontend/package*.json ./
 
-# Configure GitHub Packages auth and install dependencies
-RUN printf '@penguintechinc:registry=https://npm.pkg.github.com\n//npm.pkg.github.com/:_authToken=%s\n' "${NPM_TOKEN}" > .npmrc && \
-    npm install && \
-    rm -f .npmrc
+# Install locked dependencies using an ephemeral GitHub Packages credential.
+RUN --mount=type=secret,id=npm_token,required=true \
+    NPM_TOKEN="$(cat /run/secrets/npm_token)" && \
+    printf '@penguintechinc:registry=https://npm.pkg.github.com\n//npm.pkg.github.com/:_authToken=%s\n' "${NPM_TOKEN}" > /tmp/.npmrc && \
+    NPM_CONFIG_USERCONFIG=/tmp/.npmrc npm ci --ignore-scripts && \
+    NPM_CONFIG_USERCONFIG=/tmp/.npmrc npm rebuild esbuild && \
+    rm -f /tmp/.npmrc
 
 # Copy frontend source
 COPY admin/hub_module/frontend/ ./

@@ -16,11 +16,8 @@ class SpamDetector:
 
         # Initialize Redis connection for fast rate limiting
         try:
-            self.redis = redis.Redis(
-                host=Config.REDIS_HOST,
-                port=Config.REDIS_PORT,
-                password=Config.REDIS_PASSWORD if Config.REDIS_PASSWORD else None,
-                db=Config.REDIS_DB,
+            self.redis = redis.Redis.from_url(
+                Config.REDIS_URL,
                 decode_responses=True
             )
             self.redis.ping()

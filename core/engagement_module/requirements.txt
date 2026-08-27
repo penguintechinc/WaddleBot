@@ -4,7 +4,7 @@ grpcio>=1.64.0
 grpcio-tools>=1.64.0
 protobuf>=5.29.6
 pydal==20241111.1
-psycopg2-binary==2.9.9
+psycopg2-binary==2.9.12
 aiohttp>=3.13.4
 pyjwt==2.12.1
 cryptography>=46.0.6

@@ -97,6 +97,7 @@ jobs:
 
       - name: Log in to Container Registry
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121  # v4
+        if: github.event_name != 'pull_request' && github.event_name != 'merge_group'
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -116,7 +117,8 @@ jobs:
         with:
           context: .
           file: ./${{ inputs.module_path }}/Dockerfile
-          push: true
+          push: ${{ github.event_name != 'pull_request' && github.event_name != 'merge_group' }}
+          load: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && matrix.platform == 'linux/amd64' }}
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ inputs.module_name }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}-${{ steps.arch.outputs.suffix }}
           platforms: ${{ matrix.platform }}
           cache-from: type=gha,scope=${{ inputs.module_name }}-${{ steps.arch.outputs.suffix }}
@@ -124,13 +126,13 @@ jobs:
           build-args: |
             MODULE_NAME=${{ inputs.module_name }}
             MODULE_PORT=${{ inputs.module_port }}
-            NPM_TOKEN=${{ secrets.GITHUB_TOKEN }}
 
   # Merge amd64 + arm64 into a single multi-arch OCI index manifest
   merge:
     name: Merge Multi-Arch Manifest
     runs-on: ubuntu-latest
     needs: [determine-version, build-platform]
+    if: github.event_name != 'pull_request' && github.event_name != 'merge_group'
     steps:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd  # v4

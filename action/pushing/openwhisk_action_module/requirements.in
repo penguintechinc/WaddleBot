@@ -6,3 +6,4 @@ pydal>=20240906.1,<20250101
 aiohttp>=3.10.0,<4.0.0
 pyjwt>=2.8.0
 psycopg2-binary>=2.9.9
+setuptools>=83.0.0

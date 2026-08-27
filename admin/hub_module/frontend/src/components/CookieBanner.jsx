@@ -1,85 +1,59 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { XMarkIcon } from '@heroicons/react/24/outline';
+
+import { useCookieConsent } from '../hooks/useCookieConsent';
 
 /**
  * CookieBanner Component
- * GDPR-compliant cookie consent banner with customizable preferences
  *
- * Features:
- * - Fixed bottom position banner
- * - Three action buttons: Accept All, Reject Non-Essential, Customize
- * - Link to cookie policy page
- * - Displays current policy version
- * - Accessible with keyboard navigation and ARIA labels
- * - Smooth slide-up animation on mount
- * - Mobile responsive with stacked buttons on small screens
+ * The first-visit consent surface. Reads and writes through the cookie consent
+ * context, so a choice made here is recorded server-side rather than only in
+ * this browser.
+ *
+ * Three deliberate choices, each with a compliance reason:
+ *
+ * - Accept and Reject have identical visual weight. Refusing has to be as easy
+ *   as accepting; a prominent Accept beside a muted Reject is the standard
+ *   dark-pattern finding.
+ * - There is no dismiss control. A banner that can be closed without answering
+ *   leaves non-essential cookies neither consented nor refused, and invites
+ *   treating silence as agreement.
+ * - "Do Not Sell or Share" sits here rather than only on a privacy page,
+ *   because CCPA/CPRA expects it to be conspicuous on the pages a consumer
+ *   actually lands on.
  */
 function CookieBanner() {
-  const [isVisible, setIsVisible] = useState(false);
+  const {
+    showBanner,
+    consent,
+    acceptAll,
+    rejectNonEssential,
+    openPreferences,
+    setDoNotSell,
+  } = useCookieConsent();
+
   const [isAnimating, setIsAnimating] = useState(false);
 
-  // Initialize banner visibility based on consent state
-  // In production, integrate with useCookieConsent hook:
-  // const { showBanner, acceptAll, rejectNonEssential, openPreferences } = useCookieConsent();
   useEffect(() => {
-    // Simulate checking if banner should be shown
-    // Replace with actual hook integration
-    const shouldShowBanner = localStorage.getItem('cookieConsent') === null;
-    if (shouldShowBanner) {
-      setIsVisible(true);
-      // Trigger animation after a brief delay for smooth entry
-      setTimeout(() => setIsAnimating(true), 50);
+    if (!showBanner) {
+      setIsAnimating(false);
+      return undefined;
     }
-  }, []);
+    const timer = setTimeout(() => setIsAnimating(true), 50);
+    return () => clearTimeout(timer);
+  }, [showBanner]);
 
-  // Handle Accept All action
-  const handleAcceptAll = () => {
-    localStorage.setItem('cookieConsent', JSON.stringify({
-      essential: true,
-      analytics: true,
-      marketing: true,
-      preferences: true,
-      timestamp: new Date().toISOString(),
-      policyVersion: '1.0'
-    }));
-    dismissBanner();
-    // Integrate with hook: acceptAll();
-  };
-
-  // Handle Reject Non-Essential action
-  const handleRejectNonEssential = () => {
-    localStorage.setItem('cookieConsent', JSON.stringify({
-      essential: true,
-      analytics: false,
-      marketing: false,
-      preferences: false,
-      timestamp: new Date().toISOString(),
-      policyVersion: '1.0'
-    }));
-    dismissBanner();
-    // Integrate with hook: rejectNonEssential();
-  };
-
-  // Handle Customize action
-  const handleCustomize = () => {
-    // Open preferences modal
-    // Integrate with hook: openPreferences();
-    console.log('Opening cookie preferences modal');
-  };
-
-  // Dismiss banner with animation
-  const dismissBanner = () => {
-    setIsAnimating(false);
-    setTimeout(() => {
-      setIsVisible(false);
-    }, 300);
-  };
-
-  // Don't render if banner is not visible
-  if (!isVisible) {
+  if (!showBanner) {
     return null;
   }
+
+  const optedOut = Boolean(consent?.do_not_sell);
+
+  const actionClasses =
+    'px-4 py-2 text-sm font-medium rounded-lg bg-navy-800 border border-navy-600 ' +
+    'text-sky-100 hover:bg-navy-700 hover:border-navy-500 transition-colors ' +
+    'focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2 ' +
+    'focus:ring-offset-navy-900 whitespace-nowrap';
 
   return (
     <div
@@ -89,94 +63,69 @@ function CookieBanner() {
       role="region"
       aria-label="Cookie Consent Banner"
       aria-live="polite"
+      data-testid="cookie-banner"
     >
-      {/* Background overlay and banner container */}
       <div className="bg-navy-900 border-t border-navy-700 shadow-2xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex flex-col md:flex-row gap-4 md:gap-6">
-            {/* Content section */}
-            <div className="flex-1 flex flex-col justify-between">
-              <div className="mb-4 md:mb-0">
-                <h2 className="text-lg font-semibold text-sky-100 mb-2">
-                  Cookie Preferences
-                </h2>
-                <p className="text-sm text-navy-300 leading-relaxed">
-                  We use cookies to enhance your experience. Essential cookies are required for
-                  the site to function. You can customize your preferences or accept all cookies.
-                  {' '}
-                  <Link
-                    to="/cookie-policy"
-                    className="text-sky-400 hover:text-sky-300 underline transition-colors"
-                    onClick={(e) => {
-                      // Keep banner visible while viewing policy
-                      e.preventDefault();
-                      window.open('/cookie-policy', '_blank');
-                    }}
-                  >
-                    Learn more about our cookie policy
-                  </Link>
-                </p>
-                <p className="text-xs text-navy-500 mt-2">
-                  Policy v1.0
-                </p>
-              </div>
+            <div className="flex-1">
+              <h2 className="text-lg font-semibold text-sky-100 mb-2">Cookie Preferences</h2>
+              <p className="text-sm text-navy-300 leading-relaxed">
+                We use cookies to enhance your experience. Essential cookies are required for
+                the site to function. You can customise your preferences, accept all, or
+                reject everything non-essential.{' '}
+                <Link
+                  to="/cookie-policy"
+                  className="text-sky-400 hover:text-sky-300 underline transition-colors"
+                >
+                  Learn more about our cookie policy
+                </Link>
+              </p>
+
+              <button
+                type="button"
+                onClick={() => setDoNotSell(!optedOut)}
+                aria-pressed={optedOut}
+                data-testid="banner-do-not-sell"
+                className="mt-3 text-sm text-gold-400 underline hover:text-gold-300 transition-colors focus:outline-none focus:ring-2 focus:ring-sky-400 rounded"
+              >
+                {optedOut
+                  ? 'You have opted out of the sale or sharing of your personal information'
+                  : 'Do Not Sell or Share My Personal Information'}
+              </button>
             </div>
 
-            {/* Actions section */}
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-2 md:items-end md:flex-shrink-0">
-              {/* Reject Non-Essential Button */}
               <button
-                onClick={handleRejectNonEssential}
-                className="px-4 py-2 text-sm font-medium rounded-lg bg-navy-800
-                           border border-navy-600 text-sky-100
-                           hover:bg-navy-700 hover:border-navy-500
-                           transition-colors focus:outline-none focus:ring-2
-                           focus:ring-sky-400 focus:ring-offset-2
-                           focus:ring-offset-navy-900"
+                type="button"
+                onClick={rejectNonEssential}
+                className={actionClasses}
+                data-testid="banner-reject"
                 aria-label="Reject non-essential cookies"
               >
                 Reject Non-Essential
               </button>
 
-              {/* Customize Button */}
               <button
-                onClick={handleCustomize}
-                className="px-4 py-2 text-sm font-medium rounded-lg bg-navy-800
-                           border border-sky-500 text-sky-400
-                           hover:bg-navy-700 hover:border-sky-400
-                           transition-colors focus:outline-none focus:ring-2
-                           focus:ring-sky-400 focus:ring-offset-2
-                           focus:ring-offset-navy-900"
-                aria-label="Customize cookie preferences"
+                type="button"
+                onClick={openPreferences}
+                className={`${actionClasses} border-sky-500 text-sky-400 hover:border-sky-400`}
+                data-testid="banner-customize"
+                aria-label="Customise cookie preferences"
               >
-                Customize
+                Customise
               </button>
 
-              {/* Accept All Button */}
               <button
-                onClick={handleAcceptAll}
-                className="px-4 py-2 text-sm font-medium font-semibold rounded-lg
-                           bg-sky-600 text-white hover:bg-sky-700
-                           transition-colors focus:outline-none focus:ring-2
-                           focus:ring-sky-500 focus:ring-offset-2
-                           focus:ring-offset-navy-900 whitespace-nowrap"
+                type="button"
+                onClick={acceptAll}
+                className={actionClasses}
+                data-testid="banner-accept"
                 aria-label="Accept all cookies"
               >
                 Accept All
               </button>
             </div>
-
-            {/* Close button - optional for accessibility */}
-            <button
-              onClick={dismissBanner}
-              className="absolute top-4 right-4 p-1 text-navy-400 hover:text-sky-100
-                         hover:bg-navy-800 rounded-lg transition-colors
-                         focus:outline-none focus:ring-2 focus:ring-sky-400"
-              aria-label="Dismiss cookie banner"
-              title="Dismiss banner"
-            >
-              <XMarkIcon className="w-5 h-5" />
-            </button>
           </div>
         </div>
       </div>

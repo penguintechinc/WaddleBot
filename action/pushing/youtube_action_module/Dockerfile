@@ -1,6 +1,9 @@
 # YouTube Action Module - Python 3.12 Container
 FROM python:3.13-slim-bookworm@sha256:01f42367a0a94ad4bc17111776fd66e3500c1d87c15bbd6055b7371d39c124fb
 
+# uv replaces pip for dependency installation (pinned by digest)
+COPY --from=ghcr.io/astral-sh/uv:0.11.28@sha256:0f36cb9361a3346885ca3677e3767016687b5a170c1a6b88465ec14aefec90aa /uv /usr/local/bin/uv
+
 # Set working directory
 WORKDIR /app
 
@@ -12,7 +15,7 @@ RUN apt-get update && apt-get install -y \
 
 # Copy requirements and install dependencies
 COPY action/pushing/youtube_action_module/requirements.txt /app/
-RUN pip install --no-cache-dir -r requirements.txt
+RUN uv pip install --system --no-cache -r requirements.txt
 
 # Copy application files
 COPY action/pushing/youtube_action_module/ /app/
@@ -23,7 +26,8 @@ RUN python -m grpc_tools.protoc \
     --python_out=./proto \
     --grpc_python_out=./proto \
     ./proto/youtube_action.proto && \
-    sed -i 's/^import youtube_action_pb2/from proto import youtube_action_pb2/' ./proto/youtube_action_pb2_grpc.py
+    sed -i 's/^import youtube_action_pb2/from . import youtube_action_pb2/' ./proto/youtube_action_pb2_grpc.py && \
+    python -c "from proto import youtube_action_pb2, youtube_action_pb2_grpc; assert youtube_action_pb2_grpc.YouTubeActionStub"
 
 # Create log directory
 RUN mkdir -p /var/log/waddlebotlog

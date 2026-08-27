@@ -1,16 +1,19 @@
 # Use Python 3.12 — numpy==1.26.4 and fasttext-wheel have no Python 3.13 wheels (build from source fails)
 FROM python:3.12-slim-bookworm@sha256:d97792894a6a4162cae14da44542a83c75e56c77a27b92d58f3f83b7bc961292
 
+# uv replaces pip for dependency installation (pinned by digest)
+COPY --from=ghcr.io/astral-sh/uv:0.11.28@sha256:0f36cb9361a3346885ca3677e3767016687b5a170c1a6b88465ec14aefec90aa /uv /usr/local/bin/uv
+
 WORKDIR /app
 
 # Install shared flask_core library
 COPY libs/flask_core /app/libs/flask_core
-RUN cd /app/libs/flask_core && pip install --no-cache-dir .
+RUN uv pip install --system --no-cache /app/libs/flask_core
 
-# Install dependencies
-# Pre-install setuptools to satisfy fasttext-wheel's unlocked transitive dep before hashed mode kicks in
+# Install dependencies. setuptools (fasttext-wheel's build-time dep) is pinned
+# and hashed in requirements.txt, so no separate pre-install step is needed.
 COPY action/interactive/translate_interaction_module/requirements.txt /app/
-RUN pip install --no-cache-dir setuptools && pip install --no-cache-dir -r requirements.txt
+RUN uv pip install --system --no-cache -r requirements.txt
 
 # Copy module source
 COPY action/interactive/translate_interaction_module /app/

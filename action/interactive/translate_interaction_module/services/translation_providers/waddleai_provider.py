@@ -24,7 +24,7 @@ from .base_provider import TranslationProvider, TranslationResult
 logger = logging.getLogger(__name__)
 
 
-@dataclass
+@dataclass(slots=True)
 class WaddleAITranslationConfig:
     """Configuration for WaddleAI translation provider."""
     base_url: str = field(default_factory=lambda: Config.WADDLEAI_BASE_URL)

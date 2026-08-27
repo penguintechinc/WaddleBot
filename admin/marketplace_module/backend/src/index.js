@@ -14,6 +14,7 @@ import { checkConnection, closePool, query } from './config/database.js';
 import { logger } from './utils/logger.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { sanitizeBody } from './middleware/validation.js';
+import { setCsrfToken, verifyCsrfToken } from './middleware/csrf.js';
 import routes from './routes/index.js';
 
 /**
@@ -107,6 +108,12 @@ app.use(express.urlencoded({ extended: true }));
 
 // Cookie parsing
 app.use(cookieParser());
+
+// CSRF protection for browser sessions that authenticate with a cookie.
+// Bearer-token, service-key, and provider-webhook requests do not rely on
+// ambient browser credentials and are handled explicitly by the middleware.
+app.use(setCsrfToken);
+app.use(verifyCsrfToken);
 
 // XSS protection - sanitize all string inputs
 app.use(sanitizeBody);

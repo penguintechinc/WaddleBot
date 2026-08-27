@@ -58,7 +58,7 @@ docker run -d \
 - `REST_PORT` - REST API port (default: 8073)
 - `YOUTUBE_API_KEY` - YouTube API key (optional)
 - `YOUTUBE_REDIRECT_URI` - OAuth redirect URI (default: http://localhost:8073/oauth/callback)
-- `MAX_WORKERS` - Thread pool workers (default: 20)
+- `MAX_WORKERS` - Size of the thread pool that absorbs blocking YouTube Data API calls (default: 20)
 - `REQUEST_TIMEOUT` - API request timeout (default: 30)
 - `LOG_LEVEL` - Logging level (default: INFO)
 - `ENABLE_CHAT_ACTIONS` - Enable chat actions (default: true)

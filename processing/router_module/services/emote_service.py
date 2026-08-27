@@ -475,7 +475,7 @@ class EmoteService:
 from dataclasses import dataclass
 
 
-@dataclass
+@dataclass(slots=True)
 class Emote:
     """Represents a platform emote."""
     code: str

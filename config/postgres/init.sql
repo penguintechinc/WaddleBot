@@ -283,6 +283,46 @@ $$;
 
 DO $$
 BEGIN
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'mod_router') THEN
+        CREATE ROLE mod_router WITH LOGIN PASSWORD 'mod_router_dev_changeme';
+    END IF;
+END
+$$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'hub_admin') THEN
+        CREATE ROLE hub_admin WITH LOGIN PASSWORD 'hub_admin_dev_changeme';
+    END IF;
+END
+$$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'clip_interaction') THEN
+        CREATE ROLE clip_interaction WITH LOGIN PASSWORD 'mod_clip_interaction_dev_changeme';
+    END IF;
+END
+$$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'lfg_interaction') THEN
+        CREATE ROLE lfg_interaction WITH LOGIN PASSWORD 'mod_lfg_interaction_dev_changeme';
+    END IF;
+END
+$$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'server_status_interaction') THEN
+        CREATE ROLE server_status_interaction WITH LOGIN PASSWORD 'mod_server_status_interaction_dev_changeme';
+    END IF;
+END
+$$;
+
+DO $$
+BEGIN
     IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'identity') THEN
         CREATE ROLE identity WITH LOGIN PASSWORD 'mod_identity_dev_changeme';
     END IF;
@@ -441,6 +481,22 @@ GRANT USAGE ON SCHEMA public TO video_proxy;
 GRANT CONNECT ON DATABASE waddlebot TO workflow;
 GRANT USAGE ON SCHEMA public TO workflow;
 
+GRANT CONNECT ON DATABASE waddlebot TO mod_router;
+GRANT USAGE ON SCHEMA public TO mod_router;
+
+GRANT CONNECT ON DATABASE waddlebot TO hub_admin;
+GRANT USAGE ON SCHEMA public TO hub_admin;
+GRANT CREATE ON SCHEMA public TO hub_admin;
+
+GRANT CONNECT ON DATABASE waddlebot TO clip_interaction;
+GRANT USAGE ON SCHEMA public TO clip_interaction;
+
+GRANT CONNECT ON DATABASE waddlebot TO lfg_interaction;
+GRANT USAGE ON SCHEMA public TO lfg_interaction;
+
+GRANT CONNECT ON DATABASE waddlebot TO server_status_interaction;
+GRANT USAGE ON SCHEMA public TO server_status_interaction;
+
 -- Create indexes for common query patterns
 -- These will be created by py4web/pydal as needed, but we can prepare some common ones
 
@@ -495,6 +551,9 @@ CREATE TABLE IF NOT EXISTS hub_settings (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_by INTEGER REFERENCES hub_users(id)
 );
+
+ALTER TABLE hub_users OWNER TO hub_admin;
+ALTER TABLE hub_settings OWNER TO hub_admin;
 
 CREATE INDEX IF NOT EXISTS idx_hub_users_email ON hub_users(email);
 CREATE INDEX IF NOT EXISTS idx_hub_users_username ON hub_users(username);

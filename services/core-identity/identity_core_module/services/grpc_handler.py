@@ -1,10 +1,13 @@
 """gRPC handler for identity service"""
 import logging
+import os
 from typing import Optional, List
 from dataclasses import dataclass
 
 import grpc
 from grpc import aio
+from flask_core.auth import verify_jwt_token
+from identity_core_module.config import Config
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -101,10 +104,25 @@ class IdentityServiceServicer:
                 self.logger.warning("Empty token provided for verification")
                 return False
 
-            # TODO: Implement JWT verification
-            # This would typically validate the token against SECRET_KEY
-            # For now, we'll accept any non-empty token
+            # Get secret key from environment or config
+            secret_key = os.getenv("SECRET_KEY", Config.SECRET_KEY)
+
+            # Verify JWT token using flask_core
+            payload = verify_jwt_token(token, secret_key)
+
+            # Check if verification failed
+            if payload is None:
+                self.logger.warning("JWT verification failed for provided token")
+                return False
+
+            # Check for required tenant claim
+            tenant = payload.get("tenant")
+            if not tenant or not isinstance(tenant, str) or len(tenant.strip()) == 0:
+                self.logger.warning("Token missing or empty tenant claim")
+                return False
+
             return True
+
         except Exception as e:
             self.logger.error(f"Token verification failed: {str(e)}")
             return False
@@ -138,28 +156,87 @@ class IdentityServiceServicer:
                     error="Invalid authentication token"
                 )
 
-            # TODO: Query database to lookup identity
-            # For now, return placeholder response
-            self.logger.info("LookupIdentity request processed successfully")
+            # Validate required parameters
+            if not request.platform or not request.platform_user_id:
+                self.logger.warning("Missing required parameters: platform and platform_user_id")
+                return LookupIdentityResponse(
+                    success=False,
+                    error="platform and platform_user_id are required"
+                )
+
+            # Query database for identity if DAL is available
+            if self.dal is None:
+                self.logger.warning("DAL not available for LookupIdentity")
+                return LookupIdentityResponse(
+                    success=False,
+                    error="Internal server error"
+                )
+
+            # Query to get hub_user_id and username
+            identity_query = """
+                SELECT hui.hub_user_id, hu.username
+                FROM hub_user_identities hui
+                JOIN hub_users hu ON hu.id = hui.hub_user_id
+                WHERE hui.platform = %s AND hui.platform_user_id = %s
+                LIMIT 1
+            """
+
+            identity_result = self.dal.executesql(
+                identity_query,
+                [request.platform, request.platform_user_id]
+            )
+
+            if not identity_result:
+                self.logger.info(
+                    f"Identity not found for platform={request.platform}, "
+                    f"platform_user_id={request.platform_user_id}"
+                )
+                return LookupIdentityResponse(
+                    success=False,
+                    error="Identity not found"
+                )
+
+            # Extract user info from query result
+            hub_user_id = identity_result[0][0]
+            username = identity_result[0][1]
+
+            # Query linked platforms for this user
+            platforms_query = """
+                SELECT platform, platform_user_id, platform_username
+                FROM hub_user_identities
+                WHERE hub_user_id = %s
+            """
+
+            platforms_result = self.dal.executesql(platforms_query, [hub_user_id])
+
+            # Build linked platforms list
+            linked_platforms = []
+            if platforms_result:
+                for row in platforms_result:
+                    linked_platforms.append(
+                        PlatformIdentity(
+                            platform=row[0],
+                            platform_user_id=row[1],
+                            platform_username=row[2]
+                        )
+                    )
+
+            self.logger.info(
+                f"LookupIdentity request processed successfully for hub_user_id={hub_user_id}"
+            )
 
             return LookupIdentityResponse(
                 success=True,
-                hub_user_id=1,
-                username="test_user",
-                linked_platforms=[
-                    PlatformIdentity(
-                        platform=request.platform or "twitch",
-                        platform_user_id=request.platform_user_id or "user123",
-                        platform_username="platform_user"
-                    )
-                ]
+                hub_user_id=hub_user_id,
+                username=username,
+                linked_platforms=linked_platforms
             )
 
         except Exception as e:
             self.logger.error(f"Error in LookupIdentity: {str(e)}")
             return LookupIdentityResponse(
                 success=False,
-                error=f"Internal server error: {str(e)}"
+                error="Internal server error"
             )
 
     async def GetLinkedPlatforms(
@@ -189,29 +266,49 @@ class IdentityServiceServicer:
                     error="Invalid authentication token"
                 )
 
-            # TODO: Query database to get linked platforms
-            # For now, return placeholder response
-            self.logger.info("GetLinkedPlatforms request processed successfully")
+            # Query database for linked platforms if DAL is available
+            if self.dal is None:
+                self.logger.warning("DAL not available for GetLinkedPlatforms")
+                return GetLinkedPlatformsResponse(
+                    success=False,
+                    error="Internal server error"
+                )
+
+            # Query to get linked platforms
+            platforms_query = """
+                SELECT platform, platform_user_id, platform_username
+                FROM hub_user_identities
+                WHERE hub_user_id = %s
+                ORDER BY is_primary DESC, linked_at ASC
+            """
+
+            platforms_result = self.dal.executesql(platforms_query, [request.hub_user_id])
+
+            # Build platforms list from query result
+            platforms = []
+            if platforms_result:
+                for row in platforms_result:
+                    platforms.append(
+                        PlatformIdentity(
+                            platform=row[0],
+                            platform_user_id=row[1],
+                            platform_username=row[2]
+                        )
+                    )
+
+            self.logger.info(
+                f"GetLinkedPlatforms request processed successfully for hub_user_id={request.hub_user_id}, "
+                f"found {len(platforms)} platforms"
+            )
 
             return GetLinkedPlatformsResponse(
                 success=True,
-                platforms=[
-                    PlatformIdentity(
-                        platform="twitch",
-                        platform_user_id="user123",
-                        platform_username="twitch_user"
-                    ),
-                    PlatformIdentity(
-                        platform="discord",
-                        platform_user_id="discord456",
-                        platform_username="discord_user"
-                    ),
-                ]
+                platforms=platforms
             )
 
         except Exception as e:
             self.logger.error(f"Error in GetLinkedPlatforms: {str(e)}")
             return GetLinkedPlatformsResponse(
                 success=False,
-                error=f"Internal server error: {str(e)}"
+                error="Internal server error"
             )

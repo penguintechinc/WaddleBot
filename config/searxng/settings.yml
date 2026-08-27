@@ -1,5 +1,8 @@
 # SearXNG Configuration for WaddleBot Game Lookup
 # API-only usage — no public-facing UI needed
+# use_default_settings merges this file on top of SearXNG defaults
+# avoiding schema validation failures from missing required sections
+use_default_settings: true
 
 general:
   instance_name: "waddlebot-searxng"
@@ -15,12 +18,11 @@ search:
     - json
 
 server:
-  port: 8888
+  port: 8080
   bind_address: "0.0.0.0"
   secret_key: "waddlebot-searxng-internal-key"
   limiter: false    # rate limiting handled by game_lookup_service
   image_proxy: false
-  method: "GET"
 
 ui:
   static_use_hash: true

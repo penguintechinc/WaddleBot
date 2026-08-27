@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import paymentController from '../controllers/paymentController.js';
+import { requireAuth } from '../middleware/auth.js';
 
 /**
  * Payment Routes
@@ -19,7 +20,7 @@ router.post('/subscriptions/:provider/:id/cancel', paymentController.cancelSubsc
 router.post('/subscriptions/:provider/:id/reactivate', paymentController.reactivateSubscription.bind(paymentController));
 
 // Refunds
-router.post('/refunds', paymentController.createRefund.bind(paymentController));
+router.post('/refunds', requireAuth, paymentController.createRefund.bind(paymentController));
 router.get('/refunds/:provider/:id', paymentController.getRefund.bind(paymentController));
 
 // Customers

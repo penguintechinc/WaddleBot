@@ -47,7 +47,7 @@ spec:
           protocol: TCP
         securityContext:
           allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: false
+          readOnlyRootFilesystem: true
         env:
         - name: MODULE_NAME
           value: "action-serverless"
@@ -87,10 +87,14 @@ spec:
           mountPath: /var/log/waddlebotlog
         - name: databases
           mountPath: /app/databases
+        - name: tmp
+          mountPath: /tmp
       volumes:
       - name: logs
         emptyDir: {}
       - name: databases
+        emptyDir: {}
+      - name: tmp
         emptyDir: {}
 ---
 apiVersion: v1

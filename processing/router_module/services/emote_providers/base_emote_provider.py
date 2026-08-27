@@ -13,7 +13,7 @@ from typing import List, Optional
 logger = logging.getLogger(__name__)
 
 
-@dataclass
+@dataclass(slots=True)
 class Emote:
     """Represents a platform emote."""
     code: str

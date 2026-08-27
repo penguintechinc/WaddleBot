@@ -15,10 +15,13 @@ import UserPublicProfile from './pages/public/UserPublicProfile';
 
 // Auth pages
 import LoginPage from './pages/auth/LoginPage';
+import RegisterPage from './pages/auth/RegisterPage';
+import PasswordRecoveryUnavailablePage from './pages/auth/PasswordRecoveryUnavailablePage';
 import OAuthCallback from './pages/auth/OAuthCallback';
 
 // Cookie Policy page
 import CookiePolicy from './pages/CookiePolicy';
+import PrivacyRights from './pages/PrivacyRights';
 
 // Calendar pages
 import CalendarSettings from './pages/calendar/CalendarSettings';
@@ -212,8 +215,11 @@ function App() {
         <Route path="/users/:userId" element={<UserPublicProfile />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/login/:tenantSlug" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/forgot-password" element={<PasswordRecoveryUnavailablePage />} />
         <Route path="/auth/callback" element={<OAuthCallback />} />
         <Route path="/cookie-policy" element={<CookiePolicy />} />
+        <Route path="/privacy-rights" element={<PrivacyRights />} />
 
         {/* Public booking page (no auth required) */}
         <Route path="/book/:slug" element={<BookingPagePublic />} />

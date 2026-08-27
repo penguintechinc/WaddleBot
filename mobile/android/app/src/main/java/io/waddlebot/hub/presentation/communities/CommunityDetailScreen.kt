@@ -16,9 +16,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Message
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Message
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.Card
@@ -88,7 +88,7 @@ fun CommunityDetailScreen(
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            imageVector = Icons.Filled.ArrowBack,
                             contentDescription = "Back"
                         )
                     }
@@ -156,7 +156,7 @@ fun CommunityDetailScreen(
                             )
                         }
 
-                        items(detail.recentActivity.take(10)) { activity ->
+                        items(items = detail.recentActivity.take(10)) { activity ->
                             ActivityCard(activity = activity)
                         }
                     }
@@ -279,7 +279,7 @@ private fun StatsSection(
             StatCard(
                 label = "Messages",
                 value = stats.messagesToday.toString(),
-                icon = Icons.AutoMirrored.Filled.Message,
+                icon = Icons.Filled.Message,
                 modifier = Modifier.weight(1f)
             )
         }

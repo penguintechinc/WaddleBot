@@ -382,7 +382,7 @@ The repository includes comprehensive GitHub Actions workflows:
 1. **containers.yml**: Builds and tests all container modules
 2. **ci-cd.yml**: Main CI/CD pipeline with security scanning
 3. **android.yml**: Android app building and testing
-4. **desktop-bridge.yml**: Golang desktop bridge compilation
+4. **pr-validation.yml**: Pull request and merge-queue test gate
 
 #### Secrets Configuration
 

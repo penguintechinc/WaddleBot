@@ -99,10 +99,9 @@ async def _load_tracked_channels(dal) -> dict:
     channels = {}
     try:
         result = dal.executesql(
-            """SELECT s.platform_server_id, s.platform_data, cs.community_id
-               FROM servers s
-               JOIN community_servers cs ON cs.platform_server_id = s.platform_server_id
-               WHERE s.platform = 'twitch' AND s.is_active = true AND cs.is_active = true
+            """SELECT cs.platform_server_id, cs.config, cs.community_id
+               FROM community_servers cs
+               WHERE cs.platform = 'twitch' AND cs.status = 'approved'
             """
         )
         for row in result:

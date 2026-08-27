@@ -11,14 +11,20 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 
+def _optional_env(name: str, default: str = "") -> str:
+    """Read an optional value, rejecting comments copied from env templates."""
+    value = os.getenv(name, default).strip()
+    return "" if value.startswith("#") else value
+
+
 class Config:
     """Configuration class for GCP Functions Action Module."""
 
     # GCP Configuration (optional in testing mode)
-    GCP_PROJECT_ID: str = os.getenv("GCP_PROJECT_ID", "")
-    GCP_REGION: str = os.getenv("GCP_REGION", "us-central1")
-    GCP_SERVICE_ACCOUNT_KEY: str = os.getenv("GCP_SERVICE_ACCOUNT_KEY", "")  # JSON string or path (optional in testing)
-    GCP_SERVICE_ACCOUNT_EMAIL: str = os.getenv("GCP_SERVICE_ACCOUNT_EMAIL", "")
+    GCP_PROJECT_ID: str = _optional_env("GCP_PROJECT_ID")
+    GCP_REGION: str = _optional_env("GCP_REGION", "us-central1")
+    GCP_SERVICE_ACCOUNT_KEY: str = _optional_env("GCP_SERVICE_ACCOUNT_KEY")
+    GCP_SERVICE_ACCOUNT_EMAIL: str = _optional_env("GCP_SERVICE_ACCOUNT_EMAIL")
 
     # GCP API Configuration
     GCP_API_ENDPOINT: str = f"https://cloudfunctions.googleapis.com/v2"

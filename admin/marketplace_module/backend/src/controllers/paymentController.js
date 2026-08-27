@@ -245,11 +245,53 @@ class PaymentController {
         });
       }
 
-      // TODO: Add authorization check - only admins or original purchaser
+      // Authorization check - only admins or original purchaser
+      if (!req.user) {
+        return res.status(403).json({
+          success: false,
+          error: 'Authentication required to create refunds',
+        });
+      }
+
+      // Retrieve the original checkout/order both to check ownership and to
+      // resolve the provider-specific refundable ID.
+      const paymentResult = await paymentService.getRefundablePayment(provider, paymentId);
+      if (!paymentResult) {
+        return res.status(404).json({
+          success: false,
+          error: 'Payment not found',
+        });
+      }
+
+      if (!paymentResult.refundablePaymentId) {
+        return res.status(400).json({
+          success: false,
+          error: 'Payment has not been captured and cannot be refunded',
+        });
+      }
+
+      const paymentOwnerId = paymentResult.ownerId;
+
+      // Check authorization: admin or payment owner
+      const isAdmin = req.user?.roles?.includes('super_admin') ||
+                      req.user?.roles?.includes('platform-admin') ||
+                      req.user?.isSuperAdmin;
+      const isOwner = Boolean(
+        req.user?.id &&
+        paymentOwnerId &&
+        String(req.user.id) === String(paymentOwnerId)
+      );
+
+      if (!isAdmin && !isOwner) {
+        return res.status(403).json({
+          success: false,
+          error: 'Not authorized to refund this payment',
+        });
+      }
 
       const result = await paymentService.createRefund({
         provider,
-        paymentId,
+        paymentId: paymentResult.refundablePaymentId,
         amount,
         currency,
         reason,

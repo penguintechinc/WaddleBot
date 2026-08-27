@@ -2,17 +2,16 @@
 # Stage 1: Build frontend
 FROM node:20-bookworm-slim@sha256:1e85773c98c31d4fe5b545e4cb17379e617b348832fb3738b22a08f68dec30f3 AS frontend-build
 
-ARG NPM_TOKEN
-
 WORKDIR /build/admin/hub_module/frontend
 
 # Copy frontend package files
 COPY admin/hub_module/frontend/package*.json ./
 
-# Configure GitHub Packages auth and install dependencies
-RUN printf '@penguintechinc:registry=https://npm.pkg.github.com\n//npm.pkg.github.com/:_authToken=%s\n' "${NPM_TOKEN}" > .npmrc && \
-    npm install && \
-    rm -f .npmrc
+# Install the exact locked dependency graph from public npm without running
+# arbitrary lifecycle scripts, then rebuild the one approved native dependency.
+# @penguintechinc packages are published to npmjs.com, so no registry auth is
+# needed and no token ever enters the build.
+RUN npm ci --ignore-scripts && npm rebuild esbuild
 
 # Copy frontend source
 COPY admin/hub_module/frontend/ ./
@@ -38,8 +37,9 @@ RUN groupadd -g 1001 nodejs && \
 # Copy backend package files
 COPY admin/hub_module/backend/package*.json ./
 
-# Install production dependencies only
-RUN npm install --only=production
+# Install the exact production dependency graph without running arbitrary
+# lifecycle scripts, then rebuild the one approved native dependency.
+RUN npm ci --omit=dev --ignore-scripts && npm rebuild bcrypt
 
 # Remove build tools to reduce image size (keep curl for healthcheck)
 RUN apt-get purge -y make g++ && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*

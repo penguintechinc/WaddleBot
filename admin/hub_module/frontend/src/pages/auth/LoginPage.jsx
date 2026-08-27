@@ -1,17 +1,17 @@
 import { useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { LoginPageBuilder } from '@penguintechinc/react-libs';
 import { useAuth } from '../../contexts/AuthContext';
 import { KeyIcon } from '@heroicons/react/24/outline';
-import { passkeyApi } from '../../services/api';
+import { passkeyApi, publicApi } from '../../services/api';
 import { useState } from 'react';
 
 // Social login providers — all route through the backend OAuth proxy.
 // The LoginPageBuilder appends client_id/state params to the authUrl,
 // but the backend ignores them and generates its own state UUID.
 const SOCIAL_PROVIDERS = [
-  { provider: 'discord', clientId: 'server-side' },
-  { provider: 'twitch',  clientId: 'server-side' },
+  { provider: 'discord', clientId: 'server-side', authUrl: '/api/v1/auth/oauth/discord' },
+  { provider: 'twitch',  clientId: 'server-side', authUrl: '/api/v1/auth/oauth/twitch' },
   {
     provider: 'oauth2',
     clientId: 'server-side',
@@ -148,6 +148,13 @@ function LoginPage() {
   const navigate = useNavigate();
   const { tenantSlug } = useParams();
   const { handleOAuthCallback, isAuthenticated } = useAuth();
+  const [signupEnabled, setSignupEnabled] = useState(false);
+
+  useEffect(() => {
+    publicApi.getSignupSettings()
+      .then(({ data }) => setSignupEnabled(data.signupEnabled === true))
+      .catch(() => setSignupEnabled(false));
+  }, []);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -217,6 +224,18 @@ function LoginPage() {
           className="!rounded-t-none !border-t-0 !mt-0"
           colors={WADDLEBOT_COLORS}
         />
+        {signupEnabled && (
+          <p className="mt-4 text-center text-navy-400">
+            Don&apos;t have an account?{' '}
+            <Link
+              to="/register"
+              className="text-sky-400 hover:text-sky-300 font-medium"
+              data-testid="register-link"
+            >
+              Create one
+            </Link>
+          </p>
+        )}
       </div>
     </div>
   );

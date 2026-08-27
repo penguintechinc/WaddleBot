@@ -2,7 +2,7 @@ name: Container Builds
 
 on:
   push:
-    branches: [ main, 'v*', develop, 'feature/**', 'bugfix/**' ]
+    branches: [main, 'v*', 'release/**', 'feature/**', 'fix/**', 'chore/**', 'hotfix/**', 'docs/**', 'refactor/**']
     tags: [ 'v*' ]
     paths:
       - 'processing/router_module/**'
@@ -20,7 +20,10 @@ on:
       - '.version'
       - '.github/workflows/containers.yml'
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, 'v*', 'release/**', 'feature/**', 'fix/**', 'chore/**', 'hotfix/**', 'docs/**', 'refactor/**']
+  merge_group:
+    types: [checks_requested]
+    branches: [main, 'v*', 'release/**', 'feature/**', 'fix/**', 'chore/**', 'hotfix/**', 'docs/**', 'refactor/**']
   workflow_dispatch:
 
 permissions:
@@ -427,14 +430,14 @@ jobs:
             condition: ${{ needs.detect-changes.outputs.hub == 'true' || needs.detect-changes.outputs.libs == 'true' }}
             dockerfile: ./admin/hub_module/Dockerfile
             context: .
-            port: 3000
+            port: 8060
           - module: hub-api
             platform: linux/arm64
             runner: ubuntu-24.04-arm
             condition: ${{ needs.detect-changes.outputs.hub == 'true' || needs.detect-changes.outputs.libs == 'true' }}
             dockerfile: ./admin/hub_module/Dockerfile
             context: .
-            port: 3000
+            port: 8060
 
           - module: hub-webui
             platform: linux/amd64
@@ -442,14 +445,14 @@ jobs:
             condition: ${{ needs.detect-changes.outputs.hub == 'true' || needs.detect-changes.outputs.libs == 'true' }}
             dockerfile: ./admin/hub_module/Dockerfile.webui
             context: .
-            port: 5173
+            port: 8080
           - module: hub-webui
             platform: linux/arm64
             runner: ubuntu-24.04-arm
             condition: ${{ needs.detect-changes.outputs.hub == 'true' || needs.detect-changes.outputs.libs == 'true' }}
             dockerfile: ./admin/hub_module/Dockerfile.webui
             context: .
-            port: 5173
+            port: 8080
 
           # Action modules
           - module: action-platforms
@@ -486,18 +489,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a  # v4
-
+      # Native per-arch builds (amd64 on ubuntu-latest, arm64 on ubuntu-24.04-arm)
+      # require no QEMU emulation. Docker setup is gated on matrix.condition so
+      # unchanged modules don't pull tooling from Docker Hub only to skip the build.
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd  # v4
+        if: matrix.condition == 'true' || github.event_name == 'workflow_dispatch'
 
       - name: Log in to Container Registry
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121  # v4
+        if: >
+          (matrix.condition == 'true' || github.event_name == 'workflow_dispatch') &&
+          github.event_name != 'pull_request' &&
+          github.event_name != 'merge_group'
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_PUSH_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract platform suffix
         id: platform-suffix
@@ -511,7 +519,8 @@ jobs:
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
-          push: true
+          push: ${{ github.event_name != 'pull_request' && github.event_name != 'merge_group' }}
+          load: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && matrix.platform == 'linux/amd64' }}
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.module }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}-${{ steps.platform-suffix.outputs.suffix }}
           platforms: ${{ matrix.platform }}
           cache-from: type=gha,scope=${{ matrix.module }}-${{ steps.platform-suffix.outputs.suffix }}
@@ -519,10 +528,13 @@ jobs:
           build-args: |
             MODULE_NAME=${{ matrix.module }}
             MODULE_PORT=${{ matrix.port }}
-            NPM_TOKEN=${{ secrets.GITHUB_TOKEN }}
 
       - name: Run container tests
-        if: (matrix.condition == 'true' || github.event_name == 'workflow_dispatch') && matrix.port != 0
+        if: >
+          (matrix.condition == 'true' || github.event_name == 'workflow_dispatch') &&
+          matrix.port != 0 &&
+          ((github.event_name != 'pull_request' && github.event_name != 'merge_group') ||
+          matrix.platform == 'linux/amd64')
         run: |
           docker run --rm --name test-${{ matrix.module }} -d -p ${{ matrix.port }}:${{ matrix.port }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.module }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}-${{ steps.platform-suffix.outputs.suffix }}
           sleep 10
@@ -542,7 +554,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: [determine-version, detect-changes, build-platform]
     if: >
-      needs.detect-changes.outputs.router == 'true' ||
+      github.event_name != 'pull_request' &&
+      github.event_name != 'merge_group' &&
+      (needs.detect-changes.outputs.router == 'true' ||
       needs.detect-changes.outputs.marketplace == 'true' ||
       needs.detect-changes.outputs.migrations == 'true' ||
       needs.detect-changes.outputs.core-data == 'true' ||
@@ -558,7 +572,7 @@ jobs:
       needs.detect-changes.outputs.action-platforms == 'true' ||
       needs.detect-changes.outputs.action-serverless == 'true' ||
       needs.detect-changes.outputs.libs == 'true' ||
-      github.event_name == 'workflow_dispatch'
+      github.event_name == 'workflow_dispatch')
     strategy:
       fail-fast: false
       matrix:
@@ -601,7 +615,7 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_PUSH_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd  # v4
@@ -632,31 +646,52 @@ jobs:
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
-    needs: [determine-version, merge-manifests]
+    needs: [determine-version, detect-changes, merge-manifests]
     if: always() && needs.merge-manifests.result == 'success'
     continue-on-error: true
     strategy:
+      fail-fast: false
       matrix:
-        image:
-          - router
-          - marketplace
-          - hub-api
-          - hub-webui
-          - trigger-streaming
-          - trigger-webhooks
-          - interactive-social
-          - interactive-gaming
-          - interactive-media
-          - interactive-productivity
-          - core-data
-          - core-identity
-          - core-community
-          - action-platforms
-          - action-serverless
-          - migrations
+        # Mirror the build/merge gating: only scan modules that were actually
+        # built and merged this run. Unchanged modules have no merged manifest,
+        # so scanning them would fail with MANIFEST_UNKNOWN.
+        include:
+          - image: router
+            condition: ${{ needs.detect-changes.outputs.router == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - image: marketplace
+            condition: ${{ needs.detect-changes.outputs.marketplace == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - image: hub-api
+            condition: ${{ needs.detect-changes.outputs.hub == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - image: hub-webui
+            condition: ${{ needs.detect-changes.outputs.hub == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - image: trigger-streaming
+            condition: ${{ needs.detect-changes.outputs.trigger-streaming == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - image: trigger-webhooks
+            condition: ${{ needs.detect-changes.outputs.trigger-webhooks == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - image: interactive-social
+            condition: ${{ needs.detect-changes.outputs.interactive-social == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - image: interactive-gaming
+            condition: ${{ needs.detect-changes.outputs.interactive-gaming == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - image: interactive-media
+            condition: ${{ needs.detect-changes.outputs.interactive-media == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - image: interactive-productivity
+            condition: ${{ needs.detect-changes.outputs.interactive-productivity == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - image: core-data
+            condition: ${{ needs.detect-changes.outputs.core-data == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - image: core-identity
+            condition: ${{ needs.detect-changes.outputs.core-identity == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - image: core-community
+            condition: ${{ needs.detect-changes.outputs.core-community == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - image: action-platforms
+            condition: ${{ needs.detect-changes.outputs.action-platforms == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - image: action-serverless
+            condition: ${{ needs.detect-changes.outputs.action-serverless == 'true' || needs.detect-changes.outputs.libs == 'true' }}
+          - image: migrations
+            condition: ${{ needs.detect-changes.outputs.migrations == 'true' || needs.detect-changes.outputs.libs == 'true' }}
     steps:
       - name: Log in to Container Registry
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121  # v4
+        if: matrix.condition == 'true' || github.event_name == 'workflow_dispatch'
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -664,6 +699,7 @@ jobs:
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        if: matrix.condition == 'true' || github.event_name == 'workflow_dispatch'
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.image }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}
           format: 'sarif'
@@ -671,7 +707,7 @@ jobs:
 
       - name: Upload Trivy scan results
         uses: github/codeql-action/upload-sarif@95e58e9a2cdfd71adc6e0353d5c52f41a045d225  # v4
-        if: always()
+        if: matrix.condition == 'true' || github.event_name == 'workflow_dispatch'
         with:
           sarif_file: 'trivy-${{ matrix.image }}.sarif'
 

@@ -3,6 +3,7 @@ package io.waddlebot.hub.presentation.auth
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import io.waddlebot.hub.data.models.ApiResult
 import io.waddlebot.hub.data.models.User
 import io.waddlebot.hub.data.repository.AuthRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,22 +37,22 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             _state.update { it.copy(isCheckingAuth = true, error = null) }
 
-            if (!authRepository.isLoggedIn()) {
+            if (!authRepository.hasToken()) {
                 _state.update { it.copy(isCheckingAuth = false, isLoggedIn = false) }
                 return@launch
             }
 
-            authRepository.validateToken()
-                .onSuccess { user ->
+            when (val result = authRepository.getCurrentUser()) {
+                is ApiResult.Success -> {
                     _state.update {
                         it.copy(
                             isCheckingAuth = false,
                             isLoggedIn = true,
-                            user = user
+                            user = result.data
                         )
                     }
                 }
-                .onFailure {
+                is ApiResult.Error -> {
                     _state.update {
                         it.copy(
                             isCheckingAuth = false,
@@ -60,6 +61,7 @@ class AuthViewModel @Inject constructor(
                         )
                     }
                 }
+            }
         }
     }
 
@@ -72,25 +74,36 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
 
-            authRepository.login(email, password)
-                .onSuccess { response ->
+            when (val result = authRepository.login(email, password)) {
+                is ApiResult.Success -> {
+                    val user = result.data.user
+                    if (user != null) {
+                        _state.update {
+                            it.copy(
+                                isLoading = false,
+                                isLoggedIn = true,
+                                user = user,
+                                error = null
+                            )
+                        }
+                    } else {
+                        _state.update {
+                            it.copy(
+                                isLoading = false,
+                                error = "Login response did not include a user"
+                            )
+                        }
+                    }
+                }
+                is ApiResult.Error -> {
                     _state.update {
                         it.copy(
                             isLoading = false,
-                            isLoggedIn = true,
-                            user = response.user,
-                            error = null
+                            error = result.message
                         )
                     }
                 }
-                .onFailure { throwable ->
-                    _state.update {
-                        it.copy(
-                            isLoading = false,
-                            error = throwable.message ?: "Login failed"
-                        )
-                    }
-                }
+            }
         }
     }
 

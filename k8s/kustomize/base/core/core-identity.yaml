@@ -45,9 +45,12 @@ spec:
         - name: http
           containerPort: 8050
           protocol: TCP
+        - name: grpc
+          containerPort: 50030
+          protocol: TCP
         securityContext:
           allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: false
+          readOnlyRootFilesystem: true
         envFrom:
         - configMapRef:
             name: waddlebot-config
@@ -59,6 +62,8 @@ spec:
           value: "core-identity"
         - name: MODULE_PORT
           value: "8050"
+        - name: GRPC_PORT
+          value: "50030"
         livenessProbe:
           httpGet:
             path: /health
@@ -87,10 +92,14 @@ spec:
           mountPath: /var/log/waddlebotlog
         - name: databases
           mountPath: /app/databases
+        - name: tmp
+          mountPath: /tmp
       volumes:
       - name: logs
         emptyDir: {}
       - name: databases
+        emptyDir: {}
+      - name: tmp
         emptyDir: {}
 ---
 apiVersion: v1
@@ -108,4 +117,8 @@ spec:
   - name: http
     port: 8050
     targetPort: http
+    protocol: TCP
+  - name: grpc
+    port: 50030
+    targetPort: grpc
     protocol: TCP

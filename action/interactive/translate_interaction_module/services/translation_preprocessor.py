@@ -32,7 +32,7 @@ class TokenType(Enum):
     UNCERTAIN = "uncertain"       # Unknown patterns needing AI decision
 
 
-@dataclass
+@dataclass(slots=True)
 class PreservedToken:
     """Represents a token preserved from translation."""
     token_type: TokenType
@@ -43,7 +43,7 @@ class PreservedToken:
     metadata: Dict = field(default_factory=dict)
 
 
-@dataclass
+@dataclass(slots=True)
 class PreprocessResult:
     """Result of text preprocessing."""
     processed_text: str

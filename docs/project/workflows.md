@@ -201,13 +201,10 @@ Response modules that execute commands and user interactions:
 ├── version-release.yml                # Version release workflow
 ├── build-router.yml                   # Router module build
 ├── build-{module-name}.yml            # Individual module builds (24 files)
-├── android.yml                        # Android app CI/CD
+├── android.yml                        # Android lint, tests, and debug build
 ├── containers.yml                     # Container orchestration
-├── desktop-bridge.yml                 # Desktop bridge integration
-├── desktop-linux.yml                  # Desktop Linux build
-├── desktop-macos.yml                  # Desktop macOS build
-├── desktop-windows.yml                # Desktop Windows build
-└── desktop-release.yml                # Desktop release workflow
+├── pr-validation.yml                  # Pull request and merge-queue tests
+└── security.yml                       # Dependency and code security checks
 ```
 
 ### Main CI/CD Pipeline (`ci-cd.yml`)
@@ -291,7 +288,7 @@ on:
       - '.github/workflows/build-router.yml'
       - '.github/workflows/build-container.yml'
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, 'v*']
   workflow_dispatch:
 
 jobs:
@@ -318,14 +315,13 @@ jobs:
 - GitHub Release: `v0.2.0` (or current version)
 - Release artifacts and changelog
 
-### Desktop & Mobile Workflows
+### Mobile Workflow
 
-**android.yml**: Kotlin/Gradle Android builds and testing
-**desktop-linux.yml**: Linux desktop application builds
-**desktop-macos.yml**: macOS desktop application builds
-**desktop-windows.yml**: Windows desktop application builds
-**desktop-bridge.yml**: Desktop-to-web bridge integration
-**desktop-release.yml**: Coordinated desktop release workflow
+**android.yml** validates the maintained Kotlin application under
+`mobile/android` with Gradle wrapper validation, lint, unit tests, and a debug
+assembly. **pr-validation.yml** provides the pull-request and merge-queue test
+gate. The former desktop workflows were removed when their source projects were
+retired.
 
 ---
 

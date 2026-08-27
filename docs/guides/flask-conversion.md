@@ -229,12 +229,9 @@ Waddles uses comprehensive GitHub Actions for automated building, testing, and d
 - **Build Artifacts**: APK and AAB generation for distribution
 - **Play Store Deployment**: Automated deployment to internal testing track
 
-### Desktop Bridge Pipeline (`.github/workflows/desktop-bridge.yml`)
-
-- **Cross-Platform Compilation**: Windows, macOS, and Linux builds
-- **Go Testing**: Comprehensive testing including benchmarks
-- **Release Management**: Automated release creation with checksums
-- **Binary Distribution**: Multi-platform binary artifacts
+The legacy desktop bridge workflows were removed after their source project was
+retired. Desktop-specific release automation now belongs with any future
+desktop source repository rather than the Flask service pipeline.
 
 ## Required CI/CD Standards
 

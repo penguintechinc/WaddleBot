@@ -16,3 +16,4 @@ aiohttp>=3.10.0,<4.0.0
 pyjwt>=2.8.0
 # Logging
 python-json-logger>=2.0.0
+setuptools>=83.0.0

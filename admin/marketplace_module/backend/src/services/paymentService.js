@@ -128,6 +128,54 @@ class PaymentService {
   }
 
   /**
+   * Resolve a checkout session/order into the provider's refundable payment.
+   *
+   * The public API identifies the original checkout (Stripe Checkout Session
+   * or PayPal Order). Refund APIs use different IDs: a Stripe PaymentIntent or
+   * a PayPal capture.
+   *
+   * @param {string} provider - Payment provider
+   * @param {string} id - Checkout Session or Order ID
+   * @returns {Promise<Object>} Normalized payment ownership and refund target
+   */
+  async getRefundablePayment(provider, id) {
+    const normalizedProvider = provider.toLowerCase();
+    const paymentResult = await this.getPayment(normalizedProvider, id);
+
+    if (normalizedProvider === 'stripe') {
+      const session = paymentResult?.session;
+      const paymentIntentId = typeof session?.payment_intent === 'string'
+        ? session.payment_intent
+        : session?.payment_intent?.id;
+
+      return session ? {
+        payment: session,
+        ownerId: session.metadata?.userId,
+        refundablePaymentId: paymentIntentId,
+      } : null;
+    }
+
+    if (normalizedProvider === 'paypal') {
+      const order = paymentResult?.order;
+      if (!order) {
+        return null;
+      }
+
+      const captures = order.purchase_units
+        ?.flatMap(unit => unit.payments?.captures || []) || [];
+      const capture = captures.find(item => item.status === 'COMPLETED') || captures[0];
+
+      return {
+        payment: order,
+        ownerId: order.purchase_units?.[0]?.custom_id,
+        refundablePaymentId: capture?.id,
+      };
+    }
+
+    throw new Error(`Refund resolution not implemented for provider: ${provider}`);
+  }
+
+  /**
    * Create a subscription
    * @param {Object} options - Subscription options
    * @param {string} options.provider - Payment provider
@@ -282,16 +330,17 @@ class PaymentService {
     metadata = {},
   }) {
     try {
-      const providerService = this.getProvider(provider);
+      const normalizedProvider = provider.toLowerCase();
+      const providerService = this.getProvider(normalizedProvider);
 
-      if (provider === 'stripe') {
+      if (normalizedProvider === 'stripe') {
         return await providerService.createRefund({
           paymentIntentId: paymentId,
           amount,
           reason,
           metadata,
         });
-      } else if (provider === 'paypal') {
+      } else if (normalizedProvider === 'paypal') {
         return await providerService.createRefund(paymentId, {
           amount,
           currency,

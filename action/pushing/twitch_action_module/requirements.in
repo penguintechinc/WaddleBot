@@ -22,3 +22,4 @@ python-json-logger==2.0.7
 pytest>=9.0.3
 pytest-asyncio>=0.23.0
 pytest-cov==4.1.0
+setuptools>=83.0.0

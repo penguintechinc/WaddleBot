@@ -22,7 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -43,6 +43,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -68,6 +69,7 @@ import java.util.TimeZone
  * @param currentUserId The current user's ID for message ownership
  * @param viewModel The ChatViewModel instance
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun ChatScreen(
     communityId: String,
@@ -420,7 +422,7 @@ private fun MessageInput(
                 enabled = enabled && value.isNotBlank()
             ) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.Send,
+                    imageVector = Icons.Filled.Send,
                     contentDescription = "Send message",
                     tint = if (enabled && value.isNotBlank())
                         MaterialTheme.colorScheme.primary

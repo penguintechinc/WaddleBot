@@ -80,6 +80,20 @@ services:
       retries: 5
     restart: unless-stopped
 
+  db-migrations:
+    build:
+      context: .
+      dockerfile: migrations/Dockerfile
+    container_name: db-migrations
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-waddlebot}:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/${POSTGRES_DB:-waddlebot}
+    networks:
+      - waddlebot-internal
+    depends_on:
+      infra-postgres:
+        condition: service_healthy
+    restart: "no"
+
   # PostgreSQL Read Replica - routes SELECT queries here to reduce primary load
   infra-postgres-replica:
     image: postgres:16-bookworm@sha256:7858a1a43bb2e3decc07650c8989ba526e0a8164f212c9bb88b622cdbd71c4be
@@ -166,39 +180,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    restart: unless-stopped
-
-  credential-manager:
-    build:
-      context: .
-      dockerfile: core/credential_manager_module/Dockerfile
-    container_name: credential-manager
-    ports:
-      - "8080:8080"
-      - "9090:9090"
-    environment:
-      DATABASE_URL: postgresql://credential_manager:mod_credential_manager_dev_changeme@infra-postgres:5432/waddlebot
-      REDIS_URL: redis://redis:6379/0
-      TOKEN_REFRESH_BUFFER: "300"
-      POLLING_INTERVAL: "60"
-      MAX_CONCURRENT_REFRESHES: "5"
-      LOG_LEVEL: INFO
-      MODULE_SECRET_KEY: ${MODULE_SECRET_KEY:-change_me_in_production}
-      SECRETS_BACKEND: kubernetes
-      SECRETS_PATH: /secrets/db-passwords
-    depends_on:
-      infra-postgres:
-        condition: service_healthy
-      infra-redis:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    networks:
-      - waddlebot-internal
     restart: unless-stopped
 
   infra-minio:
@@ -331,9 +312,9 @@ services:
       - waddlebot-internal
     # Port exposed for local development/testing only
     ports:
-      - "8888:8888"
+      - "8888:8080"
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8888/healthz"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/healthz"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -389,6 +370,7 @@ services:
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_ROUTER_PASSWORD:-changeme}
       REDIS_KEY_PREFIX: "router:"
+      JWT_SECRET: ${JWT_SECRET:-changeme_jwt_secret}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:
       - waddlebot-internal
@@ -397,6 +379,8 @@ services:
         condition: service_healthy
       infra-redis:
         condition: service_healthy
+      db-migrations:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
@@ -410,8 +394,6 @@ services:
     build:
       context: .
       dockerfile: admin/hub_module/Dockerfile
-      args:
-        NPM_TOKEN: ${NPM_TOKEN}
     container_name: hub-api
     environment:
       NODE_ENV: ${NODE_ENV:-development}
@@ -445,7 +427,7 @@ services:
       # S3 Storage Configuration (MinIO)
       S3_STORAGE_ENABLED: "true"
       S3_BUCKET_NAME: waddlebot-assets
-      S3_ENDPOINT_URL: http://minio:9000
+      S3_ENDPOINT_URL: http://infra-minio:9000
       S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
       S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
       S3_PUBLIC_BASE_URL: http://localhost:9000/waddlebot-assets
@@ -462,6 +444,8 @@ services:
         condition: service_healthy
       infra-minio:
         condition: service_healthy
+      db-migrations:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:8060/health"]
       interval: 30s
@@ -632,6 +616,7 @@ services:
       WADDLEAI_BASE_URL: ${WADDLEAI_BASE_URL:-}
       WADDLEAI_API_KEY: ${WADDLEAI_API_KEY:-}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      HYPERCORN_WORKERS: ${HYPERCORN_WORKERS:-4}
     networks:
       - waddlebot-internal
     depends_on:
@@ -911,7 +896,7 @@ services:
       SECRETS_BACKEND: kubernetes
       SECRETS_PATH: /secrets/db-passwords
       ROUTER_API_URL: http://core-router:8000
-      TWITCH_MODULE_URL: http://action-twitch:8010
+      TWITCH_MODULE_URL: http://action-twitch:8072
       SERVICE_API_KEY: ${SERVICE_API_KEY:-changeme_service_key}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:
@@ -994,7 +979,9 @@ services:
     environment:
       MODULE_NAME: identity-core
       MODULE_PORT: 8050
-      DATABASE_URL: postgresql://identity:mod_identity_dev_changeme@infra-postgres:5432/waddlebot
+      GRPC_PORT: 50030
+      DATABASE_URL: postgresql://mod_core_identity:${DB_PASS_CORE_IDENTITY:-mod_core_identity_dev_changeme}@infra-postgres:5432/waddlebot
+      JWT_SECRET: ${JWT_SECRET:-changeme_jwt_secret}
       SECRETS_BACKEND: kubernetes
       SECRETS_PATH: /secrets/db-passwords
       REDIS_URL: redis://hub:${REDIS_HUB_PASSWORD:-changeme}@infra-redis:6379/0
@@ -1035,7 +1022,7 @@ services:
       MEM0_VECTOR_STORE: ${MEM0_VECTOR_STORE:-qdrant}
       QDRANT_URL: ${QDRANT_URL:-http://infra-qdrant:6333}
       GAME_LOOKUP_ENABLED: ${GAME_LOOKUP_ENABLED:-true}
-      SEARXNG_URL: ${SEARXNG_URL:-http://infra-searxng:8888}
+      SEARXNG_URL: ${SEARXNG_URL:-http://infra-searxng:8080}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:
       - waddlebot-internal
@@ -1048,6 +1035,8 @@ services:
         condition: service_healthy
       infra-searxng:
         condition: service_healthy
+      db-migrations:
+        condition: service_completed_successfully
     # Port removed - access via ingress
     # ports:
     #   - "8070:8070"
@@ -1082,10 +1071,12 @@ services:
         condition: service_healthy
       infra-redis:
         condition: service_healthy
+      db-migrations:
+        condition: service_completed_successfully
       core-router:
         condition: service_started
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8070/health')"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/health')"]
       interval: 30s
       timeout: 10s
       start_period: 30s
@@ -1165,6 +1156,8 @@ services:
         condition: service_healthy
       infra-redis:
         condition: service_healthy
+      db-migrations:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8040/health')"]
       interval: 30s
@@ -1194,6 +1187,8 @@ services:
         condition: service_healthy
       infra-redis:
         condition: service_healthy
+      db-migrations:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8041/health')"]
       interval: 30s
@@ -1354,6 +1349,8 @@ services:
         condition: service_healthy
       infra-minio:
         condition: service_healthy
+      db-migrations:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8092/health"]
       interval: 30s
@@ -1381,6 +1378,8 @@ services:
     depends_on:
       infra-postgres:
         condition: service_healthy
+      db-migrations:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8091/health"]
       interval: 30s
@@ -1410,6 +1409,8 @@ services:
     depends_on:
       infra-postgres:
         condition: service_healthy
+      db-migrations:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8093/health"]
       interval: 30s
@@ -1419,7 +1420,8 @@ services:
 
   # MarchProxy RTMP sidecar for video proxy
   marchproxy-rtmp:
-    image: ghcr.io/penguintech/marchproxy:latest
+    profiles: [rtmp]  # excluded from default `up` — image broken; waddlebot/core-module-rtc may be successor
+    image: ghcr.io/penguintechinc/marchproxy:latest
     container_name: marchproxy-rtmp
     environment:
       MARCHPROXY_MODE: rtmp
@@ -1460,6 +1462,8 @@ services:
         condition: service_healthy
       infra-redis:
         condition: service_healthy
+      db-migrations:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8095/health"]
       interval: 30s
