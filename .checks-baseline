@@ -1,0 +1,37 @@
+# Frozen pre-existing finding counts, per check.
+#
+# These gates were previously wrapped in `|| true` and could not fail, so the
+# backlog below accumulated unseen. The numbers are a ceiling, not a target:
+# a new finding fails the build, and any run that comes in under its baseline
+# prints a RATCHET line telling you to lower it in the same PR.
+#
+# Never raise a number to make a build pass. If a change genuinely needs to,
+# that is a conversation, not an edit.
+#
+# Seeded 2026-08-26 on release/v3.0.X.
+flake8=2250
+shellcheck=6281
+hadolint=142
+golangci-lint=27
+zizmor=21
+
+# --- security ---
+bandit=0
+pip-audit=0
+npm-audit=0
+gosec=0
+# core/module_rtc only; disappears with the Rust rewrite at P3.
+govulncheck=2
+# gitleaks scans git HISTORY, so this count cannot fall without rewriting it —
+# the RATCHET line will never fire for this check. Baselined so a NEW committed
+# secret fails the gate, which is the property that matters.
+#
+# The 420 are pre-existing and were triaged, not waved through:
+#   208  curl-auth-header   docs/*.md — `curl -H "Authorization: Bearer …"` examples
+#   196  generic-api-key    same, plus k8s/manifests/secrets.yaml
+#    77  of those in k8s/manifests/secrets.yaml, a dev-defaults file whose values
+#        carry placeholder/replace/change markers and which was removed from the
+#        tree in fa7bad03. Still in history; a separate cleanup decision.
+# Per devops.md the pre-commit hook should use `gitleaks protect --staged`,
+# which checks what you are about to commit rather than all of history.
+gitleaks=420
