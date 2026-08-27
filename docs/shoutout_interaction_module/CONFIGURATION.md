@@ -23,7 +23,7 @@ Twitch application client ID for Helix API authentication.
 - **Type:** String
 - **Required:** Yes
 - **Where to get:** [Twitch Developer Console](https://dev.twitch.tv/console/apps)
-- **Example:** `TWITCH_CLIENT_ID=wlc4v5o2xjlpm0wdc5qx5oid4vb5ty`
+- **Example:** `TWITCH_CLIENT_ID=This15TotallyAnExampleClientId!`
 
 #### TWITCH_CLIENT_SECRET
 ```
