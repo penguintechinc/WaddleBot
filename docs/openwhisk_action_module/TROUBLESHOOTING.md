@@ -35,7 +35,7 @@ wsk property get --auth
 
 3. **Test API key**:
 ```bash
-curl -u namespace:key https://openwhisk.example.com/api/v1/namespaces
+curl -u YOUR_NAMESPACE:This15TotallyAnExampleKey! https://openwhisk.example.com/api/v1/namespaces
 ```
 
 #### Issue: "Cannot connect to OpenWhisk"
@@ -220,7 +220,7 @@ echo "1. Checking database..."
 psql $DATABASE_URL -c "SELECT 1" && echo "✓ Database OK"
 
 echo "2. Checking OpenWhisk..."
-curl -u namespace:key $OPENWHISK_API_HOST/api/v1/namespaces && echo "✓ OpenWhisk OK"
+curl -u YOUR_NAMESPACE:This15TotallyAnExampleKey! $OPENWHISK_API_HOST/api/v1/namespaces && echo "✓ OpenWhisk OK"
 
 echo "3. Checking REST API..."
 curl -s http://localhost:8082/health | jq '.status' && echo "✓ REST API OK"

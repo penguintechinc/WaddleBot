@@ -445,7 +445,7 @@ Solution:
 1. Verify `OPENWHISK_API_HOST` is correct
 2. Ensure OpenWhisk instance is running
 3. Check network connectivity: `curl -X GET $OPENWHISK_API_HOST/api/v1/namespaces`
-4. Verify API key: `curl -u namespace:key -X GET $OPENWHISK_API_HOST/api/v1/namespaces`
+4. Verify API key: `curl -u YOUR_NAMESPACE:This15TotallyAnExampleKey! -X GET $OPENWHISK_API_HOST/api/v1/namespaces`
 
 ### Invalid API Key
 
