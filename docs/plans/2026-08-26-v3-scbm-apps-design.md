@@ -842,6 +842,75 @@ Compliance is a **P0 concern for the plumbing** and a per-phase concern for surf
 - P5: DSAR flows, consent UI, and the CCPA opt-out are user-facing and belong with the webui
   rewrite — but they cannot be *designed* at P5 if the data model does not already support them.
 
+## Interaction surfaces: gRPC, REST, MCP
+
+`hub-api` is reached three ways, because it has three kinds of consumer:
+
+| Surface | Consumer | Contract |
+|---------|----------|----------|
+| **gRPC** | other services | `.proto` per major, `api_version` field, port 50051 (`backend.md`) |
+| **REST** | browsers, mobile, CLI | OpenAPI 3.x at `openapi/v{major}.yaml`, generated from code |
+| **MCP** | AI agents and assistants | tool definitions derived from Feature contracts |
+
+Today it is REST only — 32 route files, no gRPC, no MCP.
+
+### MCP belongs server-side, not in the desktop bridge
+
+The obvious place to put an MCP server is the desktop client, since that is where an assistant
+is usually running. It is the wrong place:
+
+- **Auth, tenancy and entitlement already live server-side.** A client-side MCP server either
+  re-implements the `tenant → scope → feature` chain or proxies to the server anyway — the
+  first is a second implementation to keep in sync, the second is a hop for nothing.
+- **It would be per-client.** Desktop, mobile, web and any future client would each need one,
+  and they would drift.
+- **The bridge is not even in this repo** — it was removed here as "superseded by penguin repo
+  integration", so a bridge-hosted server could not share this codebase's gate.
+
+The desktop client becomes an MCP **client** pointing at `hub-api`, like any other consumer.
+
+### One authorization path, or MCP becomes the bypass
+
+All three surfaces share the same middleware chain, in the same order:
+
+```
+tenant check  →  scope check  →  feature / licensing check
+```
+
+This is the failure this section exists to prevent: a new protocol shipped beside a mature one
+and reaching the same data through a shorter path. A REST endpoint with three gates and an MCP
+tool with none are the same breach. Bolting the gates onto the transport rather than the
+handler is how that happens, so the gates belong below the surface, shared.
+
+### The tool list is per tenant
+
+Features are entitled per tenant, so **the set of MCP tools an agent can see is per tenant**.
+An agent connected for a Free tenant must not be shown Enterprise tools — listing them leaks
+the product surface and turns tool discovery into an upgrade prompt.
+
+That makes tool listing an authorization decision, not a static manifest, which is worth
+stating because most MCP servers ship a fixed list.
+
+### Tools derive from Feature contracts
+
+A Feature is already a versioned contract with declared scopes. Generating MCP tool
+definitions from it, rather than hand-writing them, gets three things for free:
+
+- **No drift** — the same reason the OpenAPI spec is generated rather than maintained
+- **Scopes come along** — a tool inherits its Feature's `requires_scopes` and cannot widen them
+- **Versioning is solved** — `bot.shoutout@1` is already the compatibility unit
+
+Third-party Apps can expose tools the same way, reached over the existing `webhook_push` /
+`rest_pull` boundary. An App does not get a shorter path to the model than it has to the API.
+
+### Open
+
+- Transport: MCP over stdio suits a local process; a hosted server needs HTTP/SSE or streamable
+  HTTP. Hosted is the case here, so pick one and version it alongside REST.
+- Whether MCP is its own container or rides in `hub-api`. It shares hub-api's auth and data, and
+  its traffic profile is low-volume and bursty, so riding along is the default until it earns a
+  split — same test as every other stage.
+
 ## Documentation
 
 `docs/` is 435 files and 615,000 words across 60 directories, **43 of which are one-per-module**
@@ -1167,7 +1236,7 @@ needs no decision. Nesting under SkausWatch's root needs a join token minted the
 trust bundle published to this cluster — cross-team coordination, not a code change. Blocks
 nothing; alpha can run self-signed while beta nests.
 
-## Migration phases## Migration phases
+## Migration phases
 
 Detail lives in the companion plan. Summary:
 
@@ -1208,6 +1277,7 @@ Detail lives in the companion plan. Summary:
 | mTLS is treated as replacing the inter-service JWT | `security.md` requires both regardless of transport; the SVID-required test does not assert the JWT, so both need their own gate |
 | mTLS is enabled without a peer SPIFFE ID allowlist, so any workload in the trust domain is accepted | Per-service accepted-peer lists, with a test asserting a valid-but-unlisted SVID is rejected |
 | Middleware layers get reordered during refactoring, and the happy path still passes | The ordering contract has its own test that reverses the layers and confirms the reversal is caught |
+| MCP ships beside a mature REST surface and reaches the same data without its gates | The chain sits below all three surfaces, not on the transport; a Free tenant listing tools and calling a hidden one are both tested |
 | Docs are deferred to P5 and end up describing a system that no longer exists | Docs are a per-phase exit gate, backed by a reference validator that ratchets from a measured baseline of 26 dead references to zero |
 | 615k words are migrated unexamined, so wrong pages outlive the modules they describe | Each phase reports pages deleted alongside pages written; a wrong page costs more than a missing one |
 | CI rebuilds everything on any change | Seven images with path-filtered workflows, as `build-*.yml` already does per module |
