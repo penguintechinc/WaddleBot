@@ -66,4 +66,15 @@ count_zizmor() {
 }
 run_counted_check "zizmor" zizmor "$wf_count" count_zizmor
 
+# Documentation reference gate. Counts repo paths referenced in docs/**/*.md
+# that no longer exist on disk, ratcheted against the baseline. The script owns
+# the zero-references guard; here a broken run is forced over budget so lint
+# fails rather than silently passing.
+doc_md_files=$(discover -path "./docs/*" -name "*.md")
+doc_md_count=$(count_lines "$doc_md_files")
+count_doc_refs() {
+  scripts/check-doc-refs.sh --count 2>/dev/null || echo 999999
+}
+run_counted_check "doc-refs" bash "$doc_md_count" count_doc_refs
+
 finish_checks "lint"
