@@ -1,0 +1,122 @@
+# v3.0.x Task 0.5 — SKELETON. Pipeline stage 2/3: event bus, routing, command dispatch,
+# workflow. Folds core/router.yaml (Core event bus + Bot command dispatch) — see
+# PIPELINE_MAPPING.md. Coexists with that legacy Deployment; cutover is a later task.
+#
+# Module bundle gating: presence of MODULE_LOAD_* env vars signals which Module App bundles
+# this stage should import. The actual conditional Python import behind these env vars is
+# the remaining build — this skeleton only proves the values flag reaches the container.
+{{- if .Values.pipeline.svcProcess.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "waddlebot.fullname" . }}-svc-process
+  labels:
+    {{- include "waddlebot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: svc-process
+spec:
+  replicas: {{ .Values.pipeline.svcProcess.replicas }}
+  selector:
+    matchLabels:
+      {{- include "waddlebot.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: svc-process
+  template:
+    metadata:
+      labels:
+        {{- include "waddlebot.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: svc-process
+    spec:
+      serviceAccountName: {{ include "waddlebot.serviceAccountName" . }}
+      {{- include "waddlebot.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+      {{- include "waddlebot.dbMigrateInitContainer" . | nindent 6 }}
+      containers:
+      - name: svc-process
+        # SKELETON PLACEHOLDER — no Dockerfile/CI image exists yet for svc-process; pinned to
+        # the repo's existing Python base digest rather than inventing one or using a mutable
+        # tag. Replace once svc-process has its own Dockerfile and CI build.
+        image: "{{ .Values.pipeline.pythonBaseImage }}"
+        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 10 }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.pipeline.svcProcess.port }}
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: {{ include "waddlebot.fullname" . }}-config
+        - secretRef:
+            name: {{ include "waddlebot.fullname" . }}-secrets
+        env:
+        - name: MODULE_NAME
+          value: "svc-process"
+        - name: PIPELINE_STAGE
+          value: "process"
+        - name: MODULE_PORT
+          value: {{ .Values.pipeline.svcProcess.port | quote }}
+        {{- if .Values.modules.bot.enabled }}
+        - name: MODULE_LOAD_BOT
+          value: "true"
+        {{- end }}
+        {{- if .Values.modules.social.enabled }}
+        - name: MODULE_LOAD_SOCIAL
+          value: "true"
+        {{- end }}
+        {{- if .Values.modules.customer.enabled }}
+        - name: MODULE_LOAD_CUSTOMER
+          value: "true"
+        {{- end }}
+        {{- if .Values.modules.marketing.enabled }}
+        - name: MODULE_LOAD_MARKETING
+          value: "true"
+        {{- end }}
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          {{- toYaml .Values.pipeline.svcProcess.resources | nindent 10 }}
+        volumeMounts:
+        - name: logs
+          mountPath: /var/log/waddlebotlog
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: logs
+        emptyDir: {}
+      - name: tmp
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "waddlebot.fullname" . }}-svc-process
+  labels:
+    {{- include "waddlebot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: svc-process
+spec:
+  type: ClusterIP
+  ports:
+  - port: {{ .Values.pipeline.svcProcess.port }}
+    targetPort: http
+    protocol: TCP
+    name: http
+  selector:
+    {{- include "waddlebot.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: svc-process
+{{- end }}

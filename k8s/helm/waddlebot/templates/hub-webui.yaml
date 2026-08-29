@@ -1,0 +1,95 @@
+# v3.0.x Task 0.5 — SKELETON. Static SPA assets; different cache/scaling profile from
+# hub-api, which is why it is a separate container rather than served by the same one.
+# 1:1 fold of core/hub-webui.yaml — see PIPELINE_MAPPING.md. Coexists with that legacy
+# Deployment; cutover is a later task. No envFrom / db-migrate init container, matching the
+# legacy hub-webui Deployment's precedent (static assets need neither).
+{{- if .Values.pipeline.hubWebui.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "waddlebot.fullname" . }}-hub-webui-v3
+  labels:
+    {{- include "waddlebot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: hub-webui-v3
+spec:
+  replicas: {{ .Values.pipeline.hubWebui.replicas }}
+  selector:
+    matchLabels:
+      {{- include "waddlebot.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: hub-webui-v3
+  template:
+    metadata:
+      labels:
+        {{- include "waddlebot.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: hub-webui-v3
+    spec:
+      serviceAccountName: {{ include "waddlebot.serviceAccountName" . }}
+      {{- include "waddlebot.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - name: hub-webui
+        # SKELETON PLACEHOLDER — no Dockerfile/CI image exists yet for this hub-webui
+        # container; pinned to the repo's existing Node base digest (used by
+        # admin/hub_module/Dockerfile.webui) rather than inventing one or using a mutable
+        # tag. Replace once this container has its own Dockerfile and CI build.
+        image: "{{ .Values.pipeline.nodeBaseImage }}"
+        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 10 }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.pipeline.hubWebui.port }}
+          protocol: TCP
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          {{- toYaml .Values.pipeline.hubWebui.resources | nindent 10 }}
+        volumeMounts:
+        - name: nginx-cache
+          mountPath: /var/cache/nginx
+        - name: nginx-run
+          mountPath: /var/run
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: nginx-cache
+        emptyDir: {}
+      - name: nginx-run
+        emptyDir: {}
+      - name: tmp
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "waddlebot.fullname" . }}-hub-webui-v3
+  labels:
+    {{- include "waddlebot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: hub-webui-v3
+spec:
+  type: {{ .Values.pipeline.hubWebui.service.type | default "ClusterIP" }}
+  ports:
+  - port: {{ .Values.pipeline.hubWebui.port }}
+    targetPort: http
+    protocol: TCP
+    name: http
+  selector:
+    {{- include "waddlebot.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: hub-webui-v3
+{{- end }}
