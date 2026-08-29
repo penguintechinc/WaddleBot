@@ -19,6 +19,28 @@ The model is Nextcloud's: a core platform plus an app store, where the shipped d
 are themselves apps. Nothing is a privileged built-in, because a built-in that cannot be
 replaced makes the extension point decorative.
 
+## Why a major version — the three pillars
+
+v3.0.0 exists for three reasons, and every part of this design serves one of them:
+
+1. **Proper feature flags.** Every feature behind a PostHog flag, defaulted OFF, resolved
+   per tenant — replacing the current state where PostHog is **not wired at all**.
+2. **Proper licensing.** A single entitlement path built on the published `penguin-licensing`
+   package, tier × flag, replacing today's hand-rolled per-module `license_service.py` copies
+   (the published lib is used nowhere yet, and the `PREMIUM_*` scheme covers only 2 of ~40
+   modules).
+3. **Modularity.** Core → Module → Feature → App, so the product is composed and swappable
+   rather than a flat mesh of ~40 co-equal services.
+
+These are not three separate workstreams — they are one mechanism. A **Feature** is the unit
+of all three at once: it is a flag (pillar 1), it is licensed by tier (pillar 2), and it is
+the contract an **App** implements inside a **Module** (pillar 3). Get the Feature abstraction
+right and the three pillars fall out of it; get it wrong and none of them hold.
+
+**Consequence for sequencing:** the entitlement client (plan Task 1.5) and the Feature/flag
+seeding (Task 1.4) are load-bearing for the whole release, not late polish. They gate every
+App. Treat them with the same weight as the P0 foundations, not as P1 cleanup.
+
 **v3.0.0 ships all four modules' full feature set in one release** — Social, Customer, Bot
 and Marketing, not staged across 3.x minors. This supersedes the earlier "parity plus
 lightweight Customer/Marketing" scope.
