@@ -1,0 +1,6 @@
+dependencies:
+- name: waddlebot-spire
+  repository: file://charts/spire
+  version: 0.1.0
+digest: sha256:faadec47c008399362136f21aee795d8f4964e10aaf99b9a85246e3e383b0039
+generated: "2026-08-29T10:11:52.768630644-05:00"

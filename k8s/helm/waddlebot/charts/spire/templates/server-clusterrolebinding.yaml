@@ -1,0 +1,17 @@
+{{- if .Values.enabled }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "waddlebot-spire.fullname" . }}-server
+  labels:
+    {{- include "waddlebot-spire.labels" . | nindent 4 }}
+    component: server
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "waddlebot-spire.fullname" . }}-server
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "waddlebot-spire.serverServiceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

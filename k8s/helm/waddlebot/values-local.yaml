@@ -606,3 +606,7 @@ modules:
     youtubeAction:
       <<: *module_defaults
       enabled: false
+
+spire:
+  enabled: true
+  environment: "alpha"

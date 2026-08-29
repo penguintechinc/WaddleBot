@@ -1,0 +1,189 @@
+{{- if .Values.enabled }}
+{{- $nested := and (eq .Values.topology.role "child") .Values.topology.upstreamRoot.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "waddlebot-spire.fullname" . }}-server
+  labels:
+    {{- include "waddlebot-spire.labels" . | nindent 4 }}
+    component: server
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: {{ .Values.server.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "waddlebot-spire.selectorLabels" . | nindent 6 }}
+      component: server
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/server-configmap.yaml") . | sha256sum }}
+        {{- if $nested }}
+        checksum/downstream-agent-config: {{ include (print $.Template.BasePath "/downstream-agent-configmap.yaml") . | sha256sum }}
+        {{- end }}
+        {{- with .Values.server.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "waddlebot-spire.selectorLabels" . | nindent 8 }}
+        component: server
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "waddlebot-spire.serverServiceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.server.podSecurityContext | nindent 8 }}
+      containers:
+      - name: spire-server
+        securityContext:
+          {{- toYaml .Values.server.securityContext | nindent 12 }}
+        # repository already carries @sha256:<digest> (see values.yaml) — do
+        # not append :tag, that produces an invalid "name@sha256:x:tag" ref.
+        image: "{{ .Values.server.image.repository }}"
+        imagePullPolicy: {{ .Values.server.image.pullPolicy }}
+        ports:
+        - name: grpc
+          containerPort: {{ .Values.server.ports.grpc }}
+          protocol: TCP
+        - name: healthcheck
+          containerPort: {{ .Values.server.ports.healthCheck }}
+          protocol: TCP
+        {{- with .Values.server.livenessProbe }}
+        livenessProbe:
+          {{- toYaml . | nindent 12 }}
+        {{- else }}
+        livenessProbe:
+          httpGet:
+            path: /live
+            port: healthcheck
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        {{- end }}
+        {{- with .Values.server.readinessProbe }}
+        readinessProbe:
+          {{- toYaml . | nindent 12 }}
+        {{- else }}
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: healthcheck
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        {{- end }}
+        {{- with .Values.server.resources }}
+        resources:
+          {{- toYaml . | nindent 12 }}
+        {{- end }}
+        {{- if eq .Values.server.dataStore.type "postgresql" }}
+        env:
+        - name: SPIRE_DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.server.dataStore.postgresql.secretName }}
+              key: username
+        - name: SPIRE_DB_PASS
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.server.dataStore.postgresql.secretName }}
+              key: password
+        {{- end }}
+        args:
+        - "-config"
+        - "/run/spire/config/server.conf"
+        volumeMounts:
+        - name: spire-config
+          mountPath: /run/spire/config
+          readOnly: true
+        - name: spire-data
+          mountPath: /run/spire/data
+        - name: spire-socket
+          mountPath: /tmp/spire-server/private
+        {{- if $nested }}
+        - name: spire-downstream-agent-socket
+          mountPath: /tmp/spire-downstream-agent/public
+          readOnly: true
+        {{- end }}
+      {{- if $nested }}
+      - name: downstream-agent
+        # repository already carries @sha256:<digest> (see values.yaml) — do
+        # not append :tag, that produces an invalid "name@sha256:x:tag" ref.
+        image: "{{ .Values.agent.image.repository }}"
+        imagePullPolicy: {{ .Values.agent.image.pullPolicy }}
+        securityContext:
+          {{- toYaml .Values.agent.securityContext | nindent 12 }}
+        command:
+          - /bin/sh
+          - -c
+          - |
+            exec /opt/spire/bin/spire-agent run \
+              -config /run/spire/downstream-config/downstream-agent.hcl \
+              -joinToken "$(cat /run/spire/jointoken/{{ .Values.topology.upstreamRoot.joinTokenSecret.key }})"
+        {{- with .Values.agent.resources }}
+        resources:
+          {{- toYaml . | nindent 12 }}
+        {{- end }}
+        livenessProbe:
+          httpGet:
+            path: /live
+            port: 8082
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8082
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        volumeMounts:
+        - name: downstream-agent-config
+          mountPath: /run/spire/downstream-config
+          readOnly: true
+        - name: spire-downstream-agent-socket
+          mountPath: /tmp/spire-downstream-agent/public
+        - name: spire-upstream-bundle
+          mountPath: /run/spire/upstream-bundle
+          readOnly: true
+        - name: spire-upstream-jointoken
+          mountPath: /run/spire/jointoken
+          readOnly: true
+        - name: downstream-agent-data
+          mountPath: /run/spire/downstream-agent
+      {{- end }}
+      volumes:
+      - name: spire-config
+        configMap:
+          name: {{ include "waddlebot-spire.fullname" . }}-server-config
+      - name: spire-data
+        emptyDir: {}
+      - name: spire-socket
+        emptyDir: {}
+      {{- if $nested }}
+      - name: downstream-agent-config
+        configMap:
+          name: {{ include "waddlebot-spire.fullname" . }}-downstream-agent-config
+      - name: spire-downstream-agent-socket
+        emptyDir: {}
+      - name: downstream-agent-data
+        emptyDir: {}
+      - name: spire-upstream-bundle
+        configMap:
+          name: {{ .Values.topology.upstreamRoot.trustBundleConfigMap.name }}
+      - name: spire-upstream-jointoken
+        secret:
+          secretName: {{ .Values.topology.upstreamRoot.joinTokenSecret.name }}
+      {{- end }}
+      {{- with .Values.server.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.server.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.server.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

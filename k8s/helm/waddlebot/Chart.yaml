@@ -14,3 +14,9 @@ keywords:
 home: https://github.com/waddlebot/waddlebot
 maintainers:
   - name: Waddles Team
+dependencies:
+  - name: waddlebot-spire
+    version: 0.1.0
+    repository: "file://charts/spire"
+    alias: spire
+    condition: spire.enabled
