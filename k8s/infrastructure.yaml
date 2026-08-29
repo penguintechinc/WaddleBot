@@ -118,7 +118,7 @@ spec:
     spec:
       containers:
         - name: redis
-          image: redis:7-bookworm@sha256:33d7c9a245edd95e6703a0addbeaa48fe40c3b3b4783627a72085155462ebfdb
+          image: valkey/valkey:8-bookworm@sha256:fea8b3e67b15729d4bb70589eb03367bab9ad1ee89c876f54327fc7c6e618571
           command:
             - redis-server
             - --requirepass
