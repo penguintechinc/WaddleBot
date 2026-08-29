@@ -142,7 +142,7 @@ class MessageQueue:
         Publish message to stream.
 
         Args:
-            stream: Stream name (e.g., 'events', 'commands')
+            stream: Stream name (e.g., 'events', 'process')
             message: Message data (must be JSON-serializable)
             max_len: Maximum stream length (oldest messages trimmed)
 

@@ -2,7 +2,7 @@
 Redis Streams Pipeline for Event-Driven Architecture
 
 Provides a high-level event streaming pipeline with:
-- Multiple event streams (inbound, commands, actions, responses)
+- Multiple event streams (inbound, process, actions, responses)
 - Dead letter queue support
 - Consumer group management
 - Event acknowledgment and retry logic
@@ -47,7 +47,7 @@ class StreamPipeline:
 
     Manages multiple event streams with dedicated purposes:
     - inbound: External events entering the system
-    - commands: User commands to be executed
+    - process: Business logic processing of inbound events
     - actions: System actions to be performed
     - responses: Responses to be sent back
 
@@ -62,7 +62,7 @@ class StreamPipeline:
 
     # Default stream names
     STREAM_INBOUND = "events:inbound"
-    STREAM_COMMANDS = "events:commands"
+    STREAM_PROCESS = "events:process"
     STREAM_ACTIONS = "events:actions"
     STREAM_RESPONSES = "events:responses"
 
@@ -182,7 +182,7 @@ class StreamPipeline:
         Publish event to a stream.
 
         Args:
-            stream_name: Stream name (e.g., 'events:inbound', 'events:commands')
+            stream_name: Stream name (e.g., 'events:inbound', 'events:process')
             event_data: Event data (must be JSON-serializable)
             max_len: Maximum stream length (oldest events trimmed)
 
@@ -191,8 +191,8 @@ class StreamPipeline:
 
         Example:
             message_id = await pipeline.publish_event(
-                'events:commands',
-                {'command': 'translate', 'text': 'Hello'}
+                'events:process',
+                {'type': 'translate', 'text': 'Hello'}
             )
         """
         if not self._connected:
@@ -247,7 +247,7 @@ class StreamPipeline:
 
         Example:
             events = await pipeline.consume_events(
-                'events:commands',
+                'events:process',
                 'router-group',
                 'router-1'
             )
@@ -322,7 +322,7 @@ class StreamPipeline:
 
         Example:
             success = await pipeline.acknowledge_event(
-                'events:commands',
+                'events:process',
                 'router-group',
                 '1234567890-0'
             )
@@ -374,10 +374,10 @@ class StreamPipeline:
 
         Example:
             success = await pipeline.move_to_dlq(
-                'events:commands',
+                'events:process',
                 '1234567890-0',
                 'max_retries_exceeded',
-                event_data={'command': 'translate'},
+                event_data={'type': 'translate'},
                 retry_count=3
             )
         """
@@ -435,7 +435,7 @@ class StreamPipeline:
 
         Example:
             success = await pipeline.create_consumer_group(
-                'events:commands',
+                'events:process',
                 'router-group'
             )
         """
@@ -492,7 +492,7 @@ class StreamPipeline:
 
         Example:
             pending = await pipeline.get_pending_events(
-                'events:commands',
+                'events:process',
                 'router-group'
             )
             for event in pending:
@@ -541,7 +541,7 @@ class StreamPipeline:
             Stream info with length, first_entry, last_entry, consumer_groups, etc.
 
         Example:
-            info = await pipeline.get_stream_info('events:commands')
+            info = await pipeline.get_stream_info('events:process')
             print(f"Stream length: {info['length']}")
         """
         if not self._connected:
@@ -593,7 +593,7 @@ class StreamPipeline:
             List of DLQ events with id, data, original_id, failure_reason, etc.
 
         Example:
-            dlq_events = await pipeline.get_dlq_events('events:commands')
+            dlq_events = await pipeline.get_dlq_events('events:process')
             for event in dlq_events:
                 print(f"Failed: {event['failure_reason']}")
         """
