@@ -16,7 +16,25 @@ __version__ = "2.0.0"
 __author__ = "Waddles Team"
 
 from .database import AsyncDAL, init_database
-from .auth import setup_auth, OAuthProvider, create_jwt_token, verify_jwt_token, verify_service_key
+from .auth import (
+    setup_auth,
+    OAuthProvider,
+    create_jwt_token,
+    verify_jwt_token,
+    verify_service_key,
+    setup_default_roles,
+    DEFAULT_TENANT_SLUG,
+    TENANT_CLAIM_MIGRATION_CUTOFF,
+    SCOPE_BUNDLES,
+)
+from .tenancy import (
+    TenantContext,
+    TenantIsolationError,
+    tenant_middleware,
+    tenant_scoped,
+    resolve_tenant_context,
+    get_tenant_context,
+)
 from .datamodels import (
     CommandRequest,
     CommandResult,
@@ -141,6 +159,17 @@ __all__ = [
     "create_jwt_token",
     "verify_jwt_token",
     "verify_service_key",
+    "setup_default_roles",
+    "DEFAULT_TENANT_SLUG",
+    "TENANT_CLAIM_MIGRATION_CUTOFF",
+    "SCOPE_BUNDLES",
+    # Tenancy
+    "TenantContext",
+    "TenantIsolationError",
+    "tenant_middleware",
+    "tenant_scoped",
+    "resolve_tenant_context",
+    "get_tenant_context",
     # Datamodels
     "CommandRequest",
     "CommandResult",
