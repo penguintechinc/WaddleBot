@@ -167,3 +167,15 @@ jobs:
           echo "**Image:** \`${IMAGE}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "**Tag:** \`${VERSION}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "**Platforms:** linux/amd64, linux/arm64" >> "$GITHUB_STEP_SUMMARY"
+
+      # CRA (EU Cyber Resilience Act): SBOM per built image. Generate +
+      # upload only for now — not a gating step until a policy is defined.
+      - name: Generate SBOM (SPDX)
+        id: sbom
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26  # v0.24.2
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ inputs.module_name }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}
+          format: spdx-json
+          output-file: sbom-${{ inputs.module_name }}.spdx.json
+          upload-artifact: true
+          upload-artifact-retention: 90
