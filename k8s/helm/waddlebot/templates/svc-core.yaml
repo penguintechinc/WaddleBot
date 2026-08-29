@@ -1,0 +1,116 @@
+# v3.0.x Task 0.5 — SKELETON. Core: identity, security, credentials, tenancy/entitlement.
+# Every stage depends on svc-core and calls it over gRPC (backend.md mandate) rather than a
+# stream, since these calls are synchronous. Folds core/{core-community,core-data,
+# core-identity}.yaml — see PIPELINE_MAPPING.md. Coexists with those 3 legacy Deployments;
+# cutover is a later task. Deliberately not folded into hub-api: every service's auth path
+# would otherwise ride the admin API's deploy cadence.
+#
+# Not gated by modules.<name>.enabled — Core is mandatory regardless of which Modules are on.
+{{- if .Values.pipeline.svcCore.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "waddlebot.fullname" . }}-svc-core
+  labels:
+    {{- include "waddlebot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: svc-core
+spec:
+  replicas: {{ .Values.pipeline.svcCore.replicas }}
+  selector:
+    matchLabels:
+      {{- include "waddlebot.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: svc-core
+  template:
+    metadata:
+      labels:
+        {{- include "waddlebot.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: svc-core
+    spec:
+      serviceAccountName: {{ include "waddlebot.serviceAccountName" . }}
+      {{- include "waddlebot.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+      {{- include "waddlebot.dbMigrateInitContainer" . | nindent 6 }}
+      containers:
+      - name: svc-core
+        # SKELETON PLACEHOLDER — no Dockerfile/CI image exists yet for svc-core; pinned to
+        # the repo's existing Python base digest rather than inventing one or using a mutable
+        # tag. Replace once svc-core has its own Dockerfile and CI build.
+        image: "{{ .Values.pipeline.pythonBaseImage }}"
+        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 10 }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.pipeline.svcCore.port }}
+          protocol: TCP
+        - name: grpc
+          containerPort: {{ .Values.pipeline.svcCore.grpcPort }}
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: {{ include "waddlebot.fullname" . }}-config
+        - secretRef:
+            name: {{ include "waddlebot.fullname" . }}-secrets
+        env:
+        - name: MODULE_NAME
+          value: "svc-core"
+        - name: PIPELINE_STAGE
+          value: "core"
+        - name: MODULE_PORT
+          value: {{ .Values.pipeline.svcCore.port | quote }}
+        - name: GRPC_PORT
+          value: {{ .Values.pipeline.svcCore.grpcPort | quote }}
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          {{- toYaml .Values.pipeline.svcCore.resources | nindent 10 }}
+        volumeMounts:
+        - name: logs
+          mountPath: /var/log/waddlebotlog
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: logs
+        emptyDir: {}
+      - name: tmp
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "waddlebot.fullname" . }}-svc-core
+  labels:
+    {{- include "waddlebot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: svc-core
+spec:
+  type: ClusterIP
+  ports:
+  - port: {{ .Values.pipeline.svcCore.port }}
+    targetPort: http
+    protocol: TCP
+    name: http
+  - port: {{ .Values.pipeline.svcCore.grpcPort }}
+    targetPort: grpc
+    protocol: TCP
+    name: grpc
+  selector:
+    {{- include "waddlebot.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: svc-core
+{{- end }}

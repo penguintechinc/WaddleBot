@@ -220,8 +220,121 @@ infrastructure:
     apiHost: ""
     apiKey: ""
 
+# v3.0.x Task 0.5 — seven-container pipeline (SKELETON)
+# Coexists with `modules.*` below (the 31 legacy per-module Deployments) until cutover — see
+# k8s/helm/waddlebot/PIPELINE_MAPPING.md for the full 31→7 mapping and what remains.
+#
+# Base images pinned to digests already used elsewhere in this repo (grepped from existing
+# Dockerfiles, never invented) as placeholders — none of these 7 containers have their own
+# Dockerfile/CI-built image yet. Replace per-container once each does.
+pipeline:
+  pythonBaseImage: "python:3.13-slim-bookworm@sha256:01f42367a0a94ad4bc17111776fd66e3500c1d87c15bbd6055b7371d39c124fb"
+  nodeBaseImage: "node:20-bookworm-slim@sha256:1e85773c98c31d4fe5b545e4cb17379e617b348832fb3738b22a08f68dec30f3"
+  goRuntimeImage: "debian:bookworm-slim@sha256:f06537653ac770703bc45b4b113475bd402f451e85223f0f2837acbf89ab020a"
+
+  svcIngest:
+    enabled: true
+    port: 8200
+    replicas: 2
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+      limits:
+        cpu: "2000m"
+        memory: "2Gi"
+
+  svcProcess:
+    enabled: true
+    port: 8201
+    replicas: 2
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+      limits:
+        cpu: "2000m"
+        memory: "2Gi"
+
+  svcAction:
+    enabled: true
+    port: 8202
+    replicas: 2
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+      limits:
+        cpu: "2000m"
+        memory: "2Gi"
+
+  svcCore:
+    enabled: true
+    port: 8203
+    grpcPort: 50203
+    replicas: 2
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "256Mi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
+
+  hubApi:
+    enabled: true
+    port: 8204
+    grpcPort: 50204
+    replicas: 2
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "256Mi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
+
+  hubWebui:
+    enabled: true
+    port: 8205
+    replicas: 2
+    service:
+      type: ClusterIP
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+
+  svcRtc:
+    enabled: true
+    port: 8206
+    replicas: 1
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "256Mi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
+
 # Processing Module
 modules:
+  # v3.0.x Task 0.5 — Module verticals (Bot/Social/Customer/Marketing) that load into the
+  # pipeline containers above via modules.<name>.enabled. NOT per-module pods — see
+  # docs/architecture/core-boundary.md and docs/plans/2026-08-26-v3-scbm-apps-design.md
+  # "## Deployment" > "### Modules cut across stages".
+  bot:
+    enabled: true
+  social:
+    enabled: true
+  customer:
+    enabled: false
+  marketing:
+    enabled: false
+
   # Processing Module - Router (UNCHANGED)
   router:
     enabled: true
