@@ -115,6 +115,21 @@ from .sanitization import (
     ALLOWED_ATTRIBUTES,
     ALLOWED_PROTOCOLS
 )
+from .workload_identity import (
+    IdentityProvider,
+    SpiffeIdMatcher,
+    SpiffeId,
+    TrustDomain,
+    MtlsConfig,
+    WorkloadApiSource,
+    RealWorkloadApiSource,
+    IdentityError,
+    Degraded,
+    WorkloadApiUnavailable,
+    PeerNotAuthorized,
+    EmptyTrustBundle,
+    NoDefaultSvid,
+)
 
 __all__ = [
     # Database
@@ -231,4 +246,18 @@ __all__ = [
     "ALLOWED_TAGS",
     "ALLOWED_ATTRIBUTES",
     "ALLOWED_PROTOCOLS",
+    # Workload identity (SPIFFE/SPIRE)
+    "IdentityProvider",
+    "SpiffeIdMatcher",
+    "SpiffeId",
+    "TrustDomain",
+    "MtlsConfig",
+    "WorkloadApiSource",
+    "RealWorkloadApiSource",
+    "IdentityError",
+    "Degraded",
+    "WorkloadApiUnavailable",
+    "PeerNotAuthorized",
+    "EmptyTrustBundle",
+    "NoDefaultSvid",
 ]

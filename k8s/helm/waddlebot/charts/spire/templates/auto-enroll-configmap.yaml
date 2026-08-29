@@ -1,0 +1,110 @@
+{{- if and .Values.enabled .Values.autoEnroll.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "waddlebot-spire.fullname" . }}-enroll-script
+  labels:
+    {{- include "waddlebot-spire.labels" . | nindent 4 }}
+  namespace: {{ .Release.Namespace }}
+data:
+  enroll.sh: |
+    #!/bin/sh
+    set -e
+
+    NAMESPACE="{{ .Release.Namespace }}"
+    TRUST_DOMAIN="{{ .Values.trustDomain }}"
+    ENV="{{ .Values.environment }}"
+    CLUSTER="{{ .Values.server.nodeAttestation.k8sPsat.cluster }}"
+    NODE_ALIAS_ID="spiffe://${TRUST_DOMAIN}/spire/agent/${CLUSTER}"
+    # Deploy-time default SVID TTLs — see values.yaml svidTtl.
+    X509_SVID_TTL="{{ .Values.svidTtl.x509 }}"
+    JWT_SVID_TTL="{{ .Values.svidTtl.jwt }}"
+    SERVER_POD=$(kubectl get pod -n $NAMESPACE -l "component=server,app.kubernetes.io/name=waddlebot-spire" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+
+    if [ -z "$SERVER_POD" ]; then
+      echo "ERROR: spire-server pod not found in namespace $NAMESPACE"
+      exit 1
+    fi
+
+    echo "Found spire-server pod: $SERVER_POD"
+
+    # Wait for server to be ready
+    RETRY_COUNT=0
+    MAX_RETRIES=30
+    until kubectl exec -n $NAMESPACE $SERVER_POD -- /opt/spire/bin/spire-server healthcheck -socketPath /tmp/spire-server/private/api.sock > /dev/null 2>&1; do
+      RETRY_COUNT=$((RETRY_COUNT+1))
+      if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+        echo "ERROR: spire-server failed to become ready after $MAX_RETRIES attempts"
+        exit 1
+      fi
+      echo "Waiting for spire-server to be ready... (attempt $RETRY_COUNT/$MAX_RETRIES)"
+      sleep 2
+    done
+
+    echo "spire-server is ready"
+
+    # Node alias: maps every k8s_psat-attested agent in this cluster to a
+    # single stable parent ID. Required because k8s_psat's real agent
+    # SPIFFE ID is keyed per-node (spiffe://.../spire/agent/k8s_psat/
+    # <cluster>/<node-uid>) and workload entries can't practically be
+    # re-parented every time a node is replaced — the alias is the
+    # SPIRE-documented pattern for this ("node alias" / -node entry).
+    ALIAS_EXISTS=$(kubectl exec -n $NAMESPACE $SERVER_POD -- /opt/spire/bin/spire-server entry show \
+      -socketPath /tmp/spire-server/private/api.sock \
+      -spiffeID "$NODE_ALIAS_ID" 2>/dev/null | grep -c "Entry ID" || echo 0)
+
+    if [ "$ALIAS_EXISTS" -eq 0 ]; then
+      if kubectl exec -n $NAMESPACE $SERVER_POD -- /opt/spire/bin/spire-server entry create \
+        -socketPath /tmp/spire-server/private/api.sock \
+        -node \
+        -spiffeID "$NODE_ALIAS_ID" \
+        -selector "k8s_psat:cluster:${CLUSTER}" \
+        -x509SVIDTTL "$X509_SVID_TTL" > /dev/null 2>&1; then
+        echo "✓ Registered node alias: ${NODE_ALIAS_ID}"
+      else
+        echo "✗ Failed to register node alias: ${NODE_ALIAS_ID}"
+        exit 1
+      fi
+    else
+      echo "~ Node alias already registered: ${NODE_ALIAS_ID}"
+    fi
+
+    register_entry() {
+      local svc_name="$1"
+      local ns="$2"
+      local sa="$3"
+
+      # Check if entry already exists
+      EXISTING=$(kubectl exec -n $NAMESPACE $SERVER_POD -- /opt/spire/bin/spire-server entry show \
+        -socketPath /tmp/spire-server/private/api.sock \
+        -spiffeID "spiffe://${TRUST_DOMAIN}/${ENV}/${svc_name}" 2>/dev/null | grep -c "Entry ID" || echo 0)
+
+      if [ "$EXISTING" -eq 0 ]; then
+        if kubectl exec -n $NAMESPACE $SERVER_POD -- /opt/spire/bin/spire-server entry create \
+          -socketPath /tmp/spire-server/private/api.sock \
+          -spiffeID "spiffe://${TRUST_DOMAIN}/${ENV}/${svc_name}" \
+          -parentID "$NODE_ALIAS_ID" \
+          -selector "k8s:ns:${ns}" \
+          -selector "k8s:sa:${sa}" \
+          -x509SVIDTTL "$X509_SVID_TTL" \
+          -jwtSVIDTTL "$JWT_SVID_TTL" > /dev/null 2>&1; then
+          echo "✓ Registered: ${svc_name} in namespace ${ns}"
+        else
+          echo "✗ Failed to register: ${svc_name} in namespace ${ns}"
+          return 1
+        fi
+      else
+        echo "~ Already registered: ${svc_name}"
+      fi
+      return 0
+    }
+
+    echo ""
+    echo "Registering waddlebot v3 services..."
+    {{- range .Values.autoEnroll.services }}
+    register_entry "{{ .name }}" "{{ .namespace }}" "{{ .serviceAccount }}"
+    {{- end }}
+
+    echo ""
+    echo "Auto-enrollment complete."
+{{- end }}

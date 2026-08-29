@@ -1297,3 +1297,17 @@ httproute:
 networkPolicy:
   enabled: false
   ingressNamespace: ingress-nginx
+
+# SPIFFE/SPIRE workload identity (subchart: charts/spire). Off by default
+# (opt-in per environment via values-alpha.yaml/values-beta.yaml/
+# values-local.yaml). Only the values that differ from the subchart's own
+# defaults (k8s/helm/waddlebot/charts/spire/values.yaml) are set here — see
+# that chart's README for the full topology/registration-entry spec.
+spire:
+  enabled: false
+  trustDomain: "penguintech.io"
+  environment: "alpha"
+  topology:
+    role: child
+    upstreamRoot:
+      enabled: false

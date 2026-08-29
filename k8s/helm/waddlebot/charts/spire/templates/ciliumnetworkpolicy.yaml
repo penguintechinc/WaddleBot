@@ -1,0 +1,117 @@
+# Cilium default-deny + explicit allow for the spire chart's workloads.
+# Each block below selects only its own component (server/agent) via the
+# `component` label already used by this chart's Deployment/DaemonSet.
+{{- if .Values.enabled }}
+---
+# spire-server: node attestation (from spire-agent), TokenReview calls FROM
+# kube-apiserver (k8s_psat attestor).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: {{ include "waddlebot-spire.fullname" . }}-server
+  labels:
+    {{- include "waddlebot-spire.labels" . | nindent 4 }}
+    component: server
+  namespace: {{ .Release.Namespace }}
+spec:
+  endpointSelector:
+    matchLabels:
+      {{- include "waddlebot-spire.selectorLabels" . | nindent 6 }}
+      component: server
+  ingress:
+    - fromEntities:
+        - host
+        - remote-node
+    # kube-apiserver validates the agent's k8s_psat projected token against
+    # spire-server via a webhook-style call originating from the control
+    # plane, not a normal pod identity.
+    - fromEntities:
+        - kube-apiserver
+    # spire-agent node attestation + workload API registration (gRPC).
+    - fromEndpoints:
+        - matchLabels:
+            {{- include "waddlebot-spire.selectorLabels" . | nindent 12 }}
+            component: agent
+      toPorts:
+        - ports:
+            - port: "8081"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+          rules:
+            dns:
+              - matchPattern: "*"
+    {{- if eq .Values.server.dataStore.type "postgresql" }}
+    # Postgres datastore backend (NOT owned by this chart -- infra-postgres
+    # in the parent waddlebot chart). sqlite (default) needs no network
+    # egress at all.
+    - toEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: postgresql
+      toPorts:
+        - ports:
+            - port: "{{ .Values.server.dataStore.postgresql.port }}"
+              protocol: TCP
+    {{- end }}
+    {{- if and (eq .Values.topology.role "child") .Values.topology.upstreamRoot.enabled }}
+    # Nested topology: child registers upstream against the root server --
+    # destination is cross-cluster/external, so this is FQDN/CIDR-based and
+    # left to the environment's values file (root host is env-specific).
+    {{- end }}
+---
+# spire-agent: DaemonSet, hostPath socket only -- runs as root (ROOT
+# EXCEPTION, approved -- see values.yaml agent.podSecurityContext), no
+# extra Linux capabilities and not privileged. Ingress-side is workload
+# pods on the SAME node reading /run/spire/sockets via hostPath, not a
+# network path Cilium can see -- nothing to allow here beyond kubelet
+# probes.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: {{ include "waddlebot-spire.fullname" . }}-agent
+  labels:
+    {{- include "waddlebot-spire.labels" . | nindent 4 }}
+    component: agent
+  namespace: {{ .Release.Namespace }}
+spec:
+  endpointSelector:
+    matchLabels:
+      {{- include "waddlebot-spire.selectorLabels" . | nindent 6 }}
+      component: agent
+  ingress:
+    - fromEntities:
+        - host
+        - remote-node
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+          rules:
+            dns:
+              - matchPattern: "*"
+    # spire-server node attestation + SVID rotation (gRPC).
+    - toEndpoints:
+        - matchLabels:
+            {{- include "waddlebot-spire.selectorLabels" . | nindent 12 }}
+            component: server
+      toPorts:
+        - ports:
+            - port: "8081"
+              protocol: TCP
+{{- end }}

@@ -15,6 +15,24 @@ from typing import Any, Dict, List, Optional, Tuple
 import pytest
 import redis as redis_module
 
+# --- flask_core import shim (shared by workload_identity + stream_pipeline tests)
+# flask_core/__init__.py eagerly imports the full service stack (pydal, quart,
+# authlib, ...). The leaf modules under test depend only on stdlib (+ optional
+# redis), so register a lightweight namespace-style `flask_core` package whose
+# __path__ points at the real dir. Submodule imports then resolve directly
+# without executing the heavy package __init__. A fully provisioned env is
+# unaffected. Runs before any test imports flask_core.*.
+import pathlib as _pathlib
+import types as _types
+
+_PKG_DIR = _pathlib.Path(__file__).resolve().parent.parent / "flask_core"
+if "flask_core" not in sys.modules:
+    _stub = _types.ModuleType("flask_core")
+    _stub.__path__ = [str(_PKG_DIR)]
+    sys.modules["flask_core"] = _stub
+# --- end shim
+
+
 
 def _load_stream_pipeline_module():
     """Load stream_pipeline.py directly, bypassing flask_core/__init__.py.

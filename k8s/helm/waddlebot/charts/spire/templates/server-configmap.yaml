@@ -1,0 +1,100 @@
+{{- if .Values.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "waddlebot-spire.fullname" . }}-server-config
+  labels:
+    {{- include "waddlebot-spire.labels" . | nindent 4 }}
+  namespace: {{ .Release.Namespace }}
+data:
+  server.conf: |
+    server {
+      bind_address = "0.0.0.0"
+      bind_port = "{{ .Values.server.ports.grpc }}"
+      socket_path = "/tmp/spire-server/private/api.sock"
+      trust_domain = "{{ .Values.trustDomain }}"
+      data_dir = "/run/spire/data"
+      log_level = "INFO"
+      # ca_ttl must stay >= 48h (2x the 24h admin-adjustable SVID TTL
+      # ceiling) — see values.yaml server.caTtl comment for the full
+      # constraint. Do not lower server.caTtl below 48h.
+      ca_ttl = "{{ .Values.server.caTtl }}"
+      default_x509_svid_ttl = "{{ .Values.svidTtl.x509 }}"
+      default_jwt_svid_ttl = "{{ .Values.svidTtl.jwt }}"
+    }
+
+    plugins {
+      DataStore "sql" {
+        plugin_data {
+          {{- if eq .Values.server.dataStore.type "postgresql" }}
+          database_type = "postgres"
+          connection_string = "dbname={{ .Values.server.dataStore.postgresql.dbName }} host={{ .Values.server.dataStore.postgresql.host }} user=${SPIRE_DB_USER} password=${SPIRE_DB_PASS} port={{ .Values.server.dataStore.postgresql.port }} sslmode={{ .Values.server.dataStore.postgresql.sslMode | default "verify-full" }}{{ with .Values.server.dataStore.postgresql.sslRootCert }} sslrootcert={{ . }}{{ end }}"
+          {{- else }}
+          database_type = "sqlite3"
+          connection_string = "{{ .Values.server.dataStore.sqlite.path }}"
+          {{- end }}
+        }
+      }
+      {{- if .Values.server.nodeAttestation.k8sPsat.enabled }}
+      NodeAttestor "k8s_psat" {
+        plugin_data {
+          clusters = {
+            "{{ .Values.server.nodeAttestation.k8sPsat.cluster }}" = {
+              service_account_allow_list = [{{ range .Values.server.nodeAttestation.k8sPsat.serviceAccountAllowList }}"{{ . }}", {{ end }}]
+              audience = [{{ range .Values.server.nodeAttestation.k8sPsat.audience }}"{{ . }}", {{ end }}]
+            }
+          }
+        }
+      }
+      {{- end }}
+      {{- if .Values.server.nodeAttestation.awsIid.enabled }}
+      NodeAttestor "aws_iid" {
+        plugin_data {
+          {{- if .Values.server.nodeAttestation.awsIid.accountIdAllowList }}
+          account_ids_for_local_validation = [{{ range .Values.server.nodeAttestation.awsIid.accountIdAllowList }}"{{ . }}", {{ end }}]
+          {{- end }}
+        }
+      }
+      {{- end }}
+      {{- if .Values.server.nodeAttestation.joinToken.enabled }}
+      NodeAttestor "join_token" {
+        plugin_data {}
+      }
+      {{- end }}
+      {{- /*
+        Nested SPIRE: this server requests its own intermediate signing CA
+        from the trust domain root instead of self-signing. Gated on both
+        role AND upstreamRoot.enabled so a `child` server deploys safely
+        (self-signed) before a live join-token exchange with root exists —
+        see topology.upstreamRoot in values.yaml / chart README.
+      */}}
+      {{- if and (eq .Values.topology.role "child") .Values.topology.upstreamRoot.enabled }}
+      UpstreamAuthority "spire" {
+        plugin_data {
+          server_address = "{{ .Values.topology.upstreamRoot.serverAddress }}"
+          server_port = {{ .Values.topology.upstreamRoot.serverPort }}
+          workload_api_socket = "/tmp/spire-downstream-agent/public/api.sock"
+        }
+      }
+      {{- end }}
+      KeyManager "disk" {
+        plugin_data {
+          keys_path = "/run/spire/data/keys.json"
+        }
+      }
+      Notifier "k8sbundle" {
+        plugin_data {
+          namespace = "{{ .Release.Namespace }}"
+          config_map = "{{ include "waddlebot-spire.fullname" . }}-bundle"
+        }
+      }
+    }
+
+    health_checks {
+      listener_enabled = true
+      bind_address = "0.0.0.0"
+      bind_port = "{{ .Values.server.ports.healthCheck }}"
+      live_path = "/live"
+      ready_path = "/ready"
+    }
+{{- end }}

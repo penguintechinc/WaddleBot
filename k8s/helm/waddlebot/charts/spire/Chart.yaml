@@ -1,0 +1,19 @@
+apiVersion: v2
+name: waddlebot-spire
+description: >-
+  SPIFFE/SPIRE workload identity for waddlebot — single penguintech.io trust
+  domain, deployed as a nested-topology child with upstream root disabled
+  (self-signed) until an org-wide root exists.
+type: application
+version: 0.1.0
+appVersion: "1.9.4"
+keywords:
+  - waddlebot
+  - spiffe
+  - spire
+  - mtls
+  - identity
+  - security
+maintainers:
+  - name: Penguin Tech Inc
+    email: support@penguintech.io

@@ -1,0 +1,52 @@
+{{- /*
+Bootstrap "downstream agent" — a normal spire-agent process that attests
+to the trust domain root (not this cluster's own agent fleet) purely so
+this child spire-server can obtain a Workload API SVID to hand to its own
+UpstreamAuthority "spire" plugin. This is the credential-supply mechanism
+for nested SPIRE (child requests intermediate CA from root) — see chart
+README "Two modes, one flip".
+*/}}
+{{- if and .Values.enabled (eq .Values.topology.role "child") .Values.topology.upstreamRoot.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "waddlebot-spire.fullname" . }}-downstream-agent-config
+  labels:
+    {{- include "waddlebot-spire.labels" . | nindent 4 }}
+    component: downstream-agent
+  namespace: {{ .Release.Namespace }}
+data:
+  downstream-agent.hcl: |
+    agent {
+      data_dir = "/run/spire/downstream-agent"
+      log_level = "INFO"
+      server_address = "{{ .Values.topology.upstreamRoot.serverAddress }}"
+      server_port = "{{ .Values.topology.upstreamRoot.serverPort }}"
+      socket_path = "/tmp/spire-downstream-agent/public/api.sock"
+      trust_domain = "{{ .Values.trustDomain }}"
+      trust_bundle_path = "/run/spire/upstream-bundle/{{ .Values.topology.upstreamRoot.trustBundleConfigMap.key }}"
+      insecure_bootstrap = false
+    }
+
+    plugins {
+      NodeAttestor "{{ .Values.topology.upstreamRoot.nodeAttestor }}" {
+        plugin_data {}
+      }
+
+      KeyManager "memory" {
+        plugin_data {}
+      }
+
+      WorkloadAttestor "unix" {
+        plugin_data {}
+      }
+    }
+
+    health_checks {
+      listener_enabled = true
+      bind_address = "0.0.0.0"
+      bind_port = "8082"
+      live_path = "/live"
+      ready_path = "/ready"
+    }
+{{- end }}

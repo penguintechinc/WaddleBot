@@ -1,0 +1,296 @@
+# waddlebot-spire subchart defaults.
+#
+# SUBCHART VALUE PATHS: the parent chart passes its own `.Values.spire` block
+# in as this subchart's top-level `.Values` (see parent Chart.yaml
+# `dependencies:` + parent values.yaml `spire:` block). Every key below is
+# therefore addressed WITHOUT a `spire.` prefix inside this subchart's own
+# templates (e.g. `.Values.trustDomain`, not `.Values.spire.trustDomain`).
+enabled: false
+
+# Tetragon exec-allowlist enforcement (templates/tracingpolicy.yaml) for
+# every enabled spire component. Requires the Tetragon agent DaemonSet
+# in-cluster -- set false to render without it.
+tetragon:
+  enabled: true
+
+trustDomain: "penguintech.io"
+environment: "alpha"
+
+# --- Nested SPIRE topology -------------------------------------------
+# child : the ONLY supported role for this chart today. Runs self-signed
+#         until `topology.upstreamRoot.enabled` is flipped true once a
+#         live org-wide root + join token exist. This lets the chart
+#         deploy safely today (alpha/beta) and cut over to nested mode
+#         later without a topology.role change -- two modes, one flip.
+#         "standalone"/"root" roles are NOT wired in this subchart (no
+#         org-wide root exists yet for waddlebot to nest under); if that
+#         changes, port the root-side wiring from the reference chart at
+#         that time.
+topology:
+  role: child
+
+  # Cross-cluster nested-CA bootstrap. The child server gets its
+  # intermediate signing CA through a small local "downstream agent" (see
+  # downstream-agent-configmap.yaml + server-deployment.yaml) that attests
+  # to root and hands its Workload API socket to this server's
+  # `UpstreamAuthority "spire"` plugin.
+  upstreamRoot:
+    # Gate for the whole nested wiring (UpstreamAuthority block +
+    # downstream-agent sidecar + secret/configmap mounts). Stays false
+    # until a live org-wide root exists and a join token has been minted
+    # for this cluster -- flipping it before then means the extra
+    # container crash-loops trying to reach an address that isn't set.
+    enabled: false
+    serverAddress: ""
+    serverPort: 8081
+    # This child's own SPIFFE ID, registered on root with `-downstream`.
+    downstreamSpiffeID: ""
+    # Bootstrap attestor for the downstream agent ONLY -- never the fleet
+    # workload attestor (see server.nodeAttestation below). join_token is
+    # the default because root cannot reach into the child cluster's
+    # TokenReview API to validate a k8s_psat token cross-cluster; x509pop
+    # is the documented alternative for longer-lived bootstrap credentials
+    # if join tokens prove too operationally heavy (one-time-use, minted
+    # per cutover/rotation).
+    nodeAttestor: join_token
+    # Secret pre-created by k8s-ops (live-ops) holding the one-time join
+    # token minted on root via `spire-server token generate`.
+    joinTokenSecret:
+      name: spire-upstream-join-token
+      key: token
+    # ConfigMap pre-created by k8s-ops holding root's trust bundle (PEM),
+    # so the downstream agent can validate root on first connect without
+    # insecure bootstrap.
+    trustBundleConfigMap:
+      name: spire-upstream-root-bundle
+      key: bundle.pem
+
+# --- SVID lifetimes ---------------------------------------------------
+# Deploy-time default TTL for every issued SVID, both X.509-SVID and
+# JWT-SVID. Wired to two places: the server-wide default
+# (`default_x509_svid_ttl`/`default_jwt_svid_ttl` in server.conf, used
+# when a registration entry doesn't specify its own) AND every
+# registration entry the auto-enroll Job creates (`-x509SVIDTTL`/
+# `-jwtSVIDTTL` on `spire-server entry create`).
+svidTtl:
+  x509: "5m"
+  jwt: "5m"
+
+server:
+  replicaCount: 1
+  image:
+    # External image pinned to SHA256 digest.
+    repository: ghcr.io/spiffe/spire-server@sha256:6936324dacd7dcd800dec0641db8f0e48c75204b2dfbb21201b111ef2e2490a8
+    tag: "1.9.4"  # Reference only; digest in repository takes precedence
+    pullPolicy: IfNotPresent
+
+  # SPIRE clamps any issued SVID TTL to <= half of ca_ttl (the signing CA
+  # must outlive everything it signs by a safety margin). The
+  # admin-adjustable ceiling (svidTtl, runtime UpdateEntry) tops out at
+  # 24h, so ca_ttl MUST stay >= 48h (2x the 24h max) or a legitimate 24h
+  # UpdateEntry would get silently clamped down by SPIRE itself before the
+  # admin's requested value ever takes effect. 168h (7d) leaves ~3.5x
+  # headroom above the 48h floor -- do not lower this below 48h.
+  caTtl: "168h"
+
+  ports:
+    grpc: 8081
+    healthCheck: 8080
+
+  dataStore:
+    # sqlite: zero-dependency bootstrap; switch to postgresql once a
+    # shared PG instance is available for this environment.
+    # postgresql: preferred once available -- works with the in-cluster
+    # `postgres` Service or any PG host.
+    type: sqlite
+    sqlite:
+      path: "/run/spire/data/datastore.sqlite"
+    postgresql:
+      # Default host follows this repo's in-cluster convention: the
+      # `infra-postgres` Service in the product namespace (see parent
+      # values.yaml infrastructure.postgresql.service.name). Each
+      # environment that sets `type: postgresql` still confirms or
+      # overrides this.
+      host: "infra-postgres"
+      port: 5432
+      dbName: spire
+      # TLS to the database with server-certificate verification.
+      # verify-full requires the server cert to chain to a trusted CA and
+      # match the host. For a private CA, set sslRootCert to a CA bundle
+      # path mounted into the server pod. Downgrade (require/prefer) only
+      # for TLS-terminating in-cluster proxies -- never in production.
+      sslMode: "verify-full"
+      # Optional path to a CA bundle inside the pod (e.g. /run/spire/tls/ca.crt)
+      sslRootCert: ""
+      secretName: spire-db-credentials
+      userKey: username
+      passwordKey: password
+
+  nodeAttestation:
+    # k8s_psat (projected service account token) -- REQUIRED default for
+    # every environment (alpha/beta/gamma/prod). Replaces the deprecated
+    # k8s_sat (service-account-token) attestor, which reads long-lived,
+    # non-audience-bound tokens from the API server and is no longer the
+    # recommended SPIRE node attestor.
+    k8sPsat:
+      enabled: true
+      cluster: "waddlebot"
+      serviceAccountAllowList:
+        - "waddlebot:spire-agent"
+      # Audience the agent's projected token is bound to; must match
+      # agent.serviceAccountTokenAudience below.
+      audience:
+        - "spire-server"
+    # aws_iid (EC2 Instance Identity Document) -- toggle ONLY for node
+    # pools that are AWS-resident. Stays disabled everywhere until a
+    # waddlebot cluster actually runs on AWS nodes.
+    awsIid:
+      enabled: false
+      # Restrict to known-good AWS account IDs; empty = accept any
+      # account, which is almost never what you want once enabled.
+      accountIdAllowList: []
+    # join_token as a FLEET node attestor is legacy/manual bootstrap only
+    # (a human runs `spire-server token generate` per node) -- kept
+    # available but disabled; the nested-upstream bootstrap has its own
+    # independent join_token usage under topology.upstreamRoot above.
+    joinToken:
+      enabled: false
+
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 1000
+    # PSA "restricted" compliant.
+    seccompProfile:
+      type: RuntimeDefault
+
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ALL]
+
+  serviceAccount:
+    create: true
+    name: ""
+    annotations: {}
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+agent:
+  image:
+    repository: ghcr.io/spiffe/spire-agent@sha256:66d73a745b3875f7e68f0dd48de9924231aab9a79a632f98f5c9479f95688110
+    tag: "1.9.4"  # Reference only; digest in repository takes precedence
+    pullPolicy: IfNotPresent
+
+  socketPath: /run/spire/sockets/agent.sock
+  socketDir: /run/spire/sockets
+
+  # Projected service-account token delivered to the agent pod for
+  # k8s_psat node attestation. audience MUST match
+  # server.nodeAttestation.k8sPsat.audience[0].
+  serviceAccountTokenAudience: "spire-server"
+  serviceAccountTokenPath: /var/run/secrets/tokens/spire-agent
+  serviceAccountTokenExpirationSeconds: 3600
+
+  workloadAttestors:
+    k8s:
+      enabled: true
+      skipKubeletVerification: true
+    unix:
+      enabled: true
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+  # ROOT EXCEPTION (approved): the agent must chown/create the SPIFFE
+  # Workload API socket directory (hostPath, shared with every workload
+  # pod on the node) at startup -- a documented, standard SPIRE agent
+  # requirement. NOT compatible with Pod Security Admission "restricted"
+  # (which requires runAsNonRoot); this workload needs PSA "baseline" or
+  # looser. No added Linux capabilities and not privileged.
+  podSecurityContext:
+    runAsUser: 0
+    runAsGroup: 0
+    seccompProfile:
+      type: RuntimeDefault
+
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ALL]
+
+  serviceAccount:
+    create: true
+    name: ""
+    annotations: {}
+
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+    - key: node-role.kubernetes.io/master
+      operator: Exists
+      effect: NoSchedule
+
+  nodeSelector: {}
+
+autoEnroll:
+  enabled: true
+  # The seven waddlebot v3 services (Task 0.3c / seven-container collapse).
+  # Best-effort -- entries skipped silently if namespace/SA absent.
+  #
+  # IMPORTANT -- these seven containers do not exist yet (the
+  # seven-container collapse is a later v3 task). `serviceAccount:` below
+  # is set to the PLAIN service name as a placeholder and MUST be updated
+  # to match the actual rendered K8s ServiceAccount name (the auto-enroll
+  # Job's `-selector k8s:sa:<serviceAccount>` workload-attestor match)
+  # once those charts/templates exist -- verify with
+  # `helm template <svc> k8s/helm/<svc>` the same way the reference
+  # skauswatch-spire chart's autoEnroll.services entries were verified. A
+  # wrong serviceAccount value here silently breaks k8s workload
+  # attestation for that service: the SPIRE entry exists, but no real
+  # pod's ServiceAccount ever matches the selector, so the workload never
+  # gets an SVID.
+  services:
+    - name: svc-ingest
+      namespace: waddlebot
+      serviceAccount: svc-ingest
+    - name: svc-process
+      namespace: waddlebot
+      serviceAccount: svc-process
+    - name: svc-action
+      namespace: waddlebot
+      serviceAccount: svc-action
+    - name: svc-core
+      namespace: waddlebot
+      serviceAccount: svc-core
+    - name: svc-rtc
+      namespace: waddlebot
+      serviceAccount: svc-rtc
+    - name: hub-api
+      namespace: waddlebot
+      serviceAccount: hub-api
+    - name: hub-webui
+      namespace: waddlebot
+      serviceAccount: hub-webui
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""

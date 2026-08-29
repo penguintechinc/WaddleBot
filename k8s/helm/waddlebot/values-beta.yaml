@@ -537,3 +537,7 @@ httproute:
 # Network Policies — enabled in beta for namespace isolation
 networkPolicy:
   enabled: true
+
+spire:
+  enabled: true
+  environment: "beta"
