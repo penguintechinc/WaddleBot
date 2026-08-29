@@ -66,6 +66,12 @@ class StreamPipeline:
     STREAM_ACTIONS = "events:actions"
     STREAM_RESPONSES = "events:responses"
 
+    # GDPR: unbounded streams are an unbounded retention period. This is the
+    # default applied to every stream write that does not pass an explicit
+    # bound (main streams already require callers to pass max_len; the DLQ
+    # bound lives here since poison events otherwise sit the longest).
+    DEFAULT_DLQ_MAXLEN = 10000
+
     def __init__(
         self,
         redis_url: Optional[str] = None,
@@ -74,7 +80,8 @@ class StreamPipeline:
         max_retries: Optional[int] = None,
         batch_size: Optional[int] = None,
         block_ms: Optional[int] = None,
-        enabled: Optional[bool] = None
+        enabled: Optional[bool] = None,
+        dlq_maxlen: Optional[int] = None
     ):
         """
         Initialize stream pipeline.
@@ -87,6 +94,10 @@ class StreamPipeline:
             batch_size: Events per batch (from env or default: 10)
             block_ms: Block time in ms (from env or default: 5000)
             enabled: Enable pipeline (from env or default: False)
+            dlq_maxlen: Maximum DLQ length before oldest entries are trimmed
+                (from env STREAM_DLQ_MAXLEN or default: 10000). GDPR
+                retention-period control for the dead letter queue, which
+                is otherwise an unbounded append-only log.
         """
         self.redis_url = redis_url
         self.stream_prefix = stream_prefix
@@ -97,6 +108,9 @@ class StreamPipeline:
         self.max_retries = max_retries if max_retries is not None else int(os.getenv('STREAM_MAX_RETRIES', '3'))
         self.batch_size = batch_size if batch_size is not None else int(os.getenv('STREAM_BATCH_SIZE', '10'))
         self.block_ms = block_ms if block_ms is not None else int(os.getenv('STREAM_BLOCK_MS', '5000'))
+        self.dlq_maxlen = dlq_maxlen if dlq_maxlen is not None else int(
+            os.getenv('STREAM_DLQ_MAXLEN', str(self.DEFAULT_DLQ_MAXLEN))
+        )
 
         self._redis: Optional[redis.Redis] = None
         self._connected = False
@@ -105,7 +119,7 @@ class StreamPipeline:
         logger.info(
             f"StreamPipeline initialized: enabled={self.enabled}, "
             f"max_retries={self.max_retries}, batch_size={self.batch_size}, "
-            f"block_ms={self.block_ms}"
+            f"block_ms={self.block_ms}, dlq_maxlen={self.dlq_maxlen}"
         )
 
     @staticmethod
@@ -402,8 +416,15 @@ class StreamPipeline:
             if event_data:
                 dlq_data['data'] = json.dumps(event_data)
 
-            # Add to DLQ
-            dlq_id = await self._redis.xadd(dlq_name, dlq_data)
+            # Add to DLQ with a bounded length (GDPR retention control —
+            # poison events are the ones most likely to sit indefinitely
+            # in an unbounded log, so the DLQ must never be exempt).
+            dlq_id = await self._redis.xadd(
+                dlq_name,
+                dlq_data,
+                maxlen=self.dlq_maxlen,
+                approximate=True
+            )
 
             logger.warning(
                 f"Event {message_id} moved to DLQ: {error_reason} "
@@ -677,7 +698,8 @@ def create_stream_pipeline(
     max_retries: Optional[int] = None,
     batch_size: Optional[int] = None,
     block_ms: Optional[int] = None,
-    enabled: Optional[bool] = None
+    enabled: Optional[bool] = None,
+    dlq_maxlen: Optional[int] = None
 ) -> StreamPipeline:
     """
     Factory function to create a stream pipeline.
@@ -690,6 +712,7 @@ def create_stream_pipeline(
         batch_size: Events per batch
         block_ms: Block time in ms
         enabled: Enable pipeline
+        dlq_maxlen: Maximum DLQ length before trimming (default: 10000)
 
     Returns:
         Configured StreamPipeline instance
@@ -708,5 +731,6 @@ def create_stream_pipeline(
         max_retries=max_retries,
         batch_size=batch_size,
         block_ms=block_ms,
-        enabled=enabled
+        enabled=enabled,
+        dlq_maxlen=dlq_maxlen
     )
