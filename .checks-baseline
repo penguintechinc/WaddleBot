@@ -35,3 +35,7 @@ govulncheck=2
 # Per devops.md the pre-commit hook should use `gitleaks protect --staged`,
 # which checks what you are about to commit rather than all of history.
 gitleaks=420
+
+# Documentation reference gate (scripts/check-doc-refs.sh). Dead repo paths
+# referenced in docs/**/*.md. Seeded 2026-08-29; lower as docs are corrected.
+doc-refs=27

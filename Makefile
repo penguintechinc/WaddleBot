@@ -1,6 +1,6 @@
 .PHONY: dev test test-unit test-integration test-e2e test-functional test-security \
         smoke-test lint build docker-build docker-push deploy-dev deploy-prod \
-        seed-mock-data clean pre-commit run-ai-local
+        seed-mock-data clean pre-commit run-ai-local check-docs
 
 dev:
 	docker-compose up
@@ -15,6 +15,9 @@ docker-push:
 
 lint:
 	@bash scripts/lint.sh
+
+check-docs:
+	@bash scripts/check-doc-refs.sh
 
 test:
 	@$(MAKE) test-unit
