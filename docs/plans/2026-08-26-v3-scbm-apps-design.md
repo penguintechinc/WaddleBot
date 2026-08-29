@@ -19,9 +19,18 @@ The model is Nextcloud's: a core platform plus an app store, where the shipped d
 are themselves apps. Nothing is a privileged built-in, because a built-in that cannot be
 replaced makes the extension point decorative.
 
-v3.0.0 ships **feature parity with v2.2.x** — Social and Bot fully populated — plus
-lightweight Customer and Marketing. It does not attempt a complete CRM or a full
-conferencing suite; those are 3.x work with their own specs.
+**v3.0.0 ships all four modules' full feature set in one release** — Social, Customer, Bot
+and Marketing, not staged across 3.x minors. This supersedes the earlier "parity plus
+lightweight Customer/Marketing" scope.
+
+One honest caveat on that ambition, stated so it is a known risk rather than a surprise:
+Customer is a SuiteCRM/Odoo-class CRM and Social's conferencing is a Zoom/Teams replacement —
+each is a large product in its own right, and "full feature set in one release" is a
+multi-quarter undertaking, not a single milestone. The architecture here (Core → Modules →
+Features → Apps) is what makes shipping them together *tractable* — every feature is an App
+behind a Feature contract, so the modules grow independently and in parallel — but the
+calendar cost is real. Phases P2–P5 still exist as the build order; what changes is that they
+all land in v3.0.0 rather than seeding a lightweight cut and deferring the rest.
 
 ## Reuse is the default; rewriting needs a reason
 
@@ -932,8 +941,8 @@ its source; rows sourced from "this design" are proposals, not standards.
 | All four Modules, core functionality | Free | `critical-rules.md` — "Core product, no license-gated functionality" |
 | Bot: platform connectors, commands, interactions | Free | ungated in v2.2.x |
 | Social: chat, presence, communities | Free | ungated in v2.2.x |
-| Customer: accounts, contacts, opportunities | Free | lightweight by v3.0.0 scope |
-| Marketing: manual posting | Free | lightweight by v3.0.0 scope |
+| Customer: full CRM — accounts, contacts, opportunities, pipelines, cases | Free | core CRM in v3.0.0 |
+| Marketing: full scheduling + publishing + cross-platform analytics | mixed | see Marketing tiering |
 | More than one admin | Professional | `critical-rules.md` — Free is capped at 1 admin |
 | **More than one tenant** | **Enterprise** | Free and Professional are both capped at the single default tenant; matches WaddleAI, where multi-tenancy is Enterprise |
 | Whitelabelling | Professional | `critical-rules.md` |
@@ -1168,8 +1177,8 @@ Detail lives in the companion plan. Summary:
 | P1 | App manifest, registry, binding resolution; rename to `app_installations`; convert 2–3 Bot units as proof | A community can rebind a Feature to a non-default App |
 | P2 | Bot — all triggers/actions/interactions become Apps | v2.2.x Bot parity, all as Apps |
 | P3 | Social — community, presence, RTC, browser-source as Apps | v2.2.x Social parity |
-| P4 | Customer + Marketing lightweight Apps | accounts/contacts/opportunities; scheduling + analytics |
-| P5 | Cut v3.0.0 | parity verified against v2.2.x |
+| P4 | Customer + Marketing full Apps | complete CRM (accounts→cases); scheduling, publishing, analytics |
+| P5 | Cut v3.0.0 | all four modules' full feature set verified; parity vs v2.2.x plus new modules |
 
 ## Risks
 

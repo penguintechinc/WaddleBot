@@ -148,7 +148,7 @@ services:
     restart: unless-stopped
 
   infra-redis:
-    image: redis:7-bookworm@sha256:a5995dfdf108997f8a7c9587f54fad5e94ed5848de5236a6b28119e99efd67e0
+    image: valkey/valkey:8-bookworm@sha256:fea8b3e67b15729d4bb70589eb03367bab9ad1ee89c876f54327fc7c6e618571
     container_name: infra-redis
     entrypoint: ["/usr/local/bin/docker-entrypoint.sh"]
     environment:
