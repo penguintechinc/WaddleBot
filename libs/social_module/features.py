@@ -2,13 +2,13 @@
 Social Module -- Feature contracts + default App bindings
 ==========================================================
 
-Declares the Social Module's eight Feature contracts and registers each
+Declares the Social Module's nine Feature contracts and registers each
 one's shipped default App, per docs/plans/2026-08-26-v3-scbm-apps-design.md
 ``Features`` / ``Apps`` / migration phase P1 ("convert 2-3 Bot units as
 proof") -- Social is the second Module converted onto the same spine, one
 Feature per existing capability (community_module, presence, alias, quote,
 module_rtc, browser_source_core, plus the already-shipped social.welcome).
-All eight are Free tier per the license catalog except ``social.welcome_ai``,
+All are Free tier per the license catalog except ``social.welcome_ai``,
 which is Enterprise.
 
 | Feature id                | Flag                             | Scopes                          | Tier       |
@@ -20,27 +20,34 @@ which is Enterprise.
 | ``social.quote``           | ``waddles.social.quote``           | ``social.quote:write``            | free       |
 | ``social.browser_source``  | ``waddles.social.browser_source``  | ``social.browser_source:read``    | free       |
 | ``social.rtc``              | ``waddles.social.rtc``              | ``social.rtc:write``               | free       |
+| ``social.welcome``         | ``waddles.social.welcome``         | ``social.welcome:write``          | free       |
 | ``social.welcome_ai``      | ``waddles.social.welcome_ai``      | ``social.welcome:write``          | enterprise |
 
-``social.welcome`` (the first-message-recognition Feature, distinct from
-``social.welcome_ai`` above) is already registered elsewhere and is
-deliberately not declared here -- this module only owns the eight ids in
-the table.
+``social.welcome`` is the first-message-recognition Feature -- the always-on
+base capability already shipped in
+``action/interactive/welcome_interaction_module/services/
+welcome_service.py`` (``check_and_welcome``/``try_mark_welcomed``);
+``social.welcome_ai`` is the separate, Enterprise-tier, flag-gated
+AI-personalization layer on top of it (``WELCOME_AI_FLAG_KEY`` ==
+``waddles.social.welcome_ai`` in that module's ``config.py``). Both share
+the same ``requires_scopes`` (``social.welcome:write``) but are distinct
+contracts with distinct flags -- this module now owns both.
 
 Each Feature gets exactly one shipped default App (``provider="builtin"``,
 ``is_default=True``) -- the "permanent fallback" the design doc's ``Apps ->
 Binding resolution`` describes as un-swappable cluster-wide. Social's actual
 handler code still lives in its pre-v3 locations (``core/community_module``,
 ``core/module_rtc``, ``core/browser_source_core_module``, ``libs/presence``,
-``action/interactive/{alias,quote}_interaction_module``); this module is the
-Feature-contract registration point those handlers gate against, not a
-rewrite of them. See
+``action/interactive/{alias,quote,welcome}_interaction_module``); this
+module is the Feature-contract registration point those handlers gate
+against, not a rewrite of them. See
 ``action/interactive/quote_interaction_module/app.py``'s ``add_quote`` for
 the one worked gate example wired end-to-end; the other Free-tier Features
 follow the identical one-line guard. ``social.welcome_ai``'s gate already
 exists in ``action/interactive/welcome_interaction_module/services/
-welcome_service.py`` and is not re-gated here -- only its contract and
-default App are registered.
+welcome_service.py`` and is not re-gated here (``social.welcome`` itself has
+no separate flag check -- it is the always-on base path); only their
+contracts and default Apps are registered.
 
 Call :func:`register_all` once at process startup to register these
 against the process-wide singletons. Tests pass fresh
@@ -138,6 +145,14 @@ _FEATURE_DEFS: Tuple[Dict[str, Any], ...] = (
         "flag": "waddles.social.rtc",
     },
     {
+        "id": "social.welcome",
+        "version": 1,
+        "module": MODULE,
+        "requires_scopes": frozenset({"social.welcome:write"}),
+        "min_tier": "free",
+        "flag": "waddles.social.welcome",
+    },
+    {
         "id": "social.welcome_ai",
         "version": 1,
         "module": MODULE,
@@ -232,6 +247,17 @@ _DEFAULT_APP_DEFS: Tuple[Dict[str, Any], ...] = (
         "is_default": True,
     },
     {
+        "app_id": "waddles.social.welcome.default",
+        "name": "Welcome (default)",
+        "version": "1.0.0",
+        "feature": "waddles.social.welcome",
+        "module": MODULE,
+        "provider": "builtin",
+        "surfaces": ("process", "action"),
+        "permissions": ("social.welcome:write",),
+        "is_default": True,
+    },
+    {
         "app_id": "waddles.social.welcome_ai.default",
         "name": "Welcome AI (default)",
         "version": "1.0.0",
@@ -246,12 +272,12 @@ _DEFAULT_APP_DEFS: Tuple[Dict[str, Any], ...] = (
 
 
 def build_contracts() -> Tuple[FeatureContract, ...]:
-    """Parse and validate the eight Social Feature contracts, without registering them."""
+    """Parse and validate the nine Social Feature contracts, without registering them."""
     return tuple(parse_feature_contract(raw) for raw in _FEATURE_DEFS)
 
 
 def build_default_apps() -> Tuple[AppManifest, ...]:
-    """Parse and validate the eight Social default App manifests, without registering them."""
+    """Parse and validate the nine Social default App manifests, without registering them."""
     return tuple(parse_manifest(raw) for raw in _DEFAULT_APP_DEFS)
 
 
@@ -261,7 +287,7 @@ def register_all(
     app_registry: Optional[AppRegistry] = None,
 ) -> Tuple[Tuple[FeatureContract, ...], Tuple[AppManifest, ...]]:
     """
-    Parse, validate and register all eight Social Features and their
+    Parse, validate and register all nine Social Features and their
     shipped default Apps.
 
     Defaults to the process-wide singletons
