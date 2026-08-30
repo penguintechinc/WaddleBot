@@ -21,6 +21,8 @@ from flask_core import (  # noqa: E402
     success_response,
     error_response,
 )
+from flask_core.feature_flags import feature_enabled  # noqa: E402
+from flask_core.tenancy import DEFAULT_TENANT_SLUG, get_tenant_context  # noqa: E402
 from config import Config  # noqa: E402
 from services.twitch_service import TwitchService  # noqa: E402
 from services.shoutout_service import ShoutoutService  # noqa: E402
@@ -110,6 +112,14 @@ async def create_shoutout():
 
     Returns shoutout message and metadata.
     """
+    # v3 Feature gate (bot.shoutout / waddles.bot.shoutout, free tier). The
+    # other 3 Bot Features (bot.commands, bot.connectors, bot.interactions)
+    # follow this identical one-line guard at their own handler entry points.
+    tenant_ctx = get_tenant_context(request)
+    tenant_slug = tenant_ctx.tenant_slug if tenant_ctx is not None else DEFAULT_TENANT_SLUG
+    if not await feature_enabled("waddles.bot.shoutout", tenant=tenant_slug):
+        return error_response("shoutout is not available", status_code=404)
+
     try:
         data = await request.get_json()
 
