@@ -16,6 +16,15 @@ Fail-first proof: with ``@tenant_middleware`` temporarily removed from
 ``create_shoutout``, ``test_no_jwt_is_rejected_not_run_as_default_tenant``
 and ``test_invalid_jwt_returns_401`` both failed (404 with the flag check
 running unauthenticated) before the fix, and pass after it.
+
+``TestCreateShoutoutScopeEnforcement`` covers the HTTP-layer scope check
+added on top of that fix: ``@require_scope("bot.command:write")`` now sits
+between ``tenant_middleware`` and ``async_endpoint`` on this handler, per
+``bot_module/features.py``'s ``bot.shoutout`` Feature contract
+(``requires_scopes == {"bot.command:write"}``). ``_bearer_token``'s
+default ``scope`` is the exact required scope, so every pre-existing test
+above that doesn't override it keeps exercising the real, now-enforced
+path.
 """
 
 from __future__ import annotations
@@ -51,7 +60,10 @@ class _FakeFeatureEnabled:
         return self.enabled
 
 
-def _bearer_token(tenant: str) -> str:
+def _bearer_token(tenant: str, scope: str = "bot.command:write") -> str:
+    """`scope` defaults to `create_shoutout`'s required scope so every
+    pre-existing caller of this helper keeps exercising the real,
+    now-enforced `@require_scope` path without having to be touched."""
     return create_jwt_token(
         user_id="u1",
         username="alice",
@@ -59,6 +71,7 @@ def _bearer_token(tenant: str) -> str:
         roles=["viewer"],
         secret_key=_SECRET_KEY,
         tenant=tenant,
+        scope=scope,
     )
 
 
@@ -128,5 +141,60 @@ class TestCreateShoutoutTenantIsolation:
 
         # The gate itself is mocked OFF -- 404 -- but the point of this test
         # is what tenant it was evaluated against.
+        assert response.status_code == 404
+        assert fake.calls == [{"flag_key": "waddles.bot.shoutout", "tenant": "acme-corp"}]
+
+
+class TestCreateShoutoutScopeEnforcement:
+    """`@require_scope("bot.command:write")` -- the HTTP-layer scope check
+    closing the tenant -> scope -> feature chain (security.md)."""
+
+    async def test_missing_scope_is_403(
+        self, client: Any, monkeypatch: pytest.MonkeyPatch, fake_tenant_resolution: None
+    ) -> None:
+        fake = _FakeFeatureEnabled(enabled=False)
+        monkeypatch.setattr("app.feature_enabled", fake)
+        token = _bearer_token(tenant="acme-corp", scope="")
+
+        response = await client.post(
+            "/api/v1/shoutout",
+            json={"username": "someuser", "community_id": 1},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 403
+        assert fake.calls == []
+
+    async def test_wrong_scope_is_403(
+        self, client: Any, monkeypatch: pytest.MonkeyPatch, fake_tenant_resolution: None
+    ) -> None:
+        fake = _FakeFeatureEnabled(enabled=False)
+        monkeypatch.setattr("app.feature_enabled", fake)
+        token = _bearer_token(tenant="acme-corp", scope="social.quote:write")
+
+        response = await client.post(
+            "/api/v1/shoutout",
+            json={"username": "someuser", "community_id": 1},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 403
+        assert fake.calls == []
+
+    async def test_valid_scope_proceeds(
+        self, client: Any, monkeypatch: pytest.MonkeyPatch, fake_tenant_resolution: None
+    ) -> None:
+        fake = _FakeFeatureEnabled(enabled=False)
+        monkeypatch.setattr("app.feature_enabled", fake)
+        token = _bearer_token(tenant="acme-corp", scope="bot.command:write")
+
+        response = await client.post(
+            "/api/v1/shoutout",
+            json={"username": "someuser", "community_id": 1},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # The scope check passed -- the flag was evaluated (404, disabled),
+        # not short-circuited at 403.
         assert response.status_code == 404
         assert fake.calls == [{"flag_key": "waddles.bot.shoutout", "tenant": "acme-corp"}]

@@ -18,6 +18,7 @@ from flask_core import (  # noqa: E402
     error_response,
     create_health_blueprint
 )
+from flask_core.authz import require_scope  # noqa: E402
 from flask_core.feature_flags import feature_enabled  # noqa: E402
 from flask_core.tenancy import (  # noqa: E402
     DEFAULT_TENANT_SLUG,
@@ -79,6 +80,11 @@ async def status():
 # so an invalid/missing JWT 401s before async_endpoint or the handler body
 # ever run.
 @tenant_middleware
+# HTTP-layer scope enforcement -- social_module/features.py's "social.quote"
+# Feature contract declares requires_scopes == {"social.quote:write"}; this
+# wires that declaration up to an actual 403 rather than leaving it
+# unenforced.
+@require_scope("social.quote:write")
 @async_endpoint
 async def add_quote():
     """Add a new quote"""

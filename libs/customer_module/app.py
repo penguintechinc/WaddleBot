@@ -18,6 +18,7 @@ import asyncio
 from typing import Any, Tuple
 
 from flask_core.api_utils import async_endpoint, error_response, success_response
+from flask_core.authz import require_scope
 from flask_core.feature_flags import feature_enabled
 from flask_core.tenancy import DEFAULT_TENANT_SLUG, get_tenant_context, tenant_middleware
 from quart import Blueprint, Quart, request
@@ -34,6 +35,11 @@ api_bp = Blueprint("customer_api", __name__, url_prefix="/customer")
 # so an invalid/missing JWT 401s before async_endpoint's error handling or
 # the handler body ever run.
 @tenant_middleware
+# HTTP-layer scope enforcement -- customer_module/features.py's
+# "customer.account" Feature contract declares requires_scopes ==
+# {"customer.account:write"}; this is the first handler wiring that
+# declaration up to an actual 403 rather than leaving it unenforced.
+@require_scope("customer.account:write")
 @async_endpoint
 async def create_account() -> Tuple[Any, int]:
     """

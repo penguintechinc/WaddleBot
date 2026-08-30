@@ -199,6 +199,7 @@ def create_jwt_token(
     roles: List[str],
     secret_key: str,
     tenant: str,
+    scope: str = "",
     expiration_hours: int = 24
 ) -> str:
     """
@@ -213,6 +214,12 @@ def create_jwt_token(
         tenant: Tenant slug the token is scoped to. Mandatory -- security.md
             requires every token to carry a `tenant` claim; single-tenant
             deployments pass DEFAULT_TENANT_SLUG, not an empty/omitted value.
+        scope: Space-delimited OIDC `scope` claim (SCOPE_BUNDLES-derived
+            resource:action strings, e.g. "customer.account:write") --
+            checked by `authz.require_scope()` at the HTTP layer. Empty by
+            default (no scopes granted), never omitted from the payload, so
+            downstream scope checks always see an explicit claim to parse
+            rather than a missing key.
         expiration_hours: Token expiration in hours
 
     Returns:
@@ -236,6 +243,7 @@ def create_jwt_token(
         'email': email,
         'roles': roles,
         'tenant': tenant,
+        'scope': scope,
         'iat': now,
         'exp': expiration,
         'type': 'access'

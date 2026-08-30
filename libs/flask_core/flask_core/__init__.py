@@ -35,6 +35,10 @@ from .tenancy import (
     resolve_tenant_context,
     get_tenant_context,
 )
+from .authz import (
+    require_scope,
+    has_required_scopes,
+)
 from .datamodels import (
     CommandRequest,
     CommandResult,
@@ -171,6 +175,9 @@ __all__ = [
     "tenant_scoped",
     "resolve_tenant_context",
     "get_tenant_context",
+    # Scope Enforcement (HTTP layer)
+    "require_scope",
+    "has_required_scopes",
     # Datamodels
     "CommandRequest",
     "CommandResult",

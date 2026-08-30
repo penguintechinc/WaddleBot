@@ -20,6 +20,19 @@ proof: with ``@tenant_middleware`` temporarily removed from
 ``create_account``, ``test_no_jwt_is_rejected_not_run_as_default_tenant``
 and ``test_invalid_jwt_returns_401`` both failed (200, flag check ran
 unauthenticated) before the fix, and pass after it.
+
+``TestCreateAccountScopeEnforcement`` covers the HTTP-layer scope check
+added on top of that fix: ``@require_scope("customer.account:write")`` now
+sits between ``tenant_middleware`` and ``async_endpoint`` on this handler,
+per ``customer_module/features.py``'s ``customer.account`` Feature
+contract (``requires_scopes == {"customer.account:write"}``). Fail-first
+proof: with ``@require_scope(...)`` temporarily removed from
+``create_account``, ``test_missing_scope_is_403`` and
+``test_wrong_scope_is_403`` both failed (200, flag check ran with no scope
+check at all) before the fix, and pass after it. ``_bearer_token``'s
+default ``scope`` is the exact required scope, so every pre-existing test
+above that doesn't override it keeps exercising the real, now-enforced
+path.
 """
 
 from __future__ import annotations
@@ -56,8 +69,11 @@ class _FakeFeatureEnabled:
         return self.enabled
 
 
-def _bearer_token(tenant: str) -> str:
-    """A valid JWT scoped to `tenant`, signed with tenant_middleware's default secret."""
+def _bearer_token(tenant: str, scope: str = "customer.account:write") -> str:
+    """A valid JWT scoped to `tenant`, signed with tenant_middleware's default
+    secret. `scope` defaults to `create_account`'s required scope so every
+    pre-existing caller of this helper keeps exercising the real,
+    now-enforced `@require_scope` path without having to be touched."""
     return create_jwt_token(
         user_id="u1",
         username="alice",
@@ -65,6 +81,7 @@ def _bearer_token(tenant: str) -> str:
         roles=["viewer"],
         secret_key=_SECRET_KEY,
         tenant=tenant,
+        scope=scope,
     )
 
 
@@ -184,4 +201,59 @@ class TestCreateAccountTenantIsolation:
         assert response.status_code == 200
         assert fake.calls == [
             {"flag_key": "waddles.customer.accounts", "tenant": "acme-corp", "community": 42}
+        ]
+
+
+class TestCreateAccountScopeEnforcement:
+    """`@require_scope("customer.account:write")` -- the HTTP-layer scope
+    check closing the tenant -> scope -> feature chain (security.md)."""
+
+    async def test_missing_scope_is_403(
+        self, client: Any, monkeypatch: pytest.MonkeyPatch, fake_tenant_resolution: None
+    ) -> None:
+        fake = _FakeFeatureEnabled(enabled=True)
+        monkeypatch.setattr("customer_module.app.feature_enabled", fake)
+        token = _bearer_token(tenant="global", scope="")
+
+        response = await client.post(
+            "/customer/accounts",
+            json={"name": "Acme"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 403
+        assert fake.calls == []
+
+    async def test_wrong_scope_is_403(
+        self, client: Any, monkeypatch: pytest.MonkeyPatch, fake_tenant_resolution: None
+    ) -> None:
+        fake = _FakeFeatureEnabled(enabled=True)
+        monkeypatch.setattr("customer_module.app.feature_enabled", fake)
+        token = _bearer_token(tenant="global", scope="social.quote:write")
+
+        response = await client.post(
+            "/customer/accounts",
+            json={"name": "Acme"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 403
+        assert fake.calls == []
+
+    async def test_valid_scope_proceeds(
+        self, client: Any, monkeypatch: pytest.MonkeyPatch, fake_tenant_resolution: None
+    ) -> None:
+        fake = _FakeFeatureEnabled(enabled=True)
+        monkeypatch.setattr("customer_module.app.feature_enabled", fake)
+        token = _bearer_token(tenant="global", scope="customer.account:write")
+
+        response = await client.post(
+            "/customer/accounts",
+            json={"name": "Acme", "community_id": 42},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        assert fake.calls == [
+            {"flag_key": "waddles.customer.accounts", "tenant": "global", "community": 42}
         ]

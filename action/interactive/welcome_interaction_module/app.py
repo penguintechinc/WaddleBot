@@ -24,6 +24,7 @@ from flask_core import (  # noqa: E402
     setup_aaa_logging,
     success_response,
 )
+from flask_core.authz import require_scope  # noqa: E402
 from flask_core.tenancy import (  # noqa: E402
     DEFAULT_TENANT_SLUG,
     get_tenant_context,
@@ -97,6 +98,11 @@ async def status() -> tuple[dict[str, Any], int]:
 # handler now takes tenant from the JWT-derived TenantContext only -- the
 # body's `tenant` field is gone (see validation_models.py).
 @tenant_middleware
+# HTTP-layer scope enforcement -- social_module/features.py's
+# "social.welcome" Feature contract declares requires_scopes ==
+# {"social.welcome:write"} (shared with social.welcome_ai); this wires
+# that declaration up to an actual 403 rather than leaving it unenforced.
+@require_scope("social.welcome:write")
 @validate_json(WelcomeCheckRequest)
 @async_endpoint
 async def welcome_check(

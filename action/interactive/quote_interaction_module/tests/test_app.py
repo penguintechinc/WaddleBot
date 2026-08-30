@@ -14,6 +14,15 @@ Fail-first proof: with ``@tenant_middleware`` temporarily removed from
 ``add_quote``, ``test_no_jwt_is_rejected_not_run_as_default_tenant`` and
 ``test_invalid_jwt_returns_401`` both failed (200/404 with the flag check
 running unauthenticated) before the fix, and pass after it.
+
+``TestAddQuoteScopeEnforcement`` covers the HTTP-layer scope check added on
+top of that fix: ``@require_scope("social.quote:write")`` now sits between
+``tenant_middleware`` and ``async_endpoint`` on this handler, per
+``social_module/features.py``'s ``social.quote`` Feature contract
+(``requires_scopes == {"social.quote:write"}``). ``_bearer_token``'s
+default ``scope`` is the exact required scope, so every pre-existing test
+above that doesn't override it keeps exercising the real, now-enforced
+path.
 """
 
 from __future__ import annotations
@@ -49,7 +58,10 @@ class _FakeFeatureEnabled:
         return self.enabled
 
 
-def _bearer_token(tenant: str) -> str:
+def _bearer_token(tenant: str, scope: str = "social.quote:write") -> str:
+    """`scope` defaults to `add_quote`'s required scope so every pre-existing
+    caller of this helper keeps exercising the real, now-enforced
+    `@require_scope` path without having to be touched."""
     return create_jwt_token(
         user_id="u1",
         username="alice",
@@ -57,6 +69,7 @@ def _bearer_token(tenant: str) -> str:
         roles=["viewer"],
         secret_key=_SECRET_KEY,
         tenant=tenant,
+        scope=scope,
     )
 
 
@@ -126,4 +139,60 @@ class TestAddQuoteTenantIsolation:
         # The gate itself is mocked OFF -- 404 -- but the point of this test
         # is what tenant it was evaluated against.
         assert response.status_code == 404
+        assert fake.calls == [{"flag_key": "waddles.social.quote", "tenant": "acme-corp"}]
+
+
+class TestAddQuoteScopeEnforcement:
+    """`@require_scope("social.quote:write")` -- the HTTP-layer scope check
+    closing the tenant -> scope -> feature chain (security.md)."""
+
+    async def test_missing_scope_is_403(
+        self, client: Any, monkeypatch: pytest.MonkeyPatch, fake_tenant_resolution: None
+    ) -> None:
+        fake = _FakeFeatureEnabled(enabled=True)
+        monkeypatch.setattr("app.feature_enabled", fake)
+        token = _bearer_token(tenant="acme-corp", scope="")
+
+        response = await client.post(
+            "/api/v1/quotes",
+            json={"community_id": 1, "text": "hi"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 403
+        assert fake.calls == []
+
+    async def test_wrong_scope_is_403(
+        self, client: Any, monkeypatch: pytest.MonkeyPatch, fake_tenant_resolution: None
+    ) -> None:
+        fake = _FakeFeatureEnabled(enabled=True)
+        monkeypatch.setattr("app.feature_enabled", fake)
+        token = _bearer_token(tenant="acme-corp", scope="bot.command:write")
+
+        response = await client.post(
+            "/api/v1/quotes",
+            json={"community_id": 1, "text": "hi"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 403
+        assert fake.calls == []
+
+    async def test_valid_scope_proceeds(
+        self, client: Any, monkeypatch: pytest.MonkeyPatch, fake_tenant_resolution: None
+    ) -> None:
+        fake = _FakeFeatureEnabled(enabled=True)
+        monkeypatch.setattr("app.feature_enabled", fake)
+        token = _bearer_token(tenant="acme-corp", scope="social.quote:write")
+
+        response = await client.post(
+            "/api/v1/quotes",
+            json={"community_id": 1, "text": "hi"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # feature_enabled mocked ON, but no live quote_service -> 500 past
+        # the scope check. The point of this test is that the scope check
+        # itself passed and the flag was evaluated -- not the stub's DB call.
+        assert response.status_code in (201, 500)
         assert fake.calls == [{"flag_key": "waddles.social.quote", "tenant": "acme-corp"}]
