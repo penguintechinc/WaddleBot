@@ -32,6 +32,34 @@ infrastructure:
   qdrant:
     enabled: false
 
+# PostHog stays OFF by default in beta too — flip on deliberately per
+# release. When enabled, secrets MUST come from a pre-created Secret, never
+# inline:
+#   kubectl -n waddlebot create secret generic posthog-secrets \
+#     --from-literal=SECRET_KEY="$(openssl rand -hex 32)" \
+#     --from-literal=POSTGRES_PASSWORD="$(openssl rand -hex 16)" \
+#     --from-literal=CLICKHOUSE_PASSWORD=
+# then: --set posthog.enabled=true --set posthog.existingSecret=posthog-secrets
+posthog:
+  enabled: false
+  existingSecret: "posthog-secrets"
+  web:
+    replicas: 1
+    resources:
+      requests: { cpu: "250m", memory: "512Mi" }
+      limits: { cpu: "1000m", memory: "1Gi" }
+  worker:
+    replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "384Mi" }
+      limits: { cpu: "500m", memory: "768Mi" }
+  postgres:
+    storage: 10Gi
+  clickhouse:
+    storage: 20Gi
+  kafka:
+    storage: 10Gi
+
 # Module image overrides - use registry image names
 modules:
   # Router

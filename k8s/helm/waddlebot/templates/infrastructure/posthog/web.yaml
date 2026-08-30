@@ -1,0 +1,84 @@
+{{- if .Values.posthog.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: posthog-web
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "waddlebot.posthog.labels" . | nindent 4 }}
+    app.kubernetes.io/name: posthog-web
+    app.kubernetes.io/component: feature-flags
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: posthog-web
+  ports:
+    - name: http
+      port: {{ .Values.posthog.web.port }}
+      targetPort: {{ .Values.posthog.web.port }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: posthog-web
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "waddlebot.posthog.labels" . | nindent 4 }}
+    app.kubernetes.io/name: posthog-web
+    app.kubernetes.io/component: feature-flags
+spec:
+  replicas: {{ .Values.posthog.web.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: posthog-web
+  template:
+    metadata:
+      labels:
+        {{- include "waddlebot.posthog.labels" . | nindent 8 }}
+        app.kubernetes.io/name: posthog-web
+        app.kubernetes.io/component: feature-flags
+    spec:
+      initContainers:
+        # Postgres + ClickHouse migrations before the server starts.
+        # Idempotent — safe to re-run on every rollout.
+        - name: migrate
+          image: {{ include "waddlebot.posthog.image" . }}
+          imagePullPolicy: {{ .Values.posthog.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.posthog.securityContext.app | nindent 12 }}
+          command:
+            - /bin/bash
+            - -c
+            - "python manage.py migrate --noinput && python manage.py migrate_clickhouse --noinput"
+          env:
+            {{- include "waddlebot.posthog.appEnv" . | nindent 12 }}
+      containers:
+        - name: web
+          image: {{ include "waddlebot.posthog.image" . }}
+          imagePullPolicy: {{ .Values.posthog.image.pullPolicy }}
+          # Writable rootfs required: PostHog writes temp/cache under the
+          # app dir at runtime. Still non-root, no added caps.
+          securityContext:
+            {{- toYaml .Values.posthog.securityContext.app | nindent 12 }}
+          command: ["./bin/docker-server"]
+          env:
+            {{- include "waddlebot.posthog.appEnv" . | nindent 12 }}
+          ports:
+            - containerPort: {{ .Values.posthog.web.port }}
+              name: http
+          resources:
+            {{- toYaml .Values.posthog.web.resources | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /_health
+              port: {{ .Values.posthog.web.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 12
+          livenessProbe:
+            httpGet:
+              path: /_health
+              port: {{ .Values.posthog.web.port }}
+            initialDelaySeconds: 90
+            periodSeconds: 20
+{{- end }}

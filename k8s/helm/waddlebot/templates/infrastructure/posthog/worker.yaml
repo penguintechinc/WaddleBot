@@ -1,0 +1,46 @@
+{{- if .Values.posthog.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: posthog-worker
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "waddlebot.posthog.labels" . | nindent 4 }}
+    app.kubernetes.io/name: posthog-worker
+    app.kubernetes.io/component: feature-flags
+spec:
+  replicas: {{ .Values.posthog.worker.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: posthog-worker
+  template:
+    metadata:
+      labels:
+        {{- include "waddlebot.posthog.labels" . | nindent 8 }}
+        app.kubernetes.io/name: posthog-worker
+        app.kubernetes.io/component: feature-flags
+    spec:
+      containers:
+        - name: worker
+          image: {{ include "waddlebot.posthog.image" . }}
+          imagePullPolicy: {{ .Values.posthog.image.pullPolicy }}
+          # Writable rootfs required: PostHog writes temp/cache under the
+          # app dir at runtime. Still non-root, no added caps.
+          securityContext:
+            {{- toYaml .Values.posthog.securityContext.app | nindent 12 }}
+          command: ["./bin/docker-worker-celery", "--with-scheduler"]
+          env:
+            {{- include "waddlebot.posthog.appEnv" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.posthog.worker.resources | nindent 12 }}
+          readinessProbe:
+            exec:
+              command: ["pgrep", "-f", "docker-worker-celery"]
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          livenessProbe:
+            exec:
+              command: ["pgrep", "-f", "docker-worker-celery"]
+            initialDelaySeconds: 45
+            periodSeconds: 30
+{{- end }}
