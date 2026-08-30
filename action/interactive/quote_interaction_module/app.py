@@ -19,7 +19,11 @@ from flask_core import (  # noqa: E402
     create_health_blueprint
 )
 from flask_core.feature_flags import feature_enabled  # noqa: E402
-from flask_core.tenancy import DEFAULT_TENANT_SLUG, get_tenant_context  # noqa: E402
+from flask_core.tenancy import (  # noqa: E402
+    DEFAULT_TENANT_SLUG,
+    get_tenant_context,
+    tenant_middleware,
+)
 from config import Config  # noqa: E402
 
 app = Quart(__name__)
@@ -68,6 +72,13 @@ async def status():
 
 
 @api_bp.route('/quotes', methods=['POST'])
+# regression: tenant-isolation audit 2026-08-30 -- tenant_middleware was
+# missing here, so get_tenant_context(request) always returned None and
+# every request silently ran as DEFAULT_TENANT_SLUG with no auth. Must be
+# the outermost decorator (security.md: tenant before scope/handler logic)
+# so an invalid/missing JWT 401s before async_endpoint or the handler body
+# ever run.
+@tenant_middleware
 @async_endpoint
 async def add_quote():
     """Add a new quote"""
