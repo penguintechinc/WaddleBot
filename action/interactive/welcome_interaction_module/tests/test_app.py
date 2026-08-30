@@ -19,6 +19,15 @@ Fail-first proof: with ``@tenant_middleware`` temporarily removed from
 ``welcome_check``, ``test_no_jwt_is_rejected_not_run_as_default_tenant``
 and ``test_invalid_jwt_returns_401`` both failed (200, service called
 unauthenticated) before the fix, and pass after it.
+
+``TestWelcomeCheckScopeEnforcement`` covers the HTTP-layer scope check
+added on top of that fix: ``@require_scope("social.welcome:write")`` now
+sits between ``tenant_middleware`` and ``validate_json`` on this handler,
+per ``social_module/features.py``'s ``social.welcome`` Feature contract
+(``requires_scopes == {"social.welcome:write"}``, shared with
+``social.welcome_ai``). ``_bearer_token``'s default ``scope`` is the exact
+required scope, so every pre-existing test above that doesn't override it
+keeps exercising the real, now-enforced path.
 """
 
 from __future__ import annotations
@@ -55,7 +64,10 @@ class _FakeWelcomeService:
         return self.result
 
 
-def _bearer_token(tenant: str) -> str:
+def _bearer_token(tenant: str, scope: str = "social.welcome:write") -> str:
+    """`scope` defaults to `welcome_check`'s required scope so every
+    pre-existing caller of this helper keeps exercising the real,
+    now-enforced `@require_scope` path without having to be touched."""
     return create_jwt_token(
         user_id="u1",
         username="alice",
@@ -63,6 +75,7 @@ def _bearer_token(tenant: str) -> str:
         roles=["viewer"],
         secret_key=_SECRET_KEY,
         tenant=tenant,
+        scope=scope,
     )
 
 
@@ -171,3 +184,62 @@ class TestWelcomeCheckTenantIsolation:
 
         assert response.status_code == 400
         assert fake_welcome_service.calls == []
+
+
+class TestWelcomeCheckScopeEnforcement:
+    """`@require_scope("social.welcome:write")` -- the HTTP-layer scope
+    check closing the tenant -> scope -> feature chain (security.md)."""
+
+    @pytest.mark.asyncio
+    async def test_missing_scope_is_403(
+        self,
+        client: Any,
+        fake_tenant_resolution: None,
+        fake_welcome_service: _FakeWelcomeService,
+    ) -> None:
+        token = _bearer_token(tenant="acme-corp", scope="")
+
+        response = await client.post(
+            "/api/v1/welcome/check",
+            json=_VALID_BODY,
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 403
+        assert fake_welcome_service.calls == []
+
+    @pytest.mark.asyncio
+    async def test_wrong_scope_is_403(
+        self,
+        client: Any,
+        fake_tenant_resolution: None,
+        fake_welcome_service: _FakeWelcomeService,
+    ) -> None:
+        token = _bearer_token(tenant="acme-corp", scope="bot.command:write")
+
+        response = await client.post(
+            "/api/v1/welcome/check",
+            json=_VALID_BODY,
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 403
+        assert fake_welcome_service.calls == []
+
+    @pytest.mark.asyncio
+    async def test_valid_scope_proceeds(
+        self,
+        client: Any,
+        fake_tenant_resolution: None,
+        fake_welcome_service: _FakeWelcomeService,
+    ) -> None:
+        token = _bearer_token(tenant="acme-corp", scope="social.welcome:write")
+
+        response = await client.post(
+            "/api/v1/welcome/check",
+            json=_VALID_BODY,
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        assert len(fake_welcome_service.calls) == 1
