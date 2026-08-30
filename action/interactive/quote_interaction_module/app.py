@@ -18,6 +18,8 @@ from flask_core import (  # noqa: E402
     error_response,
     create_health_blueprint
 )
+from flask_core.feature_flags import feature_enabled  # noqa: E402
+from flask_core.tenancy import DEFAULT_TENANT_SLUG, get_tenant_context  # noqa: E402
 from config import Config  # noqa: E402
 
 app = Quart(__name__)
@@ -69,6 +71,15 @@ async def status():
 @async_endpoint
 async def add_quote():
     """Add a new quote"""
+    # v3 Feature gate (social.quote / waddles.social.quote, free tier). The
+    # other Free-tier Social Features (polls, presence, communities, alias,
+    # browser_source, rtc) follow this identical one-line guard at their own
+    # handler entry points.
+    tenant_ctx = get_tenant_context(request)
+    tenant_slug = tenant_ctx.tenant_slug if tenant_ctx is not None else DEFAULT_TENANT_SLUG
+    if not await feature_enabled("waddles.social.quote", tenant=tenant_slug):
+        return error_response("quotes are not available", status_code=404)
+
     try:
         data = await request.get_json()
 
