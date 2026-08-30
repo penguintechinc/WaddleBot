@@ -44,6 +44,7 @@ from .datamodels import (
     ModuleResponse
 )
 from .logging_config import setup_aaa_logging, get_logger
+from .feature_flags import feature_enabled
 from .api_utils import (
     success_response,
     error_response,
@@ -180,6 +181,8 @@ __all__ = [
     # Logging
     "setup_aaa_logging",
     "get_logger",
+    # Feature Flags
+    "feature_enabled",
     # API Utils
     "success_response",
     "error_response",
