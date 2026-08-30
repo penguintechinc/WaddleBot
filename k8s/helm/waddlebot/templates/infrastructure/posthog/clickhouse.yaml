@@ -1,0 +1,87 @@
+{{- if .Values.posthog.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: posthog-clickhouse
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "waddlebot.posthog.labels" . | nindent 4 }}
+    app.kubernetes.io/name: posthog-clickhouse
+    app.kubernetes.io/component: database
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: posthog-clickhouse
+  ports:
+    - name: http
+      port: 8123
+      targetPort: 8123
+    - name: native
+      port: 9000
+      targetPort: 9000
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: posthog-clickhouse
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "waddlebot.posthog.labels" . | nindent 4 }}
+    app.kubernetes.io/name: posthog-clickhouse
+    app.kubernetes.io/component: database
+spec:
+  serviceName: posthog-clickhouse
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: posthog-clickhouse
+  template:
+    metadata:
+      labels:
+        {{- include "waddlebot.posthog.labels" . | nindent 8 }}
+        app.kubernetes.io/name: posthog-clickhouse
+        app.kubernetes.io/component: database
+    spec:
+      securityContext:
+        fsGroup: 101
+      containers:
+        # ClickHouse ships only its own Ubuntu-based images (no bookworm
+        # variant) — accepted exception to the Debian base-image rule.
+        - name: clickhouse
+          image: "{{ .Values.posthog.clickhouse.image }}@{{ .Values.posthog.clickhouse.digest }}"
+          imagePullPolicy: {{ .Values.posthog.image.pullPolicy }}
+          # Writable rootfs required: writes data AND generated config under
+          # /etc + /var at runtime. Still non-root, no added caps.
+          securityContext:
+            {{- toYaml .Values.posthog.securityContext.clickhouse | nindent 12 }}
+          ports:
+            - containerPort: 8123
+              name: http
+            - containerPort: 9000
+              name: native
+          resources:
+            {{- toYaml .Values.posthog.clickhouse.resources | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: 8123
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: 8123
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/clickhouse
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.posthog.clickhouse.storage }}
+{{- end }}

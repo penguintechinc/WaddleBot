@@ -1,0 +1,88 @@
+{{- if .Values.posthog.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: posthog-kafka
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "waddlebot.posthog.labels" . | nindent 4 }}
+    app.kubernetes.io/name: posthog-kafka
+    app.kubernetes.io/component: event-pipeline
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: posthog-kafka
+  ports:
+    - name: kafka
+      port: 9092
+      targetPort: 9092
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: posthog-kafka
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "waddlebot.posthog.labels" . | nindent 4 }}
+    app.kubernetes.io/name: posthog-kafka
+    app.kubernetes.io/component: event-pipeline
+spec:
+  serviceName: posthog-kafka
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: posthog-kafka
+  template:
+    metadata:
+      labels:
+        {{- include "waddlebot.posthog.labels" . | nindent 8 }}
+        app.kubernetes.io/name: posthog-kafka
+        app.kubernetes.io/component: event-pipeline
+    spec:
+      securityContext:
+        fsGroup: 101
+      containers:
+        # Redpanda (KRaft, single node) — Kafka-compatible, no ZooKeeper.
+        - name: redpanda
+          image: "{{ .Values.posthog.kafka.image }}@{{ .Values.posthog.kafka.digest }}"
+          imagePullPolicy: {{ .Values.posthog.image.pullPolicy }}
+          # Writable rootfs required: writes broker data + regenerated
+          # config on start. Still non-root, no added caps.
+          securityContext:
+            {{- toYaml .Values.posthog.securityContext.kafka | nindent 12 }}
+          command:
+            - redpanda
+            - start
+            - --smp=1
+            - --memory=1G
+            - --overprovisioned
+            - --node-id=0
+            - --kafka-addr=PLAINTEXT://0.0.0.0:9092
+            - --advertise-kafka-addr=PLAINTEXT://posthog-kafka:9092
+          ports:
+            - containerPort: 9092
+              name: kafka
+          resources:
+            {{- toYaml .Values.posthog.kafka.resources | nindent 12 }}
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "rpk cluster health | grep -q 'Healthy:.*true'"]
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "rpk cluster health | grep -q 'Healthy:.*true'"]
+            initialDelaySeconds: 40
+            periodSeconds: 20
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/redpanda/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.posthog.kafka.storage }}
+{{- end }}

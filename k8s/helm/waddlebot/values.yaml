@@ -220,6 +220,157 @@ infrastructure:
     apiHost: ""
     apiKey: ""
 
+# PostHog (Community Edition, trimmed) — self-hosted feature-flag execution
+# plane. DISABLED by default; enable per-env by setting posthog.enabled: true
+# (see values-alpha.yaml / values-beta.yaml for override examples). Deploys
+# into this chart's own namespace (.Values.namespace) alongside the rest of
+# waddlebot — see templates/infrastructure/posthog/.
+#
+# Trimmed stack (per docs/posthog-feature-flags.md in license-server, the
+# canonical reference for this deployment): web + worker + postgres +
+# redis(valkey) + clickhouse + kafka(redpanda). Object storage (MinIO) is
+# omitted — no session-replay export needed for flag evaluation. Budget
+# ~4GB RAM total for this stack; never enable in resource-constrained tiers
+# without sizing it in explicitly (see values-alpha.yaml).
+#
+# App modules read POSTHOG_HOST (ConfigMap) + POSTHOG_API_KEY (Secret) —
+# see templates/configmap.yaml / templates/secrets.yaml. POSTHOG_HOST
+# resolves to the in-cluster posthog-web Service when posthog.enabled=true
+# and posthog.host is left blank, otherwise to the external value below
+# (the hosted license.penguintech.io PostHog) — see
+# waddlebot.posthog.effectiveHost in templates/infrastructure/posthog/_helpers.tpl.
+posthog:
+  enabled: false
+
+  # POSTHOG_HOST override. Leave blank ("") to auto-resolve: in-cluster
+  # posthog-web Service when posthog.enabled=true, else the external
+  # hosted default (https://license.penguintech.io).
+  host: ""
+
+  # POSTHOG_API_KEY — personal/project API key (feature_flag:read scope).
+  # NEVER commit a literal value; set via --set or an out-of-git values file.
+  apiKey: ""
+
+  # PostHog's OWN secrets (SECRET_KEY / POSTGRES_PASSWORD / CLICKHOUSE_PASSWORD)
+  # — distinct from apiKey above. NEVER commit literals. Provide ONE of:
+  #   1) existingSecret: name of a pre-created Secret with those three keys
+  #   2) secrets.create=true + secrets.SECRET_KEY / secrets.POSTGRES_PASSWORD
+  #      via --set (alpha/local only — never beta/prod)
+  # Chart fails to render (via `fail`) if posthog.enabled=true and neither
+  # is configured.
+  existingSecret: ""
+  secrets:
+    create: false
+    SECRET_KEY: ""
+    POSTGRES_PASSWORD: ""
+    CLICKHOUSE_PASSWORD: ""
+
+  # PostHog self-host has NO dated/semver releases — images are commit-tagged
+  # off master. Pinned to the exact commit tag + digest named in
+  # license-server's docs/posthog-feature-flags.md. Bump deliberately.
+  image:
+    repository: posthog/posthog
+    tag: sha-e0e6484
+    digest: sha256:c7518b190576e89ba7e8d08ae9f92cb6011e0a63c4736aea3281ed2f7ca98226
+    pullPolicy: IfNotPresent
+
+  web:
+    replicas: 1
+    port: 8000
+    resources:
+      requests: { cpu: "250m", memory: "512Mi" }
+      limits: { cpu: "1000m", memory: "1Gi" }
+
+  worker:
+    replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "384Mi" }
+      limits: { cpu: "500m", memory: "768Mi" }
+
+  postgres:
+    image: postgres:16-bookworm
+    digest: sha256:da788743d2060767375896de4d646f7576f5911461444b372616f19ea61db2ec
+    database: posthog
+    username: posthog
+    storage: 5Gi
+    resources:
+      requests: { cpu: "100m", memory: "256Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
+
+  redis:
+    # Valkey (redis-protocol-compatible fork) — reuses the digest already
+    # pinned for waddlebot's own cache (infrastructure.redis.image above),
+    # matching this chart's redis(valkey) convention rather than the
+    # upstream redis:7-bookworm pin used in license-server's reference chart.
+    image: valkey/valkey:8-bookworm
+    digest: sha256:fea8b3e67b15729d4bb70589eb03367bab9ad1ee89c876f54327fc7c6e618571
+    storage: 1Gi
+    resources:
+      requests: { cpu: "50m", memory: "128Mi" }
+      limits: { cpu: "250m", memory: "256Mi" }
+
+  clickhouse:
+    # ClickHouse ships only its own Ubuntu-based images (no bookworm
+    # variant) — accepted exception to the Debian base-image rule.
+    # Pinned to 26.6.1.1193 per license-server's docker-compose.posthog.yml
+    # (not the older 24.8 pin in that repo's k8s/helm/posthog/values.yaml —
+    # 24.8 lacks TTL on DateTime64, which PostHog's migrations require; the
+    # compose overlay's comment documents this as the corrected version).
+    image: clickhouse/clickhouse-server:26.6.1.1193
+    digest: sha256:1d1f6508eba2dccce2cee9913907c5f7766327debc57a6b1991f2c9e3176c163
+    database: posthog
+    username: default
+    storage: 10Gi
+    resources:
+      requests: { cpu: "250m", memory: "1Gi" }
+      limits: { cpu: "1000m", memory: "2Gi" }
+
+  kafka:
+    # Redpanda (KRaft, single node) — Kafka-compatible, no ZooKeeper.
+    image: redpandadata/redpanda:v24.2.7
+    digest: sha256:82a69763bef8d8b55ea5a520fa1b38f993908ef68946819ca1aed43541824c48
+    storage: 5Gi
+    resources:
+      requests: { cpu: "250m", memory: "1Gi" }
+      limits: { cpu: "1000m", memory: "1536Mi" }
+
+  # securityContext per component — rootless everywhere (runAsNonRoot, no
+  # added capabilities, no privilege escalation). readOnlyRootFilesystem is
+  # false only for components that must write to their own data/config dirs
+  # at runtime (documented per-component in the templates) — same accepted
+  # exceptions as license-server's k8s/helm/posthog chart.
+  securityContext:
+    app:            # web + worker
+      runAsNonRoot: true
+      runAsUser: 1000
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: false
+      capabilities: { drop: ["ALL"] }
+    redis:
+      runAsNonRoot: true
+      runAsUser: 999
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities: { drop: ["ALL"] }
+    postgres:
+      runAsNonRoot: true
+      runAsUser: 999
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: false
+      capabilities: { drop: ["ALL"] }
+    clickhouse:
+      runAsNonRoot: true
+      runAsUser: 101
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: false
+      capabilities: { drop: ["ALL"] }
+    kafka:
+      runAsNonRoot: true
+      runAsUser: 101
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: false
+      capabilities: { drop: ["ALL"] }
+
 # v3.0.x Task 0.5 — seven-container pipeline (SKELETON)
 # Coexists with `modules.*` below (the 31 legacy per-module Deployments) until cutover — see
 # k8s/helm/waddlebot/PIPELINE_MAPPING.md for the full 31→7 mapping and what remains.

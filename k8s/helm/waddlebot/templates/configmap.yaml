@@ -93,3 +93,8 @@ data:
 
   # PostgreSQL Init Configuration
   POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+
+  # PostHog (feature-flag execution plane) — in-cluster posthog-web Service
+  # when posthog.enabled=true and posthog.host is blank, else the external
+  # hosted default. See templates/infrastructure/posthog/_helpers.tpl.
+  POSTHOG_HOST: {{ include "waddlebot.posthog.effectiveHost" . | quote }}

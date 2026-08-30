@@ -21,3 +21,43 @@ ingress:
 spire:
   enabled: true
   environment: "alpha"
+
+# PostHog stays OFF by default even in alpha (trimmed stack still budgets
+# ~4GB RAM — heavier than typical alpha footprint). To smoke-test the
+# in-cluster stack locally, layer on top of this file:
+#   --set posthog.enabled=true \
+#   --set posthog.secrets.create=true \
+#   --set posthog.secrets.SECRET_KEY=dev-only-32-plus-byte-secret-000000 \
+#   --set posthog.secrets.POSTGRES_PASSWORD=posthog
+posthog:
+  enabled: false
+  web:
+    replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "384Mi" }
+      limits: { cpu: "500m", memory: "768Mi" }
+  worker:
+    replicas: 1
+    resources:
+      requests: { cpu: "50m", memory: "256Mi" }
+      limits: { cpu: "250m", memory: "512Mi" }
+  postgres:
+    storage: 2Gi
+    resources:
+      requests: { cpu: "50m", memory: "128Mi" }
+      limits: { cpu: "250m", memory: "256Mi" }
+  redis:
+    storage: 512Mi
+    resources:
+      requests: { cpu: "25m", memory: "64Mi" }
+      limits: { cpu: "100m", memory: "128Mi" }
+  clickhouse:
+    storage: 3Gi
+    resources:
+      requests: { cpu: "100m", memory: "768Mi" }
+      limits: { cpu: "500m", memory: "1536Mi" }
+  kafka:
+    storage: 2Gi
+    resources:
+      requests: { cpu: "100m", memory: "512Mi" }
+      limits: { cpu: "500m", memory: "1Gi" }
