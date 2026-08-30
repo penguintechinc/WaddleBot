@@ -5,6 +5,9 @@ from typing import Dict, Any, Optional
 from datetime import datetime, timedelta
 from decimal import Decimal
 
+from flask_core.feature_flags import feature_enabled
+from flask_core.tenancy import DEFAULT_TENANT_SLUG
+
 
 class HealthService:
     """Calculate community health scores with grade-based metrics."""
@@ -31,6 +34,22 @@ class HealthService:
         - message_distribution: Message spread across users (diversity)
         """
         try:
+            # v3 Feature gate (analytics.community_health / waddles.analytics.
+            # community_health, professional tier). The other 13 Core/platform
+            # Features (analytics.*, video_proxy.*, auth.*, compliance.*,
+            # integrations.*, tenancy.*) follow this identical guard at their
+            # own call sites as they're wired up -- see
+            # core_platform_module.features for the registered contracts.
+            if not await feature_enabled(
+                "waddles.analytics.community_health",
+                tenant=DEFAULT_TENANT_SLUG,
+                community=community_id,
+            ):
+                return {
+                    'error': 'Feature not available',
+                    'message': 'Community health scoring is not enabled for this tenant'
+                }
+
             # Check if community is premium
             config = await self._get_config(community_id)
             if not config.get('is_premium', False):

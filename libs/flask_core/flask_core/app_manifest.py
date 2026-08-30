@@ -22,8 +22,29 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, Tuple
 
-# Modules table in the design doc: Bot, Social, Marketing, Customer.
-KNOWN_MODULES = frozenset({"bot", "social", "marketing", "customer"})
+# Modules table in the design doc: Bot, Social, Marketing, Customer -- the
+# 4 product Modules, each independently toggleable as a Helm deployment
+# grouping (values.yaml `modules.<name>.enabled`). The remaining namespaces
+# (analytics, video_proxy, auth, compliance, integrations, tenancy, core)
+# are Core/platform capability namespaces: always deployed (no Helm toggle
+# of their own -- Core ships with every install), but their *Features*
+# still go through the same tier gate as product-module Features (see
+# flask_core.entitlement / feature_flags.feature_enabled). Single source of
+# truth: feature_contract.py imports this set rather than re-declaring it,
+# so App and Feature validation can never drift onto two different lists.
+KNOWN_MODULES = frozenset({
+    "bot",
+    "social",
+    "marketing",
+    "customer",
+    "analytics",
+    "video_proxy",
+    "auth",
+    "compliance",
+    "integrations",
+    "tenancy",
+    "core",
+})
 
 # Pipeline stages an App's manifest may declare it touches ("stages" in the
 # design doc's YAML example; named "surfaces" per this task's schema).
