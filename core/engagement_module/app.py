@@ -20,6 +20,9 @@ from quart import Quart, request, jsonify
 import jwt
 from pydal import DAL, Field
 
+from flask_core.auth import DEFAULT_TENANT_SLUG
+from flask_core.feature_flags import feature_enabled
+
 from config import Config
 
 
@@ -286,6 +289,16 @@ async def create_poll():
         community_id = data.get("community_id")
         title = data.get("title")
         options = data.get("options", [])
+
+        # v3 Feature gate (marketing.engagement / waddles.marketing.engagement,
+        # free tier). The paid Marketing Features (marketing.scheduling,
+        # marketing.publishing) follow this identical one-line guard at their
+        # own handler entry points once wired.
+        tenant_slug = request.auth_payload.get("tenant", DEFAULT_TENANT_SLUG)
+        if not await feature_enabled(
+            "waddles.marketing.engagement", tenant=tenant_slug, community=community_id
+        ):
+            return jsonify({"error": "engagement is not available"}), 404
 
         if not all([community_id, title, options]):
             return jsonify({"error": "community_id, title, and options required"}), 400
