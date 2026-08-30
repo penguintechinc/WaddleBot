@@ -3,7 +3,7 @@ Social Module Feature tests
 ==============================
 
 Covers :mod:`social_module.features` -- the Social Module's registration of
-its eight Feature contracts and their shipped default Apps against the v3
+its nine Feature contracts and their shipped default Apps against the v3
 Feature-contract spine (:mod:`flask_core.feature_contract`,
 :mod:`flask_core.feature_registry`, :mod:`flask_core.app_manifest`,
 :mod:`flask_core.app_registry`). Mirrors
@@ -51,6 +51,11 @@ EXPECTED_FEATURES = {
         "free",
     ),
     "social.rtc": ("waddles.social.rtc", frozenset({"social.rtc:write"}), "free"),
+    "social.welcome": (
+        "waddles.social.welcome",
+        frozenset({"social.welcome:write"}),
+        "free",
+    ),
     "social.welcome_ai": (
         "waddles.social.welcome_ai",
         frozenset({"social.welcome:write"}),
@@ -66,7 +71,7 @@ def registries() -> tuple[FeatureRegistry, AppRegistry]:
 
 
 class TestSocialFeatureContracts:
-    def test_all_eight_features_registered_with_correct_tier_and_flag(
+    def test_all_nine_features_registered_with_correct_tier_and_flag(
         self, registries: tuple[FeatureRegistry, AppRegistry]
     ) -> None:
         feature_registry, app_registry = registries
