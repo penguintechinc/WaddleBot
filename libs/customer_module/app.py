@@ -52,7 +52,7 @@ async def create_account() -> Tuple[Any, int]:
 
 app.register_blueprint(api_bp)
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover - process entrypoint, not exercised by unit tests
     import hypercorn.asyncio
     from hypercorn.config import Config as HyperConfig
 

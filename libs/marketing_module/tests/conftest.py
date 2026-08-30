@@ -26,6 +26,18 @@ _LIBS_DIR = Path(__file__).resolve().parents[2]
 if str(_LIBS_DIR) not in sys.path:
     sys.path.insert(0, str(_LIBS_DIR))
 
+# --- libs/flask_core/ (the outer dir containing the real flask_core/
+# package) on sys.path, so `from flask_core.app_registry import
+# AppRegistry` resolves. Without this, `flask_core` on sys.path via
+# _LIBS_DIR alone resolves as an *implicit namespace package* rooted at
+# libs/flask_core (PEP 420 -- that dir has no __init__.py of its own), so
+# `flask_core.app_registry` silently fails to find the submodule, which
+# actually lives one level deeper at libs/flask_core/flask_core/. Mirrors
+# customer_module's conftest.py fix for the same failure mode.
+_FLASK_CORE_OUTER_DIR = _LIBS_DIR / "flask_core"
+if str(_FLASK_CORE_OUTER_DIR) not in sys.path:
+    sys.path.insert(0, str(_FLASK_CORE_OUTER_DIR))
+
 # --- core/engagement_module/ on sys.path, so app.py's own `from config
 # import Config` (a plain top-level import, not a relative one) resolves.
 _ENGAGEMENT_DIR = _LIBS_DIR.parent / "core" / "engagement_module"

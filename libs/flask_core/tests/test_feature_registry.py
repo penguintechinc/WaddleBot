@@ -90,6 +90,30 @@ class TestFeatureRegistry:
         assert registry.for_module("bot") == ()
 
 
+class TestFeatureRegistrySingletonModuleFunctions:
+    """The module-level `register`/`get`/`for_module`/`all_contracts`
+    functions are thin delegations to the process-wide singleton
+    (`get_registry()`) -- exercised here directly, mirroring
+    `TestAppRegistrySingletonModuleFunctions` in test_app_framework.py, so a
+    drift between the module-function call shape and the class method it
+    delegates to is caught here rather than only in production wiring."""
+
+    def test_module_functions_delegate_to_singleton(self) -> None:
+        from flask_core import feature_registry as feature_registry_module
+
+        registry = feature_registry_module.get_registry()
+        registry.clear()
+        try:
+            contract = make_contract("bot.shoutout")
+            registered = feature_registry_module.register(contract)
+            assert registered is contract
+            assert feature_registry_module.get("bot.shoutout") is contract
+            assert feature_registry_module.for_module("bot") == (contract,)
+            assert feature_registry_module.all_contracts() == (contract,)
+        finally:
+            registry.clear()
+
+
 class FakeCheck:
     """Records calls; resolves each (flag, tenant, community) triple against a fixed map."""
 
@@ -166,3 +190,22 @@ class TestEntitledFeatures:
             assert result == [shoutout]
         finally:
             registry.clear()
+
+    async def test_entitled_features_defaults_check_to_feature_flags_feature_enabled(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """No `check` given -> lazily imports and uses
+        `flask_core.feature_flags.feature_enabled` (the real PostHog+license
+        gate) rather than silently no-oping. Regression this guards against:
+        a caller that forgets to pass `check` in production would otherwise
+        never be caught by a test suite that always injects a fake."""
+        import flask_core.feature_flags as feature_flags_module
+
+        shoutout = make_contract("bot.shoutout")
+        fake = FakeCheck(enabled_flags={"waddles.bot.shoutout"})
+        monkeypatch.setattr(feature_flags_module, "feature_enabled", fake)
+
+        result = await entitled_features(tenant="acme", contracts=(shoutout,))
+
+        assert result == [shoutout]
+        assert fake.calls == [("waddles.bot.shoutout", "acme", None)]
