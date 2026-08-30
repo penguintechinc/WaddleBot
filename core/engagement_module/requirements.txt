@@ -1,5 +1,5 @@
 quart>=0.20.0
-hypercorn==0.15.0
+hypercorn==0.17.3
 grpcio>=1.64.0
 grpcio-tools>=1.64.0
 protobuf>=5.29.6
