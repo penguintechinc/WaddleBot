@@ -33,12 +33,15 @@ class WelcomeCheckRequest(BaseModel):
         max_length=255,
         description="Display name to greet if the user is welcomed",
     )
-    tenant: str = Field(
-        ...,
-        min_length=1,
-        max_length=255,
-        description="Tenant slug (mandatory JWT claim) for the AI flag check",
-    )
+
+    # regression: tenant-isolation audit 2026-08-30 -- `tenant` was
+    # previously a client-supplied field here and fed straight into the
+    # waddles.social.welcome_ai gate, letting any caller spoof another
+    # tenant's entitlement. Deliberately NOT a field on this model anymore:
+    # tenant comes exclusively from the validated JWT via
+    # `tenant_middleware`/`get_tenant_context` in app.py. `extra = 'forbid'`
+    # below means a request body still containing `tenant` is rejected
+    # outright (400) rather than silently accepted and ignored.
 
     def sanitized_username(self) -> str:
         """Return `platform_username` with HTML/JS-unsafe content stripped."""

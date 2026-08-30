@@ -19,7 +19,7 @@ from typing import Any, Tuple
 
 from flask_core.api_utils import async_endpoint, error_response, success_response
 from flask_core.feature_flags import feature_enabled
-from flask_core.tenancy import DEFAULT_TENANT_SLUG, get_tenant_context
+from flask_core.tenancy import DEFAULT_TENANT_SLUG, get_tenant_context, tenant_middleware
 from quart import Blueprint, Quart, request
 
 app = Quart(__name__)
@@ -27,6 +27,13 @@ api_bp = Blueprint("customer_api", __name__, url_prefix="/customer")
 
 
 @api_bp.route("/accounts", methods=["POST"])
+# regression: tenant-isolation audit 2026-08-30 -- tenant_middleware was
+# missing here, so get_tenant_context(request) always returned None and
+# every request silently ran as DEFAULT_TENANT_SLUG with no auth. Must be
+# the outermost decorator (security.md: tenant before scope/handler logic)
+# so an invalid/missing JWT 401s before async_endpoint's error handling or
+# the handler body ever run.
+@tenant_middleware
 @async_endpoint
 async def create_account() -> Tuple[Any, int]:
     """

@@ -24,8 +24,13 @@ from flask_core import (  # noqa: E402
     setup_aaa_logging,
     success_response,
 )
+from flask_core.tenancy import (  # noqa: E402
+    DEFAULT_TENANT_SLUG,
+    get_tenant_context,
+    tenant_middleware,
+)
 from flask_core.validation import validate_json  # noqa: E402
-from quart import Blueprint, Quart  # noqa: E402
+from quart import Blueprint, Quart, request  # noqa: E402
 from services.ai_client_service import AIInteractionClient  # noqa: E402
 from services.welcome_service import WelcomeService  # noqa: E402
 from validation_models import WelcomeCheckRequest  # noqa: E402
@@ -83,6 +88,15 @@ async def status() -> tuple[dict[str, Any], int]:
 # call -- this handler's body (WelcomeService.check_and_welcome) is what
 # migrates, unchanged, when that stream consumer is wired up.
 @api_bp.route('/welcome/check', methods=['POST'])
+# regression: tenant-isolation audit 2026-08-30 -- this handler had no auth
+# decorator at all and read `tenant` straight off the request body, so any
+# caller could spoof it to probe/consume another tenant's waddles.social
+# .welcome_ai entitlement. tenant_middleware must be outermost (security.md:
+# tenant before scope/handler logic, and before validate_json parses the
+# body) so an invalid/missing JWT 401s before anything else runs; the
+# handler now takes tenant from the JWT-derived TenantContext only -- the
+# body's `tenant` field is gone (see validation_models.py).
+@tenant_middleware
 @validate_json(WelcomeCheckRequest)
 @async_endpoint
 async def welcome_check(
@@ -91,25 +105,36 @@ async def welcome_check(
     """Check whether a message sender is first-time and welcome them if so.
 
     Atomically claims and sends the one-time welcome for a genuinely
-    first-time community member; a no-op for anyone already seen.
+    first-time community member; a no-op for anyone already seen. The
+    tenant used for the `waddles.social.welcome_ai` gate comes from the
+    caller's validated JWT (via `tenant_middleware`/`get_tenant_context`),
+    never from the request body -- see security.md Tenant Isolation.
 
     Request JSON:
     {
         "community_id": 123,
         "platform": "twitch",
         "platform_user_id": "456",
-        "platform_username": "jdoe",
-        "tenant": "global"
+        "platform_username": "jdoe"
     }
     """
     if welcome_service is None:
         return error_response("Service not yet initialized", status_code=503)
 
+    tenant_ctx = get_tenant_context(request)
+    tenant_slug = tenant_ctx.tenant_slug if tenant_ctx is not None else DEFAULT_TENANT_SLUG
+
     try:
         logger.audit(
             action="welcome_check",
             community=validated_data.community_id,
-            target_user=validated_data.platform_user_id,
+            # pre-existing bug fixed in passing: AAALogger.audit() requires
+            # a `user` positional/keyword arg (logging_config.py); this was
+            # `target_user`, an unrecognized kwarg, so every real call to
+            # this handler 500'd here before ever reaching welcome_service
+            # -- caught while writing the tenant-isolation regression test
+            # below, which needs this call to actually succeed.
+            user=validated_data.platform_user_id,
             result="STARTED",
         )
 
@@ -118,13 +143,13 @@ async def welcome_check(
             platform=validated_data.platform,
             platform_user_id=validated_data.platform_user_id,
             platform_username=validated_data.sanitized_username(),
-            tenant=validated_data.tenant,
+            tenant=tenant_slug,
         )
 
         logger.audit(
             action="welcome_check",
             community=validated_data.community_id,
-            target_user=validated_data.platform_user_id,
+            user=validated_data.platform_user_id,
             result="SUCCESS" if result.welcomed else "SKIPPED",
         )
 
