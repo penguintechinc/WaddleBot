@@ -104,6 +104,13 @@ class TestParseFeatureContractReject:
             parse_feature_contract(contract(id=""))
         assert excinfo.value.reason == REASON_MISSING_FIELD
 
+    def test_non_string_id_rejected(self) -> None:
+        """A truthy non-string id (e.g. a list) passes `_require` but must
+        still be rejected before it ever reaches the namespacing regex."""
+        with pytest.raises(FeatureContractError) as excinfo:
+            parse_feature_contract(contract(id=["bot", "shoutout"]))
+        assert excinfo.value.reason == REASON_NOT_NAMESPACED
+
     def test_non_namespaced_id_rejected(self) -> None:
         with pytest.raises(FeatureContractError) as excinfo:
             parse_feature_contract(contract(id="shoutout"))
