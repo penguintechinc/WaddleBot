@@ -29,7 +29,7 @@ import httpx
 
 from config import HubAPIConfig
 from services.auth_service import SessionUser, create_session_token
-from services.errors import bad_request
+from services.errors import bad_request, conflict
 
 VALID_PLATFORMS = ("discord", "twitch", "slack")
 
@@ -52,10 +52,10 @@ _SCOPES = {
 
 async def _get_platform_credentials(async_dal: Any, dal: Any, platform: str) -> dict[str, str]:
     """`platform_configs` row, falling back to `{PLATFORM}_CLIENT_ID`/`_SECRET` env vars."""
-    rows = await async_dal.executesql_async(
-        "SELECT config_key, config_value FROM platform_configs WHERE platform = %s", [platform]
-    )
-    creds = {row[0]: row[1] for row in rows}
+    # pydal query builder, not raw SQL -- see hub_api/PORTING.md Gotcha #1
+    # (async_dal's raw-SQL helpers hardcode %s/psycopg2-only placeholders).
+    rows = await async_dal.select_async(dal(dal.platform_configs.platform == platform))
+    creds = {row.config_key: row.config_value for row in rows}
     prefix = platform.upper()
     if not creds.get("client_id"):
         creds["client_id"] = os.getenv(f"{prefix}_CLIENT_ID", "")
@@ -238,61 +238,80 @@ async def _exchange_code(
 async def _find_or_create_user_from_oauth(
     async_dal: Any, dal: Any, *, platform: str, user_data: dict[str, Any]
 ) -> Any:
-    identity_rows = await async_dal.executesql_async(
-        "SELECT u.id, u.email, u.username, u.avatar_url, u.is_super_admin, "
-        "u.is_vendor, u.is_analytics_consumer "
-        "FROM hub_user_identities ui JOIN hub_users u ON u.id = ui.hub_user_id "
-        "WHERE ui.platform = %s AND ui.platform_user_id = %s",
-        [platform, user_data["id"]],
+    """Resolve the hub user for an OAuth login. Never adopts an existing row by email.
+
+    SECURITY: only ever resolves an existing user via an EXISTING, already-
+    linked `(platform, platform_user_id)` row -- never by matching the
+    OAuth provider's claimed email against `hub_users.email`. The
+    original port of this function did the latter (faithfully matching
+    Node's `authController.js::findOrCreateUserFromOAuth`, which has the
+    identical bug): an attacker who registers an OAuth account using a
+    victim's email (providers vary in whether that email is verified, and
+    some don't verify it at all) would be silently logged in AS the
+    victim's existing hub account. Fixed: an email match with no existing
+    identity link raises `conflict()` instead of merging -- intentional
+    linking only happens through the AUTHENTICATED `/oauth/<platform>/
+    link` flow (`start_link`/`link_callback` below), where the caller has
+    already proven who they are via their own session. See
+    `hub_api/PORTING.md` for the writeup; this is a real, exploitable gap
+    in the current Node source, not just a hypothetical one.
+    """
+    identity_rows = await async_dal.select_async(
+        dal(
+            (dal.hub_user_identities.platform == platform)
+            & (dal.hub_user_identities.platform_user_id == user_data["id"])
+        ),
+        dal.hub_users.ALL,
+        left=dal.hub_users.on(dal.hub_users.id == dal.hub_user_identities.hub_user_id),
     )
     if identity_rows:
-        await async_dal.executesql_async(
-            "UPDATE hub_user_identities SET platform_username = %s, avatar_url = %s, "
-            "last_used = NOW() WHERE platform = %s AND platform_user_id = %s",
-            [user_data["username"], user_data.get("avatar_url"), platform, user_data["id"]],
+        await async_dal.update_async(
+            (dal.hub_user_identities.platform == platform)
+            & (dal.hub_user_identities.platform_user_id == user_data["id"]),
+            platform_username=user_data["username"],
+            avatar_url=user_data.get("avatar_url"),
+            last_used=datetime.now(UTC),
         )
-        r = identity_rows[0]
+        # A single table's `.ALL` selected against a LEFT JOIN condition
+        # returns a flat Row (fields accessed directly), not nested under
+        # `.hub_users` -- nesting only happens when >1 table's fields are
+        # requested together (confirmed empirically; see PORTING.md).
+        u = identity_rows[0]
         return SessionUser(
-            id=r[0],
-            email=r[1],
-            username=r[2],
-            avatar_url=r[3],
-            is_super_admin=bool(r[4]),
-            is_vendor=bool(r[5]),
-            is_analytics_consumer=bool(r[6]),
+            id=u.id,
+            email=u.email,
+            username=u.username,
+            avatar_url=u.avatar_url,
+            is_super_admin=bool(u.is_super_admin),
+            is_vendor=bool(u.is_vendor),
+            is_analytics_consumer=bool(u.is_analytics_consumer),
         )
 
     email = user_data.get("email") or f"{user_data['username']}@{platform}.local"
     existing = await async_dal.select_async(dal(dal.hub_users.email == email.lower()))
     if existing:
-        row = existing.first()
-        user = SessionUser(
-            id=row.id,
-            email=row.email,
-            username=row.username,
-            avatar_url=row.avatar_url,
-            is_super_admin=bool(row.is_super_admin),
-            is_vendor=bool(row.is_vendor),
-            is_analytics_consumer=bool(row.is_analytics_consumer),
+        raise conflict(
+            "An account with this email already exists. Log in and link this "
+            "platform from your account settings instead."
         )
-    else:
-        new_id = await async_dal.insert_async(
-            dal.hub_users,
-            email=email.lower(),
-            username=user_data["username"],
-            avatar_url=user_data.get("avatar_url"),
-            is_active=True,
-            created_at=datetime.now(UTC),
-        )
-        user = SessionUser(
-            id=new_id,
-            email=email.lower(),
-            username=user_data["username"],
-            avatar_url=user_data.get("avatar_url"),
-        )
-        from services.auth_service import add_user_to_global_community
 
-        await add_user_to_global_community(async_dal, dal, user_id=new_id)
+    new_id = await async_dal.insert_async(
+        dal.hub_users,
+        email=email.lower(),
+        username=user_data["username"],
+        avatar_url=user_data.get("avatar_url"),
+        is_active=True,
+        created_at=datetime.now(UTC),
+    )
+    user = SessionUser(
+        id=new_id,
+        email=email.lower(),
+        username=user_data["username"],
+        avatar_url=user_data.get("avatar_url"),
+    )
+    from services.auth_service import add_user_to_global_community
+
+    await add_user_to_global_community(async_dal, dal, user_id=new_id)
 
     await async_dal.insert_async(
         dal.hub_user_identities,

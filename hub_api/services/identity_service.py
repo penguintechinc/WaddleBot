@@ -15,17 +15,14 @@ ported: every route here operates directly on the caller's
 
 from __future__ import annotations
 
-import base64
-import json
 import secrets
-import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from services.errors import bad_request, not_found
 
 VALID_LINK_PLATFORMS = ("discord", "twitch", "slack")
-_LINK_STATE_TTL_SECONDS = 10 * 60
+_LINK_STATE_TTL = timedelta(minutes=10)
 
 
 async def list_identities(async_dal: Any, dal: Any, *, user_id: int) -> list[Any]:
@@ -104,37 +101,24 @@ async def unlink_identity(async_dal: Any, dal: Any, *, user_id: int, platform: s
 
 
 # ---------------------------------------------------------------------------
-# Identity-linking OAuth flow -- distinct from oauth_service.start_link()/
-# link_callback(). Node's identityController.js encodes state as a
-# self-contained base64 JSON blob (no DB row) rather than authController.
-# js's hub_oauth_states-table approach; both are live, independent routes
-# in the frozen v1 contract (`/api/v1/user/identities/link/:platform` here
-# vs `/api/v1/auth/oauth/:platform/link` in oauth_service.py) so both are
-# ported faithfully rather than merged into one mechanism.
+# Identity-linking OAuth flow -- SECURITY: state MUST be resolved from
+# server-side storage, never decoded from a client-suppliable value. The
+# very first port of this function encoded state as a self-contained,
+# UNSIGNED base64 JSON blob carrying `hubUserId` directly -- forgeable by
+# any caller (craft your own base64 blob with a victim's hubUserId, run
+# your own OAuth flow, and identity_link_callback would link YOUR OAuth
+# identity to the VICTIM's hub_users row; since OAuth login resolves by
+# (platform, platform_user_id), that identity then logs you into their
+# account -- full account takeover). Fixed by switching to the exact same
+# `hub_oauth_states` table `oauth_service.start_link()`/`link_callback()`
+# already use (server-side `user_id` column, single-use via DELETE on
+# consume, TTL via `expires_at`) -- see `hub_api/PORTING.md` for the
+# writeup. Kept as its own function pair (not a call to oauth_service's
+# versions) only because the redirect_uri path differs
+# (`/api/v1/user/identities/link/:platform/callback`, the frozen v1
+# contract path, vs oauth_service's own `/api/v1/auth/oauth/:platform/
+# link-callback`) -- the state mechanism itself is now identical.
 # ---------------------------------------------------------------------------
-
-
-def _encode_link_state(user_id: int) -> str:
-    payload = {
-        "hubUserId": user_id,
-        "linkingFlow": True,
-        "timestamp": int(time.time() * 1000),
-        "nonce": secrets.token_hex(8),
-    }
-    return base64.b64encode(json.dumps(payload).encode()).decode()
-
-
-def _decode_link_state(state: str) -> dict[str, Any]:
-    try:
-        data: dict[str, Any] = json.loads(base64.b64decode(state).decode())
-    except Exception as exc:  # noqa: BLE001 - any decode failure is "invalid state"
-        raise bad_request("Invalid state") from exc
-    if not data.get("linkingFlow") or not data.get("hubUserId"):
-        raise bad_request("Invalid state")
-    age_ms = int(time.time() * 1000) - int(data.get("timestamp", 0))
-    if age_ms > _LINK_STATE_TTL_SECONDS * 1000:
-        raise bad_request("State expired")
-    return data
 
 
 async def start_identity_link(
@@ -142,9 +126,9 @@ async def start_identity_link(
 ) -> tuple[str, str]:
     """Start an identity-link OAuth flow. Returns `(authorize_url, state)`.
 
-    Delegates URL-building to `oauth_service.build_authorize_url` (shared
-    credential lookup + per-platform authorize-URL shape) but keeps its
-    own base64 state encoding -- see module docstring.
+    `state` is an opaque, unguessable token (`secrets.token_hex(16)`) --
+    the actual `user_id` binding lives server-side in `hub_oauth_states`,
+    never in the token itself.
     """
     from services import oauth_service  # local import: avoids a module-load cycle
 
@@ -157,7 +141,17 @@ async def start_identity_link(
     if exists:
         raise bad_request(f"{platform} account already linked")
 
-    state = _encode_link_state(user_id)
+    state = secrets.token_hex(16)
+    await async_dal.insert_async(
+        dal.hub_oauth_states,
+        state=state,
+        mode="link",
+        platform=platform,
+        user_id=user_id,
+        expires_at=datetime.now(UTC) + _LINK_STATE_TTL,
+        created_at=datetime.now(UTC),
+    )
+
     redirect_uri = f"{callback_base_url}/api/v1/user/identities/link/{platform}/callback"
     authorize_url = await oauth_service.build_authorize_url(
         async_dal, dal, platform=platform, redirect_uri=redirect_uri, state=state
@@ -168,11 +162,27 @@ async def start_identity_link(
 async def identity_link_callback(
     async_dal: Any, dal: Any, *, platform: str, code: str, state: str, callback_base_url: str
 ) -> None:
-    """Complete an identity-link callback: decode state, exchange the code, link the identity."""
+    """Complete an identity-link callback: resolve state server-side, exchange the code, link.
+
+    `state` is looked up in `hub_oauth_states` (never decoded/trusted from
+    the caller) and consumed (deleted) immediately -- single-use, and a
+    replay after consumption or after `expires_at` fails the lookup and
+    raises `bad_request`, same as an invalid state.
+    """
     from services import oauth_service  # local import: avoids a module-load cycle
 
-    state_data = _decode_link_state(state)
-    hub_user_id = int(state_data["hubUserId"])
+    state_rows = await async_dal.select_async(
+        dal(
+            (dal.hub_oauth_states.state == state)
+            & (dal.hub_oauth_states.platform == platform)
+            & (dal.hub_oauth_states.mode == "link")
+            & (dal.hub_oauth_states.expires_at > datetime.now(UTC))
+        )
+    )
+    if not state_rows:
+        raise bad_request("Invalid or expired state")
+    hub_user_id = state_rows.first().user_id
+    await async_dal.delete_async(dal.hub_oauth_states.state == state)
 
     redirect_uri = f"{callback_base_url}/api/v1/user/identities/link/{platform}/callback"
     user_data = await oauth_service.exchange_code(

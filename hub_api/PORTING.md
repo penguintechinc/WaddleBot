@@ -147,6 +147,20 @@ tests need `migrate=True` or pydal never issues the `CREATE TABLE` DDL at
 all against the throwaway sqlite file, and every query 500s with
 "no such table" regardless of the connection-scoping fix above.
 
+Third related gotcha: `AsyncDAL.insert_async()`/`update_async()` never
+call `.commit()`. Within a single test (a request through the app's own
+`async_dal`, or a chain of `async_dal.*_async()` calls), this is invisible
+-- every call in the chain shares the executor's one connection
+(`pool_size=1`), so writes are visible to later reads on that SAME
+connection even uncommitted. If a test instead asserts against a row via
+the fixture's OWN synchronous `auth_db.dal(...)` query (a DIFFERENT
+connection, the main thread's), an uncommitted insert from `insert_async`
+is invisible and the assertion fails with a `None`/empty result that
+looks like the insert silently failed. Fix: assert via
+`await auth_db.select_async(auth_db.dal(query))` (same connection as the
+write), not a bare synchronous `auth_db.dal(...)` call, when verifying an
+`insert_async`/`update_async` write from a test.
+
 ### Gotcha #3 -- a specific `@validate_response` + real DB write + nested-dataclass response crashes
 
 Confirmed, 100%-reproducible, isolated across 17 throwaway repro scripts
@@ -221,6 +235,59 @@ slash -- e.g. `url_prefix="/api/v1/user/identities"` + `route("")` ->
 `.../identities/` (trailing slash), a different path than Node's
 contract. Confirmed via direct `app.url_map` inspection during the M1
 port.
+
+### Gotcha #6 -- a pydal `left=` JOIN's Row shape depends on how many tables you select fields from
+
+`db(query).select(other_table.ALL, left=other_table.on(...))` (selecting
+fields from only ONE table, even across a JOIN condition spanning two)
+returns a FLAT `Row` -- access fields directly (`row.name`), not nested
+under `row.other_table.name`. Nesting under `row.<tablename>.<field>`
+only happens when you select fields from **two or more** tables together
+(e.g. `dal.hub_users.ALL, dal.hub_user_profiles.ALL` -- see
+`profile_service.get_my_profile()`). Confirmed empirically (an
+`AttributeError` from pydal's `LazyReferenceGetter` when the nested
+accessor is used on a single-table selection) while fixing Gotcha #7
+below.
+
+### Gotcha #7 -- SECURITY: OAuth state and email-based account linking are the two places a faithful Node port is NOT safe to ship
+
+Two account-takeover bugs were caught in post-merge security review of
+the M1 port -- both faithful ports of bugs that exist in Node's own
+source today, not introduced by porting:
+
+1. **`identity_service.py`'s original `_encode_link_state`/
+   `_decode_link_state`** encoded the OAuth-link state as an UNSIGNED
+   base64 JSON blob carrying `hubUserId` directly -- forgeable by any
+   caller (craft your own blob naming a victim's id, complete your own
+   OAuth flow, and the victim's account gets your OAuth identity linked
+   to it; since OAuth login resolves by `(platform, platform_user_id)`,
+   that identity then logs you into their account). **Fix: state MUST
+   be an opaque token resolved from SERVER-SIDE storage** -- the same
+   `hub_oauth_states` table (`user_id` column, single-use via `DELETE`
+   on consume, TTL via `expires_at`) `oauth_service.start_link()`/
+   `link_callback()` already use. Never decode a client-suppliable value
+   to get a user id, full stop -- if your group has any "callback
+   carries who this action is for" flow, it goes through server-side
+   state, never a signed-or-not blob you decode.
+2. **`oauth_service._find_or_create_user_from_oauth`** used to adopt an
+   EXISTING `hub_users` row when the OAuth provider's claimed email
+   matched, if no `(platform, platform_user_id)` link existed yet.
+   Providers vary in whether that email is verified (some don't verify
+   at all) -- an attacker registering an OAuth account with a victim's
+   email got silently logged in AS the victim. **Fix: an email match
+   with no existing identity link is a `409 conflict`, never an adopt.**
+   New OAuth identity + no email collision -> create a new user.
+   Existing OAuth identity link -> log in that user (safe, unchanged).
+   Intentional cross-linking only happens through the AUTHENTICATED
+   `/oauth/<platform>/link` flow, where the caller already proved who
+   they are via their own session.
+
+If your group has ANY flow resolving "which user does this unauthenticated
+callback belong to" (OAuth, magic links, invite acceptance, ...), ask
+explicitly: is the identity binding server-side, and does matching on a
+provider-claimed attribute (email, username) ever silently merge into an
+existing account instead of requiring an authenticated linking action?
+See `tests/test_v1_oauth_security.py` for the fail-first regression tests.
 
 ---
 
