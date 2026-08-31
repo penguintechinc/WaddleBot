@@ -12,8 +12,15 @@ Provides:
 - API utilities: Standardized API responses and error handling
 """
 
-__version__ = "2.0.0"
 __author__ = "Waddles Team"
+
+from .platform_version import get_platform_version, platform_version_compatible
+
+# Derived from flask_core/VERSION (see platform_version.py) rather than a
+# second hardcoded literal -- avoids the exact staleness bug this module
+# previously had (__version__ pinned at "2.0.0" long after the repo moved
+# to release/v3.0.X).
+__version__ = get_platform_version()
 
 from .database import AsyncDAL, init_database
 from .auth import (
@@ -155,6 +162,9 @@ from .workload_identity import (
 )
 
 __all__ = [
+    # Platform version / App Bundle compatibility
+    "get_platform_version",
+    "platform_version_compatible",
     # Database
     "AsyncDAL",
     "init_database",
