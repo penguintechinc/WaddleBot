@@ -14,13 +14,25 @@ Naming is deliberately load-bearing: ``app_id`` is namespaced
 recoverable from the id alone, and ``feature`` (``waddles.<module>.<feature>``)
 must be the exact prefix of ``app_id`` minus its trailing App segment — the
 manifest cannot claim to implement one Feature while being named for another.
+
+Extended per docs/plans/2026-08-31-app-bundle-sdk-design.md §3 (App Bundle
+SDK): a bundle's ``bundle.yaml`` may declare a richer ``stages`` map in
+place of the plain ``surfaces`` tuple, plus ``execution_model``,
+``compatible_with``/``incompatible_with``, and ``platform_compatibility``.
+``AppManifest.surfaces`` is kept as a derived, backward-compatible field so
+existing code that only asks "does this App touch process" never has to
+change; ``AppManifest.permissions`` is kept as the internal field name
+(bundle.yaml's ``requires_scopes`` is accepted as an alias at parse time,
+per §3.3 — the design doc leaves the rename-vs-alias choice to
+implementation time, and this module picks alias, since five modules'
+``features.py`` already construct/read ``.permissions`` directly).
 """
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Mapping, Optional, Tuple
 
 # Modules table in the design doc: Bot, Social, Marketing, Customer -- the
 # 4 product Modules, each independently toggleable as a Helm deployment
@@ -51,6 +63,12 @@ KNOWN_MODULES = frozenset({
 KNOWN_SURFACES = frozenset({"ingest", "process", "action"})
 
 KNOWN_PROVIDERS = frozenset({"builtin", "thirdparty"})
+
+# App Bundle SDK spec §3.1: `execution_model` is orthogonal to `provider` --
+# a `builtin` bundle may still front a `thirdparty` endpoint (e.g. wrapping
+# a SaaS API), so this is a distinct enum from KNOWN_PROVIDERS even though
+# the two share member names.
+KNOWN_EXECUTION_MODELS = frozenset({"native", "thirdparty"})
 
 _SEGMENT = r"[a-z0-9][a-z0-9_-]*"
 # waddles.<module>.<feature>.<app> -- exactly four dot-separated tokens.
@@ -86,8 +104,67 @@ REASON_UNKNOWN_MODULE = "unknown_module"
 REASON_FEATURE_PREFIX_MISMATCH = "feature_prefix_mismatch"
 REASON_INVALID_PROVIDER = "invalid_provider"
 REASON_UNKNOWN_SURFACE = "unknown_surface"
+# App Bundle SDK spec §3.5 -- three new validation steps, run in the same
+# parse_manifest() after the original seven.
+REASON_INVALID_EXECUTION_MODEL = "invalid_execution_model"
+REASON_BAD_PLATFORM_COMPAT_SEMVER = "bad_platform_compat_semver"
+REASON_INVALID_COMPAT_APP_ID = "invalid_compat_app_id"
 
 _REQUIRED_STR_FIELDS = ("app_id", "name", "version", "feature", "module", "provider")
+
+
+@dataclass(slots=True, frozen=True)
+class StageSpec:
+    """
+    One compiled entry of a bundle's ``stages`` map (App Bundle SDK spec
+    §3.2) -- the richer, per-stage replacement for a bare ``surfaces``
+    tuple entry.
+
+    ``entrypoint`` (``module.py:function``, awaited by the stage-runner
+    loader) is populated for native stages and left ``None`` for
+    ``thirdparty`` ones, which are reached over the network instead of
+    invoked in-process. The ``execution_model``/``communication_model``/
+    ``webhook_url``/``api_base_url``/``secret_ref``/``timeout_ms`` fields
+    are only meaningful on a thirdparty stage entry -- fields lifted from
+    ``marketplace_modules`` per the spec's own note
+    (``059_marketplace_consolidation.sql:15-22``), generalized here to
+    cover both ``webhook_push`` (uses ``webhook_url``) and ``rest_pull``
+    (uses ``api_base_url``) communication models with one shared
+    ``secret_ref``/``timeout_ms`` pair rather than duplicating them.
+    """
+
+    entrypoint: Optional[str] = None
+    consumes: Tuple[str, ...] = ()
+    produces: Tuple[str, ...] = ()
+    config: Optional[str] = None
+    spec: Optional[str] = None
+    execution_model: Optional[str] = None
+    communication_model: Optional[str] = None  # 'webhook_push' | 'rest_pull'
+    webhook_url: Optional[str] = None
+    api_base_url: Optional[str] = None
+    secret_ref: Optional[str] = None
+    timeout_ms: Optional[int] = None
+
+
+@dataclass(slots=True, frozen=True)
+class PlatformCompat:
+    """
+    A bundle's declared platform compatibility (App Bundle SDK spec §3.4),
+    modeled on npm's ``engines`` field. ``min_version``/``max_version``
+    reuse :data:`_SEMVER_RE` -- no new version grammar. ``tested_with`` is
+    free text matching the repo's own release-branch convention
+    (``release/v{Major}.{Minor}.X``); it is informational only and not
+    semver-validated. Enforcement policy (block vs warn against the running
+    platform version) is an open decision per the spec §3.4/§9 and is out
+    of scope for parsing.
+    """
+
+    tested_with: str = ""
+    min_version: Optional[str] = None
+    max_version: Optional[str] = None
+
+
+_DEFAULT_PLATFORM_COMPAT = PlatformCompat()
 
 
 @dataclass(slots=True, frozen=True)
@@ -99,6 +176,12 @@ class AppManifest:
     bypasses the semver/namespacing/module/feature-prefix checks, so callers
     reading manifests from disk, a marketplace payload, or a DB row must
     always go through ``parse_manifest``.
+
+    ``surfaces`` is kept as a plain, backward-compatible tuple field --
+    :func:`parse_manifest` derives it from ``stage_specs``' keys when the
+    input dict uses the new ``stages`` map, or takes it as given when the
+    input uses the legacy bare ``surfaces`` tuple. Either way, existing code
+    that only reads ``manifest.surfaces`` needs no changes.
     """
 
     app_id: str
@@ -111,6 +194,11 @@ class AppManifest:
     permissions: Tuple[str, ...] = ()
     config_schema: Dict[str, Any] = field(default_factory=dict)
     is_default: bool = False
+    stage_specs: Mapping[str, StageSpec] = field(default_factory=dict)
+    execution_model: str = "native"  # 'native' | 'thirdparty'
+    compatible_with: Tuple[str, ...] = ()
+    incompatible_with: Tuple[str, ...] = ()
+    platform_compatibility: PlatformCompat = _DEFAULT_PLATFORM_COMPAT
 
 
 def _require_str(data: Dict[str, Any], key: str) -> str:
@@ -118,6 +206,53 @@ def _require_str(data: Dict[str, Any], key: str) -> str:
     if not isinstance(value, str) or not value:
         raise ManifestError(REASON_MISSING_FIELD, f"{key!r} must be a non-empty string")
     return value
+
+
+def _compile_stage_spec(stage_name: str, raw: Dict[str, Any]) -> StageSpec:
+    """Validate one ``stages`` map key/entry pair and build its :class:`StageSpec`."""
+    if stage_name not in KNOWN_SURFACES:
+        raise ManifestError(
+            REASON_UNKNOWN_SURFACE,
+            f"stage {stage_name!r} is not one of {sorted(KNOWN_SURFACES)}",
+        )
+    return StageSpec(
+        entrypoint=raw.get("entrypoint"),
+        consumes=tuple(raw.get("consumes", ())),
+        produces=tuple(raw.get("produces", ())),
+        config=raw.get("config"),
+        spec=raw.get("spec"),
+        execution_model=raw.get("execution_model"),
+        communication_model=raw.get("communication_model"),
+        webhook_url=raw.get("webhook_url"),
+        api_base_url=raw.get("api_base_url"),
+        secret_ref=raw.get("secret_ref"),
+        timeout_ms=raw.get("timeout_ms"),
+    )
+
+
+def _parse_platform_compatibility(raw: Optional[Dict[str, Any]]) -> PlatformCompat:
+    """
+    Build a :class:`PlatformCompat` from the manifest's optional
+    ``platform_compatibility`` dict, or the shared empty default when the
+    manifest doesn't declare one (legacy manifests, pre-§3.4).
+    """
+    if raw is None:
+        return _DEFAULT_PLATFORM_COMPAT
+
+    min_version = raw.get("min_version")
+    max_version = raw.get("max_version")
+    for label, candidate in (("min_version", min_version), ("max_version", max_version)):
+        if candidate is not None and not _SEMVER_RE.match(candidate):
+            raise ManifestError(
+                REASON_BAD_PLATFORM_COMPAT_SEMVER,
+                f"platform_compatibility.{label} {candidate!r} is not valid SemVer 2.0.0",
+            )
+
+    return PlatformCompat(
+        tested_with=str(raw.get("tested_with", "")),
+        min_version=min_version,
+        max_version=max_version,
+    )
 
 
 def parse_manifest(data: Dict[str, Any]) -> AppManifest:
@@ -134,7 +269,22 @@ def parse_manifest(data: Dict[str, Any]) -> AppManifest:
     5. ``app_id``'s feature-prefix (``app_id`` minus its trailing App
        segment) not equal to ``feature``
     6. ``provider`` outside ``{builtin, thirdparty}``
-    7. any ``surfaces`` entry outside ``{ingest, process, action}``
+    7. any ``surfaces``/``stages`` entry outside ``{ingest, process, action}``
+    8. ``execution_model`` outside ``{native, thirdparty}``
+    9. ``platform_compatibility.min_version``/``max_version`` that are not
+       valid SemVer 2.0.0
+    10. any ``compatible_with``/``incompatible_with`` entry that is not a
+        namespaced ``app_id``
+
+    Two things this function deliberately does **not** check (per App
+    Bundle SDK spec §3.5, left for a later, registry-aware pass): whether
+    ``compatible_with``/``incompatible_with`` entries name an ``app_id``
+    actually present in the registry, and whether ``requires_scopes`` is a
+    subset of the declared Feature's ``FeatureContract.requires_scopes``
+    (spec §3.3) -- both require cross-referencing state outside this single
+    manifest dict, which would couple ``parse_manifest`` to the registry/
+    feature-contract module at parse time. TODO(bundle-sdk): add both once
+    the registry-aware validation pass lands.
     """
     for key in _REQUIRED_STR_FIELDS:
         _require_str(data, key)
@@ -179,16 +329,51 @@ def parse_manifest(data: Dict[str, Any]) -> AppManifest:
             REASON_INVALID_PROVIDER, f"provider {provider!r} is not one of {sorted(KNOWN_PROVIDERS)}"
         )
 
-    surfaces_raw = data.get("surfaces", ())
-    surfaces = tuple(surfaces_raw)
-    for surface in surfaces:
-        if surface not in KNOWN_SURFACES:
+    # App Bundle SDK spec §3.2/§3.5: `stages` (new, richer form) supersedes
+    # `surfaces` (legacy, bare tuple form) -- `surfaces` is derived from
+    # `stages`' keys when present, otherwise it's taken as given so every
+    # existing manifest (five modules' features.py) keeps parsing unchanged.
+    stages_raw = data.get("stages")
+    if stages_raw:
+        stage_specs: Dict[str, StageSpec] = {
+            stage_name: _compile_stage_spec(stage_name, stage_data)
+            for stage_name, stage_data in stages_raw.items()
+        }
+        surfaces = tuple(stage_specs.keys())
+    else:
+        stage_specs = {}
+        surfaces = tuple(data.get("surfaces", ()))
+        for surface in surfaces:
+            if surface not in KNOWN_SURFACES:
+                raise ManifestError(
+                    REASON_UNKNOWN_SURFACE,
+                    f"surface {surface!r} is not one of {sorted(KNOWN_SURFACES)}",
+                )
+
+    execution_model = str(data.get("execution_model", "native"))
+    if execution_model not in KNOWN_EXECUTION_MODELS:
+        raise ManifestError(
+            REASON_INVALID_EXECUTION_MODEL,
+            f"execution_model {execution_model!r} is not one of {sorted(KNOWN_EXECUTION_MODELS)}",
+        )
+
+    platform_compatibility = _parse_platform_compatibility(data.get("platform_compatibility"))
+
+    compatible_with = tuple(data.get("compatible_with", ()))
+    incompatible_with = tuple(data.get("incompatible_with", ()))
+    for other_app_id in (*compatible_with, *incompatible_with):
+        if not _APP_ID_RE.match(other_app_id):
             raise ManifestError(
-                REASON_UNKNOWN_SURFACE,
-                f"surface {surface!r} is not one of {sorted(KNOWN_SURFACES)}",
+                REASON_INVALID_COMPAT_APP_ID,
+                f"compatible_with/incompatible_with entry {other_app_id!r} must be "
+                "namespaced 'waddles.<module>.<feature>.<app>'",
             )
 
-    permissions = tuple(data.get("permissions", ()))
+    # requires_scopes (bundle.yaml's name, spec §3.3) aliases the existing
+    # `permissions` field -- either raw dict key populates it; the
+    # dataclass field itself stays `permissions` since five modules'
+    # features.py already construct/read `.permissions` directly.
+    permissions = tuple(data.get("requires_scopes", data.get("permissions", ())))
     config_schema = dict(data.get("config_schema", {}))
     is_default = bool(data.get("is_default", False))
 
@@ -203,4 +388,9 @@ def parse_manifest(data: Dict[str, Any]) -> AppManifest:
         permissions=permissions,
         config_schema=config_schema,
         is_default=is_default,
+        stage_specs=stage_specs,
+        execution_model=execution_model,
+        compatible_with=compatible_with,
+        incompatible_with=incompatible_with,
+        platform_compatibility=platform_compatibility,
     )

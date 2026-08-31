@@ -13,7 +13,7 @@ production.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Optional, Sequence, cast
 
 import pytest
 
@@ -24,8 +24,11 @@ from flask_core.app_binding import (
     resolve_app,
 )
 from flask_core.app_manifest import (
+    REASON_BAD_PLATFORM_COMPAT_SEMVER,
     REASON_BAD_SEMVER,
     REASON_FEATURE_PREFIX_MISMATCH,
+    REASON_INVALID_COMPAT_APP_ID,
+    REASON_INVALID_EXECUTION_MODEL,
     REASON_INVALID_PROVIDER,
     REASON_MISSING_FIELD,
     REASON_NOT_NAMESPACED,
@@ -33,6 +36,8 @@ from flask_core.app_manifest import (
     REASON_UNKNOWN_SURFACE,
     AppManifest,
     ManifestError,
+    PlatformCompat,
+    StageSpec,
     parse_manifest,
 )
 from flask_core.app_registry import AppRegistry, RegistryError
@@ -162,6 +167,236 @@ class TestParseManifestReject:
         with pytest.raises(ManifestError) as excinfo:
             parse_manifest(manifest(surfaces=["ingest", "publish"]))
         assert excinfo.value.reason == REASON_UNKNOWN_SURFACE
+
+
+# ---------------------------------------------------------------------------
+# C1 -- App Bundle SDK manifest schema extensions
+# (docs/plans/2026-08-31-app-bundle-sdk-design.md §3, §3.2, §3.4, §3.5)
+# ---------------------------------------------------------------------------
+STAGES_MANIFEST: Dict[str, object] = {
+    "app_id": "waddles.bot.giveaway.classic",
+    "name": "Giveaway Classic",
+    "version": "1.0.0",
+    "feature": "waddles.bot.giveaway",
+    "module": "bot",
+    "provider": "builtin",
+    "requires_scopes": ["bot.command:write"],
+    "execution_model": "native",
+    "compatible_with": ["waddles.bot.giveaway.raffle"],
+    "incompatible_with": ["waddles.bot.giveaway.legacy"],
+    "platform_compatibility": {
+        "tested_with": "v3.0.x",
+        "min_version": "3.0.0",
+        "max_version": "3.999.999",
+    },
+    "stages": {
+        "ingest": {
+            "entrypoint": "ingest/handler.py:on_event",
+            "consumes": [],
+            "produces": ["giveaway.entry_detected"],
+            "config": "ingest/config.yaml",
+            "spec": "ingest/spec.yaml",
+        },
+        "process": {
+            "entrypoint": "process/handler.py:on_event",
+            "consumes": ["giveaway.entry_detected"],
+            "produces": ["giveaway.winner_selected"],
+            "config": "process/config.yaml",
+            "spec": "process/spec.yaml",
+        },
+        "action": {
+            "entrypoint": "action/handler.py:on_event",
+            "consumes": ["giveaway.winner_selected"],
+            "produces": [],
+            "config": "action/config.yaml",
+            "spec": "action/spec.yaml",
+        },
+    },
+}
+
+
+def stages_manifest(**overrides: object) -> Dict[str, object]:
+    """A fresh copy of STAGES_MANIFEST with the given field overrides."""
+    data = dict(STAGES_MANIFEST)
+    data.update(overrides)
+    return data
+
+
+class TestParseManifestStagesAccept:
+    def test_full_stages_manifest_parses(self) -> None:
+        result = parse_manifest(stages_manifest())
+        assert isinstance(result, AppManifest)
+        assert result.execution_model == "native"
+        assert result.compatible_with == ("waddles.bot.giveaway.raffle",)
+        assert result.incompatible_with == ("waddles.bot.giveaway.legacy",)
+        assert result.platform_compatibility == PlatformCompat(
+            tested_with="v3.0.x", min_version="3.0.0", max_version="3.999.999"
+        )
+
+    def test_surfaces_derived_from_stages_keys(self) -> None:
+        result = parse_manifest(stages_manifest())
+        assert result.surfaces == ("ingest", "process", "action")
+
+    def test_stage_specs_compiled_with_entrypoint_and_streams(self) -> None:
+        result = parse_manifest(stages_manifest())
+        assert result.stage_specs["ingest"] == StageSpec(
+            entrypoint="ingest/handler.py:on_event",
+            consumes=(),
+            produces=("giveaway.entry_detected",),
+            config="ingest/config.yaml",
+            spec="ingest/spec.yaml",
+        )
+        assert result.stage_specs["process"].consumes == ("giveaway.entry_detected",)
+        assert result.stage_specs["action"].produces == ()
+
+    def test_requires_scopes_alias_populates_permissions(self) -> None:
+        result = parse_manifest(stages_manifest())
+        assert result.permissions == ("bot.command:write",)
+
+    def test_legacy_permissions_key_still_populates_permissions(self) -> None:
+        """The `requires_scopes` alias is additive -- the pre-existing
+        `permissions` raw key must keep working when `requires_scopes` is
+        absent, independent of the `stages` map."""
+        data = stages_manifest()
+        del data["requires_scopes"]
+        data["permissions"] = ["bot.command:write"]
+        result = parse_manifest(data)
+        assert result.permissions == ("bot.command:write",)
+
+    def test_thirdparty_stage_without_entrypoint_parses(self) -> None:
+        data = stages_manifest(
+            execution_model="thirdparty",
+            stages={
+                "action": {
+                    "execution_model": "thirdparty",
+                    "communication_model": "webhook_push",
+                    "webhook_url": "https://vendor.example.com/hook",
+                    "secret_ref": "${SECRET:vendor_hmac}",
+                    "timeout_ms": 5000,
+                    "consumes": ["giveaway.winner_selected"],
+                    "produces": [],
+                },
+            },
+        )
+        result = parse_manifest(data)
+        action_spec = result.stage_specs["action"]
+        assert action_spec.entrypoint is None
+        assert action_spec.execution_model == "thirdparty"
+        assert action_spec.communication_model == "webhook_push"
+        assert action_spec.webhook_url == "https://vendor.example.com/hook"
+        assert action_spec.secret_ref == "${SECRET:vendor_hmac}"
+        assert action_spec.timeout_ms == 5000
+        assert result.surfaces == ("action",)
+
+    def test_thirdparty_stage_rest_pull_uses_api_base_url(self) -> None:
+        data = stages_manifest(
+            stages={
+                "action": {
+                    "execution_model": "thirdparty",
+                    "communication_model": "rest_pull",
+                    "api_base_url": "https://vendor.example.com/api",
+                    "secret_ref": "${SECRET:vendor_api_key}",
+                    "timeout_ms": 3000,
+                    "consumes": ["giveaway.winner_selected"],
+                    "produces": [],
+                },
+            },
+        )
+        result = parse_manifest(data)
+        action_spec = result.stage_specs["action"]
+        assert action_spec.communication_model == "rest_pull"
+        assert action_spec.api_base_url == "https://vendor.example.com/api"
+
+    def test_manifest_without_stages_or_new_fields_still_parses(self) -> None:
+        """Defaults for every new field when a manifest declares none of
+        them -- the pre-C1 shape (see VALID_MANIFEST)."""
+        result = parse_manifest(manifest())
+        assert result.stage_specs == {}
+        assert result.execution_model == "native"
+        assert result.compatible_with == ()
+        assert result.incompatible_with == ()
+        assert result.platform_compatibility == PlatformCompat()
+
+
+class TestParseManifestStagesReject:
+    """Each case exercises exactly one new REASON_* code -- fail-first:
+    reverting the corresponding parse_manifest check makes each of these
+    fail (verified manually, see task report)."""
+
+    def test_invalid_execution_model_rejected(self) -> None:
+        with pytest.raises(ManifestError) as excinfo:
+            parse_manifest(stages_manifest(execution_model="hybrid"))
+        assert excinfo.value.reason == REASON_INVALID_EXECUTION_MODEL
+
+    def test_bad_platform_compat_min_version_rejected(self) -> None:
+        data = stages_manifest()
+        compat = cast(Dict[str, object], data["platform_compatibility"])
+        data["platform_compatibility"] = {**compat, "min_version": "v3.0"}
+        with pytest.raises(ManifestError) as excinfo:
+            parse_manifest(data)
+        assert excinfo.value.reason == REASON_BAD_PLATFORM_COMPAT_SEMVER
+
+    def test_bad_platform_compat_max_version_rejected(self) -> None:
+        data = stages_manifest()
+        compat = cast(Dict[str, object], data["platform_compatibility"])
+        data["platform_compatibility"] = {**compat, "max_version": "not-semver"}
+        with pytest.raises(ManifestError) as excinfo:
+            parse_manifest(data)
+        assert excinfo.value.reason == REASON_BAD_PLATFORM_COMPAT_SEMVER
+
+    def test_invalid_compatible_with_app_id_rejected(self) -> None:
+        with pytest.raises(ManifestError) as excinfo:
+            parse_manifest(stages_manifest(compatible_with=["not-a-namespaced-id"]))
+        assert excinfo.value.reason == REASON_INVALID_COMPAT_APP_ID
+
+    def test_invalid_incompatible_with_app_id_rejected(self) -> None:
+        with pytest.raises(ManifestError) as excinfo:
+            parse_manifest(stages_manifest(incompatible_with=["also-bad"]))
+        assert excinfo.value.reason == REASON_INVALID_COMPAT_APP_ID
+
+    def test_unknown_stage_name_in_stages_map_rejected(self) -> None:
+        data = stages_manifest(stages={"publish": {"entrypoint": "x.py:f"}})
+        with pytest.raises(ManifestError) as excinfo:
+            parse_manifest(data)
+        assert excinfo.value.reason == REASON_UNKNOWN_SURFACE
+
+
+class TestParseManifestBackwardCompat:
+    """Every existing default-app dict (five modules' features.py) must
+    keep parsing unchanged under the C1 schema extension -- none of them
+    use `stages`/`requires_scopes`/`execution_model`/etc, only the
+    pre-existing `surfaces`/`permissions` shape."""
+
+    def test_real_bot_module_default_app_def_still_parses(self) -> None:
+        from bot_module.features import _DEFAULT_APP_DEFS
+
+        raw = dict(_DEFAULT_APP_DEFS[0])
+        assert raw["app_id"] == "waddles.bot.shoutout.default"
+        assert "stages" not in raw
+        assert "requires_scopes" not in raw
+
+        result = parse_manifest(raw)
+        assert result.app_id == "waddles.bot.shoutout.default"
+        assert result.surfaces == ("process", "action")
+        assert result.permissions == ("bot.command:write",)
+        assert result.stage_specs == {}
+        assert result.execution_model == "native"
+        assert result.platform_compatibility == PlatformCompat()
+
+    def test_real_bot_module_all_default_apps_still_build(self) -> None:
+        """build_default_apps() -- the module's own parse_manifest()
+        call-site -- must still succeed end to end, not just a single raw
+        dict handed directly to parse_manifest()."""
+        from bot_module.features import build_default_apps
+
+        manifests = build_default_apps()
+        assert len(manifests) == 4
+        assert {m.app_id for m in manifests} == {
+            "waddles.bot.shoutout.default",
+            "waddles.bot.commands.default",
+            "waddles.bot.connectors.default",
+            "waddles.bot.interactions.default",
+        }
 
 
 # ---------------------------------------------------------------------------
