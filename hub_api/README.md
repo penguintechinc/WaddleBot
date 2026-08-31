@@ -100,3 +100,14 @@ All 25 tests use `sqlite:memory` (pydal) -- no external Postgres dependency.
   (matching `services/core-community/app.py`'s existing pattern).
 - gRPC (backend.md's mandatory service-to-service transport) is not wired
   in this scaffold -- REST + MCP only. Follow-up, not blocking M1.
+- `quart-schema==0.25.0` + `pydantic==2.13.x`: `POST .../shoutout/creators`
+  (`blueprints/v1/bot.py::add_shoutout_creator`, M5) reproducibly hits
+  `TypeError: 'None' is not an instance of 'SchemaSerializer'` in
+  `quart_schema`'s app-level second response-dump pass, specific to this
+  one route once registered on the real `bot_bp` (bisected -- an
+  equivalent hand-built route with identical DTOs does not reproduce it;
+  root cause not identified). Worked around by skipping
+  `@validate_response` on that single handler and building the response
+  dict via `dataclasses.asdict` instead -- the DTO (`ShoutoutCreatorResponse`)
+  stays the documented, OpenAPI-generated contract; only the runtime
+  double-validation is skipped. See the handler's own docstring.

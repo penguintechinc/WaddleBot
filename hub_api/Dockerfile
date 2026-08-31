@@ -24,6 +24,7 @@ COPY hub_api/app.py hub_api/config.py ./
 COPY hub_api/blueprints ./blueprints
 COPY hub_api/routers ./routers
 COPY hub_api/openapi ./openapi
+COPY hub_api/services ./services
 
 EXPOSE 8204
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
