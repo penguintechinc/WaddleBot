@@ -31,6 +31,7 @@ from quart_schema import Info, QuartSchema
 from blueprints import register_blueprints
 from config import HubAPIConfig
 from openapi.routes import register_openapi_docs
+from services.schema import bind_auth_tables
 
 
 def _bind_reference_tables(dal: Any) -> None:
@@ -43,15 +44,28 @@ def _bind_reference_tables(dal: Any) -> None:
     `flask_core.tenancy.resolve_tenant_context`'s `dal.tenants.slug` /
     `dal.tenants.is_active` field access has a table object to resolve
     against; it never creates or alters the real table.
+
+    `logo_url`/`config` were added here by the M1 Core Identity/Auth
+    group -- `auth_service.get_tenant_login_info()` needs them and
+    `tenants` can only be `define_table()`-d once per DAL instance.
+    Every future group that needs more `tenants` columns extends this
+    same call rather than re-defining the table; group-owned tables
+    (everything else the M1 group needs) live in
+    `services/schema.py::bind_auth_tables()` instead, called below, to
+    keep this shared function's diff small for parallel port PRs -- see
+    `hub_api/PORTING.md`.
     """
     dal.define_table(
         "tenants",
         Field("slug", "string", length=100),
         Field("display_name", "string", length=255),
+        Field("logo_url", "text"),
         Field("is_global", "boolean", default=False),
         Field("is_active", "boolean", default=True),
+        Field("config", "json"),
         migrate=False,
     )
+    bind_auth_tables(dal)
 
 
 def create_app(config: HubAPIConfig | None = None) -> Quart:
