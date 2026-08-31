@@ -1,0 +1,17 @@
+# svc-presentation -- Dependencies
+# SCAFFOLD ONLY -- mirrors core/browser_source_core_module/requirements.txt's
+# pinning style; trimmed to what the current skeleton (app.py/config.py)
+# actually imports. Add hub-api client / DAL deps when the TODO stubs in
+# app.py get implemented.
+
+# Core Framework
+quart>=0.19.0
+hypercorn>=0.16.0
+
+# Environment
+python-dotenv>=1.0.0
+
+# Development
+pytest>=7.4.0
+pytest-asyncio>=0.23.0
+pytest-cov>=4.1.0

@@ -471,6 +471,22 @@ pipeline:
         cpu: "1000m"
         memory: "1Gi"
 
+  # v3.0.x — 8th container / 4th stage-runner. `presentation.enabled` toggle: renders core
+  # overlays + Music Station + activated bundles' presentation components. See
+  # templates/svc-presentation.yaml header for the full design-doc trail and why this is
+  # NOT gated on any modules.<name>.enabled (generic across all Modules, unlike svc-rtc).
+  svcPresentation:
+    enabled: true
+    port: 8207
+    replicas: 2
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "256Mi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
+
 # Processing Module
 modules:
   # v3.0.x Task 0.5 — Module verticals (Bot/Social/Customer/Marketing) that load into the
