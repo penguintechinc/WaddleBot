@@ -12,3 +12,8 @@ quart-schema>=0.25.0,<0.26.0
 pydal>=20240906.1,<20260601
 psycopg2-binary>=2.9.9,<3.0.0
 pyjwt>=2.13.0,<3.0.0
+# Community-module port (M6): async reverse-proxy client for core-engagement
+# (polls/forms), loyalty-interaction (loyalty), and per-platform bot relay
+# endpoints (announcements broadcast, interaction mirror relay) -- see
+# services/community_engagement_proxy.py, community_loyalty.py, community_relay.py.
+httpx>=0.28.0,<0.29.0
