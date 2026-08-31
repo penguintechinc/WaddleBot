@@ -1,0 +1,14 @@
+# hub-api direct dependencies.
+#
+# libs/flask_core is installed separately in the Dockerfile's builder
+# stage (`pip install /app/libs/flask_core`, its own requirements.in is
+# the source of truth for its transitive deps -- flask-security-too,
+# authlib, sqlalchemy, alembic, posthog, penguin-licensing, redis,
+# opentelemetry-*, etc.) -- listed here only what hub-api's own app code
+# (app.py, config.py, blueprints/, routers/, openapi/) imports directly.
+quart>=0.23.0,<0.24.0
+hypercorn>=0.18.0,<0.19.0
+quart-schema>=0.25.0,<0.26.0
+pydal>=20240906.1,<20260601
+psycopg2-binary>=2.9.9,<3.0.0
+pyjwt>=2.13.0,<3.0.0
