@@ -24,6 +24,7 @@ from flask_core.app_binding import (
     resolve_app,
 )
 from flask_core.app_manifest import (
+    KNOWN_SURFACES,
     REASON_BAD_PLATFORM_COMPAT_SEMVER,
     REASON_BAD_SEMVER,
     REASON_FEATURE_PREFIX_MISMATCH,
@@ -32,6 +33,9 @@ from flask_core.app_manifest import (
     REASON_INVALID_PROVIDER,
     REASON_MISSING_FIELD,
     REASON_NOT_NAMESPACED,
+    REASON_PRESENTATION_HAS_SCRIPT_ENTRYPOINT,
+    REASON_PRESENTATION_MISSING_HTML_ENTRYPOINT,
+    REASON_SCRIPT_STAGE_HAS_HTML_ENTRYPOINT,
     REASON_UNKNOWN_MODULE,
     REASON_UNKNOWN_SURFACE,
     AppManifest,
@@ -361,6 +365,87 @@ class TestParseManifestStagesReject:
         assert excinfo.value.reason == REASON_UNKNOWN_SURFACE
 
 
+# ---------------------------------------------------------------------------
+# App Bundle SDK spec §3.2a -- presentation component (4th bundle surface)
+#
+# A per-community HTML/JS overlay (e.g. a giveaway wheel) rendered
+# client-side in an OBS browser source by svc-presentation -- not an async
+# event script like ingest/process/action. No `entrypoint`; instead
+# `html_entrypoint`/`assets`/`browser_source_path` describe the overlay.
+# ---------------------------------------------------------------------------
+_VALID_PRESENTATION_STAGE: Dict[str, object] = {
+    "html_entrypoint": "presentation/overlay.html",
+    "assets": ["presentation/overlay.js", "presentation/overlay.css"],
+    "browser_source_path": "/presentation/waddles.bot.giveaway.classic",
+    "consumes": ["giveaway.winner_selected"],
+}
+
+
+def stages_manifest_with_presentation(presentation: Dict[str, object]) -> Dict[str, object]:
+    """A copy of STAGES_MANIFEST with a `presentation` entry added to `stages`
+    (on top of the existing ingest/process/action entries)."""
+    data = stages_manifest()
+    stages = dict(cast(Dict[str, object], data["stages"]))
+    stages["presentation"] = presentation
+    data["stages"] = stages
+    return data
+
+
+class TestParseManifestPresentationAccept:
+    def test_manifest_with_presentation_stage_parses(self) -> None:
+        data = stages_manifest_with_presentation(_VALID_PRESENTATION_STAGE)
+        result = parse_manifest(data)
+        presentation_spec = result.stage_specs["presentation"]
+        assert presentation_spec.entrypoint is None
+        assert presentation_spec.html_entrypoint == "presentation/overlay.html"
+        assert presentation_spec.assets == (
+            "presentation/overlay.js",
+            "presentation/overlay.css",
+        )
+        assert presentation_spec.browser_source_path == (
+            "/presentation/waddles.bot.giveaway.classic"
+        )
+        assert presentation_spec.consumes == ("giveaway.winner_selected",)
+
+    def test_surfaces_derived_includes_presentation(self) -> None:
+        data = stages_manifest_with_presentation(_VALID_PRESENTATION_STAGE)
+        result = parse_manifest(data)
+        assert result.surfaces == ("ingest", "process", "action", "presentation")
+
+
+class TestParseManifestPresentationReject:
+    """Each case fail-first: verified against a version of app_manifest.py
+    with the corresponding presentation/script-stage check reverted before
+    landing (see PR description for the mutation log)."""
+
+    def test_presentation_stage_without_html_entrypoint_rejected(self) -> None:
+        bad = dict(_VALID_PRESENTATION_STAGE)
+        del bad["html_entrypoint"]
+        data = stages_manifest_with_presentation(bad)
+        with pytest.raises(ManifestError) as excinfo:
+            parse_manifest(data)
+        assert excinfo.value.reason == REASON_PRESENTATION_MISSING_HTML_ENTRYPOINT
+
+    def test_presentation_stage_with_script_entrypoint_rejected(self) -> None:
+        bad = dict(_VALID_PRESENTATION_STAGE)
+        bad["entrypoint"] = "presentation/handler.py:on_event"
+        data = stages_manifest_with_presentation(bad)
+        with pytest.raises(ManifestError) as excinfo:
+            parse_manifest(data)
+        assert excinfo.value.reason == REASON_PRESENTATION_HAS_SCRIPT_ENTRYPOINT
+
+    def test_script_stage_with_html_entrypoint_rejected(self) -> None:
+        data = stages_manifest()
+        stages = dict(cast(Dict[str, object], data["stages"]))
+        action = dict(cast(Dict[str, object], stages["action"]))
+        action["html_entrypoint"] = "action/overlay.html"
+        stages["action"] = action
+        data["stages"] = stages
+        with pytest.raises(ManifestError) as excinfo:
+            parse_manifest(data)
+        assert excinfo.value.reason == REASON_SCRIPT_STAGE_HAS_HTML_ENTRYPOINT
+
+
 class TestParseManifestBackwardCompat:
     """Every existing default-app dict (five modules' features.py) must
     keep parsing unchanged under the C1 schema extension -- none of them
@@ -382,6 +467,17 @@ class TestParseManifestBackwardCompat:
         assert result.stage_specs == {}
         assert result.execution_model == "native"
         assert result.platform_compatibility == PlatformCompat()
+
+    def test_presentation_surface_added_without_breaking_existing_manifests(self) -> None:
+        """KNOWN_SURFACES gained `presentation` (4th bundle surface, §3.2a)
+        alongside the original three -- an existing manifest that never
+        declares it keeps parsing to the same `surfaces` tuple as before."""
+        assert "presentation" in KNOWN_SURFACES
+        assert KNOWN_SURFACES >= {"ingest", "process", "action"}
+
+        result = parse_manifest(manifest())
+        assert result.surfaces == ("process", "action")
+        assert "presentation" not in result.stage_specs
 
     def test_real_bot_module_all_default_apps_still_build(self) -> None:
         """build_default_apps() -- the module's own parse_manifest()
