@@ -101,6 +101,13 @@ class HubAPIConfig:
     posthog_host: str
     license_server_url: str
 
+    # OAuth redirect wiring (authController.js's `config.identity.
+    # callbackBaseUrl` / `config.cors.origin`) -- callback_base_url is
+    # hub-api's OWN externally-reachable base URL (OAuth providers redirect
+    # back to it), frontend_origin is where post-login redirects land.
+    identity_callback_base_url: str
+    frontend_origin: str
+
     log_level: str
 
     @classmethod
@@ -143,5 +150,9 @@ class HubAPIConfig:
             posthog_api_key=os.getenv("POSTHOG_API_KEY") or os.getenv("POSTHOG_KEY"),
             posthog_host=os.getenv("POSTHOG_HOST", "https://license.penguintech.io"),
             license_server_url=os.getenv("LICENSE_SERVER_URL", "https://license.penguintech.io"),
+            identity_callback_base_url=os.getenv(
+                "IDENTITY_CALLBACK_BASE_URL", "http://localhost:8204"
+            ),
+            frontend_origin=os.getenv("FRONTEND_ORIGIN", "http://localhost:5173"),
             log_level=os.getenv("LOG_LEVEL", "INFO"),
         )
