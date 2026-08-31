@@ -19,12 +19,21 @@ and are deliberately not the same mechanism.
 (:class:`InstallationLookup`) rather than querying a DB directly, per the
 task spec -- this module has no DB dependency and stays trivially testable
 with an in-memory fake.
+
+App Bundle SDK spec (``2026-08-31-app-bundle-sdk-design.md`` §5.2/§7)
+supersedes the single-winner ladder above with a **coexistence set**:
+:func:`resolve_apps` returns every enabled/activated App implementing a
+Feature at (tenant, community) as a union, not an override -- fan-out to
+all of them, not a pick-one binding. :func:`resolve_app` is kept unchanged
+for backward compatibility; it is superseded, not removed. :func:`detect_conflict`
+is the companion pure-logic check (spec §7.3) the ``app_activations`` write
+(C3) runs before enabling a new App alongside an already-active set.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional, Protocol, Sequence
+from typing import Any, Dict, Iterable, List, Optional, Protocol, Sequence
 
 from .app_manifest import AppManifest
 from .app_registry import AppRegistry, get_registry
@@ -98,7 +107,12 @@ async def resolve_app(
     registry: Optional[AppRegistry] = None,
 ) -> AppManifest:
     """
-    Resolve the active App for ``feature`` at (``tenant``, ``community``).
+    Resolve the single active App for ``feature`` at (``tenant``, ``community``).
+
+    Superseded by :func:`resolve_apps` (design doc §5.2) -- the coexistence
+    model returns the full activated set rather than picking one winner.
+    Kept unchanged for backward compatibility with existing callers/tests;
+    new call sites should prefer :func:`resolve_apps`.
 
     Precedence, narrowest first:
 
@@ -131,3 +145,86 @@ async def resolve_app(
         f"no App bound or defaulted for feature {feature!r} "
         f"(tenant={tenant!r}, community={community!r})"
     )
+
+
+async def resolve_apps(
+    feature: str,
+    *,
+    tenant: str,
+    community: Optional[int],
+    installations: InstallationLookup,
+    registry: Optional[AppRegistry] = None,
+) -> Sequence[AppManifest]:
+    """
+    Resolve every *enabled, activated* App for ``feature`` visible at
+    (``tenant``, ``community``) -- the coexistence set (design doc §5.2/§7.1),
+    not the binding ladder's single winner.
+
+    Community-scoped rows (``community_id == community``) and tenant-wide
+    rows (``community_id is None``) are a **union**: every enabled row
+    ``installations.find`` returns contributes its App to the result.
+    ``resolve_app``'s narrowest-scope-wins precedence does not apply here --
+    a community-scoped row does not suppress a tenant-wide one, it adds to
+    it. Results are de-duplicated by ``app_id`` (first occurrence wins,
+    ``installations.find`` row order), so an App somehow bound at both
+    scopes at once is not returned twice.
+
+    Falls back to the Feature's shipped default App
+    (:meth:`AppRegistry.default_app_for`) only when the resolved set is
+    empty -- any non-empty set of enabled activations is returned as-is,
+    never topped up with the default. Raises :class:`BindingError` if the
+    set is empty and no default is registered either, same failure mode as
+    :func:`resolve_app`.
+    """
+    reg = registry if registry is not None else get_registry()
+    rows = [row for row in await installations.find(feature, tenant=tenant, community=community) if row.enabled]
+
+    resolved: List[AppManifest] = []
+    seen_app_ids: set[str] = set()
+    for row in rows:
+        if row.app_id in seen_app_ids:
+            continue
+        seen_app_ids.add(row.app_id)
+        resolved.append(reg.get(row.app_id))
+
+    if resolved:
+        return tuple(resolved)
+
+    default_app = reg.default_app_for(feature)
+    if default_app is not None:
+        return (default_app,)
+
+    raise BindingError(
+        f"no App bound or defaulted for feature {feature!r} "
+        f"(tenant={tenant!r}, community={community!r})"
+    )
+
+
+def detect_conflict(candidate: AppManifest, active: Iterable[AppManifest]) -> Optional[str]:
+    """
+    Symmetric coexistence check for activating ``candidate`` alongside
+    ``active`` (design doc §7.3). Returns the conflicting ``app_id`` if
+    ``candidate`` cannot coexist with some App already in ``active``, or
+    ``None`` if there is no conflict.
+
+    A conflict exists when ``candidate.app_id`` appears in
+    ``other.incompatible_with`` **or** ``other.app_id`` appears in
+    ``candidate.incompatible_with``, for any ``other`` in ``active`` --
+    either manifest declaring the restriction is enough, regardless of which
+    side authored it (package-manager ``Conflicts``-style, not a
+    both-sides-must-agree check).
+
+    ``active`` is expected to already be scoped to the target community's
+    currently *enabled* activations -- this function knows nothing about
+    ``app_activations`` rows or an ``enabled`` flag, only manifests; a
+    disabled activation's App simply should not be in ``active`` when the
+    caller builds it. Pure logic, no I/O: this is the check the
+    ``app_activations`` insert/update (C3) runs *before* writing, not a
+    replacement for that write.
+    """
+    for other in active:
+        if other.app_id == candidate.app_id:
+            continue
+        if candidate.app_id in other.incompatible_with or other.app_id in candidate.incompatible_with:
+            return other.app_id
+    return None
