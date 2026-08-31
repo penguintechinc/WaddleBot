@@ -19,19 +19,14 @@ from typing import Any
 import httpx
 
 from . import bot_crypto
+from .url_guard import is_private_host
 
-_PRIVATE_IP_PATTERNS = [
-    re.compile(r"^10\."),
-    re.compile(r"^172\.(1[6-9]|2[0-9]|3[0-1])\."),
-    re.compile(r"^192\.168\."),
-    re.compile(r"^127\."),
-    re.compile(r"^0\."),
-    re.compile(r"^169\.254\."),
-    re.compile(r"^::1$"),
-    re.compile(r"^fc00:", re.IGNORECASE),
-    re.compile(r"^fe80:", re.IGNORECASE),
-    re.compile(r"^localhost$", re.IGNORECASE),
-]
+# Re-exported for backward compatibility -- callers/tests import
+# `bot_rcon.is_private_host` (this module's original name, before the
+# SSRF security-review fix promoted it to the shared `url_guard.py` so
+# `bot_ai_knowledge.py` could reuse the identical check rather than
+# duplicating it).
+__all__ = ["is_private_host"]
 
 
 class RconValidationError(ValueError):
@@ -40,11 +35,6 @@ class RconValidationError(ValueError):
 
 class RconNotFoundError(LookupError):
     """The addressed server/row doesn't exist for this community (-> 404)."""
-
-
-def is_private_host(host: str) -> bool:
-    """SSRF guard: reject private/reserved IPs and `localhost` (matches `isPrivateHost`)."""
-    return any(pattern.search(host) for pattern in _PRIVATE_IP_PATTERNS)
 
 
 def _server_manager_url() -> str:

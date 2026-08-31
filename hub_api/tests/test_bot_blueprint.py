@@ -520,6 +520,139 @@ class TestAIKnowledgeSources:
         assert called_with == [source_id]
 
 
+class TestAIKnowledgeSourceSSRFGuard:
+    """Write-time SSRF rejection -- `add_knowledge_source`/`update_knowledge_source`.
+
+    Fetch-time coverage (the crawler itself) lives in `test_url_guard.py`'s
+    `TestGuardedGetRedirects`; these exercise the HTTP-layer boundary a
+    malicious `source_url` never even gets persisted through.
+    """
+
+    async def test_create_rejects_loopback_url(self, client: Any, auth_headers: Any) -> None:
+        response = await client.post(
+            "/api/v1/admin/ai-knowledge/sources",
+            headers=auth_headers(scope="bot.ai_knowledge:write"),
+            json={
+                "source_name": "Evil",
+                "source_type": "mkdocs",
+                "source_url": "http://127.0.0.1/admin",
+            },
+        )
+        assert response.status_code == 400
+
+    async def test_create_rejects_cloud_metadata_url(self, client: Any, auth_headers: Any) -> None:
+        response = await client.post(
+            "/api/v1/admin/ai-knowledge/sources",
+            headers=auth_headers(scope="bot.ai_knowledge:write"),
+            json={
+                "source_name": "Evil",
+                "source_type": "generic_url",
+                "source_url": "http://169.254.169.254/latest/meta-data/",
+            },
+        )
+        assert response.status_code == 400
+
+    async def test_create_rejects_private_10_range_url(
+        self, client: Any, auth_headers: Any
+    ) -> None:
+        response = await client.post(
+            "/api/v1/admin/ai-knowledge/sources",
+            headers=auth_headers(scope="bot.ai_knowledge:write"),
+            json={
+                "source_name": "Evil",
+                "source_type": "generic_url",
+                "source_url": "http://10.0.0.5/internal",
+            },
+        )
+        assert response.status_code == 400
+
+    async def test_create_rejects_private_192_168_range_url(
+        self, client: Any, auth_headers: Any
+    ) -> None:
+        response = await client.post(
+            "/api/v1/admin/ai-knowledge/sources",
+            headers=auth_headers(scope="bot.ai_knowledge:write"),
+            json={
+                "source_name": "Evil",
+                "source_type": "generic_url",
+                "source_url": "http://192.168.1.1/router",
+            },
+        )
+        assert response.status_code == 400
+
+    async def test_create_rejects_file_scheme(self, client: Any, auth_headers: Any) -> None:
+        response = await client.post(
+            "/api/v1/admin/ai-knowledge/sources",
+            headers=auth_headers(scope="bot.ai_knowledge:write"),
+            json={
+                "source_name": "Evil",
+                "source_type": "generic_url",
+                "source_url": "file:///etc/passwd",
+            },
+        )
+        assert response.status_code == 400
+
+    async def test_create_rejects_gopher_scheme(self, client: Any, auth_headers: Any) -> None:
+        response = await client.post(
+            "/api/v1/admin/ai-knowledge/sources",
+            headers=auth_headers(scope="bot.ai_knowledge:write"),
+            json={
+                "source_name": "Evil",
+                "source_type": "generic_url",
+                "source_url": "gopher://127.0.0.1/x",
+            },
+        )
+        assert response.status_code == 400
+
+    async def test_create_allows_normal_public_url(
+        self, client: Any, auth_headers: Any, monkeypatch: Any
+    ) -> None:
+        """A genuinely public target (literal IP -- no real DNS needed) is still allowed."""
+
+        async def fake_index(dal: Any, source_id: int) -> None:
+            return None
+
+        monkeypatch.setattr(bot_ai_knowledge, "index_source", fake_index)
+        response = await client.post(
+            "/api/v1/admin/ai-knowledge/sources",
+            headers=auth_headers(scope="bot.ai_knowledge:write"),
+            json={
+                "source_name": "Public Docs",
+                "source_type": "generic_url",
+                "source_url": "http://1.2.3.4/docs",
+            },
+        )
+        assert response.status_code == 201
+
+    async def test_update_rejects_loopback_url(
+        self, client: Any, auth_headers: Any, dal: Any
+    ) -> None:
+        source_id = dal.ai_knowledge_sources.insert(
+            source_name="Old", source_type="manual", is_active=True
+        )
+        dal.commit()
+        response = await client.put(
+            f"/api/v1/admin/ai-knowledge/sources/{source_id}",
+            headers=auth_headers(scope="bot.ai_knowledge:write"),
+            json={"source_url": "http://127.0.0.1/admin"},
+        )
+        assert response.status_code == 400
+
+    async def test_update_rejects_cloud_metadata_url(
+        self, client: Any, auth_headers: Any, dal: Any
+    ) -> None:
+        source_id = dal.ai_knowledge_sources.insert(
+            source_name="Old", source_type="manual", is_active=True
+        )
+        dal.commit()
+        response = await client.put(
+            f"/api/v1/admin/ai-knowledge/sources/{source_id}",
+            headers=auth_headers(scope="bot.ai_knowledge:write"),
+            json={"source_url": "http://169.254.169.254/latest/meta-data/"},
+        )
+        assert response.status_code == 400
+
+
 class TestAIKnowledgeSearchAndSuggest:
     async def test_search_missing_query_is_400(self, client: Any, auth_headers: Any) -> None:
         response = await client.post(
@@ -662,7 +795,7 @@ class TestRconServerCrud:
         response = await client.post(
             f"/api/v1/admin/{community_id}/rcon/servers",
             headers=auth_headers(scope="bot.server_manager:admin"),
-            json={"display_name": "My Server", "host": "203.0.113.5", "password": "secret123"},
+            json={"display_name": "My Server", "host": "1.2.3.5", "password": "secret123"},
         )
         assert response.status_code == 201
         body = await response.get_json()
@@ -685,7 +818,7 @@ class TestRconServerCrud:
         response = await client.post(
             f"/api/v1/admin/{community_id}/rcon/servers",
             headers=auth_headers(scope="bot.server_manager:admin"),
-            json={"display_name": "  ", "host": "203.0.113.5"},
+            json={"display_name": "  ", "host": "1.2.3.5"},
         )
         assert response.status_code == 400
 
@@ -693,7 +826,7 @@ class TestRconServerCrud:
         self, client: Any, auth_headers: Any, community_id: int, dal: Any
     ) -> None:
         server_id = dal.server_status_configs.insert(
-            community_id=community_id, display_name="Old", game_name="old", host="203.0.113.5"
+            community_id=community_id, display_name="Old", game_name="old", host="1.2.3.5"
         )
         dal.commit()
         response = await client.put(
@@ -718,7 +851,7 @@ class TestRconServerCrud:
         self, client: Any, auth_headers: Any, community_id: int, dal: Any
     ) -> None:
         server_id = dal.server_status_configs.insert(
-            community_id=community_id, display_name="Del", game_name="del", host="203.0.113.5"
+            community_id=community_id, display_name="Del", game_name="del", host="1.2.3.5"
         )
         dal.commit()
         response = await client.delete(
@@ -741,7 +874,7 @@ class TestRconServerCrud:
 @pytest.fixture
 def seeded_server_id(dal: Any, community_id: int) -> int:
     server_id: int = dal.server_status_configs.insert(
-        community_id=community_id, display_name="S1", game_name="s1", host="203.0.113.5"
+        community_id=community_id, display_name="S1", game_name="s1", host="1.2.3.5"
     )
     dal.commit()
     return server_id
@@ -935,14 +1068,14 @@ class TestRconCommandLogAndMemberInfo:
             community_id=community_id,
             display_name="Hidden",
             game_name="hidden",
-            host="203.0.113.9",
+            host="1.2.3.9",
             visibility="admin_only",
         )
         dal.server_status_configs.insert(
             community_id=community_id,
             display_name="Visible",
             game_name="visible",
-            host="203.0.113.10",
+            host="1.2.3.10",
             visibility="members",
         )
         dal.commit()

@@ -25,6 +25,8 @@ from typing import Any
 
 import httpx
 
+from .url_guard import SSRFError, guarded_get, validate_url
+
 logger = logging.getLogger(__name__)
 
 _CHUNK_SIZE_TOKENS = 500
@@ -158,7 +160,16 @@ async def _fetch_github_markdown(
     pages: list[_Page] = []
 
     async def crawl(url: str, client: httpx.AsyncClient) -> None:
-        response = await client.get(url, headers=headers)
+        # `url` is always an `api.github.com` URL here (either `contents_url`,
+        # built from a hardcoded host, or `item["url"]` from GitHub's own API
+        # response) -- `guarded_get` is still applied for defense in depth
+        # (matches the security review's "apply to EVERY fetch, including
+        # github" requirement) and to re-validate any redirect hop.
+        try:
+            response = await guarded_get(client, url, headers=headers)
+        except SSRFError as exc:
+            logger.warning("GitHub fetch blocked by SSRF guard url=%s err=%s", url, exc)
+            return
         if response.is_error:
             logger.warning("GitHub API non-OK response url=%s status=%s", url, response.status_code)
             return
@@ -182,7 +193,13 @@ async def _fetch_github_markdown(
             if item.get("type") == "dir":
                 await crawl(item["url"], client)
             elif item.get("type") == "file" and item.get("name", "").endswith(".md"):
-                file_response = await client.get(item["url"], headers=headers)
+                try:
+                    file_response = await guarded_get(client, item["url"], headers=headers)
+                except SSRFError as exc:
+                    logger.warning(
+                        "GitHub file fetch blocked by SSRF guard url=%s err=%s", item["url"], exc
+                    )
+                    continue
                 if file_response.is_error:
                     continue
                 import base64
@@ -197,7 +214,7 @@ async def _fetch_github_markdown(
                     )
                 )
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
         await crawl(contents_url, client)
     return pages
 
@@ -216,12 +233,27 @@ _CRAWLER_UA = {"User-Agent": "WaddleBot/2.0 Knowledge Indexer"}
 
 
 async def _fetch_sitemap_pages(base_url: str) -> list[_Page]:
+    """Crawl `base_url`'s `sitemap.xml` and every `<loc>` it lists.
+
+    `base_url` is fully user-supplied (`mkdocs`/`docusaurus`/`generic_url`
+    source types) and the sitemap's `<loc>` entries are attacker-
+    controlled content on that same user-supplied origin -- both the
+    sitemap fetch and every per-page fetch go through `guarded_get`
+    (SSRF guard + redirect re-validation), not a bare `client.get()`.
+    `follow_redirects=False` on the client itself so `guarded_get` owns
+    every redirect hop.
+    """
     sitemap_url = base_url.rstrip("/") + "/sitemap.xml"
     pages: list[_Page] = []
 
-    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=15.0, follow_redirects=False) as client:
         try:
-            sitemap_response = await client.get(sitemap_url, headers=_CRAWLER_UA)
+            sitemap_response = await guarded_get(client, sitemap_url, headers=_CRAWLER_UA)
+        except SSRFError as exc:
+            logger.warning(
+                "Sitemap fetch blocked by SSRF guard sitemap_url=%s err=%s", sitemap_url, exc
+            )
+            return pages
         except httpx.HTTPError as exc:
             logger.warning("Could not fetch sitemap sitemap_url=%s err=%s", sitemap_url, exc)
             return pages
@@ -238,7 +270,7 @@ async def _fetch_sitemap_pages(base_url: str) -> list[_Page]:
 
         for page_url in page_urls:
             try:
-                response = await client.get(page_url, headers=_CRAWLER_UA)
+                response = await guarded_get(client, page_url, headers=_CRAWLER_UA)
                 if response.is_error:
                     continue
                 html = response.text
@@ -258,6 +290,8 @@ async def _fetch_sitemap_pages(base_url: str) -> list[_Page]:
 
                 if len(text) > 100:
                     pages.append(_Page(url=page_url, title=title, content=text))
+            except SSRFError as exc:
+                logger.warning("Page fetch blocked by SSRF guard page_url=%s err=%s", page_url, exc)
             except httpx.HTTPError as exc:
                 logger.warning("Failed to fetch knowledge page page_url=%s err=%s", page_url, exc)
 
@@ -365,6 +399,22 @@ def _to_source(row: Any) -> KnowledgeSource:
 # ── Source management ────────────────────────────────────────────────────
 
 
+def _validate_source_url(source_url: str | None) -> None:
+    """Write-time SSRF guard -- reject a bad `source_url` before it's ever stored.
+
+    `index_source` crawls `source_url` later (fetch time, defense in
+    depth against DNS-rebind) -- this call rejects the obvious case
+    immediately, at creation/update, rather than waiting for the first
+    (possibly deferred/scheduled) crawl to discover it.
+    """
+    if not source_url:
+        return  # `manual` sources (and unset URLs) have nothing to validate
+    try:
+        validate_url(source_url)
+    except SSRFError as exc:
+        raise KnowledgeServiceError(f"source_url rejected: {exc}", status=400) from exc
+
+
 def add_knowledge_source(dal: Any, payload: KnowledgeSourceCreate) -> KnowledgeSource:
     """`POST .../ai-knowledge/sources` -- caller triggers `index_source` after, if not `manual`."""
     if not payload.source_name.strip():
@@ -373,6 +423,7 @@ def add_knowledge_source(dal: Any, payload: KnowledgeSourceCreate) -> KnowledgeS
         raise KnowledgeServiceError(
             f"source_type must be one of: {', '.join(sorted(_VALID_SOURCE_TYPES))}", status=400
         )
+    _validate_source_url(payload.source_url)
 
     new_id = dal.ai_knowledge_sources.insert(
         community_id=payload.community_id,
@@ -416,6 +467,8 @@ def update_knowledge_source(dal: Any, source_id: int, updates: dict[str, Any]) -
     fields = {k: v for k, v in updates.items() if k in _ALLOWED_UPDATE_FIELDS}
     if not fields:
         raise KnowledgeServiceError("No valid fields provided for update", status=400)
+    if "source_url" in fields:
+        _validate_source_url(fields["source_url"])
 
     row = dal.ai_knowledge_sources[source_id]
     if row is None:
