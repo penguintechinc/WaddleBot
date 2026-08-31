@@ -61,6 +61,39 @@ class TestScopeAndTenant:
         )
         assert response.status_code == 404
 
+    @pytest.mark.parametrize(
+        "method,path_suffix,scope",
+        [
+            ("PUT", "loyalty/config", "community.loyalty:write"),
+            ("GET", "loyalty/leaderboard", "community.loyalty:read"),
+            ("PUT", "loyalty/user/1/balance", "community.loyalty:admin"),
+            ("POST", "loyalty/wipe", "community.loyalty:admin"),
+            ("GET", "loyalty/stats", "community.loyalty:read"),
+            ("GET", "loyalty/giveaways", "community.loyalty:read"),
+            ("POST", "loyalty/giveaways", "community.loyalty:write"),
+            ("GET", "loyalty/giveaways/1/entries", "community.loyalty:read"),
+            ("POST", "loyalty/giveaways/1/draw", "community.loyalty:write"),
+            ("PUT", "loyalty/giveaways/1/end", "community.loyalty:write"),
+            ("GET", "loyalty/games/config", "community.loyalty:read"),
+            ("PUT", "loyalty/games/config", "community.loyalty:write"),
+            ("GET", "loyalty/games/stats", "community.loyalty:read"),
+            ("GET", "loyalty/games/recent", "community.loyalty:read"),
+            ("GET", "loyalty/gear/categories", "community.loyalty:read"),
+            ("GET", "loyalty/gear/items", "community.loyalty:read"),
+            ("POST", "loyalty/gear/items", "community.loyalty:write"),
+            ("PUT", "loyalty/gear/items/1", "community.loyalty:write"),
+            ("DELETE", "loyalty/gear/items/1", "community.loyalty:write"),
+            ("GET", "loyalty/gear/stats", "community.loyalty:read"),
+        ],
+    )
+    async def test_remaining_routes_404_on_unknown_community(
+        self, client: Any, auth_headers: Any, method: str, path_suffix: str, scope: str
+    ) -> None:
+        response = await client.open(
+            f"/api/v1/admin/9999/{path_suffix}", method=method, headers=auth_headers(scope=scope)
+        )
+        assert response.status_code == 404
+
 
 class TestRemainingRoutesForward:
     """One representative call per remaining route.

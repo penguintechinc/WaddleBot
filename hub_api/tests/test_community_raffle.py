@@ -57,6 +57,24 @@ class TestScopeAndTenant:
         )
         assert response.status_code == 404
 
+    @pytest.mark.parametrize(
+        "method,path_suffix",
+        [
+            ("PUT", "raffle-customization/raffle_start"),
+            ("DELETE", "raffle-customization/raffle_start"),
+            ("POST", "raffle-customization/raffle_start/upload"),
+        ],
+    )
+    async def test_remaining_routes_404_on_unknown_community(
+        self, client: Any, auth_headers: Any, method: str, path_suffix: str
+    ) -> None:
+        response = await client.open(
+            f"/api/v1/admin/9999/{path_suffix}",
+            method=method,
+            headers=auth_headers(scope="community.raffle:write"),
+        )
+        assert response.status_code == 404
+
 
 class TestUpsertAndDelete:
     async def test_invalid_event_type_is_400(
@@ -107,6 +125,16 @@ class TestUpsertAndDelete:
         )
         assert "raffle_winner" not in (await list_after.get_json())["customizations"]
 
+    async def test_delete_invalid_event_type_is_400(
+        self, client: Any, auth_headers: Any, community_db: Any
+    ) -> None:
+        _, community_id = community_db
+        response = await client.delete(
+            f"/api/v1/admin/{community_id}/raffle-customization/not_a_real_event",
+            headers=auth_headers(scope="community.raffle:write"),
+        )
+        assert response.status_code == 400
+
 
 class TestUpload:
     async def test_upload_requires_a_file(
@@ -129,3 +157,34 @@ class TestUpload:
             files={"sound": FileStorage(BytesIO(b"not-really-audio"), filename="clip.exe")},
         )
         assert response.status_code == 400
+
+    async def test_upload_rejects_oversized_file(
+        self, client: Any, auth_headers: Any, community_db: Any
+    ) -> None:
+        _, community_id = community_db
+        oversized = b"x" * (3 * 1024 * 1024)
+        response = await client.post(
+            f"/api/v1/admin/{community_id}/raffle-customization/raffle_start/upload",
+            headers=auth_headers(scope="community.raffle:write"),
+            files={"sound": FileStorage(BytesIO(oversized), filename="clip.mp3")},
+        )
+        assert response.status_code == 400
+        assert "2MB" in (await response.get_json())["error"]["message"]
+
+    async def test_upload_success(
+        self, client: Any, auth_headers: Any, community_db: Any, tmp_path: Any, monkeypatch: Any
+    ) -> None:
+        import services.community_raffle as raffle_svc
+
+        monkeypatch.setattr(raffle_svc, "_UPLOAD_BASE_DIR", str(tmp_path))
+        _, community_id = community_db
+
+        response = await client.post(
+            f"/api/v1/admin/{community_id}/raffle-customization/raffle_start/upload",
+            headers=auth_headers(scope="community.raffle:write"),
+            files={"sound": FileStorage(BytesIO(b"real-ish-audio-bytes"), filename="clip.mp3")},
+        )
+        assert response.status_code == 200
+        body = await response.get_json()
+        assert body["success"] is True
+        assert body["customization"]["sound_format"] == "mp3"
