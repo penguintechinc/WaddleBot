@@ -23,7 +23,7 @@ stage boundary, not just the first. `svc-ingest` / `svc-process` / `svc-action`
 containers — they carry no bundle-specific code, only the loader that reads each activated
 bundle's manifest and dispatches to its stage script. process→action is a second queue hop,
 never a direct call: each stage publishes onto the next stage's own Valkey stream (§3.2's
-`produces`/`consumes`, §6.2's isolation keys) and only that stream connects them. A slow or
+`produces`/`consumes`, §7.2's isolation keys) and only that stream connects them. A slow or
 long-running `action` handler backs up its *own* action-stage queue — bounded, spilling to the
 DLQ on overflow (`stream_pipeline.py:368-438`) — without back-pressuring or blocking `process`
 or `ingest`. Every stage is fully decoupled and scales independently.
@@ -83,8 +83,8 @@ partial tuple (`app_manifest.py:110`, `parse_manifest` never requires all three)
 | `permissions` | tuple[str] | `app_manifest.py:111` | **renamed** to `requires_scopes` in bundle.yaml (design doc's own term, `2026-08-26-v3-scbm-apps-design.md:409`) — reconciliation in §3.3 |
 | `surfaces` | tuple of stage **names** only, `{ingest,process,action}` | `app_manifest.py:110,51` | **superseded** by `stages` map (§3.2) — `AppManifest.surfaces` stays as a derived compat field |
 | `execution_model` | `native` \| `thirdparty` | — | **NEW** — how the bundle runs, orthogonal to `provider` (a `builtin` bundle may still front a `thirdparty` endpoint, e.g. wrapping a SaaS API) |
-| `compatible_with` | list[app_id], optional | — | **NEW** (§6) |
-| `incompatible_with` | list[app_id], optional | — | **NEW** (§6) |
+| `compatible_with` | list[app_id], optional | — | **NEW** (§7) |
+| `incompatible_with` | list[app_id], optional | — | **NEW** (§7) |
 | `platform_compatibility` | object (§3.4) | — | **NEW** |
 | `stages` | map, keyed by stage name (§3.2) | — | **NEW** — richer replacement for `surfaces` |
 
@@ -167,7 +167,7 @@ There is currently **no single canonical "running platform version"** to compare
 stale relative to the `release/v3.0.X` branch this spec lives on. Establishing that source is
 itself part of the implementation work, not assumed here.
 
-**Enforcement policy — OPEN DECISION, see §9.** Proposed default: block install/available/
+**Enforcement policy — OPEN DECISION, see §10.** Proposed default: block install/available/
 activate transitions when the running platform version is outside `[min_version,
 max_version]`; warn (log + surface in an admin UI) but allow when it's in-range but does not
 match `tested_with`. Flagged because "block vs warn" at each boundary is a product decision,
@@ -193,9 +193,9 @@ this field; it does not replace `surfaces`.
 
 | Stage | Entry point receives | Emits onto | Config/secrets | Scopes |
 |---|---|---|---|---|
-| `ingest` | raw platform event (Twitch/Discord/etc. payload or webhook body) + tenant/community context + this instance's `config.yaml` merged with runtime overrides (§5) | this bundle's isolated `process`-stage stream (§6.2) | `penguin-sal` reference in `config.yaml`, never inline value | `requires_scopes` declared for the `ingest` stage, always ⊆ bundle-level `requires_scopes` |
+| `ingest` | raw platform event (Twitch/Discord/etc. payload or webhook body) + tenant/community context + this instance's `config.yaml` merged with runtime overrides (§5) | this bundle's isolated `process`-stage stream (§7.2) | `penguin-sal` reference in `config.yaml`, never inline value | `requires_scopes` declared for the `ingest` stage, always ⊆ bundle-level `requires_scopes` |
 | `process` | one event off this bundle's isolated `process` stream, tenant/community context, config | this bundle's isolated `action`-stage stream, or the DLQ on poison (`stream_pipeline.py:368-438`, `move_to_dlq`) | same | same |
-| `action` | one event off this bundle's isolated `action` stream | nothing (terminal) — or, for `thirdparty` execution, a network call per §7 | same | same |
+| `action` | one event off this bundle's isolated `action` stream | nothing (terminal) — or, for `thirdparty` execution, a network call per §8 | same | same |
 
 Every handler is `async def` (`entrypoint: "module.py:function"`, awaited by the stage-runner
 loader) per `backend-python.md`. Consumers **must be idempotent** — at-least-once delivery is
@@ -269,7 +269,7 @@ Enforcement (application layer, at write time — not expressible as a single SQ
 across three tables): inserting into `app_tenant_availability` requires the `app_id` to exist
 in `app_catalog`; inserting into `app_activations` requires an *available* row for that
 `(tenant_id, app_id)`. Exact migration path (rename vs new tables, backfill from
-`hub_module_installations`/`marketplace_subscriptions`) is an **open decision**, §9.
+`hub_module_installations`/`marketplace_subscriptions`) is an **open decision**, §10.
 
 ### 5.2 Resolution: `resolve_app` → `resolve_apps`
 
@@ -293,17 +293,99 @@ async def resolve_apps(
 
 ---
 
-## 6. Coexistence and conflict resolution
+## 6. Distribution & control plane
 
-### 6.1 Fan-out
+How a bundle gets from "global admin installs it" to "`svc-ingest` runs its code for event N"
+is three separate planes, each hitting a different DB tier for a different reason — conflating
+them is how a routing lookup on the hot path ends up competing with an admin write for the
+same connection pool.
+
+### 6.1 Control plane (writes) — hub-api, primary
+
+The global admin installs/uninstalls/updates bundles through **hub-api**
+(`2026-08-26-v3-scbm-apps-design.md:681`, "admin + marketplace + tenant management"). hub-api
+is the sole writer to `app_catalog` (§5.1): it writes install/uninstall/update to the
+**primary/write** DB node, and stores/removes the bundle artifact (scripts + config + spec +
+manifest, §2).
+
+Install/uninstall/update is a plain REST surface on hub-api, not a separate control path —
+**hub-webui and the CLI are both just REST clients of the same hub-api endpoints**, neither
+owning install logic independently. This is the existing three-surface model
+(`2026-08-26-v3-scbm-apps-design.md:867-877`), which already lists REST's consumers as
+"browsers, mobile, CLI" (line 874) — the bundle SDK adds new REST routes under that surface,
+not a new surface.
+
+Uninstall is **global** — it removes the row from `app_catalog`, the installed set. Any
+`app_tenant_availability`/`app_activations` rows still referencing that `app_id` are now
+dangling; cascade vs. deny-if-referenced is an open decision, §10.
+
+### 6.2 Code distribution (pull) — stage-runner poll + reconcile
+
+Each stage-runner container (`svc-ingest`/`svc-process`/`svc-action`,
+`2026-08-26-v3-scbm-apps-design.md:496-511`) **polls** hub-api on an interval for the current
+global installed-bundle set, then reconciles locally: fetch and install newly-installed
+bundles' code for its own stage, remove uninstalled ones' code. Polling, not push, so a
+restarting or newly-scaled-out runner self-heals to the current installed set on its own first
+poll — hub-api never needs to know a given runner replica exists.
+
+Proposed endpoints (new; versioned per `backend.md`'s `/api/v{major}/{endpoint}` rule):
+
+| Endpoint | Returns | Consumer |
+|---|---|---|
+| `GET /api/v1/apps/installed?stage=ingest` | every installed bundle with an `ingest` stage: `{app_id, version, artifact_hash}` | `svc-ingest` (and `process`/`action` with their own `stage=`) |
+| `GET /api/v1/apps/{app_id}/artifact` | the bundle artifact for one `app_id` (script + config + spec + manifest for the requested stage) | any stage-runner, only for a hash it does not already hold |
+
+`artifact_hash` per bundle is what lets a runner skip re-fetching unchanged bundles on every
+poll — it fetches only when the hash it sees differs from what it has cached. `stage=` scopes
+the response so a runner loads only the stage(s) it serves: `svc-ingest` installs each
+bundle's `ingest` component only, never its `process`/`action` code.
+
+### 6.3 Routing reads (hot path) — read replica
+
+Per-community activation/routing — `app_activations` (§5.1) plus which activated bundles fan
+out for a `(tenant, community, feature)` via `resolve_apps` (§5.2) — is read on **every
+event**, not on a poll interval. Stage-runners read this from the **read replica**, never the
+primary, so a routing lookup never loads the write node hub-api holds.
+
+Per `backend.md`'s Database Tier Architecture ("every container has its own DB account scoped
+to its tables/operations... Levels: read-only, read-write, scoped read-write (RLS), admin
+(DDL)") and `security.md`'s checklist ("per-service DB accounts (no shared creds)"):
+stage-runners get a **read-only** account scoped to the read replica; hub-api holds the
+**write** account on the primary. Neither can do the other's job — a compromised stage-runner
+cannot write `app_catalog`, and hub-api's write path never contends with the routing hot path
+for read-replica connections.
+
+Cache routing reads with a short TTL, invalidated on the stage-runner's own poll cycle (§6.2) —
+the poll that refreshes the installed set is also the natural point to drop a stale routing
+cache.
+
+### 6.4 Two read paths, deliberately different
+
+| | Installed set (code) | Routing (data) |
+|---|---|---|
+| What | which bundles exist, per stage | which activated bundles fan out for this `(tenant, community, feature)` |
+| Frequency | rare — changes only on admin install/uninstall | every event |
+| Path | poll hub-api (§6.2) | read replica (§6.3) |
+
+Routing on every event through hub-api would hammer a low-volume admin API with the platform's
+entire event throughput; code artifacts have no business in a per-event query path either.
+These are two mechanisms on purpose, not two instances of one — installed-set is rare and is
+code, so it goes through the API that serves artifacts; routing is frequent and is data, so it
+goes straight to the tier built for high-read-volume queries, bypassing hub-api entirely.
+
+---
+
+## 7. Coexistence and conflict resolution
+
+### 7.1 Fan-out
 
 For a given inbound event, `svc-ingest` calls `resolve_apps(feature, tenant, community, ...)`
 and runs **every** returned bundle's `ingest` stage independently — each publishes onto its
-own isolated `process` stream (§6.2), so `svc-process` and `svc-action` fan out identically at
+own isolated `process` stream (§7.2), so `svc-process` and `svc-action` fan out identically at
 their own stage boundary. Four giveaway bundles activated in one community means four
 independent ingest→process→action runs per matching chat event, not one shared run.
 
-### 6.2 Isolation keys
+### 7.2 Isolation keys
 
 Today's stream naming is **two generations behind this proposal** — worth stating precisely
 because both existing schemes are visible in the codebase and neither is per-app:
@@ -332,7 +414,7 @@ This reconciles, not replaces, the design doc's tenant ACL-user scheme
 per-(tenant, stage) credential; the stream *key* underneath it now also carries community and
 app_id.
 
-### 6.3 Conflict enforcement
+### 7.3 Conflict enforcement
 
 `compatible_with`/`incompatible_with` (§3.1) are `app_id` lists, package-manager
 `Provides`/`Conflicts`-style. Coexistence is the default (empty `incompatible_with` = no
@@ -352,7 +434,7 @@ open question, not decided here.
 
 ---
 
-## 7. Execution models
+## 8. Execution models
 
 | | Native | Third-party |
 |---|---|---|
@@ -362,11 +444,11 @@ open question, not decided here.
 | Transport | direct function call from the stage-runner's dispatch loop | `webhook_push` (we call them, HMAC-SHA256, `webhook_secret`) or `rest_pull` (we call their API, `api_key`/`oauth2_client_credentials` bearer, or HMAC fallback) — both implemented today in `vendorExecutionService.executeCommand()` (`vendorExecutionService.js:25-102`) |
 | Auth | `requires_scopes` checked against the caller's JWT scopes, in-process | HMAC over payload (`webhook_push`) or bearer/HMAC per `auth_type` (`rest_pull`) — `059_marketplace_consolidation.sql:17-18,27-30` |
 | Failure mode | exception → DLQ (`stream_pipeline.py:368-438`) | timeout (`webhook_timeout_ms`, default 5000ms) + non-2xx → DLQ; inherits network latency/failure the native path doesn't have |
-| Isolation | shares the stage-runner process — sandboxing is an **open decision**, §9 | already isolated by construction (separate process/network boundary) |
+| Isolation | shares the stage-runner process — sandboxing is an **open decision**, §10 | already isolated by construction (separate process/network boundary) |
 
 ---
 
-## 8. Worked example: `giveaway` bundle
+## 9. Worked example: `giveaway` bundle
 
 ```
 giveaway-classic/
@@ -425,11 +507,11 @@ Two queue hops, not one: `ingest.produces["giveaway.entry_detected"]` ==
 `process.consumes["giveaway.entry_detected"]` is the ingest→process stream
 (`...:giveaway-classic:process`); `process.produces["giveaway.winner_selected"]` ==
 `action.consumes["giveaway.winner_selected"]` is the *second*, independent process→action
-stream (`...:giveaway-classic:action`, §6.2). `action` can take as long as posting the
+stream (`...:giveaway-classic:action`, §7.2). `action` can take as long as posting the
 announcement takes without ever blocking `process` from picking the next window's winner —
 it only backs up its own `:action` stream.
 
-### 8.1 Coexistence — 4 giveaway bundles in one community
+### 9.1 Coexistence — 4 giveaway bundles in one community
 
 Community `C1` activates `giveaway-classic`, `giveaway-raffle`, `giveaway-milestone`,
 `giveaway-sub-only` — 4 rows in `app_activations`, all `enabled=true`, all implementing
@@ -444,9 +526,9 @@ waddles:t:T:c:C1:app:waddles.bot.giveaway.giveaway-sub-only:{ingest,process,acti
 ```
 
 A `!giveaway enter` chat event is evaluated by all 4 ingest handlers independently — no shared
-state, no interference, per §6.1/§6.2.
+state, no interference, per §7.1/§7.2.
 
-### 8.2 Conflict — 2 incompatible Twitch bundles
+### 9.2 Conflict — 2 incompatible Twitch bundles
 
 `waddles.bot.twitch-chat.official-eventsub` and `waddles.bot.twitch-chat.legacy-irc-bridge`
 both implement `waddles.bot.twitch-chat` but cannot both hold the platform's single Twitch
@@ -458,12 +540,12 @@ incompatible_with: [waddles.bot.twitch-chat.legacy-irc-bridge]
 ```
 
 Activating `legacy-irc-bridge` in a community that already has `official-eventsub` enabled is
-rejected at the `app_activations` write (§6.3) — the community must deactivate one before the
+rejected at the `app_activations` write (§7.3) — the community must deactivate one before the
 other can be turned on.
 
 ---
 
-## 9. Open decisions (for the user — not decided here)
+## 10. Open decisions (for the user — not decided here)
 
 | # | Decision | Why it's open |
 |---|---|---|
@@ -473,10 +555,12 @@ other can be turned on.
 | 4 | **`compatible_with` as declared IDs vs. an exclusive "provides" capability** — current proposal is explicit `app_id` lists (package-manager style); an alternative is a `provides: [capability]` + "only one provider of a given exclusive capability may be active," which scales better as the catalog grows but is a bigger schema change |
 | 5 | **Exact `app_installations`/`app_catalog`/`app_tenant_availability` migration** — new tables (as drafted, §5.1) vs. renaming `hub_module_installations` in place and adding the two new tiers around it; backfill plan for existing `hub_module_installations`/`marketplace_subscriptions` rows |
 | 6 | **`platform_compatibility` enforcement policy** (§3.4) — block-out-of-range/warn-untested-in-range is a proposed default, not confirmed; also needs a canonical "running platform version" source, which doesn't exist today (`flask_core.__version__` is stale) |
+| 7 | **Uninstall cascade policy** (§6.1) — when hub-api removes an `app_id` from `app_catalog`, whether dangling `app_tenant_availability`/`app_activations` rows referencing it cascade-delete or block the uninstall until the tenant/community deactivates first |
+| 8 | **Poll interval + artifact store location** (§6.2) — how often a stage-runner polls hub-api for the installed set, and whether the bundle artifact itself lives in the DB (BLOB/JSONB), object storage, or an OCI registry (image-layer-style distribution) |
 
 ---
 
-## 10. What changes from today (gap list)
+## 11. What changes from today (gap list)
 
 | Today | Becomes |
 |---|---|
@@ -487,3 +571,4 @@ other can be turned on.
 | `stream_pipeline.py`'s `{stream_prefix}:{stream}` (legacy) / design doc's `waddles:t:{tenant}:{stage}` (target, unimplemented) — neither is per-community or per-app | `waddles:t:{tenant}:c:{community}:app:{app_id}:{stage}` — full per-(community × app) isolation |
 | No platform-version compatibility declaration anywhere in `AppManifest` or `marketplace_modules` | `platform_compatibility` (`tested_with`/`min_version`/`max_version`) on `bundle.yaml`, enforced at install/available/activate |
 | `permissions` field name on `AppManifest` (`app_manifest.py:111`) vs. `requires_scopes` in the design doc's own example (`2026-08-26-v3-scbm-apps-design.md:409`) | one name, `requires_scopes`, used consistently in `bundle.yaml` (§3.3) |
+| No distribution mechanism — `AppRegistry` is load-once at process startup (`app_registry.py:16-21`), nothing pushes/pulls bundle code to a running container | hub-api is the sole `app_catalog` writer (primary); stage-runners poll hub-api and reconcile their own stage's code; routing reads go to the read replica, never hub-api or the primary (§6) |
