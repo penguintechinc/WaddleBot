@@ -17,10 +17,16 @@ stages; it omits directories for stages it doesn't touch. This is the authoring-
 counterpart to the runtime `AppManifest` dataclass already defined in
 `libs/flask_core/flask_core/app_manifest.py:93-114`.
 
-Pipeline: **ingest → Valkey → process → action**. `svc-ingest` / `svc-process` / `svc-action`
+Pipeline: **ingest →[Valkey queue]→ process →[Valkey queue]→ action** — a queue at *every*
+stage boundary, not just the first. `svc-ingest` / `svc-process` / `svc-action`
 (`docs/plans/2026-08-26-v3-scbm-apps-design.md:496-511`) are the three generic stage-runner
 containers — they carry no bundle-specific code, only the loader that reads each activated
-bundle's manifest and dispatches to its stage script.
+bundle's manifest and dispatches to its stage script. process→action is a second queue hop,
+never a direct call: each stage publishes onto the next stage's own Valkey stream (§3.2's
+`produces`/`consumes`, §6.2's isolation keys) and only that stream connects them. A slow or
+long-running `action` handler backs up its *own* action-stage queue — bounded, spilling to the
+DLQ on overflow (`stream_pipeline.py:368-438`) — without back-pressuring or blocking `process`
+or `ingest`. Every stage is fully decoupled and scales independently.
 
 **What changes from the current single-winner model**: `app_binding.py`'s `resolve_app`
 (`app_binding.py:92-133`) picks exactly **one** App per `(tenant, community, feature)` slot.
@@ -308,6 +314,12 @@ because both existing schemes are visible in the codebase and neither is per-app
 | Design-doc target, **not yet implemented** | `2026-08-26-v3-scbm-apps-design.md:571-573` | `waddles:t:{tenant}:{stage}` — tenant-scoped, but still one shared stream per stage across every bundle |
 | **This proposal** | — | `waddles:t:{tenant}:c:{community}:app:{app_id}:{stage}` |
 
+`{stage}` takes all three values independently — `ingest`, `process`, and `action` each get
+their own stream under this key. The process→action queue hop (§1) is the stream at
+`waddles:t:{tenant}:c:{community}:app:{app_id}:action` — `process` publishes there (its
+`produces`), `action` consumes from there (its `consumes`); it is a stream like every other
+boundary, never a direct call between the two stage-runner containers.
+
 Config/state follow the same shape: `waddles:t:{tenant}:c:{community}:app:{app_id}:cfg` and
 `:state`. Tenant-wide activations (`community_id IS NULL` in `AppInstallation`,
 `app_binding.py:63,58-60`) use a literal `c:_tenant` segment rather than omitting the segment,
@@ -408,6 +420,14 @@ Stage specs (`spec.yaml`), abbreviated:
 - `ingest/spec.yaml`: watches chat for `!giveaway enter`; emits `giveaway.entry_detected {user_uuid, community_id, ts}` (PII-tokenized per `backend-database.md` — chat username resolved via the identity table, never carried in the event itself).
 - `process/spec.yaml`: accumulates entrants per active giveaway window in this instance's isolated state key (`waddles:t:{tenant}:c:{community}:app:waddles.bot.giveaway.giveaway-classic:state`); on window close, picks a winner, emits `giveaway.winner_selected {winner_uuid, giveaway_id}`.
 - `action/spec.yaml`: posts the winner announcement via the platform's outbound chat action.
+
+Two queue hops, not one: `ingest.produces["giveaway.entry_detected"]` ==
+`process.consumes["giveaway.entry_detected"]` is the ingest→process stream
+(`...:giveaway-classic:process`); `process.produces["giveaway.winner_selected"]` ==
+`action.consumes["giveaway.winner_selected"]` is the *second*, independent process→action
+stream (`...:giveaway-classic:action`, §6.2). `action` can take as long as posting the
+announcement takes without ever blocking `process` from picking the next window's winner —
+it only backs up its own `:action` stream.
 
 ### 8.1 Coexistence — 4 giveaway bundles in one community
 
