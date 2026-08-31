@@ -1,11 +1,15 @@
 """hub-api blueprint mounting registry.
 
 `register_blueprints(app)` is the single call that wires every versioned
-API group onto the Quart app. The 54 remaining controllers
-(docs/plans/2026-08-31-hubapi-node-to-quart-migration.md's per-phase
-sequence, M1..M9) land by adding a sub-blueprint to `routers/v1.py` or
-`routers/v2.py` and registering it there -- not by editing this file's
-logic. Health, MCP, and the two OpenAPI documents are infra-level
+API group onto the Quart app. `routers/v1.py`/`routers/v2.py` themselves
+auto-discover their groups (`routers/_discovery.py`) -- the 54 remaining
+controllers (docs/plans/2026-08-31-hubapi-node-to-quart-migration.md's
+per-phase sequence, M1..M9) land by dropping ONE new module,
+`blueprints/v1/<group>.py` or `blueprints/v2/<group>.py`, exposing a
+module-level `BLUEPRINTS: list[Blueprint]` -- never by editing
+`routers/v1.py`, `routers/v2.py`, or this file. That's the whole
+extension point: no shared file for ~10 parallel port agents to collide
+on. Health, MCP, and the two OpenAPI documents are infra-level
 blueprints wired directly in `app.py` alongside this call, not through
 here, since they aren't versioned business API groups.
 """

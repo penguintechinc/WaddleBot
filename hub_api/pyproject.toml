@@ -17,7 +17,7 @@ convention = "google"
 # The example blueprint asserts a tenant_middleware postcondition
 # (get_tenant_context always non-None on the success path) -- a defensive
 # invariant note, not a security assert-in-prod-strips-it concern.
-"blueprints/platform.py" = ["S101"]
+"blueprints/v2/platform.py" = ["S101"]
 
 [tool.mypy]
 python_version = "3.13"

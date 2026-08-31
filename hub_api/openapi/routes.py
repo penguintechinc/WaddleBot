@@ -46,7 +46,7 @@ async def public_login_spec() -> dict[str, Any]:
 async def full_spec() -> dict[str, Any]:
     """The complete, auto-generated OpenAPI document -- every mounted route.
 
-    Behind the same tenant + scope chain as `blueprints/platform.py`'s
+    Behind the same tenant + scope chain as `blueprints/v2/platform.py`'s
     example endpoints -- `require_scope("platform:read")` is deliberately
     the same scope, so a caller entitled to read hub-api's platform
     surface is also entitled to see what surface exists.

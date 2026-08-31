@@ -24,7 +24,7 @@ import pytest
 from quart import Quart
 from quart_schema import Info, QuartSchema
 
-from blueprints.platform import platform_bp
+from blueprints.v2.platform import platform_bp
 from openapi.routes import openapi_bp
 
 
@@ -84,6 +84,6 @@ class TestFullSpecAuthGate:
         body = await response.get_json()
         # More than the public doc's single path -- proves this is the
         # generated full document, not the curated public one.
-        assert "/core/platform/default/status" in body["paths"]
-        assert "/core/platform/default/echo" in body["paths"]
+        assert "/api/v2/core/platform/default/status" in body["paths"]
+        assert "/api/v2/core/platform/default/echo" in body["paths"]
         assert len(body["paths"]) > 1

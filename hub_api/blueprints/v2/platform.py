@@ -1,4 +1,4 @@
-"""Example v2 blueprint: hub-api's `core.platform` surface.
+"""v2 `core.platform` group -- the copy-me exemplar for every future port group.
 
 Proves, end-to-end, the per-controller port pattern every other
 controller in docs/plans/2026-08-31-hubapi-node-to-quart-migration.md's
@@ -13,7 +13,13 @@ checklist (§4) copies when porting a Node controller into hub-api:
     -> quart-schema @validate_response (explicit response DTO --
       security.md Output Validation: never a raw model or **dict)
 
-Mounted under `/api/v2/core/platform/default/*` -- module=core,
+Matches the discovery contract every v2 port group follows: a module-
+level `BLUEPRINTS: list[Blueprint]`, found and mounted by `routers/v2.py`'s
+auto-discovery -- no edit to `routers/v2.py` needed. `url_prefix` is
+already the FULL `/api/v2/...` path (discovery registers each blueprint
+as-is, with no additional prefix wrapping).
+
+Mounted at `/api/v2/core/platform/default/*` -- module=core,
 surface=platform, app_bundle=default (the first-party default binding;
 see flask_core/app_manifest.py), matching the v2
 `/api/v2/{module}/{surface}/{app_bundle}/{target}` shape from the
@@ -30,7 +36,7 @@ from flask_core.tenancy import get_tenant_context, tenant_middleware
 from quart import Blueprint, request
 from quart_schema import validate_request, validate_response
 
-platform_bp = Blueprint("core_platform_v2", __name__, url_prefix="/core/platform/default")
+platform_bp = Blueprint("core_platform_v2", __name__, url_prefix="/api/v2/core/platform/default")
 
 
 @dataclass(slots=True, frozen=True)
@@ -91,3 +97,6 @@ async def platform_echo(data: PlatformEchoRequest) -> PlatformEchoResponse:
     # Same postcondition/rationale as platform_status above.
     assert ctx is not None  # nosec B101
     return PlatformEchoResponse(echoed=data.message, tenant=ctx.tenant_slug)
+
+
+BLUEPRINTS: list[Blueprint] = [platform_bp]
