@@ -13,9 +13,15 @@ table is a **proposal**, called out as such.
 **An App Bundle *is* the App** — not a grouping of multiple Apps. A bundle is the packaged
 combination of `{config + spec + script}` for each pipeline stage (`ingest` / `process` /
 `action`) plus one top-level manifest (`bundle.yaml`). A bundle may implement 1, 2, or all 3
-stages; it omits directories for stages it doesn't touch. This is the authoring-time
+pipeline stages; it omits directories for stages it doesn't touch. This is the authoring-time
 counterpart to the runtime `AppManifest` dataclass already defined in
 `libs/flask_core/flask_core/app_manifest.py:93-114`.
+
+A bundle may additionally declare a 4th component, `presentation` (§3.2a) — a per-community
+HTML/JS overlay rendered client-side in an OBS browser source by `svc-presentation`, not an
+async pipeline stage. It sits outside the ingest→process→action queue chain entirely: no
+`entrypoint`, no Valkey produce/consume boundary of its own (though it may `consume` a stream
+for live data), just a served overlay.
 
 Pipeline: **ingest →[Valkey queue]→ process →[Valkey queue]→ action** — a queue at *every*
 stage boundary, not just the first. `svc-ingest` / `svc-process` / `svc-action`
@@ -53,16 +59,22 @@ giveaway-classic/
 │   ├── handler.py
 │   ├── config.yaml
 │   └── spec.yaml
-└── action/
-    ├── handler.py
-    ├── config.yaml
-    └── spec.yaml
+├── action/
+│   ├── handler.py
+│   ├── config.yaml
+│   └── spec.yaml
+└── presentation/                 # optional 4th component (§3.2a) -- no script stage
+    ├── overlay.html               # html_entrypoint
+    ├── overlay.js                 # assets
+    └── overlay.css                # assets
 ```
 
 A bundle implementing only `process` + `action` (e.g. a pure moderation-decision bundle
 triggered by another bundle's ingest) omits the `ingest/` directory entirely — `bundle.yaml`'s
 `stages` map only lists what exists, mirroring how `surfaces` today is an optional, possibly-
-partial tuple (`app_manifest.py:110`, `parse_manifest` never requires all three).
+partial tuple (`app_manifest.py:110`, `parse_manifest` never requires all three). `presentation/`
+follows the same optionality — most bundles have no overlay and omit the directory and the
+`stages.presentation` entry entirely.
 
 ---
 
@@ -81,12 +93,12 @@ partial tuple (`app_manifest.py:110`, `parse_manifest` never requires all three)
 | `is_default` | bool | `app_manifest.py:113` | unchanged |
 | `config_schema` | dict | `app_manifest.py:112` | unchanged |
 | `permissions` | tuple[str] | `app_manifest.py:111` | **renamed** to `requires_scopes` in bundle.yaml (design doc's own term, `2026-08-26-v3-scbm-apps-design.md:409`) — reconciliation in §3.3 |
-| `surfaces` | tuple of stage **names** only, `{ingest,process,action}` | `app_manifest.py:110,51` | **superseded** by `stages` map (§3.2) — `AppManifest.surfaces` stays as a derived compat field |
+| `surfaces` | tuple of stage **names** only, `{ingest,process,action,presentation}` | `app_manifest.py:110,63` | **superseded** by `stages` map (§3.2) — `AppManifest.surfaces` stays as a derived compat field; now may include `presentation` (§3.2a), a non-script surface |
 | `execution_model` | `native` \| `thirdparty` | — | **NEW** — how the bundle runs, orthogonal to `provider` (a `builtin` bundle may still front a `thirdparty` endpoint, e.g. wrapping a SaaS API) |
 | `compatible_with` | list[app_id], optional | — | **NEW** (§7) |
 | `incompatible_with` | list[app_id], optional | — | **NEW** (§7) |
 | `platform_compatibility` | object (§3.4) | — | **NEW** |
-| `stages` | map, keyed by stage name (§3.2) | — | **NEW** — richer replacement for `surfaces` |
+| `stages` | map, keyed by stage name (§3.2) | — | **NEW** — richer replacement for `surfaces`; may include a `presentation` entry (§3.2a) alongside/instead of `ingest`/`process`/`action` |
 
 ### 3.2 `stages` map
 
@@ -134,6 +146,49 @@ stage invokes it."* A `thirdparty`-`execution_model` stage entry is therefore al
 single-stage block; a bundle mixing native `process` + thirdparty `action` is valid (native
 stage calls out to the endpoint at the process→action stream boundary), but a single stage
 block is never half-native/half-network.
+
+### 3.2a `presentation` — the 4th bundle component
+
+**NEW.** `presentation` is a `stages` map entry like `ingest`/`process`/`action`, but it is not
+a pipeline stage — it declares a client-side HTML/JS overlay, not an async event script. It has
+no `entrypoint`, is never invoked by a stage-runner, and sits outside the
+ingest→process→action queue chain entirely (§1). Concretely: a giveaway bundle's `action` stage
+posts the winner announcement to chat (§9); its `presentation` component is the spinning-wheel
+overlay a streamer drops into OBS as a browser source so viewers watching the stream see the
+draw happen live.
+
+```yaml
+stages:
+  presentation:
+    html_entrypoint: "presentation/overlay.html"
+    assets:
+      - "presentation/overlay.js"
+      - "presentation/overlay.css"
+    browser_source_path: "/presentation/waddles.bot.giveaway.giveaway-classic"
+    consumes: ["giveaway.winner_selected"]   # optional -- live data, not a pipeline hop
+```
+
+| Field | Type | Meaning |
+|---|---|---|
+| `html_entrypoint` | str, **required** | path to the overlay's HTML file — the asset `svc-presentation` serves at `browser_source_path` |
+| `assets` | list[str], optional | the overlay's JS/CSS/image files, served alongside `html_entrypoint` |
+| `browser_source_path` | str, **required** | the per-community route `svc-presentation` serves this overlay at — the URL a streamer pastes into an OBS browser source |
+| `consumes` | list[str], optional | Valkey stream(s) the overlay's own client-side JS polls/subscribes to for live data (e.g. `giveaway.winner_selected`) — the overlay's read path into the pipeline, not a stage hop |
+
+Not used by a `presentation` entry: `entrypoint`, `produces`, `config`, `spec`, and the
+thirdparty-only fields (`execution_model`/`communication_model`/`webhook_url`/`api_base_url`/
+`secret_ref`/`timeout_ms`) — those describe an invoked stage, and `presentation` is served, not
+invoked. `parse_manifest` rejects a `presentation` entry missing `html_entrypoint` or declaring
+a script `entrypoint`, and rejects `html_entrypoint` on any of `ingest`/`process`/`action` —
+each surface's shape is enforced, not just documented (`app_manifest.py`'s
+`_compile_stage_spec`).
+
+`svc-presentation` is a new, 4th stage-runner-style container alongside `svc-ingest`/
+`svc-process`/`svc-action` (§1, §2), but it does not participate in the poll/reconcile code
+distribution model of §6.2 the same way — it serves static HTML/JS/CSS per activated bundle at
+a per-community `browser_source_path` rather than executing an `entrypoint` per event. Exact
+distribution/caching mechanics for `presentation` assets are out of scope for this subsection;
+they follow the same `app_catalog`/`app_activations` lifecycle (§5) as any other component.
 
 ### 3.3 `permissions` → `requires_scopes` reconciliation
 
@@ -196,6 +251,11 @@ this field; it does not replace `surfaces`.
 | `ingest` | raw platform event (Twitch/Discord/etc. payload or webhook body) + tenant/community context + this instance's `config.yaml` merged with runtime overrides (§5) | this bundle's isolated `process`-stage stream (§7.2) | `penguin-sal` reference in `config.yaml`, never inline value | `requires_scopes` declared for the `ingest` stage, always ⊆ bundle-level `requires_scopes` |
 | `process` | one event off this bundle's isolated `process` stream, tenant/community context, config | this bundle's isolated `action`-stage stream, or the DLQ on poison (`stream_pipeline.py:368-438`, `move_to_dlq`) | same | same |
 | `action` | one event off this bundle's isolated `action` stream | nothing (terminal) — or, for `thirdparty` execution, a network call per §8 | same | same |
+
+`presentation` (§3.2a) is deliberately **not** in this table — it has no entry point, receives
+no event off a queue, and emits nothing. It is served static HTML/JS/CSS, optionally reading
+live data by having its own client-side JS `consume` a stream directly; it does not participate
+in the `entrypoint`/DLQ/idempotency contract below.
 
 Every handler is `async def` (`entrypoint: "module.py:function"`, awaited by the stage-runner
 loader) per `backend-python.md`. Consumers **must be idempotent** — at-least-once delivery is
@@ -572,3 +632,4 @@ other can be turned on.
 | No platform-version compatibility declaration anywhere in `AppManifest` or `marketplace_modules` | `platform_compatibility` (`tested_with`/`min_version`/`max_version`) on `bundle.yaml`, enforced at install/available/activate |
 | `permissions` field name on `AppManifest` (`app_manifest.py:111`) vs. `requires_scopes` in the design doc's own example (`2026-08-26-v3-scbm-apps-design.md:409`) | one name, `requires_scopes`, used consistently in `bundle.yaml` (§3.3) |
 | No distribution mechanism — `AppRegistry` is load-once at process startup (`app_registry.py:16-21`), nothing pushes/pulls bundle code to a running container | hub-api is the sole `app_catalog` writer (primary); stage-runners poll hub-api and reconcile their own stage's code; routing reads go to the read replica, never hub-api or the primary (§6) |
+| No presentation/UI component anywhere in `AppManifest`/`bundle.yaml` — a bundle is only ever `{ingest,process,action}` script stages | `presentation` (§3.2a), a 4th, non-script bundle component: a client-side HTML/JS overlay (`html_entrypoint`/`assets`/`browser_source_path`) served per-community by `svc-presentation` for an OBS browser source, outside the ingest→process→action queue chain |

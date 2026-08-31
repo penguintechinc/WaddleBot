@@ -60,7 +60,14 @@ KNOWN_MODULES = frozenset({
 
 # Pipeline stages an App's manifest may declare it touches ("stages" in the
 # design doc's YAML example; named "surfaces" per this task's schema).
-KNOWN_SURFACES = frozenset({"ingest", "process", "action"})
+# ingest/process/action are async script stages (StageSpec.entrypoint,
+# executed by the svc-{ingest,process,action} stage-runners). presentation
+# is a 4th, non-script surface: a per-community HTML/JS overlay (e.g. a
+# giveaway wheel) rendered client-side in an OBS browser source by
+# svc-presentation, described by StageSpec.html_entrypoint/assets/
+# browser_source_path rather than an async entrypoint -- see
+# docs/plans/2026-08-31-app-bundle-sdk-design.md §3.2a.
+KNOWN_SURFACES = frozenset({"ingest", "process", "action", "presentation"})
 
 KNOWN_PROVIDERS = frozenset({"builtin", "thirdparty"})
 
@@ -109,6 +116,14 @@ REASON_UNKNOWN_SURFACE = "unknown_surface"
 REASON_INVALID_EXECUTION_MODEL = "invalid_execution_model"
 REASON_BAD_PLATFORM_COMPAT_SEMVER = "bad_platform_compat_semver"
 REASON_INVALID_COMPAT_APP_ID = "invalid_compat_app_id"
+# App Bundle SDK spec §3.2a -- presentation component (4th bundle surface,
+# client-side HTML/JS overlay, not a script stage): a presentation stage
+# entry must declare html_entrypoint and must not declare a script
+# entrypoint; a script stage (ingest/process/action) must not declare
+# html_entrypoint.
+REASON_PRESENTATION_MISSING_HTML_ENTRYPOINT = "presentation_missing_html_entrypoint"
+REASON_PRESENTATION_HAS_SCRIPT_ENTRYPOINT = "presentation_has_script_entrypoint"
+REASON_SCRIPT_STAGE_HAS_HTML_ENTRYPOINT = "script_stage_has_html_entrypoint"
 
 _REQUIRED_STR_FIELDS = ("app_id", "name", "version", "feature", "module", "provider")
 
@@ -131,6 +146,16 @@ class StageSpec:
     cover both ``webhook_push`` (uses ``webhook_url``) and ``rest_pull``
     (uses ``api_base_url``) communication models with one shared
     ``secret_ref``/``timeout_ms`` pair rather than duplicating them.
+
+    A ``presentation`` stage entry (§3.2a) is a different shape entirely --
+    it has no async ``entrypoint``: ``html_entrypoint`` (the overlay HTML
+    file), ``assets`` (its JS/CSS/image files), and ``browser_source_path``
+    (the per-community route ``svc-presentation`` serves it at) describe a
+    client-side OBS browser-source overlay instead of an invoked script.
+    ``consumes`` is still meaningful (the Valkey streams the overlay's own
+    JS polls/subscribes to for live data, e.g. giveaway entrant counts);
+    ``produces``/``config``/``spec`` and the thirdparty-only fields above
+    are not used by a presentation stage.
     """
 
     entrypoint: Optional[str] = None
@@ -144,6 +169,9 @@ class StageSpec:
     api_base_url: Optional[str] = None
     secret_ref: Optional[str] = None
     timeout_ms: Optional[int] = None
+    html_entrypoint: Optional[str] = None
+    assets: Tuple[str, ...] = ()
+    browser_source_path: Optional[str] = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -209,14 +237,43 @@ def _require_str(data: Dict[str, Any], key: str) -> str:
 
 
 def _compile_stage_spec(stage_name: str, raw: Dict[str, Any]) -> StageSpec:
-    """Validate one ``stages`` map key/entry pair and build its :class:`StageSpec`."""
+    """
+    Validate one ``stages`` map key/entry pair and build its :class:`StageSpec`.
+
+    ``presentation`` (§3.2a) is not a script stage: it requires
+    ``html_entrypoint`` and rejects a script ``entrypoint``; the three
+    script stages (``ingest``/``process``/``action``) are the reverse --
+    they reject ``html_entrypoint``, which only ever describes a
+    client-side overlay.
+    """
     if stage_name not in KNOWN_SURFACES:
         raise ManifestError(
             REASON_UNKNOWN_SURFACE,
             f"stage {stage_name!r} is not one of {sorted(KNOWN_SURFACES)}",
         )
+
+    entrypoint = raw.get("entrypoint")
+    html_entrypoint = raw.get("html_entrypoint")
+
+    if stage_name == "presentation":
+        if not html_entrypoint:
+            raise ManifestError(
+                REASON_PRESENTATION_MISSING_HTML_ENTRYPOINT,
+                "presentation stage requires html_entrypoint",
+            )
+        if entrypoint:
+            raise ManifestError(
+                REASON_PRESENTATION_HAS_SCRIPT_ENTRYPOINT,
+                "presentation stage must not declare a script entrypoint",
+            )
+    elif html_entrypoint:
+        raise ManifestError(
+            REASON_SCRIPT_STAGE_HAS_HTML_ENTRYPOINT,
+            f"stage {stage_name!r} is a script stage and must not declare html_entrypoint",
+        )
+
     return StageSpec(
-        entrypoint=raw.get("entrypoint"),
+        entrypoint=entrypoint,
         consumes=tuple(raw.get("consumes", ())),
         produces=tuple(raw.get("produces", ())),
         config=raw.get("config"),
@@ -227,6 +284,9 @@ def _compile_stage_spec(stage_name: str, raw: Dict[str, Any]) -> StageSpec:
         api_base_url=raw.get("api_base_url"),
         secret_ref=raw.get("secret_ref"),
         timeout_ms=raw.get("timeout_ms"),
+        html_entrypoint=html_entrypoint,
+        assets=tuple(raw.get("assets", ())),
+        browser_source_path=raw.get("browser_source_path"),
     )
 
 
@@ -269,12 +329,17 @@ def parse_manifest(data: Dict[str, Any]) -> AppManifest:
     5. ``app_id``'s feature-prefix (``app_id`` minus its trailing App
        segment) not equal to ``feature``
     6. ``provider`` outside ``{builtin, thirdparty}``
-    7. any ``surfaces``/``stages`` entry outside ``{ingest, process, action}``
+    7. any ``surfaces``/``stages`` entry outside
+       ``{ingest, process, action, presentation}``
     8. ``execution_model`` outside ``{native, thirdparty}``
     9. ``platform_compatibility.min_version``/``max_version`` that are not
        valid SemVer 2.0.0
     10. any ``compatible_with``/``incompatible_with`` entry that is not a
         namespaced ``app_id``
+    11. a ``presentation`` stage entry in ``stages`` missing
+        ``html_entrypoint``, or declaring a script ``entrypoint``
+    12. an ``ingest``/``process``/``action`` stage entry in ``stages``
+        declaring ``html_entrypoint``
 
     Two things this function deliberately does **not** check (per App
     Bundle SDK spec §3.5, left for a later, registry-aware pass): whether
