@@ -9,11 +9,12 @@ select = ["E", "W", "F", "I", "N", "D", "UP", "B", "ASYNC", "S"]
 convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
-# Test names are self-documenting (pytest convention); S105/S106 flag the
-# fixed test-only JWT secret that deliberately mirrors flask_core's own
-# `os.getenv("SECRET_KEY", "change-me-in-production")` default, not a real
-# credential. S101 (assert) is standard pytest usage.
-"tests/*" = ["D100", "D101", "D102", "D103", "D104", "S101", "S105", "S106"]
+# Test names are self-documenting (pytest convention); S105/S106/S107 flag
+# fixed test-only passwords/JWT secrets (e.g. mirroring flask_core's own
+# `os.getenv("SECRET_KEY", "change-me-in-production")` default, or seed-user
+# helper default passwords), not real credentials. S101 (assert) is standard
+# pytest usage.
+"tests/*" = ["D100", "D101", "D102", "D103", "D104", "S101", "S105", "S106", "S107"]
 # The example blueprint asserts a tenant_middleware postcondition
 # (get_tenant_context always non-None on the success path) -- a defensive
 # invariant note, not a security assert-in-prod-strips-it concern.
@@ -28,6 +29,21 @@ convention = "google"
 "blueprints/v1/bot.py" = ["N815", "S101"]
 "services/bot_shoutout.py" = ["N815"]
 "services/bot_ai_knowledge.py" = ["N815"]
+# M1 Core Identity/Auth group -- postcondition asserts, same rationale as
+# blueprints/v2/platform.py above (register()/get_my_profile() always
+# return a populated result on this code path; worst case under -O is an
+# AttributeError -> 500, never an auth bypass). Also v1 response/request
+# DTOs are wire contracts pinned to `frontend/src/services/api.js` --
+# camelCase field names are deliberate (security.md Output Validation:
+# the JSON key IS the field name, no alias mechanism in this app's
+# QuartSchema setup -- convert_casing defaults False and app.py doesn't
+# opt in), not a naming-convention slip.
+"blueprints/v1/auth.py" = ["S101", "N815"]
+"blueprints/v1/identity.py" = ["N815"]
+"blueprints/v1/passkey.py" = ["N815"]
+"blueprints/v1/profile.py" = ["N815"]
+"blueprints/v1/user_management.py" = ["N815"]
+"services/profile_service.py" = ["S101"]
 
 [tool.mypy]
 python_version = "3.13"
@@ -48,3 +64,9 @@ exclude = ["^\\.venv/", "^tests/"]
 module = ["flask_core.*", "pydal.*"]
 ignore_missing_imports = true
 follow_imports = "skip"
+
+# boto3/botocore/webauthn ship no py.typed marker either -- same boundary
+# override, third-party-import only, not a relaxation of hub-api's own bar.
+[[tool.mypy.overrides]]
+module = ["boto3.*", "botocore.*", "webauthn.*"]
+ignore_missing_imports = true

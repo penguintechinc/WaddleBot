@@ -13,15 +13,24 @@ pydal>=20240906.1,<20260601
 psycopg2-binary>=2.9.9,<3.0.0
 pyjwt>=2.13.0,<3.0.0
 
-# Bot module (M5, blueprints/v1/bot.py + services/bot_*.py):
-# httpx -- outbound proxy calls to server-manager-service/ai-interaction/
-#   Ollama (already a flask_core transitive dep for the same purpose --
-#   see libs/flask_core/requirements.in's "HTTP Client (async)" -- listed
-#   directly here too since hub-api's own app code imports it, per this
-#   file's header comment).
+# M1 Core Identity/Auth group (bcrypt, httpx come transitively via flask_core):
+webauthn>=3.0.0,<4.0.0  # passkey_service.py -- WebAuthn/FIDO2 registration+auth
+boto3>=1.35.0,<2.0.0  # storage_service.py -- S3/MinIO avatar storage only, no local-disk fallback
+# Async HTTP client -- blueprints/v1/event.py's EventCalendarProxyClient
+# forwards to the calendar-interaction service; pin matches
+# action/interactive/calendar_interaction_module/requirements.in's own
+# httpx pin (same downstream contract, same client library). Also used
+# by this Dockerfile's own HEALTHCHECK, which imported it unpinned
+# before this port added a real runtime dependency on it, and by the
+# Bot module (M5, blueprints/v1/bot.py + services/bot_*.py) for outbound
+# proxy calls to server-manager-service/ai-interaction/Ollama (already a
+# flask_core transitive dep for the same purpose -- see
+# libs/flask_core/requirements.in's "HTTP Client (async)" -- listed
+# directly here too since hub-api's own app code imports it, per this
+# file's header comment).
+httpx>=0.27.0,<0.28.0
 # cryptography -- AES-256-GCM for server_status_configs.credential_enc
 #   (services/bot_crypto.py ports utils/encryption.js's exact wire format).
-httpx>=0.27.0,<0.28.0
 # 44.0.1 floor: PYSEC-2026-35/1284/2141/3553/3554, GHSA-537c-gmf6-5ccf --
 # pip-audit flagged 43.0.3 (`test-security`'s pip-audit gate) before this
 # floor was raised.

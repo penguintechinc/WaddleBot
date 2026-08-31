@@ -36,6 +36,8 @@ def _test_config() -> HubAPIConfig:
         posthog_api_key=None,
         posthog_host="https://license.penguintech.io",
         license_server_url="https://license.penguintech.io",
+        identity_callback_base_url="http://localhost:8204",
+        frontend_origin="http://localhost:5173",
         log_level="INFO",
     )
 
@@ -76,12 +78,17 @@ class TestHealthEndpoint:
 
 
 class TestVersionedRoutersMounted:
-    async def test_v1_login_stub_reachable(self, app: Quart) -> None:
-        """v1 frozen router mounted -- the M1 placeholder answers (501), not 404."""
+    async def test_v1_login_reachable(self, app: Quart) -> None:
+        """v1 frozen router mounted -- the real M1 auth group answers (400), not 404.
+
+        400 comes from quart-schema's @validate_request rejecting the empty
+        body. Was a 501 placeholder before M1 (Core Identity/Auth) replaced
+        the stub -- see `tests/test_v1_auth_blueprint.py` for the full suite.
+        """
         async with app.test_app():
             client = app.test_client()
             response = await client.post("/api/v1/auth/login", json={})
-            assert response.status_code == 501
+            assert response.status_code == 400
 
     async def test_v2_platform_example_reachable_but_gated(self, app: Quart) -> None:
         """v2 additive router mounted -- reaches tenant_middleware (401), not 404."""

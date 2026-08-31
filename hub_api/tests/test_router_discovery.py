@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import Any
 
 from quart import Quart
+from quart_schema import QuartSchema
 
 import blueprints.v2 as v2_package
 from routers._discovery import discover_blueprints
@@ -103,9 +104,12 @@ class TestRealPackageDiscovery:
 
     async def test_register_v1_mounts_the_real_auth_group(self) -> None:
         app = Quart(__name__)
+        QuartSchema(app)  # required: /login's @validate_request reads QUART_SCHEMA_CONVERT_CASING
         register_v1(app)
         response = await app.test_client().post("/api/v1/auth/login", json={})
-        assert response.status_code == 501  # blueprints/v1/auth.py's M1 stub, found by discovery
+        # blueprints/v1/auth.py's real M1 port, found by discovery -- 400 (quart-schema
+        # @validate_request rejects the empty body), not 404. Was 501 (the pre-M1 stub).
+        assert response.status_code == 400
 
     async def test_register_v2_mounts_the_real_platform_group(self, tenant_db: Any) -> None:
         app = Quart(__name__)
