@@ -1,0 +1,7 @@
+# flask_core.get_platform_version() reads flask_core/VERSION at runtime
+# (see flask_core/platform_version.py). Every service Dockerfile does
+# `COPY libs/flask_core ... && pip install .` -- the file must ship as
+# installed package data, not just live in the source tree, so it is
+# resolvable via Path(__file__).parent after installation into
+# site-packages too.
+include flask_core/VERSION
