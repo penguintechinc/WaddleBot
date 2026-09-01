@@ -131,6 +131,16 @@ convention = "google"
 # (inline `# noqa` at each call site, matching every other service
 # module's own convention -- see `services/auth_service.py`/
 # `services/community_activity.py`).
+# M4 Marketplace Billing group (subscriptions/payments/premium/discount
+# codes) -- request/response DTOs are wire contracts pinned to
+# `frontend/src/services/api.js` (`communityId`, `discountType`,
+# `successUrl`, ...), camelCase deliberate per the same rationale as
+# `blueprints/v1/auth.py` above. S101 covers this group's
+# `_require_community_admin`/`cancel_premium_subscription` postcondition
+# asserts (tenant_middleware/just-updated-row invariants, never a runtime
+# auth decision -- see those call sites' own comments).
+"blueprints/v1/marketplace_billing.py" = ["N815", "S101"]
+"services/marketplace_billing_service.py" = ["N815", "S101"]
 
 [tool.mypy]
 python_version = "3.13"
