@@ -280,9 +280,7 @@ class TestRequireCommunityAdminBypasses:
         dal = automation_db.dal
         user_id = dal.hub_users.insert(username="tadmin", is_super_admin=False)
         own_tenant_row = dal(dal.tenants.slug == TENANT_SLUG).select().first()
-        dal.tenant_admins.insert(
-            tenant_id=own_tenant_row.id, user_id=user_id, role="tenant-admin"
-        )
+        dal.tenant_admins.insert(tenant_id=own_tenant_row.id, user_id=user_id, role="tenant-admin")
         other_tenant_id = dal.tenants.insert(slug="other-tenant", is_active=True)
         other_community_id = dal.communities.insert(
             name="other-tenant-community", tenant_id=other_tenant_id
@@ -349,20 +347,17 @@ class TestRequireCommunityAdminBypasses:
 
 
 class TestResolveCommunityMembershipScopedTenantAdminBypass:
-    """`resolve_community_membership_scoped`'s tenant-admin bypass had the SAME cross-tenant
+    """`resolve_community_membership_scoped`'s tenant-admin bypass had the same IDOR shape.
 
-    IDOR shape as `require_community_admin`'s (same security hotfix, same file): the
-    `_is_tenant_admin()` bypass check ran BEFORE the `communities.tenant_id` ownership
-    check, so it never actually benefited from that check despite this module's own
-    docstring claiming otherwise. Covered here directly (not via a blueprint) against
-    `automation_db`, which already binds `communities`/`tenant_admins`/`community_members`/
-    `community_roles`/`hub_users` -- no need for the M7 Streaming group's `streaming_db`
-    fixture just to exercise this function in isolation.
+    Same security hotfix, same file: the `_is_tenant_admin()` bypass check ran BEFORE the
+    `communities.tenant_id` ownership check, so it never actually benefited from that check
+    despite this module's own docstring claiming otherwise. Covered here directly (not via
+    a blueprint) against `automation_db`, which already binds `communities`/`tenant_admins`/
+    `community_members`/`community_roles`/`hub_users` -- no need for the M7 Streaming group's
+    `streaming_db` fixture just to exercise this function in isolation.
     """
 
-    async def test_tenant_admin_bypass_within_own_tenant_is_admin(
-        self, automation_db: Any
-    ) -> None:
+    async def test_tenant_admin_bypass_within_own_tenant_is_admin(self, automation_db: Any) -> None:
         """Positive case: tenant-admin authorizing a community IN their own tenant succeeds."""
         dal = automation_db.dal
         user_id = dal.hub_users.insert(username="tadmin", is_super_admin=False)
@@ -407,9 +402,7 @@ class TestResolveCommunityMembershipScopedTenantAdminBypass:
         dal = automation_db.dal
         user_id = dal.hub_users.insert(username="tadmin", is_super_admin=False)
         own_tenant_row = dal(dal.tenants.slug == TENANT_SLUG).select().first()
-        dal.tenant_admins.insert(
-            tenant_id=own_tenant_row.id, user_id=user_id, role="tenant-admin"
-        )
+        dal.tenant_admins.insert(tenant_id=own_tenant_row.id, user_id=user_id, role="tenant-admin")
         other_tenant_id = dal.tenants.insert(slug="other-tenant", is_active=True)
         other_community_id = dal.communities.insert(
             name="other-tenant-community", tenant_id=other_tenant_id
