@@ -156,6 +156,16 @@ convention = "google"
 # `assert ctx is not None` tenant_middleware postcondition as
 # blueprints/v2/platform.py.
 "blueprints/v1/distribution.py" = ["N815", "S101"]
+# Music-station provider resolvers -- `ProviderUnavailable`/`TrackNotFound`
+# are the literal exception names specified by the resolve()/search()
+# contract these modules implement (not a naming-convention slip; adding
+# "Error" would break every caller's `except ProviderUnavailable:`).
+# S105 on `_TOKEN_URL`/`_TOKEN_FILE` false-positives on the substring
+# "token" -- both are a public OAuth token-endpoint URL and a filesystem
+# path, never a credential value.
+"services/music_providers/errors.py" = ["N818"]
+"services/music_providers/spotify.py" = ["S105"]
+"services/music_providers/youtube.py" = ["S105"]
 
 [tool.mypy]
 python_version = "3.13"
