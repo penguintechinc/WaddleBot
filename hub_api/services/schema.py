@@ -2264,11 +2264,12 @@ def bind_lifecycle_tables(dal: Any, *, migrate: bool = False) -> None:
     """Define `app_catalog` / `app_tenant_availability` / `app_activations` (App Bundle 3-tier).
 
     Schema owned by `config/postgres/migrations/069_app_bundle_tiers.sql`
-    (+ `070_app_bundle_catalog_name.sql`'s `app_catalog.name` column) --
-    `migrate=False` always in production, same "this process never issues
-    DDL" invariant every `bind_*_tables()` function in this file documents
-    (see `bind_auth_tables()`'s own docstring). `migrate=True` is
-    test-only (`hub_api/PORTING.md` Gotcha #2): pydal never issues
+    (+ `070_app_bundle_catalog_name.sql`'s `app_catalog.name` column,
+    `071_app_catalog_stages.sql`'s `app_catalog.stages` column -- see
+    below) -- `migrate=False` always in production, same "this process
+    never issues DDL" invariant every `bind_*_tables()` function in this
+    file documents (see `bind_auth_tables()`'s own docstring). `migrate=True`
+    is test-only (`hub_api/PORTING.md` Gotcha #2): pydal never issues
     `CREATE TABLE` DDL against the throwaway sqlite file otherwise.
 
     `libs/flask_core/flask_core/app_bundle_tables.py::init_app_bundle_tables`
@@ -2278,7 +2279,7 @@ def bind_lifecycle_tables(dal: Any, *, migrate: bool = False) -> None:
     function is a parallel, hub-api-owned definition (not a wrapper around
     that one) so `migrate` can thread through normally; field lists are
     kept in lockstep with `app_bundle_tables.py`'s own (and with migration
-    069/070's columns) -- verify both if either ever drifts.
+    069/070/071's columns) -- verify both if either ever drifts.
 
     Plain `"integer"`/`"string"` FK-shaped columns (`tenant_id`,
     `community_id`, `app_id` cross-references), not pydal `"reference ..."`
@@ -2295,7 +2296,23 @@ def bind_lifecycle_tables(dal: Any, *, migrate: bool = False) -> None:
     `app.py::_bind_reference_tables` (append-only per this port's task
     scope) -- idempotency guard below makes a second call (e.g. from a
     test fixture that also wants `migrate=True`) a cheap no-op check
-    rather than a `pydal` "table already defined" error.
+    rather than a `pydal` "table already defined" error. This is also the
+    ONLY `app_catalog`/`app_tenant_availability`/`app_activations`
+    definition that ever actually runs in production: this function
+    registers these three tables before any request is served, so
+    `blueprints/v1/distribution.py`'s own lazy `bind_app_bundle_tables()`
+    call (Distribution-API port group, `services/distribution_service.py`)
+    always hits ITS OWN identical idempotency guard and no-ops -- the two
+    functions independently defined the same three tables (parallel port
+    tasks, same precedent `bind_admin_tables`'s `community_servers` vs
+    `bind_streaming_tables`'s own copy already sets in this file), so
+    `stages` (needed only by the Distribution API's own code) is added
+    HERE, not left in the shadowed definition, so it's actually present in
+    production. `bind_app_bundle_tables()`'s own field list below is kept
+    in lockstep with this one (same plain-FK types, same lengths) so a
+    test fixture calling it directly (`tests/conftest.py`) builds the
+    identical schema this function does -- no split-brain between the two
+    entry points.
     """
     if "app_catalog" in dal.tables:
         return
@@ -2315,6 +2332,93 @@ def bind_lifecycle_tables(dal: Any, *, migrate: bool = False) -> None:
         Field("platform_compatibility", "json", notnull=True),
         Field("status", "string", length=20, default="active"),
         Field("installed_at", "datetime"),
+        # migration 071 -- {"ingest": {"entrypoint", "config", "spec"}, ...},
+        # keyed by stage name. Added by the Distribution-API port group
+        # (`bind_app_bundle_tables()` below) -- see this function's own
+        # docstring for why it lives here, not there. default={} so a
+        # pre-071 row (or a row written before this column existed) reads
+        # back as an empty dict, never None.
+        Field("stages", "json", default={}),
+        primarykey=["app_id"],
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "app_tenant_availability",
+        Field("tenant_id", "integer", notnull=True),
+        Field("app_id", "string", length=255, notnull=True),
+        Field("available", "boolean", default=True),
+        Field("config_defaults", "json"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "app_activations",
+        Field("community_id", "integer", notnull=True),
+        Field("tenant_id", "integer", notnull=True),
+        Field("app_id", "string", length=255, notnull=True),
+        Field("enabled", "boolean", default=True),
+        Field("config", "json"),
+        Field("activated_by", "integer"),
+        Field("activated_at", "datetime"),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+
+def bind_app_bundle_tables(dal: Any, *, migrate: bool = False) -> None:
+    """Define `app_catalog`/`app_tenant_availability`/`app_activations` for the distribution API.
+
+    `app.py` is frozen for this port (same rationale as `bind_community_authz_tables`/
+    `bind_privacy_tables` above) -- called lazily, idempotent, from
+    `blueprints/v1/distribution.py`'s own request path rather than at app
+    startup. Depends on `tenants`/`communities` already being bound on
+    `dal` -- both are unconditionally bound by `app.py::_bind_reference_tables`
+    before any request is served, so this ordering is always satisfied in
+    production; test fixtures bind them via `bind_auth_tables()` first.
+
+    SHADOWED IN PRODUCTION by `bind_lifecycle_tables()` above: that
+    function is called unconditionally at the END of
+    `app.py::_bind_reference_tables`, so `app_catalog` already exists on
+    `dal` by the time any request handler runs -- this function's own
+    `if "app_catalog" in dal.tables: return` guard then no-ops every time
+    in production. Field lists below are kept in lockstep with
+    `bind_lifecycle_tables()`'s own (same plain `"integer"`/`"string"`
+    FK-shaped columns, not pydal `"reference ..."` fields, same lengths)
+    -- this function exists so `tests/conftest.py` fixtures that build an
+    isolated `dal` and call this one directly (without first calling
+    `bind_lifecycle_tables()`) still get the identical schema production
+    actually uses, `stages` included. Two independently-callable entry
+    points defining the same three tables has precedent in this exact file
+    (see `bind_admin_tables`'s `community_servers` vs
+    `bind_streaming_tables`'s own copy) -- `bind_lifecycle_tables()` is the
+    one that matters at runtime; this one exists for lazy/test call sites
+    and must never drift from it.
+
+    `stages` (migration 071): per-stage `{entrypoint, config, spec}` JSON,
+    keyed by `ingest`/`process`/`action` -- see that migration's own
+    docstring. `default={}` so a pre-071 row (or a row a future writer
+    inserts without stage data) reads back as an empty dict, never `None`.
+    """
+    if "app_catalog" in dal.tables:
+        return
+
+    dal.define_table(
+        "app_catalog",
+        Field("app_id", "string", length=255, notnull=True),
+        Field("name", "string", length=255),
+        Field("manifest_version", "string", length=50, notnull=True),
+        Field("module", "string", length=100, notnull=True),
+        Field("feature", "string", length=150, notnull=True),
+        Field("provider", "string", length=50, notnull=True),
+        Field("execution_model", "string", length=50, notnull=True),
+        Field("is_default", "boolean", default=False),
+        Field("compatible_with", "list:string"),
+        Field("incompatible_with", "list:string"),
+        Field("platform_compatibility", "json", notnull=True),
+        Field("status", "string", length=20, default="active"),
+        Field("installed_at", "datetime"),
+        Field("stages", "json", default={}),
         primarykey=["app_id"],
         migrate=migrate,
     )
