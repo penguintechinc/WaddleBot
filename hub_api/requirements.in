@@ -22,3 +22,10 @@ boto3>=1.35.0,<2.0.0  # storage_service.py -- S3/MinIO avatar storage only, no l
 # by this Dockerfile's own HEALTHCHECK, which imported it unpinned
 # before this port added a real runtime dependency on it.
 httpx>=0.27.0,<0.28.0
+# M-automation port group (workflow/github_sync): cryptography's AESGCM
+# (services/github_sync_service.py -- AES-256-GCM token-at-rest
+# encryption, port of githubSyncService.js's Node `crypto` usage) was
+# already a transitive dep via flask_core's pyopenssl requirement;
+# pinned directly here now that hub-api's own code imports it, not just
+# flask_core's.
+cryptography>=43.0.0,<51.0.0

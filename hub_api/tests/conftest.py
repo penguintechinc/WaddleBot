@@ -24,7 +24,7 @@ from flask_core.auth import create_jwt_token
 from flask_core.database import AsyncDAL
 from pydal import DAL, Field
 
-from services.schema import bind_auth_tables
+from services.schema import bind_auth_tables, bind_community_authz_tables, bind_github_sync_tables
 
 #: Matches flask_core.tenancy/authz's own os.getenv("SECRET_KEY", ...) fallback.
 SECRET_KEY = "change-me-in-production"
@@ -90,6 +90,39 @@ def auth_db(tmp_path: Any) -> Any:
     # table once here, still on the main thread, forces that DDL to run
     # before any worker thread exists -- a test-only concern (production
     # Postgres has no such lazy-CREATE-races-a-thread failure mode).
+    for table_name in dal.tables:
+        dal(dal[table_name]).count()
+    yield async_dal
+    dal.close()
+
+
+@pytest.fixture
+def automation_db(tmp_path: Any) -> Any:
+    """File-backed `AsyncDAL` for the M-automation port group (workflow + github_sync).
+
+    Same file-backed-sqlite/`pool_size=1`/lazy-table-touch rationale as
+    `auth_db` above -- see that fixture's own docstring for the full
+    gotcha writeup. Extends `bind_auth_tables()` with
+    `bind_community_authz_tables()` (`community_roles`, for
+    `services.community_authz.require_community_admin()`) and
+    `bind_github_sync_tables()` (`github_repo_connections` and friends).
+    """
+    async_dal = AsyncDAL(f"sqlite://{tmp_path / 'automation_test.db'}", pool_size=1)
+    dal = async_dal.dal
+    dal.define_table(
+        "tenants",
+        Field("slug", unique=True),
+        Field("display_name"),
+        Field("logo_url"),
+        Field("is_global", "boolean", default=False),
+        Field("is_active", "boolean", default=True),
+        Field("config", "json"),
+    )
+    bind_auth_tables(dal, migrate=True)
+    bind_community_authz_tables(dal, migrate=True)
+    bind_github_sync_tables(dal, migrate=True)
+    dal.tenants.insert(slug=TENANT_SLUG, display_name="Acme Corp", is_active=True)
+    dal.commit()
     for table_name in dal.tables:
         dal(dal[table_name]).count()
     yield async_dal
