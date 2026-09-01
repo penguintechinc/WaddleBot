@@ -141,6 +141,14 @@ convention = "google"
 # auth decision -- see those call sites' own comments).
 "blueprints/v1/marketplace_billing.py" = ["N815", "S101"]
 "services/marketplace_billing_service.py" = ["N815", "S101"]
+# App Bundle 3-tier lifecycle group (marketplace_lifecycle) -- v1 request/
+# response DTOs are camelCase (appId, configDefaults, isDefault, ...), same
+# wire-contract rationale as the M1 entries above; `_tenant_id()`/
+# `get_resolved_bundles()`/`activate_bundle()` repeat the standard
+# tenant_middleware postcondition assert (`ctx is not None`) every other
+# port group's own blueprint uses (see blueprints/v2/platform.py's own
+# per-file-ignore above).
+"blueprints/v1/marketplace_lifecycle.py" = ["S101", "N815"]
 
 [tool.mypy]
 python_version = "3.13"

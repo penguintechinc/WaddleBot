@@ -31,7 +31,7 @@ from quart_schema import Info, QuartSchema
 from blueprints import register_blueprints
 from config import HubAPIConfig
 from openapi.routes import register_openapi_docs
-from services.schema import bind_platform_tables
+from services.schema import bind_lifecycle_tables, bind_platform_tables
 
 
 def _bind_reference_tables(dal: Any) -> None:
@@ -76,6 +76,10 @@ def _bind_reference_tables(dal: Any) -> None:
         migrate=False,
     )
     bind_platform_tables(dal)
+    # App Bundle 3-tier lifecycle (marketplace_lifecycle group) -- append-only
+    # per hub_api/PORTING.md's per-group isolation note; see
+    # services/schema.py::bind_lifecycle_tables's own docstring.
+    bind_lifecycle_tables(dal)
 
 
 def create_app(config: HubAPIConfig | None = None) -> Quart:

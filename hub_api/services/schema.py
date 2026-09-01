@@ -2258,3 +2258,85 @@ def bind_marketplace_billing_tables(dal: Any, *, migrate: bool = False) -> None:
         )
 
 
+
+
+def bind_lifecycle_tables(dal: Any, *, migrate: bool = False) -> None:
+    """Define `app_catalog` / `app_tenant_availability` / `app_activations` (App Bundle 3-tier).
+
+    Schema owned by `config/postgres/migrations/069_app_bundle_tiers.sql`
+    (+ `070_app_bundle_catalog_name.sql`'s `app_catalog.name` column) --
+    `migrate=False` always in production, same "this process never issues
+    DDL" invariant every `bind_*_tables()` function in this file documents
+    (see `bind_auth_tables()`'s own docstring). `migrate=True` is
+    test-only (`hub_api/PORTING.md` Gotcha #2): pydal never issues
+    `CREATE TABLE` DDL against the throwaway sqlite file otherwise.
+
+    `libs/flask_core/flask_core/app_bundle_tables.py::init_app_bundle_tables`
+    already defines these same three tables, but hardcodes `migrate=False`
+    unconditionally -- unusable for this group's own test fixtures, which
+    need `migrate=True` against a file-backed sqlite DB (Gotcha #2). This
+    function is a parallel, hub-api-owned definition (not a wrapper around
+    that one) so `migrate` can thread through normally; field lists are
+    kept in lockstep with `app_bundle_tables.py`'s own (and with migration
+    069/070's columns) -- verify both if either ever drifts.
+
+    Plain `"integer"`/`"string"` FK-shaped columns (`tenant_id`,
+    `community_id`, `app_id` cross-references), not pydal `"reference ..."`
+    fields -- matches every other `bind_*_tables()` call in this file
+    (e.g. `oauth_state_tokens.community_id` above); the subset invariant
+    those FKs imply (`activated <= available <= installed`) is enforced at
+    the application layer at write time
+    (`flask_core.app_installations_db.check_availability_insert_allowed`/
+    `check_activation_insert_allowed`), matching migration 069's own
+    top-of-file comment that this is deliberately not a SQL-level
+    constraint spanning three tables.
+
+    Called once, unconditionally, at the END of
+    `app.py::_bind_reference_tables` (append-only per this port's task
+    scope) -- idempotency guard below makes a second call (e.g. from a
+    test fixture that also wants `migrate=True`) a cheap no-op check
+    rather than a `pydal` "table already defined" error.
+    """
+    if "app_catalog" in dal.tables:
+        return
+
+    dal.define_table(
+        "app_catalog",
+        Field("app_id", "string", length=255, notnull=True),
+        Field("name", "string", length=255),
+        Field("manifest_version", "string", length=50, notnull=True),
+        Field("module", "string", length=100, notnull=True),
+        Field("feature", "string", length=150, notnull=True),
+        Field("provider", "string", length=50, notnull=True),
+        Field("execution_model", "string", length=50, notnull=True),
+        Field("is_default", "boolean", default=False),
+        Field("compatible_with", "list:string"),
+        Field("incompatible_with", "list:string"),
+        Field("platform_compatibility", "json", notnull=True),
+        Field("status", "string", length=20, default="active"),
+        Field("installed_at", "datetime"),
+        primarykey=["app_id"],
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "app_tenant_availability",
+        Field("tenant_id", "integer", notnull=True),
+        Field("app_id", "string", length=255, notnull=True),
+        Field("available", "boolean", default=True),
+        Field("config_defaults", "json"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "app_activations",
+        Field("community_id", "integer", notnull=True),
+        Field("tenant_id", "integer", notnull=True),
+        Field("app_id", "string", length=255, notnull=True),
+        Field("enabled", "boolean", default=True),
+        Field("config", "json"),
+        Field("activated_by", "integer"),
+        Field("activated_at", "datetime"),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
