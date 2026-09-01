@@ -9,9 +9,9 @@
 # that is a conversation, not an edit.
 #
 # Seeded 2026-08-26 on release/v3.0.X.
-flake8=2250
-shellcheck=6281
-hadolint=142
+flake8=2058
+shellcheck=5700
+hadolint=121
 golangci-lint=27
 zizmor=21
 
