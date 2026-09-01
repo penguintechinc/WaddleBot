@@ -40,6 +40,21 @@ faithfully (not introduced by this port -- see `hub_api/PORTING.md`):
      `getTenantLoginInfo()`) is likewise undefined by any numbered
      migration -- bound here for the same byte-faithful-to-Node reason
      as gaps (1)/(2).
+  4. `communities.about_extended`/`social_links`/`website_url`/
+     `discord_invite_url`/`visibility` -- see the `communities`
+     `define_table()` call's own inline comment for detail. Added by
+     the M2 Core Tenancy-Misc group.
+
+M2 (Core Tenancy-Misc: `communityProfileController.js` +
+`joinRequestController.js`) extends this function's existing
+`communities`/`community_members` calls with the additional columns
+those two controllers need, and adds `community_roles`/
+`community_join_requests` -- per this file's own precedent (`app.py`'s
+`tenants` table) of extending the ONE existing `define_table()` call
+rather than redefining a table a second time elsewhere. `bind_auth_tables()`
+is still the sole call site (`app.py::_bind_reference_tables()`), so no
+`app.py` edit is needed for a group that only needs more columns on an
+already-bound table.
 """
 
 from __future__ import annotations
@@ -191,14 +206,32 @@ def bind_auth_tables(dal: Any, *, migrate: bool = False) -> None:
         Field("member_count", "integer", default=0),
         Field("config", "json"),
         # Columns below added by the M3 Platform-admin group (adminController.js
-        # /superadminController.js) -- `communities` is bound once, here, by
+        # /superadminController.js) and the M2 Core Tenancy-Misc group
+        # (communityProfileController.js / joinRequestController.js port,
+        # see `hub_api/PORTING.md`) -- `communities` is bound once, here, by
         # M1; every column any later group needs joins this same Field list
         # rather than a second define_table() call (pydal allows exactly one
-        # per table name per DAL instance). Matches
-        # 000_create_base_schema.sql + 058_tenants_and_claims.sql's
+        # per table name per DAL instance). `tenant_id`, `description`,
+        # `platform`, `owner_id`, `join_mode`, `is_public`, `deleted_at`
+        # match 000_create_base_schema.sql + 058_tenants_and_claims.sql's
         # `ALTER TABLE communities ADD COLUMN tenant_id` verbatim.
+        # `about_extended`, `social_links`, `website_url`,
+        # `discord_invite_url`, `visibility` are a pre-existing schema gap:
+        # `communityProfileController.js`'s own raw SQL reads/writes these
+        # exact column names on `communities`, but no numbered migration
+        # ever adds them (`social_links` migration 037 adds a same-named
+        # column to `community_members`, a DIFFERENT table -- not this
+        # one). Bound here anyway to stay byte-faithful to Node: a query
+        # touching these columns 500s against real Postgres exactly like
+        # Node's own controller does today. Needs a migration to
+        # reconcile -- out of scope for a "no schema changes" port PR.
         Field("tenant_id", "integer"),
         Field("description", "text"),
+        Field("about_extended", "text"),  # gap -- see docstring above
+        Field("social_links", "json"),  # gap -- see docstring above
+        Field("website_url", "string", length=500),  # gap -- see docstring above
+        Field("discord_invite_url", "string", length=500),  # gap -- see docstring above
+        Field("visibility", "string", length=30, default="public"),  # gap -- see docstring above
         Field("platform", "string", length=50, default="discord"),
         Field("platform_server_id", "string", length=255),
         # VARCHAR in Postgres, not a hub_users.id FK -- see community_members.user_id below.
@@ -229,8 +262,12 @@ def bind_auth_tables(dal: Any, *, migrate: bool = False) -> None:
         Field("joined_at", "datetime"),
         # Columns below added by the M3 Platform-admin group -- same
         # single-define_table() rationale as `communities` above.
-        # `reputation`/`community_role_id`/`claims_cache` match
-        # 000_create_base_schema.sql / 058_tenants_and_claims.sql exactly.
+        # `reputation`/`claims_cache` match 000_create_base_schema.sql /
+        # 058_tenants_and_claims.sql exactly. `community_role_id` is the
+        # same FK to community_roles.id (`058_tenants_and_claims.sql`'s
+        # "1f. Update community_members" ALTER) the M2 Core Tenancy-Misc
+        # group's `services/community_authz.py` also relies on for its
+        # per-community admin check -- bound once here, not duplicated.
         # `removed_at`/`removed_by`/`removal_reason` are a pre-existing
         # schema gap (adminController.js's removeMember() references them,
         # but no migration defines them -- same class of gap as
@@ -244,6 +281,38 @@ def bind_auth_tables(dal: Any, *, migrate: bool = False) -> None:
         Field("removed_by", "integer"),
         Field("removal_reason", "text"),
         Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "community_roles",
+        # Schema: `058_tenants_and_claims.sql`'s "1e. Community roles
+        # table". Added by the M2 group -- `services/community_authz.py`
+        # resolves a caller's granted scopes for one community via this
+        # table (`base_claims.scopes`), the same DB-backed check Node's
+        # `middleware/auth.js::requireCommunityAdmin`/`requireMember` do.
+        Field("community_id", "integer", notnull=True),
+        Field("name", "string", length=50, notnull=True),
+        Field("display_name", "string", length=100),
+        Field("priority", "integer", default=0),
+        Field("base_claims", "json"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "community_join_requests",
+        # Schema: `049_add_auth_settings.sql`. Added by the M2 group
+        # (joinRequestController.js port). Unlike `community_members.
+        # user_id` (legacy VARCHAR), `user_id` here is a real INTEGER FK
+        # to `hub_users.id` -- matches Node's own INSERT/SELECT, which
+        # pass `req.user.userId` (an int) directly, never `str(...)`.
+        Field("community_id", "integer", notnull=True),
+        Field("user_id", "integer", notnull=True),
+        Field("status", "string", length=20, default="pending"),
+        Field("message", "text"),
+        Field("reviewed_by", "integer"),
+        Field("reviewed_at", "datetime"),
+        Field("created_at", "datetime"),
         migrate=migrate,
     )
 
@@ -477,6 +546,7 @@ def bind_superadmin_tenant_fields(dal: Any, *, migrate: bool = False) -> None:
     """
     if "seat_limit" in dal.tenants.fields:
         return
+
     dal.define_table(
         "tenants",
         Field("slug", "string", length=100),
@@ -492,4 +562,108 @@ def bind_superadmin_tenant_fields(dal: Any, *, migrate: bool = False) -> None:
         Field("updated_at", "datetime"),
         migrate=migrate,
         redefine=True,
+    )
+
+
+def bind_tenant_tables(dal: Any, *, migrate: bool = False) -> None:
+    """Extend `tenants`/`communities` + bind new tables for the M2 Core Tenant group.
+
+    This group's task explicitly scopes `app.py`/`routers/*.py`/
+    `blueprints/__init__.py` as never-edit (avoids a shared-file collision
+    point across the parallel M1..M9 port wave -- the same rationale
+    `app.py::_bind_reference_tables`'s own docstring gives for keeping
+    that function's diff small). That means this group can't follow
+    `hub_api/PORTING.md`'s literal "extend the ONE define_table("tenants",
+    ...) call already in app.py" instruction the way M1 did -- `tenants`
+    and `communities` are both already bound (by app.py's
+    `_bind_reference_tables` and this module's own `bind_auth_tables`,
+    respectively) by the time any request reaches a tenant-blueprint
+    route.
+
+    Instead, this function is called lazily (see `blueprints/v1/tenant.py`
+    ::_dal()`) and uses pydal's `redefine=True` to ADD fields to those two
+    already-bound `Table` objects, always paired with `migrate=migrate`
+    (production is always `False`) so this is a pure in-memory Field-list
+    update -- no DDL, same "schema owned by
+    config/postgres/migrations/*.sql, never by this process" invariant
+    `_bind_reference_tables` documents for `tenants` itself. Verified
+    empirically: `redefine=True` REPLACES a table's field list wholesale
+    (not merge-by-name), so both redefine calls below repeat every field
+    the table's original definition already had -- dropping one here would
+    silently break `flask_core.tenancy.resolve_tenant_context`'s
+    `row.is_active` access (`tenants`) or `auth_service.
+    add_user_to_global_community()`'s `dal.communities.name`/`.display_name`
+    access (`communities`) for every request served after this function's
+    first call. Safe under Quart's single-threaded event loop: `define_table`
+    has no `await` inside it, so no concurrent request can observe a
+    half-rebuilt `Table` object mid-call. Idempotent (`"tenant_settings" in
+    dal.tables` guard) -- cheap to call on every request via `_dal()`.
+
+    New columns, all real (not invented) per `config/postgres/migrations/
+    058_tenants_and_claims.sql` (`tenants.description`/`allowed_module_ids`/
+    `seat_limit`/`created_at`, `communities.tenant_id`) and `000_create_base_
+    schema.sql`/`008_add_community_types.sql` (`communities.is_public`/
+    `community_type`/`created_at`) -- `tenantController.js`'s `getTenant`/
+    `updateTenant`/`getTenantModules`/`getTenantCommunities` all read them.
+
+    `tenant_settings` (`058_tenants_and_claims.sql`) and `hub_modules`
+    (`000_create_base_schema.sql`) are new tables, owned outright by this
+    group -- bound the normal (non-redefine) way.
+    """
+    if "tenant_settings" in dal.tables:
+        return
+
+    dal.define_table(
+        "tenants",
+        Field("slug", "string", length=100),
+        Field("display_name", "string", length=255),
+        Field("logo_url", "text"),
+        Field("is_global", "boolean", default=False),
+        Field("is_active", "boolean", default=True),
+        Field("config", "json"),
+        Field("description", "text"),
+        Field("allowed_module_ids", "list:integer"),
+        Field("seat_limit", "integer"),
+        Field("created_at", "datetime"),
+        migrate=migrate,
+        redefine=True,
+    )
+
+    dal.define_table(
+        "communities",
+        Field("name", "string", length=255),
+        Field("display_name", "string", length=255),
+        Field("is_global", "boolean", default=False),
+        Field("is_active", "boolean", default=True),
+        Field("member_count", "integer", default=0),
+        Field("config", "json"),
+        Field("tenant_id", "integer"),
+        Field("is_public", "boolean", default=True),
+        Field("community_type", "string", length=50, default="creator"),
+        Field("created_at", "datetime"),
+        migrate=migrate,
+        redefine=True,
+    )
+
+    dal.define_table(
+        "tenant_settings",
+        Field("tenant_id", "integer", notnull=True),
+        Field("key", "string", length=100, notnull=True),
+        Field("value", "text"),
+        Field("created_at", "datetime"),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "hub_modules",
+        Field("name", "string", length=255),
+        Field("display_name", "string", length=255),
+        Field("description", "text"),
+        Field("category", "string", length=100),
+        Field("is_core", "boolean", default=False),
+        Field("is_published", "boolean", default=False),
+        Field("version", "string", length=50),
+        Field("created_at", "datetime"),
+        migrate=migrate,
     )
