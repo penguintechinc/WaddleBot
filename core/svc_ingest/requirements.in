@@ -1,0 +1,25 @@
+# svc-ingest -- Dependencies
+# Real stage-runner: Quart control plane + background poll/normalize/enqueue
+# loop. flask_core (libs/flask_core) is installed as a separate package step
+# (Dockerfile) and brings in redis/httpx transitively via its own
+# requirements.in -- pinned here too for explicitness on direct imports.
+
+# Core Framework
+quart>=0.19.0
+hypercorn>=0.16.0
+
+# HTTP client (distribution API poll)
+httpx>=0.27.0,<0.28.0
+
+# Valkey/Redis (LPUSH/RPUSH per-bundle isolation keys)
+redis>=5.0.1
+hiredis>=2.3.2
+
+# Environment
+python-dotenv>=1.0.0
+
+# Development / test
+pytest>=7.4.0
+pytest-asyncio>=0.23.0
+pytest-cov>=4.1.0
+fakeredis>=2.21.0

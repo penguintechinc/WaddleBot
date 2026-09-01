@@ -106,7 +106,10 @@ class TestFetchActiveBundles:
             )
         )
         bundles = await sr.fetch_active_bundles(
-            client, "http://hub-api/api/v1/distribution/bundles", stage="ingest", jwt="t.o.k"
+            client,
+            "http://hub-api/api/v1/distribution/bundles",
+            stage="ingest",
+            jwt="t.o.k",
         )
         assert len(bundles) == 1
         assert bundles[0] == sr.BundleDistribution(
@@ -125,7 +128,10 @@ class TestFetchActiveBundles:
             seen["auth"] = request.headers.get("authorization")
             seen["stage"] = request.url.params.get("stage")
             seen["community_id"] = request.url.params.get("community_id")
-            return httpx.Response(200, json={"success": True, "stage": "process", "bundles": [], "meta": {}})
+            return httpx.Response(
+                200,
+                json={"success": True, "stage": "process", "bundles": [], "meta": {}},
+            )
 
         client = _make_client(handler)
         await sr.fetch_active_bundles(
@@ -147,7 +153,10 @@ class TestFetchActiveBundles:
         client = _make_client(handler)
         with pytest.raises(httpx.HTTPStatusError):
             await sr.fetch_active_bundles(
-                client, "http://hub-api/api/v1/distribution/bundles", stage="ingest", jwt="t"
+                client,
+                "http://hub-api/api/v1/distribution/bundles",
+                stage="ingest",
+                jwt="t",
             )
         await client.aclose()
 

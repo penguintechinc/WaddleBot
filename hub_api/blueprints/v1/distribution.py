@@ -93,7 +93,9 @@ def _parse_community_id(raw: str | None) -> int | None:
     try:
         return int(raw)
     except ValueError as exc:
-        raise ApiError(f"community_id {raw!r} must be an integer", 400, "INVALID_COMMUNITY_ID") from exc
+        raise ApiError(
+            f"community_id {raw!r} must be an integer", 400, "INVALID_COMMUNITY_ID"
+        ) from exc
 
 
 # ---------------------------------------------------------------------------
@@ -136,10 +138,12 @@ class DistributionBundlesResponse:
 
 
 @distribution_bp.route("/bundles", methods=["GET"])
-@tenant_middleware
-@require_scope("distribution:read")
+@tenant_middleware  # type: ignore[untyped-decorator]
+@require_scope("distribution:read")  # type: ignore[untyped-decorator]
 @validate_response(DistributionBundlesResponse)
-async def list_distribution_bundles() -> DistributionBundlesResponse | tuple[dict[str, object], int]:
+async def list_distribution_bundles() -> (
+    DistributionBundlesResponse | tuple[dict[str, object], int]
+):
     """List every enabled, activated bundle implementing `stage` for the caller's tenant."""
     stage = request.args.get("stage", "")
     if stage not in svc.BUNDLE_STAGES:

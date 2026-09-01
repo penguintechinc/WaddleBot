@@ -166,7 +166,7 @@ class TestListBundles:
     async def test_community_activation_overrides_tenant_wide_config(
         self, client: Any, distribution_db: Any
     ) -> None:
-        """Community-scoped `config` wins over the tenant-wide `config_defaults` for the same app_id."""
+        """Community-scoped `config` wins over the tenant-wide `config_defaults`, same app_id."""
         _seed_bundle(distribution_db)
         tenant_id, community_id = _seed_community(distribution_db)
         dal = distribution_db.dal
@@ -273,3 +273,91 @@ class TestListBundles:
         response = await client.get("/api/v1/distribution/bundles?stage=ingest", headers=_headers())
         body = await response.get_json()
         assert body["bundles"] == []
+
+    async def test_pre_071_row_with_null_stages_is_excluded_not_crashing(
+        self, client: Any, distribution_db: Any
+    ) -> None:
+        """A row inserted before migration 071 (or any writer that leaves `stages` NULL).
+
+        `_stage_data`'s `isinstance(stages, dict)` guard must degrade this
+        to "bundle doesn't implement this stage" -- never a 500.
+        """
+        dal = distribution_db.dal
+        dal.app_catalog.insert(
+            app_id="waddles.core.demo.prelegacy",
+            manifest_version="1.0.0",
+            module="core",
+            feature="waddles.core.demo",
+            provider="builtin",
+            execution_model="native",
+            platform_compatibility={},
+            status="active",
+            stages=None,
+        )
+        tenant_id, _ = _seed_community(distribution_db)
+        dal.app_tenant_availability.insert(
+            tenant_id=tenant_id, app_id="waddles.core.demo.prelegacy", available=True
+        )
+        dal.commit()
+
+        response = await client.get("/api/v1/distribution/bundles?stage=ingest", headers=_headers())
+        assert response.status_code == 200
+        body = await response.get_json()
+        assert body["bundles"] == []
+
+    async def test_read_replica_connection_is_used_when_configured(
+        self, client: Any, distribution_db: Any
+    ) -> None:
+        """When `async_dal.read_dal` is set, the blueprint queries THAT connection, not primary.
+
+        Simulates a configured read replica by pointing `read_dal` at a
+        SECOND, independently-seeded in-memory DAL -- if the blueprint
+        queried the primary instead, this bundle (which exists only on the
+        "replica") would never appear.
+        """
+        from pydal import DAL, Field
+
+        from services.schema import bind_app_bundle_tables
+
+        replica_dal = DAL("sqlite:memory")
+        replica_dal.define_table(
+            "tenants",
+            Field("slug", unique=True),
+            Field("display_name"),
+            Field("is_active", "boolean", default=True),
+        )
+        replica_dal.define_table(
+            "communities", Field("tenant_id", "reference tenants"), Field("name")
+        )
+        bind_app_bundle_tables(replica_dal, migrate=True)
+        tenant_row = replica_dal.tenants.insert(slug=TENANT_SLUG, is_active=True)
+        replica_dal.app_catalog.insert(
+            app_id="waddles.core.demo.echo",
+            manifest_version="1.0.0",
+            module="core",
+            feature="waddles.core.demo",
+            provider="builtin",
+            execution_model="native",
+            platform_compatibility={},
+            status="active",
+            stages={
+                "ingest": {"entrypoint": "bundles.echo_ingest:normalize", "config": {}, "spec": {}}
+            },
+        )
+        replica_dal.app_tenant_availability.insert(
+            tenant_id=tenant_row, app_id="waddles.core.demo.echo", available=True
+        )
+        replica_dal.commit()
+
+        distribution_db.read_dal = replica_dal
+        try:
+            response = await client.get(
+                "/api/v1/distribution/bundles?stage=ingest", headers=_headers()
+            )
+            assert response.status_code == 200
+            body = await response.get_json()
+            assert len(body["bundles"]) == 1
+            assert body["bundles"][0]["appId"] == "waddles.core.demo.echo"
+        finally:
+            distribution_db.read_dal = None
+            replica_dal.close()

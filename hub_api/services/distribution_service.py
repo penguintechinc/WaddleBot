@@ -21,8 +21,9 @@ responsible for passing the read-replica connection when one is configured.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional, Sequence
+from typing import Any
 
 #: The three script pipeline stages a bundle may declare -- mirrors
 #: `flask_core.stream_pipeline.BUNDLE_STAGES` (not imported directly to
@@ -38,7 +39,7 @@ class InvalidStageError(ValueError):
 
 @dataclass(slots=True, frozen=True)
 class BundleDistributionRow:
-    """One bundle's `{entrypoint, config, spec}` for a single stage, at a single (tenant, community).
+    """One bundle's `{entrypoint, config, spec}` for a stage, at a single (tenant, community).
 
     `config` is the merge of the bundle's own shipped stage default
     (`app_catalog.stages[stage].config`) with the tenant/community's
@@ -48,13 +49,13 @@ class BundleDistributionRow:
     """
 
     app_id: str
-    community_id: Optional[int]
-    entrypoint: Optional[str]
-    spec: Dict[str, Any] = field(default_factory=dict)
-    config: Dict[str, Any] = field(default_factory=dict)
+    community_id: int | None
+    entrypoint: str | None
+    spec: dict[str, Any] = field(default_factory=dict)
+    config: dict[str, Any] = field(default_factory=dict)
 
 
-def _stage_data(stages: Any, stage: str) -> Optional[Dict[str, Any]]:
+def _stage_data(stages: Any, stage: str) -> dict[str, Any] | None:
     """Extract `stages[stage]` from an `app_catalog.stages` JSON value, or `None`.
 
     Tolerant of `stages` being `None`/`{}` (a pre-071 row, or a row that
@@ -72,7 +73,7 @@ async def list_bundles_for_stage(
     dal: Any,
     *,
     tenant_id: int,
-    community_id: Optional[int],
+    community_id: int | None,
     stage: str,
 ) -> Sequence[BundleDistributionRow]:
     """Every enabled, activated bundle implementing `stage` at (`tenant_id`, `community_id`).

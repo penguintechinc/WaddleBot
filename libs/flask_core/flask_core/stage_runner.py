@@ -18,8 +18,9 @@ from __future__ import annotations
 
 import importlib
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, Dict, Optional, Tuple
+from typing import Any, cast
 
 import httpx
 
@@ -49,13 +50,13 @@ class BundleDistribution:
     """
 
     app_id: str
-    community_id: Optional[int]
-    entrypoint: Optional[str]
-    spec: Dict[str, Any] = field(default_factory=dict)
-    config: Dict[str, Any] = field(default_factory=dict)
+    community_id: int | None
+    entrypoint: str | None
+    spec: dict[str, Any] = field(default_factory=dict)
+    config: dict[str, Any] = field(default_factory=dict)
 
 
-def _parse_bundle(raw: Dict[str, Any]) -> BundleDistribution:
+def _parse_bundle(raw: dict[str, Any]) -> BundleDistribution:
     """Parse one item of the distribution response's `data.bundles` list."""
     return BundleDistribution(
         app_id=raw["appId"],
@@ -72,9 +73,9 @@ async def fetch_active_bundles(
     *,
     stage: str,
     jwt: str,
-    community_id: Optional[int] = None,
+    community_id: int | None = None,
     timeout_s: float = 10.0,
-) -> Tuple[BundleDistribution, ...]:
+) -> tuple[BundleDistribution, ...]:
     """Call hub-api's distribution endpoint once; raises on any non-2xx or network failure.
 
     Raising (rather than swallowing) is deliberate -- :class:`BundlePoller`
@@ -83,7 +84,7 @@ async def fetch_active_bundles(
     HTTP call so it stays independently testable and reusable outside a
     poller (e.g. a one-shot CLI/debug script).
     """
-    params: Dict[str, str] = {"stage": stage}
+    params: dict[str, str] = {"stage": stage}
     if community_id is not None:
         params["community_id"] = str(community_id)
 
@@ -120,14 +121,16 @@ def load_entrypoint(entrypoint: str) -> Callable[..., Awaitable[Any]]:
     try:
         module = importlib.import_module(module_path)
     except ImportError as exc:
-        raise EntrypointLoadError(f"cannot import module {module_path!r}: {exc}") from exc
+        raise EntrypointLoadError(
+            f"cannot import module {module_path!r}: {exc}"
+        ) from exc
 
     func = getattr(module, func_name, None)
     if func is None or not callable(func):
         raise EntrypointLoadError(
             f"module {module_path!r} has no callable attribute {func_name!r}"
         )
-    return func
+    return cast(Callable[..., Awaitable[Any]], func)
 
 
 class BundlePoller:
@@ -151,7 +154,7 @@ class BundlePoller:
         *,
         stage: str,
         jwt_provider: Callable[[], str],
-        community_id: Optional[int] = None,
+        community_id: int | None = None,
         poll_interval_s: float = DEFAULT_POLL_INTERVAL_S,
         base_backoff_s: float = DEFAULT_BASE_BACKOFF_S,
         max_backoff_s: float = DEFAULT_MAX_BACKOFF_S,
@@ -165,12 +168,12 @@ class BundlePoller:
         self._base_backoff_s = base_backoff_s
         self._max_backoff_s = max_backoff_s
 
-        self._last_known: Tuple[BundleDistribution, ...] = ()
+        self._last_known: tuple[BundleDistribution, ...] = ()
         self._current_backoff_s = base_backoff_s
         self._next_delay_s = poll_interval_s
 
     @property
-    def last_known(self) -> Tuple[BundleDistribution, ...]:
+    def last_known(self) -> tuple[BundleDistribution, ...]:
         """The most recently successfully-fetched bundle set (possibly stale)."""
         return self._last_known
 
@@ -179,7 +182,7 @@ class BundlePoller:
         """How long the runner should sleep before the next `poll_once()` call."""
         return self._next_delay_s
 
-    async def poll_once(self) -> Tuple[BundleDistribution, ...]:
+    async def poll_once(self) -> tuple[BundleDistribution, ...]:
         """Fetch the active bundle set once; never raises -- degrades to `last_known` on failure."""
         try:
             bundles = await fetch_active_bundles(
@@ -197,7 +200,9 @@ class BundlePoller:
                 self._current_backoff_s,
             )
             self._next_delay_s = self._current_backoff_s
-            self._current_backoff_s = min(self._current_backoff_s * 2, self._max_backoff_s)
+            self._current_backoff_s = min(
+                self._current_backoff_s * 2, self._max_backoff_s
+            )
             return self._last_known
 
         self._current_backoff_s = self._base_backoff_s
