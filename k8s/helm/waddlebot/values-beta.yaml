@@ -32,6 +32,13 @@ infrastructure:
   qdrant:
     enabled: false
 
+# WADDLES_AI_ENABLED=false -- no Ollama deployed above (infrastructure.
+# ollama.enabled: false), so hub-api's AI-routing subsystem stays off too
+# rather than crash-looping/degrading against an unreachable backend.
+pipeline:
+  hubApi:
+    aiEnabled: false
+
 # PostHog stays OFF by default in beta too — flip on deliberately per
 # release. When enabled, secrets MUST come from a pre-created Secret, never
 # inline:

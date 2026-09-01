@@ -60,6 +60,11 @@ spec:
           value: {{ .Values.pipeline.hubApi.port | quote }}
         - name: GRPC_PORT
           value: {{ .Values.pipeline.hubApi.grpcPort | quote }}
+        # ONE-WAY AI kill-switch (hub_api/config.py's WADDLES_AI_ENABLED) --
+        # lets this Deployment run with no Ollama/model backend reachable;
+        # never grants access on its own, see values.yaml's own comment.
+        - name: WADDLES_AI_ENABLED
+          value: {{ .Values.pipeline.hubApi.aiEnabled | quote }}
         {{- if .Values.modules.bot.enabled }}
         - name: MODULE_LOAD_BOT
           value: "true"
