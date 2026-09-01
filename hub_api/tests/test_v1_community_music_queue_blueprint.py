@@ -328,7 +328,8 @@ class TestEnqueueRequest:
         assert response.status_code == 201
 
         log_rows = await _select_async(
-            music_station_db, music_station_db.dal.music_moderation_log.action == "category_override"
+            music_station_db,
+            music_station_db.dal.music_moderation_log.action == "category_override",
         )
         assert len(log_rows) == 1
 
@@ -626,7 +627,9 @@ class TestCrossTenantIsolation:
         )
         assert response.status_code == 403
 
-    async def test_super_admin_role_claim_bypasses(self, client: Any, music_station_db: Any) -> None:
+    async def test_super_admin_role_claim_bypasses(
+        self, client: Any, music_station_db: Any
+    ) -> None:
         community_id = _seed_community(music_station_db)
         headers = {
             "Authorization": (
