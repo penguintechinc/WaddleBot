@@ -12,6 +12,7 @@ quart-schema>=0.25.0,<0.26.0
 pydal>=20240906.1,<20260601
 psycopg2-binary>=2.9.9,<3.0.0
 pyjwt>=2.13.0,<3.0.0
+
 # M1 Core Identity/Auth group (bcrypt, httpx come transitively via flask_core):
 webauthn>=3.0.0,<4.0.0  # passkey_service.py -- WebAuthn/FIDO2 registration+auth
 boto3>=1.35.0,<2.0.0  # storage_service.py -- S3/MinIO avatar storage only, no local-disk fallback
@@ -20,12 +21,26 @@ boto3>=1.35.0,<2.0.0  # storage_service.py -- S3/MinIO avatar storage only, no l
 # action/interactive/calendar_interaction_module/requirements.in's own
 # httpx pin (same downstream contract, same client library). Also used
 # by this Dockerfile's own HEALTHCHECK, which imported it unpinned
-# before this port added a real runtime dependency on it.
+# before this port added a real runtime dependency on it, and by the
+# Bot module (M5, blueprints/v1/bot.py + services/bot_*.py) for outbound
+# proxy calls to server-manager-service/ai-interaction/Ollama (already a
+# flask_core transitive dep for the same purpose -- see
+# libs/flask_core/requirements.in's "HTTP Client (async)" -- listed
+# directly here too since hub-api's own app code imports it, per this
+# file's header comment). Same pin covers the Community module (M6,
+# services/community_engagement_proxy.py, community_loyalty.py,
+# community_relay.py) -- plain AsyncClient/RequestError usage, no
+# 0.28-specific API, so it stays on the range every other hub-api proxy
+# client already shares rather than introducing a second httpx range.
 httpx>=0.27.0,<0.28.0
-# M-automation port group (workflow/github_sync): cryptography's AESGCM
-# (services/github_sync_service.py -- AES-256-GCM token-at-rest
-# encryption, port of githubSyncService.js's Node `crypto` usage) was
-# already a transitive dep via flask_core's pyopenssl requirement;
-# pinned directly here now that hub-api's own code imports it, not just
-# flask_core's.
-cryptography>=43.0.0,<51.0.0
+# cryptography -- AES-256-GCM for server_status_configs.credential_enc
+#   (services/bot_crypto.py ports utils/encryption.js's exact wire format)
+#   AND for services/github_sync_service.py's token-at-rest encryption
+#   (M-automation port group, port of githubSyncService.js's Node `crypto`
+#   usage) -- was already a transitive dep via flask_core's pyopenssl
+#   requirement; pinned directly here now that hub-api's own code imports
+#   it, not just flask_core's.
+# 44.0.1 floor: PYSEC-2026-35/1284/2141/3553/3554, GHSA-537c-gmf6-5ccf --
+# pip-audit flagged 43.0.3 (`test-security`'s pip-audit gate) before this
+# floor was raised.
+cryptography>=44.0.1,<51.0.0

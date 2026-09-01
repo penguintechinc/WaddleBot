@@ -1,31 +1,60 @@
-"""Faithful port of `middleware/auth.js::requireCommunityAdmin()`.
+"""Per-community authorization -- DB-backed, mirrors Node's `requireCommunityAdmin`.
 
-Shared by the workflow and github_sync port groups. Both
-`routes/workflow.js` and `routes/githubSync.js` gate every
-authenticated endpoint with Node's `requireCommunityAdmin`, a real
-DB-backed check (join `community_members` -> `community_roles`,
-require `community:manage_members` or `community:manage_channels` in
-`base_claims.scopes`), not a bare "is logged in" check -- unlike
-`blueprints/v1/event.py`'s M8 group, which flattened Node's own
-`requireCommunityAdmin` into a single static OIDC scope
-(`event.calendar:admin`) because that group's community-admin surfaces
-were internal to a single proxied service. This port keeps the real,
-per-community DB check faithfully: hub-api OWNS `github_repo_connections`
-(this module's community check is the only thing standing between a
-caller and another community's GitHub PAT), and `workflowController.js`'s
-own missing per-workflow ownership check (see `workflow.py`'s module
-docstring) makes a weaker, scope-only gate the wrong tradeoff here.
+`flask_core.authz.require_scope` checks a flat JWT `scope` claim -- correct
+for tenant-level gates, but wrong here: `flask_core.auth.SCOPE_BUNDLES
+["community"]["admin"]` is never granted at JWT-issuance time anywhere in
+this port (`auth_service.create_session_token` only ever grants the
+`global`/`tenant` bundles), and even if it were, a flat scope claim can't
+answer "admin of *which* community" -- using it alone for a `communityId`
+URL path param would let any caller holding a broad community-shaped scope
+act on a community they don't actually belong to. That is the exact IDOR
+class this module exists to prevent (see `hub_api/PORTING.md`'s "SECURITY"
+note on this port: "IDOR from request-param community_id instead of JWT").
 
-Bypasses ported 1:1 from Node (`super-admin`, `tenant-admin`,
-`platform-admin` roles) -- `roles` is an audit/display claim per
-security.md, but these three checks are Node's ALREADY-SHIPPED authz
-decisions, not a new role-based check invented by this port; flagged
-here rather than silently dropped or silently kept without comment.
+Node's real authorization for these routes
+(`middleware/auth.js::requireCommunityAdmin`/`requireMember`) is a live DB
+lookup -- `community_members` JOIN `community_roles` on
+`(community_id, user_id)`, `is_active = true` -- never the JWT scope claim
+alone. This module ports that check faithfully: `community_id` always
+comes from the URL (as Node's own routes take it), but the caller's
+*membership and role in that specific community* is resolved from the
+database using `user_id` sourced from the validated JWT
+(`services.current_user.get_current_user_id`), never trusted from the
+request itself. A caller with no active membership row for that exact
+`community_id`, or an active membership whose role doesn't carry one of
+the required scopes, is rejected -- regardless of what scope claims their
+JWT carries for *other* communities or the tenant at large.
+
+Scope strings (`community:manage_members`, `community:manage_channels`,
+...) come from `community_roles.base_claims.scopes`
+(`config/postgres/migrations/058_tenants_and_claims.sql`'s
+`seed_community_system_roles()`), not from `flask_core.auth.SCOPE_BUNDLES`
+-- a different, DB-seeded vocabulary Node's own controllers already use,
+kept as-is rather than remapped to the (unrelated, unwired-for-community)
+JWT bundle names.
+
+The M2 Core Tenancy-Misc group's own scope this module originally shipped
+under explicitly did NOT cover Node's tenant-admin/platform-admin bypasses
+in `requireCommunityAdmin` (`req.isTenantAdmin`, `req.user.roles.includes
+('platform-admin')`) -- only the global `hub_users.is_super_admin` bypass
+(`_is_super_admin`/`require_community_scope` below). The M-automation group
+(workflow/github_sync port) needs the FULL set of bypasses
+`routes/workflow.js`/`routes/githubSync.js` actually ship with in Node, so
+`require_community_admin`/`require_valid_community_id` below port those
+remaining two bypasses (tenant-admin via `tenant_admins`, platform-admin via
+the JWT `roles` claim) faithfully, as a second, independent entry point
+rather than reworking `require_community_scope`'s own (still relied upon by
+`community_profile_service.py`/`join_request_service.py`) narrower
+contract. `roles` is an audit/display claim per security.md, but these are
+Node's ALREADY-SHIPPED authz decisions, not a new role-based check invented
+by this port; flagged here rather than silently dropped or silently kept
+without comment.
 """
 
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from typing import Any
 
 from flask_core.auth import verify_jwt_token
@@ -35,6 +64,91 @@ from quart import Request
 from services.current_user import get_current_user_id
 from services.errors import ApiError, forbidden
 from services.schema import bind_community_authz_tables
+
+
+@dataclass(slots=True, frozen=True)
+class CommunityRole:
+    """The caller's resolved role + granted scopes for one specific community."""
+
+    name: str
+    priority: int
+    scopes: frozenset[str]
+
+
+async def _is_super_admin(async_dal: Any, dal: Any, *, user_id: int) -> bool:
+    """Look up `hub_users.is_super_admin` for `user_id`. False if the user row is missing."""
+    rows = await async_dal.select_async(dal(dal.hub_users.id == user_id))
+    if not rows:
+        return False
+    return bool(rows.first().is_super_admin)
+
+
+async def get_caller_community_role(
+    async_dal: Any, dal: Any, *, community_id: int, user_id: int
+) -> CommunityRole | None:
+    """Resolve the caller's active `community_members` row + its `community_roles` scopes.
+
+    Mirrors `middleware/auth.js`'s `requireCommunityAdmin`/`requireMember`
+    query (LEFT JOIN on `community_role_id`, `is_active = true`).
+    `community_members.user_id` is a legacy VARCHAR column (see
+    `services/schema.py`'s own note on that field) -- compared as a string
+    here to match how Node's pg driver serializes it and how every other
+    `community_members.user_id` query in this port already does.
+
+    Returns `None` if the caller has no active membership row for this
+    community at all (never raises -- callers decide whether "no role" is
+    an error).
+    """
+    rows = await async_dal.select_async(
+        dal(
+            (dal.community_members.community_id == community_id)
+            & (dal.community_members.user_id == str(user_id))
+            & (dal.community_members.is_active == True)  # noqa: E712
+        ),
+        dal.community_members.ALL,
+        dal.community_roles.ALL,
+        left=dal.community_roles.on(
+            dal.community_members.community_role_id == dal.community_roles.id
+        ),
+    )
+    if not rows:
+        return None
+    cm, cr = rows[0].community_members, rows[0].community_roles
+    base_claims = cr.base_claims if cr is not None else None
+    scopes = base_claims.get("scopes", []) if isinstance(base_claims, dict) else []
+    role_name = (cr.name if cr is not None and cr.name else None) or cm.role or "member"
+    priority = (cr.priority if cr is not None and cr.priority is not None else 0) or 0
+    return CommunityRole(name=role_name, priority=priority, scopes=frozenset(scopes))
+
+
+async def require_community_scope(
+    async_dal: Any,
+    dal: Any,
+    *,
+    community_id: int,
+    user_id: int,
+    any_of: tuple[str, ...],
+) -> CommunityRole:
+    """Require the caller hold at least one of `any_of` scopes for `community_id`.
+
+    Global super admins bypass (`hub_users.is_super_admin`, DB-authoritative
+    -- mirrors Node's `req.user?.isSuperAdmin` bypass). Fails closed: no
+    active membership, or a membership whose role grants none of the
+    required scopes, is a 403 (`forbidden()`) -- never a silent pass. This
+    is the ONLY place `community_id` from a URL param is trusted to mean
+    anything -- it is always cross-checked against a real
+    `community_members` row for the caller's own `user_id`, never assumed.
+    """
+    if await _is_super_admin(async_dal, dal, user_id=user_id):
+        return CommunityRole(name="super-admin", priority=999, scopes=frozenset(any_of))
+
+    role = await get_caller_community_role(
+        async_dal, dal, community_id=community_id, user_id=user_id
+    )
+    if role is None or not (role.scopes & set(any_of)):
+        raise forbidden("Community admin access required")
+    return role
+
 
 #: Node's `requireCommunityAdmin` accepts either scope (`community:manage_members`
 #: OR `community:manage_channels`) as sufficient for "community admin".
@@ -47,17 +161,18 @@ async def require_community_admin(
     """Raise :class:`ApiError` (401/403) unless the caller admins `community_id`.
 
     Must run after `tenant_middleware` (needs `request.tenant_context` for
-    the tenant-admin bypass) -- matches this group's own Auth pattern
-    entry in `hub_api/PORTING.md` ("Admin/elevated action":
-    `tenant_middleware` + a scope/authz check).
+    the tenant-admin bypass) -- matches the M-automation group's own Auth
+    pattern entry in `hub_api/PORTING.md` ("Admin/elevated action":
+    `tenant_middleware` + a scope/authz check). Unlike `require_community_scope`
+    above (M2's narrower, still-in-use contract), this entry point also
+    ports Node's tenant-admin and platform-admin bypasses -- see this
+    module's own top-of-file docstring for why the two coexist.
     """
     bind_community_authz_tables(dal)
 
     user_id = get_current_user_id(request)  # raises 401 if missing/invalid
 
-    user_rows = await async_dal.select_async(dal(dal.hub_users.id == user_id))
-    user_row = user_rows.first() if user_rows else None
-    if user_row is not None and bool(user_row.is_super_admin):
+    if await _is_super_admin(async_dal, dal, user_id=user_id):
         return
 
     ctx: TenantContext | None = get_tenant_context(request)
@@ -74,30 +189,10 @@ async def require_community_admin(
     if "platform-admin" in _jwt_roles(request):
         return
 
-    member_rows = await async_dal.select_async(
-        dal(
-            (dal.community_members.community_id == community_id)
-            & (dal.community_members.user_id == str(user_id))
-            & (dal.community_members.is_active == True)  # noqa: E712
-        ),
-        dal.community_members.ALL,
-        dal.community_roles.ALL,
-        left=dal.community_roles.on(
-            dal.community_members.community_role_id == dal.community_roles.id
-        ),
+    role = await get_caller_community_role(
+        async_dal, dal, community_id=community_id, user_id=user_id
     )
-    if not member_rows:
-        raise forbidden("Community admin access required")
-
-    # Gotcha #6 (hub_api/PORTING.md): selecting fields from TWO tables via
-    # `left=` nests the Row under `<tablename>.<field>` -- `community_roles`
-    # is all-NULL (not absent) when the LEFT JOIN found no matching row
-    # (legacy member with no `community_role_id` set), hence the `.id`
-    # None-check rather than an AttributeError/KeyError.
-    role_row = member_rows.first().community_roles
-    base_claims = role_row.base_claims if role_row.id is not None else None
-    scopes = set((base_claims or {}).get("scopes") or [])
-    if not scopes & _ADMIN_SCOPES:
+    if role is None or not (role.scopes & _ADMIN_SCOPES):
         raise forbidden("Community admin access required")
 
 

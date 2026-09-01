@@ -77,6 +77,37 @@ async def upload_avatar(data: bytes, original_filename: str, content_type: str) 
     return f"{_public_base_url()}/{key}"
 
 
+MAX_LOGO_SIZE_BYTES = 5 * 1024 * 1024  # 5MB, matches communityProfileController.js's logo limit
+MAX_BANNER_SIZE_BYTES = 10 * 1024 * 1024  # 10MB, matches its banner limit
+
+
+async def upload_community_asset(
+    data: bytes, original_filename: str, content_type: str, *, folder: str
+) -> str:
+    """Upload community logo/banner bytes to `<folder>/<uuid><ext>`. Returns the public URL.
+
+    `folder` is `community-logos`/`community-banners`, matching Node's
+    `uploadFile(buffer, 'community-logos', ...)` bucket-folder convention
+    (`communityProfileController.js`) -- extends this module per its own
+    docstring ("a reusable starting point ... not a full port of every
+    caller"), reusing `upload_avatar`'s exact put_object/SSE pattern.
+    """
+    ext = os.path.splitext(original_filename)[1] or ""
+    key = f"{folder}/{uuid.uuid4()}{ext}"
+
+    def _put() -> None:
+        _client().put_object(
+            Bucket=_bucket(),
+            Key=key,
+            Body=data,
+            ContentType=content_type,
+            ServerSideEncryption="AES256",  # security.md: default server-side encryption
+        )
+
+    await asyncio.to_thread(_put)
+    return f"{_public_base_url()}/{key}"
+
+
 async def delete_object(url: str) -> None:
     """Delete a previously-uploaded object given its public URL. Never raises on not-found."""
     base = _public_base_url().rstrip("/") + "/"
