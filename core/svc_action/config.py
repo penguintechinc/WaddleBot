@@ -106,11 +106,7 @@ class ActionConfig:
             password=os.getenv("DB_PASS", ""),
         )
 
-        valkey_url = (
-            os.getenv("VALKEY_URL")
-            or os.getenv("REDIS_URL")
-            or "redis://localhost:6379/0"
-        )
+        valkey_url = os.getenv("VALKEY_URL") or os.getenv("REDIS_URL") or "redis://localhost:6379/0"
 
         return cls(
             module_name=os.getenv("MODULE_NAME", "svc-action"),
@@ -122,21 +118,15 @@ class ActionConfig:
             queue_scan_pattern=os.getenv(
                 "ACTION_QUEUE_SCAN_PATTERN", "waddles:t:*:c:*:app:*:action"
             ),
-            queue_scan_interval_seconds=float(
-                os.getenv("ACTION_QUEUE_SCAN_INTERVAL_SECONDS", "5")
-            ),
-            queue_block_timeout_seconds=int(
-                os.getenv("ACTION_QUEUE_BLOCK_TIMEOUT_SECONDS", "5")
-            ),
+            queue_scan_interval_seconds=float(os.getenv("ACTION_QUEUE_SCAN_INTERVAL_SECONDS", "5")),
+            queue_block_timeout_seconds=int(os.getenv("ACTION_QUEUE_BLOCK_TIMEOUT_SECONDS", "5")),
             database_url=database_url,
             db_pool_size=int(os.getenv("DB_POOL_SIZE", "5")),
             http_timeout_seconds=float(os.getenv("ACTION_HTTP_TIMEOUT_SECONDS", "10")),
             max_retries=int(os.getenv("ACTION_MAX_RETRIES", "3")),
             retry_initial_delay=float(os.getenv("ACTION_RETRY_INITIAL_DELAY", "1.0")),
             retry_max_delay=float(os.getenv("ACTION_RETRY_MAX_DELAY", "30.0")),
-            presentation_base_url=os.getenv(
-                "PRESENTATION_URL", "http://svc-presentation:8207"
-            ),
+            presentation_base_url=os.getenv("PRESENTATION_URL", "http://svc-presentation:8207"),
             smtp_host=os.getenv("SMTP_HOST", "localhost"),
             smtp_port=int(os.getenv("SMTP_PORT", "587")),
             smtp_user=os.getenv("SMTP_USER", ""),

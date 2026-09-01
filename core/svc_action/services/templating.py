@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from services.action_target import ActionTarget
 from services.envelope import ActionEnvelope
@@ -21,7 +22,7 @@ _TEMPLATE_VAR_RE = re.compile(r"\{\{\s*([\w.]+)\s*\}\}")
 def render_template(template: str, payload: Mapping[str, Any]) -> str:
     """Render `{{key}}`/`{{a.b}}` placeholders against `payload`; unknown keys render empty."""
 
-    def _lookup(match: "re.Match[str]") -> str:
+    def _lookup(match: re.Match[str]) -> str:
         value: Any = payload
         for part in match.group(1).split("."):
             if isinstance(value, Mapping) and part in value:

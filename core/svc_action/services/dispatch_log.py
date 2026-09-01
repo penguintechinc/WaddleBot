@@ -15,7 +15,7 @@ bodies").
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from flask_core import AsyncDAL
 
@@ -42,20 +42,20 @@ async def record_dispatch(
     dal: AsyncDAL,
     *,
     tenant_id: int,
-    community_id: Optional[int],
+    community_id: int | None,
     app_id: str,
     target_type: str,
     status: str,
     attempt: int,
-    http_status: Optional[int],
+    http_status: int | None,
     detail: str,
-    envelope_ts: Optional[datetime],
+    envelope_ts: datetime | None,
 ) -> None:
-    """Insert one audit row. Never raises into the caller's dispatch flow --
+    """Insert one audit row.
 
-    an audit-log write failure must not mask (or retry-loop) the dispatch
-    outcome it's trying to record; the runner logs (via structured
-    logging, not this table) and moves on if this insert itself fails.
+    Raises on a DB write failure -- callers (`runner.py::_record`) catch
+    and log rather than let an audit-log write failure mask or retry-loop
+    the dispatch outcome it's trying to record.
     """
     await dal.insert_async(
         dal.dal.action_dispatch_log,

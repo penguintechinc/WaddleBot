@@ -82,6 +82,16 @@ async def test_5xx_is_retryable() -> None:
             await rest_api.dispatch(target, _envelope(), timeout_seconds=5.0, client=client)
 
 
+async def test_network_error_is_retryable() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused", request=request)
+
+    target = ActionTarget(type="rest_api", url="https://8.8.8.8/api", method="GET")
+    async with _client(handler) as client:
+        with pytest.raises(RetryableDispatchError):
+            await rest_api.dispatch(target, _envelope(), timeout_seconds=5.0, client=client)
+
+
 async def test_private_target_blocked_non_retryable() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         raise AssertionError("must not be called")

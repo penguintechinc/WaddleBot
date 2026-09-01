@@ -22,10 +22,11 @@ from typing import Any
 
 
 def bind_minimal_reference_tables(dal: Any) -> None:
-    """Define bare `tenants`/`communities` tables (id only) on `dal`. Idempotent no-op if already bound."""
+    """Define bare `tenants`/`communities` tables (id only) on `dal`.
+
+    Idempotent no-op if already bound.
+    """
     if "tenants" not in dal.tables:
         dal.define_table("tenants", migrate=False)
     if "communities" not in dal.tables:
-        dal.define_table(
-            "communities", dal.Field("tenant_id", "reference tenants"), migrate=False
-        )
+        dal.define_table("communities", dal.Field("tenant_id", "reference tenants"), migrate=False)

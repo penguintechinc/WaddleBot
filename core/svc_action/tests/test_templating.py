@@ -38,7 +38,12 @@ def test_render_template_no_placeholders_passthrough() -> None:
 
 
 def test_build_body_uses_template_when_present() -> None:
-    target = ActionTarget(type="webhook", url="https://example.com", secret_ref="S", body_template='{"user":"{{name}}"}')
+    target = ActionTarget(
+        type="webhook",
+        url="https://example.com",
+        secret_ref="S",
+        body_template='{"user":"{{name}}"}',
+    )
     envelope = _envelope({"name": "Justin"})
     assert build_body(target, envelope) == b'{"user":"Justin"}'
 

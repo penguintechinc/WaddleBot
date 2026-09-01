@@ -27,7 +27,8 @@ with this class's own.
 
 from __future__ import annotations
 
-from typing import Any, Mapping, Optional
+from collections.abc import Mapping
+from typing import Any
 
 from flask_core import AsyncDAL
 
@@ -40,11 +41,12 @@ class ActionConfigLookup:
     """
 
     def __init__(self, dal: AsyncDAL) -> None:
+        """Wrap `dal` (its C3 tables already bound by the caller -- see class docstring)."""
         self._dal = dal
 
     async def get_action_target_config(
-        self, *, tenant: str, community: Optional[str], app_id: str
-    ) -> Optional[Mapping[str, Any]]:
+        self, *, tenant: str, community: str | None, app_id: str
+    ) -> Mapping[str, Any] | None:
         """Return the raw `action_target` dict for `app_id`, or `None` if unconfigured.
 
         `community=None` (tenant-wide activation, `c:_tenant` in the queue
@@ -73,7 +75,7 @@ class ActionConfigLookup:
                 activation_set, dal.app_activations.config, limitby=(0, 1)
             )
             if rows:
-                target = dict(rows[0].config or {}).get("action_target")
+                target: Mapping[str, Any] | None = dict(rows[0].config or {}).get("action_target")
                 if target:
                     return target
 
@@ -86,8 +88,10 @@ class ActionConfigLookup:
             avail_set, dal.app_tenant_availability.config_defaults, limitby=(0, 1)
         )
         if avail_rows:
-            target = dict(avail_rows[0].config_defaults or {}).get("action_target")
-            if target:
-                return target
+            avail_target: Mapping[str, Any] | None = dict(avail_rows[0].config_defaults or {}).get(
+                "action_target"
+            )
+            if avail_target:
+                return avail_target
 
         return None

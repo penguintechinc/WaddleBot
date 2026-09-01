@@ -45,9 +45,7 @@ async def test_signs_body_with_hmac_sha256(monkeypatch: pytest.MonkeyPatch) -> N
         return httpx.Response(200)
 
     async with _client(handler) as client:
-        result = await webhook.dispatch(
-            _target(), _envelope(), timeout_seconds=5.0, client=client
-        )
+        result = await webhook.dispatch(_target(), _envelope(), timeout_seconds=5.0, client=client)
 
     expected_sig = hmac.new(b"s3cr3t", captured["body"], hashlib.sha256).hexdigest()
     assert captured["signature"] == expected_sig
@@ -67,7 +65,9 @@ async def test_missing_secret_is_non_retryable(monkeypatch: pytest.MonkeyPatch) 
 
 
 @pytest.mark.parametrize("status", [401, 403])
-async def test_auth_rejection_is_non_retryable(monkeypatch: pytest.MonkeyPatch, status: int) -> None:
+async def test_auth_rejection_is_non_retryable(
+    monkeypatch: pytest.MonkeyPatch, status: int
+) -> None:
     monkeypatch.setenv("TEST_WEBHOOK_SECRET", "s3cr3t")
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -111,7 +111,9 @@ async def test_network_error_is_retryable(monkeypatch: pytest.MonkeyPatch) -> No
             await webhook.dispatch(_target(), _envelope(), timeout_seconds=5.0, client=client)
 
 
-async def test_private_host_target_is_blocked_non_retryable(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_private_host_target_is_blocked_non_retryable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Fail-first-verify case: SSRF guard blocks a private-host webhook target."""
     monkeypatch.setenv("TEST_WEBHOOK_SECRET", "s3cr3t")
     called = False

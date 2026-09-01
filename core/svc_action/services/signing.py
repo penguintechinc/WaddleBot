@@ -27,9 +27,7 @@ def resolve_secret(secret_ref: str) -> str:
     """
     value = os.environ.get(secret_ref, "")
     if not value:
-        raise SecretResolutionError(
-            f"secret_ref {secret_ref!r} is not set in the environment"
-        )
+        raise SecretResolutionError(f"secret_ref {secret_ref!r} is not set in the environment")
     return value
 
 

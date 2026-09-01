@@ -28,7 +28,7 @@ async def dispatch_action(
     envelope: ActionEnvelope,
     *,
     config: ActionConfig,
-    redis_client: "redis.Redis[bytes]",
+    redis_client: redis.Redis,
     http_client: httpx.AsyncClient,
 ) -> AdapterResult:
     """Route `target` to its adapter and return the successful dispatch result.

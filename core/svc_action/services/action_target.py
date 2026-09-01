@@ -19,8 +19,9 @@ partially dispatched by an adapter discovering a missing field mid-request.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any
 
 #: The five standardized adapter types this stage-runner supports.
 KNOWN_TARGET_TYPES = frozenset({"webhook", "rest_api", "message_queue", "overlay", "email"})

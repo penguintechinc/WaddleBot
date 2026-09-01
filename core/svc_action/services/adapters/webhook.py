@@ -47,9 +47,7 @@ async def dispatch(
     }
 
     owns_client = client is None
-    http_client = client or httpx.AsyncClient(
-        follow_redirects=False, timeout=timeout_seconds
-    )
+    http_client = client or httpx.AsyncClient(follow_redirects=False, timeout=timeout_seconds)
     try:
         response = await guarded_request(
             http_client, "POST", target.url, headers=headers, content=body

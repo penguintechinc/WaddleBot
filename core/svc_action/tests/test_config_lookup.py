@@ -68,6 +68,14 @@ def dal(tmp_path: Path) -> AsyncDAL:
         d.Field("config", "json", default={}),
         migrate=True,
     )
+
+    # FK targets -- app_activations/app_tenant_availability reference these by
+    # id, sqlite enforces the FK, so every test's tenant_id=1/community_id=42
+    # needs a matching row to exist first.
+    d.tenants.insert(id=1)
+    d.communities.insert(id=42, tenant_id=1)
+    d.commit()
+
     return async_dal
 
 

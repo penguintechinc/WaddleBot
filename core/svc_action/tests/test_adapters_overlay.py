@@ -81,6 +81,35 @@ async def test_no_resolvable_community_raises_non_retryable() -> None:
             )
 
 
+async def test_network_error_is_retryable() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused", request=request)
+
+    target = ActionTarget(type="overlay", surface="giveaway")
+    async with _client(handler) as client:
+        with pytest.raises(RetryableDispatchError):
+            await overlay.dispatch(
+                target,
+                _envelope(),
+                presentation_base_url="https://8.8.8.8",
+                timeout_seconds=5.0,
+                client=client,
+            )
+
+
+async def test_auth_rejection_is_non_retryable() -> None:
+    target = ActionTarget(type="overlay", surface="giveaway")
+    async with _client(lambda r: httpx.Response(401)) as client:
+        with pytest.raises(NonRetryableDispatchError):
+            await overlay.dispatch(
+                target,
+                _envelope(),
+                presentation_base_url="https://8.8.8.8",
+                timeout_seconds=5.0,
+                client=client,
+            )
+
+
 async def test_5xx_is_retryable() -> None:
     target = ActionTarget(type="overlay", surface="giveaway")
     async with _client(lambda r: httpx.Response(503)) as client:

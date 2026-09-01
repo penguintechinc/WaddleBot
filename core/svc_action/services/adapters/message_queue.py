@@ -18,7 +18,7 @@ from services.envelope import ActionEnvelope
 
 
 async def dispatch(
-    target: ActionTarget, envelope: ActionEnvelope, *, redis_client: "redis.Redis[bytes]"
+    target: ActionTarget, envelope: ActionEnvelope, *, redis_client: redis.Redis
 ) -> AdapterResult:
     """PUBLISH the envelope payload (JSON) to `target.channel`.
 

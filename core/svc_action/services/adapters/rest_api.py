@@ -35,9 +35,7 @@ async def dispatch(
         headers.setdefault("Content-Type", "application/json")
 
     owns_client = client is None
-    http_client = client or httpx.AsyncClient(
-        follow_redirects=False, timeout=timeout_seconds
-    )
+    http_client = client or httpx.AsyncClient(follow_redirects=False, timeout=timeout_seconds)
     try:
         response = await guarded_request(
             http_client, target.method, target.url, headers=headers, content=body

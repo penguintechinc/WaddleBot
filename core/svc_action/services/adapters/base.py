@@ -11,13 +11,13 @@ task's "no retry on 4xx auth (401/403)" requirement.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 
 class RetryableDispatchError(Exception):
     """5xx response or network/timeout error -- worth retrying with backoff."""
 
-    def __init__(self, message: str, *, http_status: Optional[int] = None) -> None:
+    def __init__(self, message: str, *, http_status: int | None = None) -> None:
+        """Store `message` (the exception text) and the originating HTTP status, if any."""
         super().__init__(message)
         self.http_status = http_status
 
@@ -25,7 +25,8 @@ class RetryableDispatchError(Exception):
 class NonRetryableDispatchError(Exception):
     """4xx auth failure (401/403) or a config error -- retrying cannot succeed."""
 
-    def __init__(self, message: str, *, http_status: Optional[int] = None) -> None:
+    def __init__(self, message: str, *, http_status: int | None = None) -> None:
+        """Store `message` (the exception text) and the originating HTTP status, if any."""
         super().__init__(message)
         self.http_status = http_status
 
@@ -36,4 +37,4 @@ class AdapterResult:
 
     target_type: str
     detail: str
-    http_status: Optional[int] = None
+    http_status: int | None = None

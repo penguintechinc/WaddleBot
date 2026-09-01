@@ -155,7 +155,7 @@ async def guarded_request(
     *,
     headers: dict[str, str] | None = None,
     content: bytes | None = None,
-    json: dict | list | None = None,
+    json: dict[str, object] | list[object] | None = None,
 ) -> httpx.Response:
     """`method url`, re-validating the SSRF guard before every hop.
 

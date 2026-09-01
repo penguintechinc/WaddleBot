@@ -16,7 +16,7 @@ import redis.asyncio as redis
 
 
 async def scan_action_keys(
-    redis_client: "redis.Redis[bytes]", *, pattern: str, count: int = 500
+    redis_client: redis.Redis, *, pattern: str, count: int = 500
 ) -> list[str]:
     """Return every currently-existing key matching `pattern` via a full `SCAN` cursor walk.
 

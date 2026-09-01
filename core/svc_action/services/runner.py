@@ -18,15 +18,14 @@ from __future__ import annotations
 import asyncio
 import time
 from datetime import datetime
-from typing import Optional
 
 import httpx
 import redis.asyncio as redis
-
-from config import ActionConfig
 from flask_core import AsyncDAL, get_logger
 from flask_core.app_bundle_tables import init_app_bundle_tables
 from flask_core.circuit_breaker import retry_with_backoff
+
+from config import ActionConfig
 from services.action_target import ActionTarget, ActionTargetError, parse_action_target
 from services.adapters import dispatch_action
 from services.adapters.base import AdapterResult, NonRetryableDispatchError, RetryableDispatchError
@@ -39,7 +38,7 @@ from services.reference_tables import bind_minimal_reference_tables
 logger = get_logger(__name__)
 
 
-def _parse_envelope_ts(ts: str) -> Optional[datetime]:
+def _parse_envelope_ts(ts: str) -> datetime | None:
     """Best-effort ISO8601 parse of `envelope.ts` -- audit-log-only, never fatal."""
     try:
         return datetime.fromisoformat(ts.replace("Z", "+00:00"))
@@ -51,12 +50,13 @@ class ActionRunner:
     """Owns the Valkey/DB connections and the BRPOP dispatch loop's lifecycle."""
 
     def __init__(self, config: ActionConfig) -> None:
+        """Store `config`; connections open lazily in `start()`, not here."""
         self._config = config
-        self._redis: Optional["redis.Redis[bytes]"] = None
-        self._dal: Optional[AsyncDAL] = None
-        self._config_lookup: Optional[ActionConfigLookup] = None
-        self._http_client: Optional[httpx.AsyncClient] = None
-        self._task: Optional[asyncio.Task[None]] = None
+        self._redis: redis.Redis | None = None
+        self._dal: AsyncDAL | None = None
+        self._config_lookup: ActionConfigLookup | None = None
+        self._http_client: httpx.AsyncClient | None = None
+        self._task: asyncio.Task[None] | None = None
         self._running = False
 
     async def start(self) -> None:
@@ -95,7 +95,19 @@ class ActionRunner:
         if self._redis is not None:
             await self._redis.aclose()
         if self._dal is not None:
-            await self._dal.close_async()
+            # Defensive try/except, matching hub_api/app.py's established
+            # shutdown pattern: AsyncDAL.close_async() runs pydal's
+            # DAL.close() inside its ThreadPoolExecutor, on a different
+            # thread than the one that created the DAL -- pydal's close()
+            # reads THREAD_LOCAL._pydal_db_instances_, only ever populated
+            # on the *creating* thread, so a cross-thread close raises
+            # AttributeError (a flask_core bug, out of scope to patch a
+            # shared lib from this PR). Failing to release the pool
+            # cleanly on shutdown must never crash the ASGI lifespan.
+            try:
+                await self._dal.close_async()
+            except Exception as exc:  # noqa: BLE001 -- shutdown must not raise
+                logger.warning("error closing DAL on shutdown: %s", exc)
         logger.info("svc-action runner stopped")
 
     async def _loop(self) -> None:
@@ -134,7 +146,7 @@ class ActionRunner:
             _popped_key, raw_value = result
             await self._handle_item(raw_value)
 
-    async def _handle_item(self, raw_value: bytes) -> None:
+    async def _handle_item(self, raw_value: bytes | str) -> None:
         try:
             envelope = parse_envelope(raw_value)
         except EnvelopeError as exc:
@@ -182,6 +194,11 @@ class ActionRunner:
         self, envelope: ActionEnvelope, target: ActionTarget, ctx: str
     ) -> None:
         assert self._redis is not None and self._http_client is not None
+        # Local captures so the closure below sees the narrowed (non-None)
+        # type -- mypy does not narrow `self.*` attributes across a nested
+        # function boundary even after the assert above.
+        redis_client = self._redis
+        http_client = self._http_client
         attempt_count = 0
 
         async def _attempt() -> AdapterResult:
@@ -191,8 +208,8 @@ class ActionRunner:
                 target,
                 envelope,
                 config=self._config,
-                redis_client=self._redis,
-                http_client=self._http_client,
+                redis_client=redis_client,
+                http_client=http_client,
             )
 
         try:
@@ -250,7 +267,7 @@ class ActionRunner:
         target_type: str,
         status: str,
         attempt: int,
-        http_status: Optional[int],
+        http_status: int | None,
         detail: str,
     ) -> None:
         assert self._dal is not None
