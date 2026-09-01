@@ -1,29 +1,29 @@
-# v3.0.x — SCAFFOLD ONLY. Streaming module's control plane (RTC + broadcast media). See
-# docs/plans/2026-08-31-svc-streaming-design.md — the load-bearing correction at the top of
-# that doc: there is NO first-party media engine in this repo. This container is a CONTROL
-# PLANE fronting two EXTERNAL media engines (MarchProxy for RTMP/AV1 transcode,
-# core/video_proxy_module/config.py:39-40; LiveKit for the SFU, core/module_rtc/go.mod:8-11)
-# — build-vs-keep-external is an OPEN decision (spec §8.1), not settled by this scaffold.
+# v3.0.x — REAL control plane + real ffmpeg data plane (Streaming module). See
+# docs/plans/2026-08-31-svc-streaming-design.md for the target-state design (Rust control
+# plane, build-vs-external-media-engine decision at §8.1, still genuinely open). This build is
+# a deliberate, documented scope choice for a working alpha demo: Python/Quart control plane
+# (own DB tables, migration 078) + a real `ffmpeg` subprocess as the data plane (`services/
+# ffmpeg_engine.py`) — not the external MarchProxy/LiveKit fronting the design doc describes,
+# because neither exists in this repo/environment to front. The Rust data-plane migration
+# remains a documented follow-up (see the PR that landed this container).
 #
-# Only the control REST/gRPC ports are declared here — media transport (RTMP 1935, WebRTC/SFU
-# UDP) is §7.1 "only if §8.1 = build" and is explicitly NOT wired: no privileged port, no
-# hostNetwork/hostPort, no NET_ADMIN/NET_RAW capability added. Any of those needs an explicit
-# user-approved `# ROOT EXCEPTION (approved)` per critical-rules.md Rootless Containers —
-# TODO, not assumed here.
+# ffmpeg PULLS from a caller-supplied source_url (HLS/RTMP) and fans out to N forward targets
+# — this pod never listens on an RTMP/WebRTC media port itself, so only the control REST/gRPC
+# ports are declared here: no privileged port, no hostNetwork/hostPort, no NET_ADMIN/NET_RAW.
+# (gRPC port is reserved/declared, matching every other pipeline-stage container's shape —
+# this build's control surface is REST-only; a gRPC surface is follow-up work.)
 #
 # Gated solely on `pipeline.svcStreaming.enabled`, same single-condition gate as
-# svc-presentation.yaml — NOT on a `modules.streaming.enabled` toggle. The spec's target state
-# (§6) gates the *absorbed* container on `modules.streaming.enabled`, but that module doesn't
-# exist in `modules.*` yet (today: bot/social/customer/marketing) and adding it is out of
-# scope for this scaffold PR. svc-rtc.yaml / video_proxy_module are UNTOUCHED — this is a new,
-# additional container, not a replacement (spec §6's absorption is deferred, not done here).
+# svc-presentation.yaml — NOT on a `modules.streaming.enabled` toggle (that module doesn't
+# exist in `modules.*` yet; adding it is out of scope here). svc-rtc.yaml / video_proxy_module
+# are UNTOUCHED — this is a new, additional container, not a replacement (design spec §6's
+# absorption of both remains staged/future work).
 #
-# Base image pinned to the same digest already used by every other pipeline-stage skeleton in
-# this file (pipeline.pythonBaseImage) — no Dockerfile/CI image exists for svc-streaming yet;
-# core/svc_streaming/Dockerfile in this PR is scaffold-only, not wired into CI. Note the design
-# spec targets Rust for the eventual control plane (§1) — this scaffold is Python/Quart to
-# match the svc-presentation pattern this PR was asked to mirror; the Rust rewrite is follow-up
-# work, not contradicted by this placeholder.
+# Base image still pinned to the shared `pipeline.pythonBaseImage` placeholder digest — no CI
+# build exists for svc-streaming yet (same posture every other freshly-built core/svc_*
+# container in this chart is in today, e.g. svc-presentation.yaml's own header comment).
+# `core/svc_streaming/Dockerfile` is real (installs ffmpeg via apt, hash-pinned pip deps,
+# rootless `USER appuser`) but not yet wired into CI image publishing.
 {{- if .Values.pipeline.svcStreaming.enabled }}
 ---
 apiVersion: apps/v1
@@ -51,10 +51,10 @@ spec:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
       - name: svc-streaming
-        # SKELETON PLACEHOLDER — no Dockerfile/CI image exists yet for svc-streaming; pinned
-        # to the repo's existing Python base digest rather than inventing one or using a
-        # mutable tag. Replace once svc-streaming has its own CI build (and, per spec §1,
-        # once/if the service is rewritten in Rust).
+        # PLACEHOLDER — no CI-built image exists yet for svc-streaming; pinned to the repo's
+        # shared Python base digest rather than inventing one or using a mutable tag. Replace
+        # with a real `ghcr.io/.../svc-streaming` tag once CI publishes one for
+        # `core/svc_streaming/Dockerfile` (the Dockerfile itself is real, not a placeholder).
         image: "{{ .Values.pipeline.pythonBaseImage }}"
         imagePullPolicy: {{ .Values.global.imagePullPolicy }}
         securityContext:
@@ -99,8 +99,16 @@ spec:
         volumeMounts:
         - name: tmp
           mountPath: /tmp
+        # Real recording output target for `record_enabled` streams (`services/
+        # ffmpeg_engine.py::ensure_recordings_dir`, `Config.recordings_dir`) — emptyDir today
+        # (pod-lifetime only); MinIO/object-store upload of finished segments is documented
+        # follow-up (design spec §8.5), not done here.
+        - name: recordings
+          mountPath: /var/lib/svc-streaming/recordings
       volumes:
       - name: tmp
+        emptyDir: {}
+      - name: recordings
         emptyDir: {}
 ---
 apiVersion: v1

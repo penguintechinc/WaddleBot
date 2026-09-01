@@ -1,221 +1,116 @@
-"""
-svc-streaming -- Quart application entrypoint.
+"""svc-streaming -- Quart application factory + hypercorn entry point.
 
-SCAFFOLD ONLY. Streaming module's control plane (RTC + broadcast media,
-docs/plans/2026-08-31-svc-streaming-design.md §1). Per that spec's
-load-bearing correction: this repo has NO first-party media engine --
-svc-streaming is a CONTROL PLANE fronting two EXTERNAL media engines
-(MarchProxy for RTMP ingest/AV1 transcode/fan-out,
-core/video_proxy_module/config.py:39-40; LiveKit for the WebRTC SFU,
-core/module_rtc/go.mod:8-11). Build vs keep-external is an OPEN decision
-(spec §8.1) -- this scaffold builds neither, only the control-plane HTTP
-surface that will eventually orchestrate one or the other.
+The 8th container / Streaming module's control plane + real ffmpeg data
+plane (`docs/plans/2026-08-31-svc-streaming-design.md`). Follows the same
+`create_app()`/blueprint-auto-discovery shape `core/svc_presentation/
+app.py` established for this monorepo's newer first-party Quart services
+(itself following `hub_api/app.py`'s own precedent).
 
-Every capability below (INGEST/DISPLAY/FORWARD/premium_limits/RECORD/
-TRANSCODE/RTC) is its own PostHog feature flag under `waddles.streaming.*`
-(spec §2) -- flag checks are NOT wired in this scaffold (TODO); routes are
-unconditionally stubbed.
+Real Quart serving, a real pydal-backed control plane (`services/
+schema.py`, `services/streaming_service.py`), and a real `ffmpeg`
+subprocess data plane (`services/ffmpeg_engine.py`) doing the actual
+HLS/RTMP ingest + fan-out-to-N-targets forwarding -- not simulated. This
+is a deliberate, documented scope choice: the design spec targets a
+first-party Rust media engine or a control plane fronting external
+MarchProxy/LiveKit (§1, §8.1, both still genuinely open per that spec);
+this build is Python/Quart control-plane + orchestration with `ffmpeg`
+(the real, external, industry-standard media engine) as the data plane,
+because neither MarchProxy nor LiveKit exists in this repo/environment to
+front for tonight's alpha demo. See this PR's description for the full
+rationale; the Rust data-plane migration remains a documented follow-up.
 
 The word "restream" is never used anywhere in this file or its docs --
-"forward" / "stream-forwarding" / "forward to targets" only (spec
-Terminology, mandatory).
+"forward" / "stream-forwarding" / "forward to targets" only (design spec
+Terminology, mandatory; trademark caution).
 """
+
 from __future__ import annotations
 
-import re
+import asyncio
 
-from flask_core import create_health_blueprint, setup_aaa_logging
-from quart import Blueprint, Quart, jsonify, request
+from flask_core import create_health_blueprint, init_database, setup_aaa_logging
+from quart import Quart
+from quart_schema import QuartSchema
 
+from blueprints import register_blueprints
 from config import Config
-
-app = Quart(__name__)
-
-# /health, /healthz, /metrics -- flask_core standard blueprint, same as
-# every other pipeline-stage container. k8s liveness/readiness probes
-# (k8s/helm/waddlebot/templates/svc-streaming.yaml) point at /health.
-health_bp = create_health_blueprint(Config.MODULE_NAME, Config.MODULE_VERSION)
-app.register_blueprint(health_bp)
-
-logger = setup_aaa_logging(Config.MODULE_NAME, Config.MODULE_VERSION)
-
-streams_bp = Blueprint('streams', __name__, url_prefix='/streams')
-
-# Loose slug validation for path params -- security.md Input Validation
-# (server-side validation on client input) applies even to a stub response.
-_SLUG_RE = re.compile(r'^[a-zA-Z0-9_-]{1,64}$')
+from openapi.routes import register_openapi_docs
+from services.ffmpeg_engine import FFmpegSupervisor
+from services.schema import bind_shared_read_tables, bind_streaming_tables
 
 
-def _not_implemented(detail: str) -> tuple[dict, int]:
-    """Build the standard scaffold 501 body -- every stub route returns this shape."""
-    return {"status": "not_implemented", "detail": detail}, 501
+def create_app(config: Config | None = None) -> Quart:
+    """Build the svc-streaming Quart application."""
+    cfg = config or Config.from_env()
+    app = Quart(__name__)
+    app.config["APP_CONFIG"] = cfg
+
+    # Public/full OpenAPI docs mounted at /openapi/v1-public.json and
+    # /openapi/v1.json (own auth chain, see openapi/routes.py) -- the
+    # DEFAULT quart-schema doc/UI routes are disabled (openapi_path=None,
+    # swagger_ui_path=None) so this service never accidentally serves an
+    # unauthenticated full-surface spec at the well-known path
+    # (backend.md OpenAPI: "the default-mounted UI/spec route... is fully
+    # unauthenticated and covers every endpoint").
+    QuartSchema(app, openapi_path=None, swagger_ui_path=None, redoc_ui_path=None)
+
+    logger = setup_aaa_logging(cfg.module_name, cfg.module_version, log_level=cfg.log_level)
+    app.config["logger"] = logger
+
+    app.register_blueprint(create_health_blueprint(cfg.module_name, cfg.module_version))
+    register_blueprints(app)
+    register_openapi_docs(app)
+
+    app.config["FFMPEG_SUPERVISOR"] = FFmpegSupervisor()
+
+    @app.before_serving
+    async def startup() -> None:
+        """Initialize the DAL, bind this service's own + shared read-only tables."""
+        logger.system("Starting svc-streaming", action="startup", extra={"port": cfg.module_port})
+
+        async_dal = init_database(cfg.database_url, pool_size=cfg.db_pool_size)
+        dal = async_dal.dal
+        bind_streaming_tables(dal, migrate=cfg.db_migrate)
+        bind_shared_read_tables(dal, migrate=cfg.db_migrate)
+        # `lazy_tables=True` (AsyncDAL's own default) defers each table's
+        # actual `CREATE TABLE` until first ORM access -- left lazy, the
+        # first access could happen on an `async_dal.*_async()` worker
+        # thread mid-request, racing its own `CREATE TABLE` against this
+        # thread's still-open sqlite file handle (same gotcha `core/
+        # svc_presentation/app.py`'s own startup hook documents). Touching
+        # every table once here, still on this thread, forces that DDL to
+        # run before any worker thread exists.
+        for table_name in dal.tables:
+            dal(dal[table_name]).count()
+        app.config["async_dal"] = async_dal
+        app.config["dal"] = dal
+
+        logger.system("svc-streaming started", action="startup", result="SUCCESS")
+
+    @app.after_serving
+    async def shutdown() -> None:
+        """Stop every supervised ffmpeg job, then close the DAL connection pool."""
+        supervisor: FFmpegSupervisor = app.config["FFMPEG_SUPERVISOR"]
+        await supervisor.stop_all()
+
+        async_dal = app.config.get("async_dal")
+        if async_dal is not None:
+            try:
+                await async_dal.close_async()
+            except Exception as exc:  # noqa: BLE001 - shutdown must not raise
+                logger.warning(f"Error closing DAL on shutdown: {exc}")
+        logger.system("svc-streaming shutdown complete", action="shutdown", result="SUCCESS")
+
+    return app
 
 
-async def _front_marchproxy_ingest(community_id: str, source: str) -> None:
-    """
-    TODO(svc-streaming): front external MarchProxy for INGEST (capability
-    #1) -- open an RTMP/HLS intake session against MarchProxy's gRPC
-    control API (`Config.MARCHPROXY_GRPC_HOST`/`MARCHPROXY_GRPC_PORT`,
-    matching `core/video_proxy_module/config.py:39-40`; today's
-    `proto/video_proxy.proto` `VideoProxyService`). Gated on the
-    `waddles.streaming.ingest` PostHog flag (spec §2) -- not checked here.
-
-    See: docs/plans/2026-08-31-svc-streaming-design.md §3, §6
-    """
-    raise NotImplementedError(
-        "svc-streaming: MarchProxy ingest front-end not implemented (scaffold)"
-    )
-
-
-async def _front_marchproxy_transcode(community_id: str, stream_id: str, profile: str) -> None:
-    """
-    TODO(svc-streaming): front external MarchProxy for ENCODE/TRANSCODE
-    (capability #6) -- request a transcode profile from MarchProxy,
-    gated on `waddles.streaming.transcode` (Professional + metered
-    tokens, spec §2) AND a successful `_consume_transcoding_tokens` call
-    at job admission (spec §5) BEFORE starting the job. Never kill an
-    in-flight job on balance exhaustion -- block only new job starts
-    (spec §5 enforcement posture).
-
-    See: docs/plans/2026-08-31-svc-streaming-design.md §5, §6
-    """
-    raise NotImplementedError(
-        "svc-streaming: MarchProxy transcode front-end not implemented (scaffold)"
-    )
-
-
-async def _front_livekit_rtc(community_id: str, room: str) -> None:
-    """
-    TODO(svc-streaming): front external LiveKit for RTC (capability #7,
-    the folded-in `svc-rtc`/`module_rtc`) -- room create/join-JWT/
-    moderation control reimplemented against LiveKit's control API
-    (today's Go control plane: `core/module_rtc/internal/services/
-    room_service.go:53-178`, `call_features.go:32-106`). Gated on
-    `waddles.streaming.rtc` (spec §2).
-
-    See: docs/plans/2026-08-31-svc-streaming-design.md §6
-    """
-    raise NotImplementedError(
-        "svc-streaming: LiveKit RTC front-end not implemented (scaffold)"
-    )
-
-
-async def _consume_transcoding_tokens(community_id: str, units: int, job_id: str) -> None:
-    """
-    TODO(svc-streaming): metered transcoding-token consumption -- call
-    hub-api marketplace's `consume()` at transcode job admission via
-    `Config.TOKEN_CONSUME_URL` (internal `POST /internal/tokens/consume`,
-    signature `consume(community_id, consumable_type, amount,
-    idempotency_key, source_ref, actor)`, e.g.
-    `consume('transcoding', units, job_id)` --
-    `k8s/helm/waddlebot/PIPELINE_MAPPING.md:119,207`). svc-streaming holds
-    NO ledger DB grant (marketplace account is single-writer) -- this is
-    the only way tokens are ever decremented.
-
-    Cross-ref: docs/plans/2026-08-31-metered-token-billing-design.md
-               docs/plans/2026-08-31-svc-streaming-design.md §5
-    """
-    raise NotImplementedError(
-        "svc-streaming: transcoding-token consume() call not implemented (scaffold)"
-    )
-
-
-async def _aggregate_live_status(community_id: str) -> None:
-    """
-    TODO(svc-streaming): live-streams aggregation (DISPLAY, capability #2)
-    -- merge (a) this community's own svc-streaming ingest/forward
-    sessions with (b) the per-connected-channel live-status projection
-    that Twitch EventSub (`trigger/receiver/twitch_module/
-    eventsub_handler.py:215-236`, already emits `stream_online`/
-    `stream_offline`) and YouTube WebSub/poll
-    (`trigger/receiver/youtube_live_module/webhook_handler.py`,
-    `youtube_client.py:141-178`) already detect -- detection exists
-    today, only the projection + aggregation are new (spec §4, §4.1).
-    Read from the read replica, never primary (backend.md Database Tier).
-    Rendered by svc-presentation, NOT served as HTML from this route
-    (spec §3) -- this endpoint returns the raw projection only.
-
-    See: docs/plans/2026-08-31-svc-streaming-design.md §4, §4.1, §8.6
-    """
-    raise NotImplementedError(
-        "svc-streaming: live-status aggregation not implemented (scaffold)"
-    )
-
-
-@streams_bp.route('', methods=['GET'])
-async def list_streams():
-    """
-    STUB -- list this community's active/known streams. Real
-    implementation reads per-community stream state from the read
-    replica (spec §3) once `_aggregate_live_status`/hub-api client wiring
-    lands.
-    """
-    body, status = _not_implemented(
-        "list streams: hub-api read-replica client not wired (scaffold)"
-    )
-    return jsonify(body), status
-
-
-@streams_bp.route('', methods=['POST'])
-async def create_stream():
-    """
-    STUB -- create/ingest a new stream (capability #1, INGEST). Real
-    implementation validates the request body, checks the
-    `waddles.streaming.ingest` flag + tier entitlement, and calls
-    `_front_marchproxy_ingest`.
-    """
-    await request.get_json(force=True, silent=True)
-    try:
-        await _front_marchproxy_ingest(community_id="", source="")
-    except NotImplementedError as exc:
-        body, status = _not_implemented(str(exc))
-        return jsonify(body), status
-    return jsonify({"status": "created"}), 201  # pragma: no cover - unreachable in scaffold
-
-
-@streams_bp.route('/<stream_id>/forward', methods=['POST'])
-async def add_forward_target(stream_id: str):
-    """
-    STUB -- add a FORWARD target for an existing stream (capability #3/#4,
-    spec §3's `stream_destinations` model). Real implementation validates
-    `stream_id`, checks `waddles.streaming.forward` +
-    `waddles.streaming.premium_limits` tier limits, resolves the target
-    stream key via a `penguin-sal` reference (never inline, spec §8.4),
-    and writes to hub-api's primary.
-    """
-    if not _SLUG_RE.match(stream_id):
-        return jsonify({"status": "invalid_stream_id"}), 400
-    await request.get_json(force=True, silent=True)
-    body, status = _not_implemented(
-        "add forward target: hub-api destination CRUD not wired (scaffold)"
-    )
-    return jsonify(body), status
-
-
-@streams_bp.route('/live', methods=['GET'])
-async def live_status():
-    """
-    STUB -- live-status projection endpoint (DISPLAY aggregation, spec
-    §4). Consumed by svc-presentation's community "live streams" section,
-    not rendered as HTML here (spec §3).
-    """
-    try:
-        await _aggregate_live_status(community_id="")
-    except NotImplementedError as exc:
-        body, status = _not_implemented(str(exc))
-        return jsonify(body), status
-    return jsonify({"streams": []}), 200  # pragma: no cover - unreachable in scaffold
-
-
-app.register_blueprint(streams_bp)
+app = create_app()
 
 
 if __name__ == "__main__":  # pragma: no cover - process entrypoint, not exercised by unit tests
-    import asyncio
-
     import hypercorn.asyncio
     from hypercorn.config import Config as HyperConfig
 
     hyper_config = HyperConfig()
-    hyper_config.bind = [f"0.0.0.0:{Config.MODULE_PORT}"]
+    hyper_config.bind = [f"0.0.0.0:{app.config['APP_CONFIG'].module_port}"]
     asyncio.run(hypercorn.asyncio.serve(app, hyper_config))
