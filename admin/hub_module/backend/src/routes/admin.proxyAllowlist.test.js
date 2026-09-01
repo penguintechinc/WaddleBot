@@ -1,13 +1,26 @@
 /**
  * Regression guard: the security/analytics proxy routes in admin.js must
- * gate on the shared allowlist before ever building the downstream URL.
+ * gate on the shared allowlist pattern — via a direct, inline
+ * `PATTERN.test(pathTail)` call on the raw Express wildcard capture, in
+ * the same function as the downstream request — before ever building the
+ * proxied URL.
+ *
+ * The inline-`.test()`-on-the-tainted-variable shape matters: CodeQL's
+ * js/request-forgery query recognizes a direct `regex.test(taintedVar)`
+ * (or `array.includes(taintedVar)`) guard in the same function as a
+ * sanitizing barrier, but does NOT reliably recognize a boolean returned
+ * from a call to a separately-defined helper function as one. An earlier
+ * version of this fix called `isAllowedProxyPath(...)` from
+ * utils/proxyAllowlist.js and left all 5 of these CodeQL alerts open even
+ * though the runtime behavior was already correct — this test pins the
+ * shape that actually clears them.
  *
  * This intentionally reads admin.js as source text rather than importing
  * the module. admin.js pulls in ~30 controllers that each import
  * config/database.js, which opens a real pg Pool and an un-refed
  * setInterval — importing it here would leave the test runner unable to
  * exit cleanly. Reading the file avoids that entirely while still proving
- * the fix is actually wired into the route handlers (not just present in
+ * the fix is wired into the route handlers (not just present in
  * proxyAllowlist.js and unused).
  *
  * Run with the repo's configured runner: `npm test` (node --test).
@@ -32,34 +45,35 @@ function extractHandler(routerMethod, path) {
   return source.slice(start, nextRouterCall === -1 ? source.length : nextRouterCall);
 }
 
-describe('admin.js proxy routes are gated by isAllowedProxyPath', () => {
-  it('imports the shared allowlist helper', () => {
-    assert.match(source, /import\s*\{\s*isAllowedProxyPath\s*\}\s*from\s*'\.\.\/utils\/proxyAllowlist\.js'/);
+describe('admin.js proxy routes are gated by an inline allowlist regex test', () => {
+  it('imports the shared allowlist patterns', () => {
+    assert.match(source, /import\s*\{[^}]*ANALYTICS_GET_PATH[^}]*\}\s*from\s*'\.\.\/utils\/proxyAllowlist\.js'/s);
   });
 
   const cases = [
-    ['get', '/:communityId/analytics/*', 'analytics', 'analyticsPath', "'GET'"],
-    ['get', '/:communityId/security/*', 'security', 'securityPath', "'GET'"],
-    ['put', '/:communityId/security/*', 'security', 'securityPath', "'PUT'"],
-    ['post', '/:communityId/security/*', 'security', 'securityPath', "'POST'"],
-    ['delete', '/:communityId/security/*', 'security', 'securityPath', "'DELETE'"],
+    ['get', '/:communityId/analytics/*', 'ANALYTICS_GET_PATH', 'analyticsPath'],
+    ['get', '/:communityId/security/*', 'SECURITY_GET_PATH', 'securityPath'],
+    ['put', '/:communityId/security/*', 'SECURITY_PUT_PATH', 'securityPath'],
+    ['post', '/:communityId/security/*', 'SECURITY_POST_PATH', 'securityPath'],
+    ['delete', '/:communityId/security/*', 'SECURITY_DELETE_PATH', 'securityPath'],
   ];
 
-  for (const [routerMethod, path, service, pathVar, methodLiteral] of cases) {
+  for (const [routerMethod, path, patternName, pathVar] of cases) {
     it(`${routerMethod.toUpperCase()} ${path} rejects a disallowed path before proxying`, () => {
       // security registers 4 handlers (get/put/post/delete) on the same
       // path — the routerMethod in the marker disambiguates which one.
       const handler = extractHandler(routerMethod, path);
 
+      // Must be a direct `PATTERN.test(pathVar)` call — not routed through
+      // an intermediate helper function — so CodeQL's local barrier-guard
+      // analysis sees the tainted variable gated in this same function.
       assert.match(
         handler,
-        new RegExp(`isAllowedProxyPath\\(\\s*'${service}'\\s*,\\s*${methodLiteral}\\s*,\\s*${pathVar}\\s*\\)`),
-        `handler must call isAllowedProxyPath('${service}', ${methodLiteral}, ${pathVar})`
+        new RegExp(`if\\s*\\(\\s*!${patternName}\\.test\\(${pathVar}\\)\\s*\\)`),
+        `handler must inline-guard with if (!${patternName}.test(${pathVar}))`
       );
 
-      // The guard must reject with a client error and must appear BEFORE
-      // the axios call is issued — otherwise the request already went out.
-      const guardIndex = handler.search(/if\s*\(\s*!isAllowedProxyPath/);
+      const guardIndex = handler.search(new RegExp(`if\\s*\\(\\s*!${patternName}\\.test`));
       const axiosCallIndex = handler.search(/httpClient\.(get|put|post|delete)\(/);
       assert.ok(guardIndex !== -1, 'no rejection guard found');
       assert.ok(axiosCallIndex !== -1, 'no downstream axios call found');
