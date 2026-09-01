@@ -15,14 +15,16 @@ Fail-first proofs (executed, not narrated):
    `activate_bundle`'s `check_activation_insert_allowed` call with a bare
    `pass`: `test_activate_without_availability_is_409` went red (201
    instead of 409); reverted, green again.
-3. Per-community IDOR (`authorize_community`'s tenant-ownership re-check) --
-   temporarily hardcoded `admin=False` bypass by commenting out the
-   `resolve_community_membership_scoped` community-tenant-ownership guard
-   clause (`if not community_rows: return None`) in
-   `services/community_authz.py`: `test_activate_cross_tenant_community_is_403`
-   went red (201 instead of 403 -- a community-admin of the FIRST tenant's
-   community could activate a bundle against the SECOND tenant's
-   `community_id`); reverted, green again.
+3. Per-community IDOR (`resolve_community_membership_scoped`'s
+   tenant-ownership guard, `services/community_authz.py`) -- temporarily
+   changed its `if not community_rows:` early-return to `if False and not
+   community_rows:`. `test_activate_cross_tenant_community_is_403` seeds
+   user `"1"` as a GENUINE active admin member of the OTHER tenant's
+   community (not just an absent membership row, which would pass for the
+   wrong reason) and asserts 403 when acting under a JWT whose tenant claim
+   doesn't own that `community_id` -- went red (201 instead of 403, real
+   membership in a tenant-B community authorized an action while the
+   caller's JWT/tenant context was tenant A); reverted, green again.
 """
 
 from __future__ import annotations
@@ -272,8 +274,37 @@ class TestActivateDeactivate:
         )
         assert response.status_code == 403
 
-    async def test_activate_cross_tenant_community_is_403(self, client: Any) -> None:
-        """Per-community IDOR -- see module fail-first note #3."""
+    async def test_activate_cross_tenant_community_is_403(
+        self, client: Any, lifecycle_db: Any
+    ) -> None:
+        """Per-community IDOR -- see module fail-first note #3.
+
+        User `"1"` is ALSO seeded here as a genuine active admin member of
+        `LIFECYCLE_OTHER_COMMUNITY_ID` (the OTHER tenant's community) --
+        without that, this test would pass for the wrong reason (no
+        membership row at all), never actually exercising
+        `resolve_community_membership_scoped`'s tenant-ownership guard
+        (`community.tenant_id == ctx.tenant_id`, checked BEFORE the
+        `community_members` lookup). The caller's JWT still claims
+        `TENANT_SLUG` (tenant A) -- real membership in a tenant-B community
+        must not authorize action there while acting under tenant A's
+        JWT/tenant context.
+        """
+        dal = lifecycle_db.dal
+        role_id = dal.community_roles.insert(
+            community_id=LIFECYCLE_OTHER_COMMUNITY_ID,
+            name="admin",
+            base_claims={"scopes": ["community:manage_members"]},
+        )
+        dal.community_members.insert(
+            community_id=LIFECYCLE_OTHER_COMMUNITY_ID,
+            user_id="1",
+            role="admin",
+            community_role_id=role_id,
+            is_active=True,
+        )
+        dal.commit()
+
         await _install(client)
         await _make_available(client)
         response = await _activate(client, community_id=LIFECYCLE_OTHER_COMMUNITY_ID)
