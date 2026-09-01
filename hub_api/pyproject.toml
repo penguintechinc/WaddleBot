@@ -166,6 +166,17 @@ convention = "google"
 "services/music_providers/errors.py" = ["N818"]
 "services/music_providers/spotify.py" = ["S105"]
 "services/music_providers/youtube.py" = ["S105"]
+# Metered token billing (marketplace module, migration 076) -- credit/
+# debit routes assert `result.balance_after is not None and
+# result.transaction_id is not None` after `result.ok` is already True
+# (`token_billing_service.TokenLedgerResult`'s own contract: both fields
+# are only `None` on a blocked/`ok=False` result) -- a postcondition
+# assert, same rationale as blueprints/v2/platform.py's `ctx is not None`
+# above, not a security control an `-O` strip could bypass (worst case is
+# an AttributeError -> 500, never a ledger bypass -- the real oversell
+# guard is the WHERE-guarded UPDATE in token_billing_service.py, not this
+# assert).
+"blueprints/v1/token_billing.py" = ["S101"]
 
 [tool.mypy]
 python_version = "3.13"

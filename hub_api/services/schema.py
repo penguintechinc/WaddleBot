@@ -2524,3 +2524,63 @@ def bind_ai_routing_tables(dal: Any, *, migrate: bool = False) -> None:
         Field("created_at", "datetime"),
         migrate=migrate,
     )
+
+
+def bind_token_billing_tables(dal: Any, *, migrate: bool = False) -> None:
+    """Define the metered-token-billing ledger tables (migration 076).
+
+    The third metering axis alongside node/seat licensing (critical-
+    rules.md "Licensing Model: Nodes & Seats") -- premium metered
+    consumables (e.g. AI-routing calls) sold as pre-paid token packs.
+    `token_products` is a global catalog (no `community_id`/`tenant_id`
+    column, matching the literal migration 076 schema); the per-community
+    `balance`/`transactions` tables below are tenant-isolated
+    transitively via `community_id -> communities.tenant_id`, the same
+    pattern every other community-scoped table in this schema already
+    uses (`inventory_items`, `community_members`, ...) -- enforced at the
+    API layer by `services/community_authz.py::authorize_community()`,
+    not a redundant `tenant_id` column here.
+
+    Called unconditionally from `app.py::_bind_reference_tables` (this
+    group's own PORTING.md instruction: "one call at END of
+    app.py::_bind_reference_tables") -- no idempotency guard needed since
+    that is the ONLY call site (contrast `bind_community_authz_tables`,
+    which guards against being called lazily from multiple request
+    paths).
+    """
+    dal.define_table(
+        "token_products",
+        Field("key", "string", length=100, notnull=True, unique=True),
+        Field("name", "string", length=255, notnull=True),
+        Field("unit", "string", length=50, notnull=True, default="token"),
+        Field("price_cents", "integer", notnull=True),
+        Field("tokens_granted", "integer", notnull=True),
+        Field("active", "boolean", notnull=True, default=True),
+        Field("created_at", "datetime"),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "community_token_balances",
+        Field("community_id", "integer", notnull=True),
+        Field("product_id", "integer", notnull=True),
+        Field("balance", "integer", notnull=True, default=0),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    # Append-only -- no service-layer code ever UPDATEs or DELETEs a row
+    # here (see the migration's own docstring: the ledger alone can
+    # reconstruct the balance history via `balance_after`).
+    dal.define_table(
+        "token_transactions",
+        Field("community_id", "integer", notnull=True),
+        Field("product_id", "integer", notnull=True),
+        Field("delta", "integer", notnull=True),
+        Field("reason", "string", length=255, notnull=True),
+        Field("ref", "string", length=255),
+        Field("balance_after", "integer", notnull=True),
+        Field("created_at", "datetime"),
+        migrate=migrate,
+    )
