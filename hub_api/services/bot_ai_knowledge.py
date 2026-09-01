@@ -3,9 +3,12 @@
 Knowledge-source CRUD, content crawling (GitHub Contents API / sitemap.xml
 + HTML strip), chunking, Ollama embeddings/completions, pgvector
 similarity search, and AI-generated support-ticket suggestions. Faithful
-port: same chunk sizing, same confidence threshold, same regex-based
-HTML extraction the Node version used (a rewrite to a real HTML parser
-is out of scope for a 1:1 behavior port -- migration plan §1 non-goals).
+port: same chunk sizing, same confidence threshold. HTML text extraction
+uses a real `html.parser.HTMLParser`-based tokenizer (`_html_to_text`),
+not the Node version's regex-based tag stripping -- CodeQL's
+`py/bad-tag-filter` flagged the original regex pipeline as bypassable
+(a crafted nested/malformed tag can survive removal); see
+`_HTMLTextExtractor`'s docstring.
 
 pydal has no pgvector field type, so the two `ai_knowledge_chunks`
 operations that touch `embedding` (`vector(384)`, cosine `<=>` operator)
@@ -21,6 +24,7 @@ import os
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
+from html.parser import HTMLParser
 from typing import Any
 
 import httpx
@@ -223,13 +227,75 @@ _TITLE_RE = re.compile(r"<title>([^<]+)</title>", re.IGNORECASE)
 _MAIN_RE = re.compile(r"<main[^>]*>([\s\S]*?)</main>", re.IGNORECASE)
 _ARTICLE_RE = re.compile(r"<article[^>]*>([\s\S]*?)</article>", re.IGNORECASE)
 _BODY_RE = re.compile(r"<body[^>]*>([\s\S]*?)</body>", re.IGNORECASE)
-_SCRIPT_RE = re.compile(r"<script[^>]*>[\s\S]*?</script>", re.IGNORECASE)
-_STYLE_RE = re.compile(r"<style[^>]*>[\s\S]*?</style>", re.IGNORECASE)
-_TAG_RE = re.compile(r"<[^>]+>")
 _WHITESPACE_RE = re.compile(r"\s+")
 _LOC_RE = re.compile(r"<loc>([^<]+)</loc>")
 
 _CRAWLER_UA = {"User-Agent": "WaddleBot/2.0 Knowledge Indexer"}
+
+#: Elements whose entire content (not just the tag) is dropped, not
+#: kept as visible text -- matches the original regex pipeline's intent
+#: (JS/CSS source should never be indexed as page content).
+_SKIP_CONTENT_TAGS = frozenset({"script", "style"})
+
+
+class _HTMLTextExtractor(HTMLParser):
+    """Real HTML-tokenizer text extractor -- not a regex-based tag filter.
+
+    Replaces a three-step regex pipeline (strip `<script>`, strip
+    `<style>`, strip every remaining `<...>`) that CodeQL flagged as a
+    bypassable tag filter (`py/bad-tag-filter`): a crafted payload such
+    as ``<scr<script>ipt>alert(1)</scr</script>ipt>`` can leave a live,
+    unescaped `<script>` tag in a *regex's* output, because the regex
+    matches raw string positions rather than actual element boundaries.
+
+    `HTMLParser` tokenizes markup the way a browser's HTML parser does --
+    every `handle_starttag`/`handle_endtag` callback corresponds to a
+    real, fully-parsed tag, so there is no string position a
+    nested/malformed payload can exploit to survive as a reconstructed
+    tag in the output. Content of `<script>`/`<style>` elements is
+    dropped entirely (never emitted via `handle_data`), matching the
+    original pipeline's intent of extracting only visible page text.
+    """
+
+    def __init__(self) -> None:
+        """Start with an empty output buffer and zero script/style nesting depth."""
+        super().__init__(convert_charrefs=True)
+        self._skip_depth = 0
+        self._chunks: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        """Enter a `<script>`/`<style>` element -- its content is not emitted."""
+        if tag in _SKIP_CONTENT_TAGS:
+            self._skip_depth += 1
+
+    def handle_endtag(self, tag: str) -> None:
+        """Leave a `<script>`/`<style>` element, resuming text emission."""
+        if tag in _SKIP_CONTENT_TAGS and self._skip_depth > 0:
+            self._skip_depth -= 1
+
+    def handle_data(self, data: str) -> None:
+        """Emit text data, unless it's inside a skipped `<script>`/`<style>` element."""
+        if self._skip_depth == 0:
+            self._chunks.append(data)
+
+    def get_text(self) -> str:
+        """Return the accumulated visible text, in document order."""
+        return "".join(self._chunks)
+
+
+def _html_to_text(html_fragment: str) -> str:
+    """Strip all markup from `html_fragment` via a real HTML parser.
+
+    Drops `<script>`/`<style>` element content entirely; every other
+    tag is removed but its text content is preserved. `HTMLParser.feed`
+    tokenizes best-effort on malformed input (never raises), so this
+    always returns plain text -- there is no exception path that could
+    leak a partially-processed fragment back to the caller.
+    """
+    extractor = _HTMLTextExtractor()
+    extractor.feed(html_fragment)
+    extractor.close()
+    return extractor.get_text()
 
 
 async def _fetch_sitemap_pages(base_url: str) -> list[_Page]:
@@ -283,9 +349,7 @@ async def _fetch_sitemap_pages(base_url: str) -> list[_Page]:
                 if not main_match:
                     continue
 
-                text = _SCRIPT_RE.sub("", main_match.group(1))
-                text = _STYLE_RE.sub("", text)
-                text = _TAG_RE.sub(" ", text)
+                text = _html_to_text(main_match.group(1))
                 text = _WHITESPACE_RE.sub(" ", text).strip()
 
                 if len(text) > 100:
