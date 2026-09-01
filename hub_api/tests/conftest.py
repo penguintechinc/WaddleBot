@@ -42,6 +42,7 @@ from services.schema import (
     bind_auth_tables,
     bind_community_authz_tables,
     bind_github_sync_tables,
+    bind_lifecycle_tables,
     bind_overlay_tables,
     bind_platform_tables,
     bind_privacy_tables,
@@ -54,6 +55,9 @@ from services.schema import (
 SECRET_KEY = "change-me-in-production"
 
 TENANT_SLUG = "acme-corp"
+
+#: Second tenant slug -- `lifecycle_db`'s cross-tenant IDOR fixture data.
+OTHER_TENANT_SLUG = "other-corp"
 
 
 @pytest.fixture
@@ -385,6 +389,86 @@ def tenant_admin_db(tmp_path: Any) -> Any:
         dal(dal[table_name]).count()
     yield async_dal
     dal.close()
+
+
+@pytest.fixture
+def lifecycle_db(tmp_path: Any) -> Any:
+    """File-backed `AsyncDAL` for the App Bundle 3-tier lifecycle group.
+
+    Same file-backed-sqlite / `pool_size=1` / eager-table-touch rationale as
+    `auth_db` above (see its own docstring). Extends `bind_auth_tables()`
+    (`hub_users`/`communities`/`community_members`/`tenant_admins` --
+    needed by `services.community_authz`) with `bind_community_authz_tables()`
+    (`community_roles`) and this group's own `bind_lifecycle_tables()`
+    (`app_catalog`/`app_tenant_availability`/`app_activations`).
+
+    Seeds TWO tenants (`TENANT_SLUG` + `OTHER_TENANT_SLUG`) and one
+    community per tenant, plus an `admin` `community_roles` row and a
+    `community_members` row granting user `"1"` that role in the FIRST
+    tenant's community only -- the fixture every per-community-IDOR test
+    needs to prove a caller admin of one community cannot act on the
+    other tenant's community. IDs are NOT returned (matches every other
+    `*_db` fixture's `yield async_dal`-only shape, e.g. `automation_db`'s
+    own `COMMUNITY_ID = 1` precedent in `test_community_authz.py`) --
+    insertion order into a fresh sqlite file is deterministic (1-based
+    autoincrement), so tests reference `LIFECYCLE_TENANT_ID = 1`,
+    `LIFECYCLE_COMMUNITY_ID = 1`, `LIFECYCLE_OTHER_TENANT_ID = 2`,
+    `LIFECYCLE_OTHER_COMMUNITY_ID = 2` (module-level constants below) the
+    same way.
+    """
+    async_dal = AsyncDAL(f"sqlite://{tmp_path / 'lifecycle_test.db'}", pool_size=1)
+    dal = async_dal.dal
+    dal.define_table(
+        "tenants",
+        Field("slug", unique=True),
+        Field("display_name"),
+        Field("logo_url"),
+        Field("is_global", "boolean", default=False),
+        Field("is_active", "boolean", default=True),
+        Field("config", "json"),
+    )
+    bind_auth_tables(dal, migrate=True)
+    bind_community_authz_tables(dal, migrate=True)
+    bind_lifecycle_tables(dal, migrate=True)
+
+    tenant_id = dal.tenants.insert(slug=TENANT_SLUG, display_name="Acme Corp", is_active=True)
+    other_tenant_id = dal.tenants.insert(
+        slug=OTHER_TENANT_SLUG, display_name="Other Corp", is_active=True
+    )
+    community_id = dal.communities.insert(
+        name="acme-community", display_name="Acme Community", tenant_id=tenant_id, is_active=True
+    )
+    dal.communities.insert(
+        name="other-community",
+        display_name="Other Community",
+        tenant_id=other_tenant_id,
+        is_active=True,
+    )
+    role_id = dal.community_roles.insert(
+        community_id=community_id,
+        name="admin",
+        base_claims={"scopes": ["community:manage_members"]},
+    )
+    dal.community_members.insert(
+        community_id=community_id,
+        user_id="1",
+        role="admin",
+        community_role_id=role_id,
+        is_active=True,
+    )
+    dal.commit()
+    for table_name in dal.tables:
+        dal(dal[table_name]).count()
+    yield async_dal
+    dal.close()
+
+
+#: `lifecycle_db`'s deterministic seeded ids (fresh sqlite file, 1-based
+#: autoincrement, insertion order == fixture body order above).
+LIFECYCLE_TENANT_ID = 1
+LIFECYCLE_OTHER_TENANT_ID = 2
+LIFECYCLE_COMMUNITY_ID = 1
+LIFECYCLE_OTHER_COMMUNITY_ID = 2
 
 
 def make_token(*, scope: str = "", tenant: str = TENANT_SLUG, user_id: str = "u1") -> str:
