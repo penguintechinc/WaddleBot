@@ -46,7 +46,7 @@ The module serves as a bridge between WaddleBot's core platform and YouTube Musi
 
 **Docker Compose:**
 ```bash
-docker-compose up youtube-music-interaction
+docker-compose up interactive-youtube-music
 ```
 
 **Standalone (after `pip install -r requirements.txt`):**

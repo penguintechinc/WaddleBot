@@ -50,7 +50,7 @@ docker-compose up -d
 
 Verify it's running:
 ```bash
-docker-compose logs -f discord_action_module
+docker-compose logs -f action-discord
 ```
 
 ### 4. Check Health
@@ -174,12 +174,12 @@ volumes:
 
 View real-time logs:
 ```bash
-docker-compose logs -f discord_action_module
+docker-compose logs -f action-discord
 ```
 
 View specific module logs:
 ```bash
-docker-compose exec discord_action_module tail -f /var/log/waddlebotlog/discord_action_module.log
+docker-compose exec action-discord tail -f /var/log/waddlebotlog/discord_action_module.log
 ```
 
 ## Configuration
@@ -278,7 +278,7 @@ curl -X POST http://localhost:8070/api/v1/webhook/send \
 **Module fails to start:**
 - Check DATABASE_URL is valid: `psql $DATABASE_URL`
 - Check DISCORD_BOT_TOKEN is valid
-- Check logs: `docker-compose logs discord_action_module`
+- Check logs: `docker-compose logs action-discord`
 
 **Health check fails:**
 - Database connectivity: Check PostgreSQL is running

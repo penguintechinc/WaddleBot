@@ -104,19 +104,20 @@ REDIS_URL=redis://:password@redis:6379/0
 
 ## Redis Configuration
 
-### docker-compose.yml
+### docker-compose.yml (local dev only — production is Helm-only)
+
+The actual service (`infra-redis`) runs Valkey, not Redis, config-driven rather than inline flags:
+
 ```yaml
-redis:
-  image: redis:7-alpine
-  command: >
-    redis-server
-    --requirepass ${REDIS_PASSWORD:-waddlebot_redis}
-    --appendonly yes
-    --maxmemory 512mb
-    # DB 0: LRU eviction for cache
-    --maxmemory-policy allkeys-lru
-    # Enable multiple databases
-    --databases 16
+infra-redis:
+  image: valkey/valkey:8-bookworm@sha256:...
+  volumes:
+    - redis-data:/data
+    - ./config/redis/redis.conf:/etc/redis/redis.conf:ro
+    - ./config/redis/users.acl:/etc/redis/users.acl.template:ro
+  # config/redis/redis.conf sets: appendonly yes, maxmemory 512mb,
+  # maxmemory-policy allkeys-lru — per-service passwords/ACLs come from
+  # REDIS_<SERVICE>_PASSWORD env vars templated into users.acl at startup
 ```
 
 ### Redis ACL (Advanced - Optional)

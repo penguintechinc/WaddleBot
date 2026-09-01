@@ -131,8 +131,7 @@ backend/
 │   │   ├── errors.js             # Custom error classes
 │   │   ├── email.js              # Email sending
 │   │   ├── reputation.js         # FICO scoring
-│   │   ├── certificates.js       # SSL cert management
-│   │   └── kongClient.js         # Kong Gateway client
+│   │   └── certificates.js       # SSL cert management
 │   └── index.js                  # Application entry point
 ├── package.json
 └── .env.example
@@ -390,8 +389,7 @@ frontend/
 │   │   │   ├── SuperAdminCommunities.jsx
 │   │   │   ├── SuperAdminCreateCommunity.jsx
 │   │   │   ├── SuperAdminModuleRegistry.jsx
-│   │   │   ├── SuperAdminPlatformConfig.jsx
-│   │   │   └── SuperAdminKongGateway.jsx
+│   │   │   └── SuperAdminPlatformConfig.jsx
 │   │   └── platform/
 │   │       ├── PlatformDashboard.jsx
 │   │       ├── PlatformUsers.jsx
@@ -979,7 +977,7 @@ CMD ["node", "src/index.js"]
 ```
 ┌──────────────────────────────────────────────┐
 │              Load Balancer / CDN             │
-│              (Kong Gateway)                  │
+│         (Kubernetes Ingress/HTTPRoute)       │
 └──────────────┬───────────────────────────────┘
                │
          HTTPS │

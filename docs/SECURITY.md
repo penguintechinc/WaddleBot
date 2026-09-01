@@ -17,7 +17,7 @@ Waddles's threat model addresses risks across multiple attack vectors:
 
 **1. External Threats**
 - **Unauthorized API Access**: Mitigated through API key authentication, JWT tokens, and rate limiting
-- **DDoS Attacks**: Protected via Kong Gateway rate limiting and distributed architecture
+- **DDoS Attacks**: Protected via per-service rate limiting and Kubernetes Ingress-level controls
 - **SQL Injection**: Prevented through parameterized queries and ORM usage
 - **XSS/CSRF**: Frontend sanitization, CSP headers, and CSRF tokens
 - **Webhook Spoofing**: HMAC-SHA256 signature verification for all webhooks

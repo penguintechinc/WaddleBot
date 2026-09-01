@@ -688,7 +688,7 @@ pytest tests/e2e/test_broadcaster_commands.py -v
 
 1. **Service startup**
    ```bash
-   docker-compose up twitch-module
+   docker-compose up trigger-twitch
    curl http://localhost:8002/health
    # Should return 200
    ```

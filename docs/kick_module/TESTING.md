@@ -71,8 +71,8 @@ docker run --rm \
   kick-module-test \
   pytest -v
 
-# With Docker Compose
-docker-compose -f docker-compose.test.yml up --abort-on-container-exit
+# With Docker Compose (repo's docker-compose.yml — no separate test compose file exists)
+docker-compose up --abort-on-container-exit trigger-kick
 ```
 
 ## Unit Tests

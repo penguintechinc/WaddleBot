@@ -316,7 +316,7 @@ pkill -f "python main.py"
 python main.py
 
 # Docker
-docker-compose restart youtube-live
+docker-compose restart trigger-youtube
 ```
 
 ### Webhook Integration

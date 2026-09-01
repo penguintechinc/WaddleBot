@@ -1,5 +1,9 @@
 # Quote Interaction Module - Troubleshooting Guide
 
+> **Note:** this module is not currently wired into the repo's `docker-compose.yml` as its own
+> service — `docker-compose` commands below that target `quote_interaction_module` directly assume
+> it has been added locally. `infra-postgres`/other infra service commands are accurate as-is.
+
 ## Common Issues
 
 ### Module Startup Issues
@@ -54,7 +58,7 @@ docker exec postgres psql -U waddlebot -d waddlebot -c "SELECT 1;"
 5. Restart PostgreSQL and module:
 ```bash
 # If using Docker Compose
-docker-compose restart postgres
+docker-compose restart infra-postgres
 docker-compose restart quote_interaction_module
 
 # If local
@@ -623,7 +627,7 @@ export LOG_LEVEL=DEBUG
 docker-compose logs -f quote_interaction_module
 
 # View PostgreSQL logs
-docker-compose logs -f postgres
+docker-compose logs -f infra-postgres
 
 # Follow all logs
 docker-compose logs -f

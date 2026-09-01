@@ -256,7 +256,7 @@ EVENTSUB_SECRET environment variable is required
    # Edit .env and set:
    EVENTSUB_DEDUP_WINDOW=10000
 
-   docker-compose restart twitch-module
+   docker-compose restart trigger-twitch
    ```
 
 ---
@@ -350,7 +350,7 @@ ERROR: eventsub_verification_failed: HMAC signature mismatch
 3. Enable debug logging:
    ```bash
    # Set LOG_LEVEL=debug to see detailed HMAC info
-   LOG_LEVEL=debug docker-compose up twitch-module
+   LOG_LEVEL=debug docker-compose up trigger-twitch
 
    docker logs twitch-module -f | grep -i "hmac\|verification"
    ```
@@ -395,7 +395,7 @@ ERROR: eventsub_verification_failed: HMAC signature mismatch
 
 4. Restart service and re-register subscription:
    ```bash
-   docker-compose restart twitch-module
+   docker-compose restart trigger-twitch
 
    # Delete old subscription, create new one
    # New subscription should transition to "enabled"
@@ -490,7 +490,7 @@ ERROR: eventsub_verification_failed: HMAC signature mismatch
    # Edit .env:
    VIEWER_POLL_INTERVAL=30  # Default is 60
 
-   docker-compose restart twitch-module
+   docker-compose restart trigger-twitch
    ```
 
 2. Check viewer cache TTL:
@@ -651,7 +651,7 @@ ERROR: api_error: connection refused to http://hub:8000
 Enable full debug logging:
 
 ```bash
-LOG_LEVEL=debug docker-compose up twitch-module
+LOG_LEVEL=debug docker-compose up trigger-twitch
 ```
 
 **Debug output includes**:

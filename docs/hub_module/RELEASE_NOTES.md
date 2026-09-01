@@ -303,8 +303,6 @@ This is the initial stable release of the Waddles Hub Module - the central admin
 - ✅ Module registry administration
 - ✅ Platform OAuth configuration
 - ✅ Hub settings management
-- ✅ Kong Gateway integration
-- ✅ Service/route/plugin management
 - ✅ SSL certificate management (Certbot integration)
 
 #### Security Features
@@ -399,7 +397,6 @@ This is the initial stable release of the Waddles Hub Module - the central admin
 
 ### SuperAdmin (25+ endpoints)
 - Communities, modules, platform config
-- Kong Gateway management
 - Hub settings
 
 ---

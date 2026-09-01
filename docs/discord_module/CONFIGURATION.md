@@ -378,7 +378,7 @@ This may take up to 1 hour to sync globally across Discord.
 To force re-registration:
 
 ```bash
-docker-compose exec discord-module python -m scripts.register_commands --force
+docker-compose exec trigger-discord python -m scripts.register_commands --force
 ```
 
 ### Command Configuration

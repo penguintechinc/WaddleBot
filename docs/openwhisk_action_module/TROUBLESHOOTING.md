@@ -231,9 +231,10 @@ grpcurl -plaintext localhost:50062 list && echo "✓ gRPC OK"
 
 ## Getting Help
 
-1. Check logs:
+1. Check logs (this module is not currently wired into `docker-compose.yml` as its own service —
+   run it directly and check its log file/stdout):
 ```bash
-docker-compose logs -f openwhisk_action_module
+tail -f /var/log/waddlebotlog/openwhisk_action_module.log
 ```
 
 2. Run tests:

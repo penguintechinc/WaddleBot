@@ -453,14 +453,14 @@ Check in this order:
 
 3. **Is it in container/pod?**
    ```bash
-   docker-compose exec youtube-music-interaction env | grep YOUTUBE
+   docker-compose exec interactive-youtube-music env | grep YOUTUBE
    # or
    kubectl exec -it deployment/youtube-music-interaction -- env | grep YOUTUBE
    ```
 
 4. **Check application logs for loading message**
    ```bash
-   docker-compose logs youtube-music-interaction | grep -i config
+   docker-compose logs interactive-youtube-music | grep -i config
    ```
 
 ### Database Connection Failures
@@ -472,7 +472,7 @@ Test connection manually:
 psql "$DATABASE_URL"
 
 # Or from inside container
-docker-compose exec youtube-music-interaction \
+docker-compose exec interactive-youtube-music \
   python3 -c "from sqlalchemy import create_engine; \
               engine = create_engine('$DATABASE_URL'); \
               print(engine.execute('SELECT 1'))"

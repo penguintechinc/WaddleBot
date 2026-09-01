@@ -43,7 +43,7 @@ None
 
 To apply:
 ```bash
-docker-compose exec discord-module python -m scripts.migrate_db
+docker-compose exec trigger-discord python -m scripts.migrate_db
 ```
 
 ### Dependencies Updated
@@ -81,7 +81,7 @@ docker-compose exec discord-module python -m scripts.migrate_db
 
 1. **Backup database**
    ```bash
-   docker-compose exec db pg_dump waddlebot > backup_v0.2.0.sql
+   docker-compose exec infra-postgres pg_dump waddlebot > backup_v0.2.0.sql
    ```
 
 2. **Update image**
@@ -91,7 +91,7 @@ docker-compose exec discord-module python -m scripts.migrate_db
 
 3. **Apply migrations**
    ```bash
-   docker-compose exec discord-module python -m scripts.migrate_db
+   docker-compose exec trigger-discord python -m scripts.migrate_db
    ```
 
 4. **Restart service**

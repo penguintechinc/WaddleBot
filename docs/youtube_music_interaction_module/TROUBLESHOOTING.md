@@ -204,7 +204,7 @@ source .env
 3. Check inside container:
 ```bash
 # For Docker
-docker-compose exec youtube-music-interaction env | grep YOUTUBE_
+docker-compose exec interactive-youtube-music env | grep YOUTUBE_
 
 # For Kubernetes
 kubectl exec -it deployment/youtube-music-interaction -- env | grep YOUTUBE_
@@ -269,7 +269,7 @@ echo "Client Secret: $YOUTUBE_CLIENT_SECRET"
 
 4. Check logs for more details:
 ```bash
-docker-compose logs youtube-music-interaction | grep -i "oauth\|token"
+docker-compose logs interactive-youtube-music | grep -i "oauth\|token"
 ```
 
 ---
@@ -358,7 +358,7 @@ docker ps | grep redis
 
 3. View logs for dependency check errors:
 ```bash
-docker-compose logs youtube-music-interaction | grep -i "health\|check"
+docker-compose logs interactive-youtube-music | grep -i "health\|check"
 ```
 
 ---
@@ -604,7 +604,7 @@ ping $(echo $DATABASE_URL | cut -d'@' -f2 | cut -d':' -f1)
 
 3. Check module logs:
 ```bash
-docker-compose logs youtube-music-interaction | tail -50
+docker-compose logs interactive-youtube-music | tail -50
 ```
 
 4. Monitor resource usage:
@@ -640,7 +640,7 @@ watch -n 5 'docker stats youtube-music-interaction'
 
 3. Restart module to reset memory:
 ```bash
-docker-compose restart youtube-music-interaction
+docker-compose restart interactive-youtube-music
 ```
 
 ---
@@ -654,33 +654,33 @@ docker-compose restart youtube-music-interaction
 export LOG_LEVEL=DEBUG
 
 # Restart module
-docker-compose restart youtube-music-interaction
+docker-compose restart interactive-youtube-music
 
 # View debug logs
-docker-compose logs -f youtube-music-interaction
+docker-compose logs -f interactive-youtube-music
 ```
 
 ### View Full Logs
 
 ```bash
 # All logs for module
-docker-compose logs youtube-music-interaction
+docker-compose logs interactive-youtube-music
 
 # Last 100 lines
 docker-compose logs --tail=100 youtube-music-interaction
 
 # Follow in real-time
-docker-compose logs -f youtube-music-interaction
+docker-compose logs -f interactive-youtube-music
 
 # Filter by keyword
-docker-compose logs youtube-music-interaction | grep -i "oauth\|error"
+docker-compose logs interactive-youtube-music | grep -i "oauth\|error"
 ```
 
 ### Extract Request/Response
 
 ```bash
 # Find request details in logs
-docker-compose logs youtube-music-interaction | grep "POST /api/v1"
+docker-compose logs interactive-youtube-music | grep "POST /api/v1"
 
 # See full request with curl verbose
 curl -v -X POST http://localhost:8025/api/v1/oauth/token \

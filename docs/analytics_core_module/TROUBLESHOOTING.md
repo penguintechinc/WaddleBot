@@ -46,9 +46,8 @@ kill -9 1234
 export MODULE_PORT=8041
 python app.py
 
-# Option 3: Stop conflicting service
-docker-compose down nginx
-docker-compose up analytics-core
+# Option 3: Stop whatever else is bound to the port, then restart this service
+docker-compose up core-analytics
 ```
 
 ### Module Exits on Startup
@@ -65,7 +64,7 @@ SystemExit: 1
 
 ```bash
 # Check startup logs
-docker-compose logs analytics-core
+docker-compose logs core-analytics
 
 # Check for database connection error
 grep -i "database\|connection\|failed" docker-compose.logs
@@ -102,8 +101,8 @@ pip install -r requirements.txt
 python -c "import quart; print(quart.__version__)"
 
 # In Docker, rebuild image
-docker-compose build analytics-core
-docker-compose up analytics-core
+docker-compose build core-analytics
+docker-compose up core-analytics
 ```
 
 ### Configuration Error
@@ -156,7 +155,7 @@ sudo iptables -L | grep 5432
 
 ```bash
 # If using Docker Compose, ensure postgres container is running
-docker-compose ps postgres
+docker-compose ps infra-postgres
 
 # If missing, start it
 docker-compose up -d postgres
@@ -604,7 +603,7 @@ WHERE community_id = 123;
 
 ```bash
 # Check service logs for errors
-docker-compose logs analytics-core | grep -i "bot\|error"
+docker-compose logs core-analytics | grep -i "bot\|error"
 
 # Verify required tables exist
 psql $DATABASE_URL -c "
@@ -674,7 +673,7 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
   http://localhost:8040/api/v1/analytics/123/basic
 
 # Or check if Flask-Security-Too is configured
-docker-compose logs analytics-core | grep -i "auth\|security"
+docker-compose logs core-analytics | grep -i "auth\|security"
 ```
 
 ### 403 Forbidden
@@ -709,7 +708,7 @@ curl http://localhost:8040/api/v1/analytics/123/metrics
 
 ```bash
 # Check application logs
-docker-compose logs analytics-core | tail -50
+docker-compose logs core-analytics | tail -50
 
 # Look for stack trace
 grep -A 20 "Traceback\|Exception" docker-compose.logs
@@ -733,7 +732,7 @@ psql $DATABASE_URL -c "\dt analytics_*"
 
 # 4. Enable debug logging
 export LOG_LEVEL=DEBUG
-docker-compose restart analytics-core
+docker-compose restart core-analytics
 ```
 
 ### 400 Bad Request
@@ -847,10 +846,10 @@ ON activity_message_events(community_id, created_at);
 export LOG_LEVEL=DEBUG
 
 # Restart service
-docker-compose restart analytics-core
+docker-compose restart core-analytics
 
 # View logs
-docker-compose logs -f analytics-core
+docker-compose logs -f core-analytics
 ```
 
 ### Capture HTTP Requests/Responses
@@ -892,7 +891,7 @@ curl -v \
   http://localhost:8040/api/v1/analytics/123/basic
 
 # Check logs for trace ID
-docker-compose logs analytics-core | grep "debug-123"
+docker-compose logs core-analytics | grep "debug-123"
 ```
 
 ---

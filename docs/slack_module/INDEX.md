@@ -322,7 +322,7 @@ Complete documentation for the WaddleBot Slack Module receiver service.
 - **Slack API Documentation**: https://api.slack.com/
 - **Slack Bolt Python**: https://slack.dev/bolt-python/
 - **Slack Block Kit**: https://app.slack.com/block-kit-builder
-- **PyDAL Documentation**: https://py4web.io/_dashboard/help
+- **PyDAL Documentation**: https://py4web.com/_documentation/static/en/chapter-07.html
 - **Quart Documentation**: https://quart.palletsprojects.com/
 
 ---

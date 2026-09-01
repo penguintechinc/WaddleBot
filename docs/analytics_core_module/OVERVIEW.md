@@ -130,7 +130,7 @@ The module operates as both a data collection pipeline and an analytics query en
 
 ### Starting the Module (Docker)
 ```bash
-docker-compose -f docker-compose.dev.yml up analytics-core
+docker-compose up core-analytics
 ```
 
 ### Health Check

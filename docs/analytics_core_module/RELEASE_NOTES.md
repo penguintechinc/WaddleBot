@@ -186,8 +186,8 @@ All configuration via environment variables:
 Supports multiple deployment scenarios:
 
 - **Local Development**: `python app.py`
-- **Docker Compose**: `docker-compose up analytics-core`
-- **Kubernetes**: Helm/Kustomize (standard patterns)
+- **Docker Compose**: `docker-compose up core-analytics`
+- **Kubernetes**: Helm (`k8s/helm/waddlebot/`) — the only supported deploy path
 - **Cloud**: AWS ECS, Google Cloud Run, Azure Container Instances
 
 ### Testing

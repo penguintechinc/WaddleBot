@@ -19,7 +19,6 @@ The module is central to the Waddles architecture, sitting at the intersection o
 - Real-time updates and notifications via WebSocket
 - Broadcast and announcement system
 - Analytics and statistics dashboard
-- Kong API Gateway integration and management
 - Admin panel for super-admins and community moderators
 - Public community directory and search
 - Hub Channels (chat, forum, voice) with cross-platform bridging via mirror groups

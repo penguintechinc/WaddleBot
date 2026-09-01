@@ -34,7 +34,7 @@ export REDIS_URL="redis://localhost:6379/0"
 
 ```bash
 # Using docker-compose
-docker-compose up discord-module
+docker-compose up trigger-discord
 
 # Or directly with Python
 python -m uvicorn services.discord_bot:app --port 8003 --reload
@@ -282,7 +282,7 @@ Enable debug logging:
 
 ```bash
 export LOG_LEVEL="DEBUG"
-docker-compose up discord-module
+docker-compose up trigger-discord
 ```
 
 This shows all Discord API calls and event handling:

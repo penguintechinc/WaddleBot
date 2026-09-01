@@ -152,7 +152,7 @@ credential-manager:
 Start the service:
 
 ```bash
-docker-compose up credential-manager
+docker-compose up core-credential-manager
 ```
 
 ---

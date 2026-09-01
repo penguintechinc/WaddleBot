@@ -173,7 +173,7 @@ docker run -d \
 
 ```bash
 # Docker Compose
-docker-compose logs -f video-proxy
+docker-compose logs -f core-video-proxy
 
 # Standalone Container
 docker logs -f video-proxy

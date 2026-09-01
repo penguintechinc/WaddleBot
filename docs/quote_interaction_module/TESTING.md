@@ -484,7 +484,5 @@ DELETE FROM quotes WHERE community_id = 999;
 # Enable debug logging
 export LOG_LEVEL=DEBUG
 python -m action.interactive.quote_interaction_module.app
-
-# View logs
-docker-compose logs -f quote_interaction_module
+# (module not wired into docker-compose.yml — run directly and read stdout/log file)
 ```

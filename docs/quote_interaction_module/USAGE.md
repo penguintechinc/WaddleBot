@@ -11,21 +11,8 @@
 
 ### Local Development Setup
 
-#### Option 1: Docker Compose (Recommended)
-
-```bash
-# Navigate to project root
-cd /home/penguin/code/waddlebot
-
-# Start all services including quote module
-docker-compose -f docker-compose.dev.yml up -d
-
-# Verify the module is running
-curl http://localhost:5012/health
-
-# View logs
-docker-compose -f docker-compose.dev.yml logs -f quote_interaction_module
-```
+> **Note:** this module is not currently wired into the repo's `docker-compose.yml` — use manual
+> setup (Option 2) for local development until it is added as a service there.
 
 #### Option 2: Manual Setup
 
@@ -349,8 +336,8 @@ curl -X POST http://localhost:5012/api/v1/quotes \
 # Check if module is running
 curl -v http://localhost:5012/health
 
-# View logs
-docker-compose logs quote_interaction_module
+# View logs (module not wired into docker-compose.yml — check its own process/journal)
+tail -f /var/log/waddlebotlog/quote_interaction_module.log
 
 # Check port availability
 lsof -i :5012

@@ -111,11 +111,11 @@ docker run -d --name test-container myapp:test  # Start container
 docker logs test-container                      # Check for errors
 docker stop test-container && docker rm test-container  # Cleanup
 
-# Docker Compose (if applicable)
-docker-compose -f docker-compose.dev.yml build  # Build all services
-docker-compose -f docker-compose.dev.yml up -d  # Start all services
-docker-compose -f docker-compose.dev.yml logs   # Check for errors
-docker-compose -f docker-compose.dev.yml down   # Cleanup
+# Docker Compose (local dev only — see docker-compose.yml at repo root)
+docker-compose build     # Build all services
+docker-compose up -d     # Start all services
+docker-compose logs      # Check for errors
+docker-compose down      # Cleanup
 ```
 
 ## Commit Rules

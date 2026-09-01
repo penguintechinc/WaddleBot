@@ -143,7 +143,7 @@ echo "LIVEKIT_API_SECRET=devsecret456" >> .env
 docker-compose up -d
 
 # Check health
-docker-compose logs -f module-rtc
+docker-compose logs -f core-module-rtc
 ```
 
 ## Health Check

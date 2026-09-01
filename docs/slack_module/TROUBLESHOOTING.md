@@ -66,7 +66,7 @@ echo $SLACK_APP_TOKEN | grep -E '^xapp-' && echo "Valid" || echo "Invalid"
 
 ```bash
 # Check module logs for connection attempts
-docker-compose logs slack-module | grep -i websocket
+docker-compose logs trigger-slack | grep -i websocket
 
 # Verify network connectivity to Slack
 curl -I https://wss-primary.slack.com
@@ -75,7 +75,7 @@ curl -I https://wss-primary.slack.com
 telnet wss-primary.slack.com 443
 
 # Try full module restart
-docker-compose restart slack-module
+docker-compose restart trigger-slack
 ```
 
 **Symptom: "Socket Mode enabled: True" but no "connected" message**
@@ -85,7 +85,7 @@ docker-compose restart slack-module
 export LOG_LEVEL=DEBUG
 
 # Restart and capture logs
-docker-compose logs -f slack-module | grep -E "(socket|websocket|connection)"
+docker-compose logs -f trigger-slack | grep -E "(socket|websocket|connection)"
 
 # Common causes:
 # 1. App token expired/revoked - generate new token
@@ -103,7 +103,7 @@ docker-compose logs -f slack-module | grep -E "(socket|websocket|connection)"
 
 ```bash
 # Step 1: Check if module is receiving requests
-docker-compose logs slack-module | grep -i "slash command"
+docker-compose logs trigger-slack | grep -i "slash command"
 
 # If no logs, slash command request isn't reaching module:
 # - Verify Request URL in Slack app settings
@@ -123,27 +123,27 @@ curl -X POST http://localhost:8004/slack/commands \
 
 ```bash
 # Check logs for command processing
-docker-compose logs slack-module | grep -A5 "slash command"
+docker-compose logs trigger-slack | grep -A5 "slash command"
 
 # Common causes:
 # 1. Router API unreachable
-docker-compose logs router | grep error
+docker-compose logs core-router | grep error
 
 # 2. Command processing takes >3 seconds
 # Solution: Use async response via response_url
 
 # 3. Database timeout
-docker-compose logs slack-module | grep -i "database\|timeout"
+docker-compose logs trigger-slack | grep -i "database\|timeout"
 ```
 
 **Symptom: Command returns "Internal error" to user**
 
 ```bash
 # Get full error details from logs
-docker-compose logs slack-module | grep -i error | tail -20
+docker-compose logs trigger-slack | grep -i error | tail -20
 
 # Common errors:
-# - "Router service unavailable": docker-compose up router
+# - "Router service unavailable": docker-compose up core-router
 # - "Database connection error": Check DATABASE_URL
 # - "Invalid command": Check slash command routing in code
 # - "Signature validation failed": Check SLACK_SIGNING_SECRET matches Slack app
@@ -172,20 +172,20 @@ curl -X POST http://localhost:8004/slack/events \
 # {"challenge": "test123"}
 
 # For Socket Mode, check connection status
-docker-compose logs slack-module | grep -i "socket mode"
+docker-compose logs trigger-slack | grep -i "socket mode"
 ```
 
 **Symptom: Correct events showing in logs but not processing**
 
 ```bash
 # Check event routing
-docker-compose logs slack-module | grep -E "(message_event|app_mention|event_type)"
+docker-compose logs trigger-slack | grep -E "(message_event|app_mention|event_type)"
 
 # Verify event handler registered
 grep -r "on_event(" src/ | grep message
 
 # Check if event is filtered/ignored
-docker-compose logs slack-module | grep -i "ignoring\|skipping\|filtering"
+docker-compose logs trigger-slack | grep -i "ignoring\|skipping\|filtering"
 
 # Common causes:
 # - Message from bot itself (filtered by design)
@@ -199,7 +199,7 @@ docker-compose logs slack-module | grep -i "ignoring\|skipping\|filtering"
 
 ```bash
 # Check if interaction event received
-docker-compose logs slack-module | grep "block_actions"
+docker-compose logs trigger-slack | grep "block_actions"
 
 # If not received:
 # - Verify Interactivity enabled in Slack app
@@ -207,7 +207,7 @@ docker-compose logs slack-module | grep "block_actions"
 # - Check button action_id is set in message
 
 # If received but not processed:
-docker-compose logs slack-module | grep -i "action\|button"
+docker-compose logs trigger-slack | grep -i "action\|button"
 
 # Test interaction manually
 curl -X POST http://localhost:8004/slack/actions \
@@ -232,14 +232,14 @@ curl -X POST http://localhost:8004/slack/actions \
 
 ```bash
 # Check response posting in logs
-docker-compose logs slack-module | grep -E "(chat_postMessage|updating|posting)"
+docker-compose logs trigger-slack | grep -E "(chat_postMessage|updating|posting)"
 
 # Common causes:
 
 # 1. Response type mismatch
 # Expected: ephemeral only visible to user
 # Check logs for response_type
-docker-compose logs slack-module | grep "response_type"
+docker-compose logs trigger-slack | grep "response_type"
 
 # 2. Missing bot permission
 # Required: chat:write, chat:write.public
@@ -247,18 +247,18 @@ docker-compose logs slack-module | grep "response_type"
 
 # 3. Channel archive or deleted
 # Module tries to post to invalid channel
-docker-compose logs slack-module | grep -E "channel.*not_found|archive_error"
+docker-compose logs trigger-slack | grep -E "channel.*not_found|archive_error"
 
 # 4. Router returned empty response
 # Check router logs
-docker-compose logs router | grep -E "empty|null|undefined"
+docker-compose logs core-router | grep -E "empty|null|undefined"
 ```
 
 **Symptom: Ephemeral responses appear to everyone**
 
 ```bash
 # Check response_type is set correctly
-docker-compose logs slack-module | grep "response_type"
+docker-compose logs trigger-slack | grep "response_type"
 
 # Should show: "response_type": "ephemeral"
 
@@ -274,7 +274,7 @@ grep -r "response_type" src/ | grep -v ephemeral | head -10
 
 ```bash
 # Check modal opening call
-docker-compose logs slack-module | grep -E "(views_open|modal)"
+docker-compose logs trigger-slack | grep -E "(views_open|modal)"
 
 # Common causes:
 # 1. Invalid trigger_id (expires after 3 seconds)
@@ -283,7 +283,7 @@ docker-compose logs slack-module | grep -E "(views_open|modal)"
 
 # Test modal directly with valid trigger_id
 # Get from recent interaction logs
-docker-compose logs slack-module | grep "trigger_id" | tail -1
+docker-compose logs trigger-slack | grep "trigger_id" | tail -1
 
 # Extract trigger_id and test
 curl -X POST https://slack.com/api/views.open \
@@ -301,7 +301,7 @@ curl -X POST https://slack.com/api/views.open \
 
 ```bash
 # Check block JSON validity
-docker-compose logs slack-module | grep -A20 "blocks.*:" | head -50
+docker-compose logs trigger-slack | grep -A20 "blocks.*:" | head -50
 
 # Use Slack Block Kit validator
 # Go to: https://app.slack.com/block-kit-builder
@@ -340,17 +340,17 @@ docker-compose logs slack-module | grep -A20 "blocks.*:" | head -50
 
 ```bash
 # Check validation logic runs
-docker-compose logs slack-module | grep -i validation
+docker-compose logs trigger-slack | grep -i validation
 
 # If no validation logs:
 # 1. Modal handler not triggered
-docker-compose logs slack-module | grep "view_submission"
+docker-compose logs trigger-slack | grep "view_submission"
 
 # 2. Validation function not called
 grep -r "def.*validate" src/
 
 # 3. Validation errors not returned
-docker-compose logs slack-module | grep "response_action.*errors"
+docker-compose logs trigger-slack | grep "response_action.*errors"
 
 # Test validation with missing required field
 curl -X POST http://localhost:8004/slack/actions \
@@ -398,7 +398,7 @@ curl -X POST http://localhost:8004/slack/actions \
 
 ```bash
 # Check state.values structure in logs
-docker-compose logs slack-module | grep -A30 "state.*values"
+docker-compose logs trigger-slack | grep -A30 "state.*values"
 
 # Verify block_id and action_id match in submission
 # block_id comes from block definition
@@ -469,7 +469,7 @@ echo -n $SLACK_SIGNING_SECRET | wc -c  # should print 32
 # 3. Restart module
 
 # Test signature validation
-docker-compose logs slack-module | grep -E "(signature|validation)" | tail -5
+docker-compose logs trigger-slack | grep -E "(signature|validation)" | tail -5
 ```
 
 ### Credential refresh issues
@@ -506,7 +506,7 @@ psql $DATABASE_URL -c "
 # 3. Restart module
 
 # Monitor refresh attempts
-docker-compose logs slack-module | grep -i refresh | tail -10
+docker-compose logs trigger-slack | grep -i refresh | tail -10
 ```
 
 ### Database transaction failures
@@ -515,14 +515,14 @@ docker-compose logs slack-module | grep -i refresh | tail -10
 
 ```bash
 # Check if many commands happening simultaneously
-docker-compose logs slack-module | grep -c "transaction\|deadlock"
+docker-compose logs trigger-slack | grep -c "transaction\|deadlock"
 
 # Solutions:
 # 1. Increase connection pool size
 export DATABASE_MAX_CONNECTIONS=20
 
 # 2. Retry with exponential backoff (should be automatic)
-docker-compose logs slack-module | grep -i retry
+docker-compose logs trigger-slack | grep -i retry
 
 # 3. Check for long-running queries blocking others
 psql $DATABASE_URL -c "
@@ -542,7 +542,7 @@ psql $DATABASE_URL -c "
 
 ```bash
 # Check router latency
-docker-compose logs router | grep -E "(duration|ms|time)" | tail -5
+docker-compose logs core-router | grep -E "(duration|ms|time)" | tail -5
 
 # Check database query performance
 psql $DATABASE_URL -c "
@@ -564,7 +564,7 @@ psql $DATABASE_URL -c "
 
 # Check connection pool isn't exhausted
 # Look for "pool exhausted" errors in logs
-docker-compose logs slack-module | grep -i "pool\|connection"
+docker-compose logs trigger-slack | grep -i "pool\|connection"
 ```
 
 ### High CPU usage
@@ -580,7 +580,7 @@ docker stats slack-module
 export WORKERS=2
 
 # 2. Check for infinite loops in event handlers
-docker-compose logs slack-module | grep -E "(CPU|loop)" | head -10
+docker-compose logs trigger-slack | grep -E "(CPU|loop)" | head -10
 
 # 3. Check blocking I/O not happening
 # All operations should be async
@@ -596,14 +596,14 @@ grep -r "\.sleep\|sleep\(" src/ | grep -v "asyncio"
 watch -n 5 'docker stats slack-module | grep slack'
 
 # Check for unclosed connections
-docker-compose logs slack-module | grep -i "connection\|leak\|open" | tail -20
+docker-compose logs trigger-slack | grep -i "connection\|leak\|open" | tail -20
 
 # Verify sessions are properly closed
 grep -r "async with" src/ | wc -l  # Should have context managers
 
 # Restart module to confirm memory resets
-docker-compose restart slack-module
-docker-compose logs slack-module | grep "Memory\|Uptime"
+docker-compose restart trigger-slack
+docker-compose logs trigger-slack | grep "Memory\|Uptime"
 ```
 
 ---
@@ -619,7 +619,7 @@ docker-compose logs slack-module | grep "Memory\|Uptime"
 ping -c 5 slack.com
 
 # Monitor Socket Mode connection
-docker-compose logs slack-module | grep -E "(heartbeat|ping|pong)" | tail -10
+docker-compose logs trigger-slack | grep -E "(heartbeat|ping|pong)" | tail -10
 
 # If repeated failures:
 # 1. Network is unstable - may need retry logic
@@ -627,7 +627,7 @@ docker-compose logs slack-module | grep -E "(heartbeat|ping|pong)" | tail -10
 # 3. Slack having issues - check status.slack.com
 
 # Force reconnect
-docker-compose restart slack-module
+docker-compose restart trigger-slack
 ```
 
 ### Duplicate events in Socket Mode
@@ -636,7 +636,7 @@ docker-compose restart slack-module
 
 ```bash
 # Check if events are being retried
-docker-compose logs slack-module | grep -E "(envelope_id|retry|duplicate)" | tail -20
+docker-compose logs trigger-slack | grep -E "(envelope_id|retry|duplicate)" | tail -20
 
 # Socket Mode requires:
 # 1. Immediate ack with envelope_id
@@ -660,10 +660,10 @@ grep -A5 "handle_message_event\|handle_slash_command" src/ | grep ack
 export LOG_LEVEL=DEBUG
 
 # Restart module
-docker-compose restart slack-module
+docker-compose restart trigger-slack
 
 # Watch logs in real-time
-docker-compose logs -f slack-module | grep -i "debug\|error"
+docker-compose logs -f trigger-slack | grep -i "debug\|error"
 ```
 
 ### Capture request/response payloads
@@ -726,9 +726,9 @@ If issues persist after troubleshooting:
 
 1. **Collect logs:**
    ```bash
-   docker-compose logs slack-module > /tmp/slack-module.log 2>&1
-   docker-compose logs router > /tmp/router.log 2>&1
-   docker-compose logs postgres > /tmp/postgres.log 2>&1
+   docker-compose logs trigger-slack > /tmp/slack-module.log 2>&1
+   docker-compose logs core-router > /tmp/router.log 2>&1
+   docker-compose logs infra-postgres > /tmp/postgres.log 2>&1
    ```
 
 2. **Capture configuration (no secrets):**

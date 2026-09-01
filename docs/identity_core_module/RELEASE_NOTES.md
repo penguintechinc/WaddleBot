@@ -223,7 +223,7 @@ docker tag waddlebot/identity-core:2.0.0 waddlebot/identity-core:latest
 
 #### 6. Start Services
 ```bash
-docker-compose up -d identity-core
+docker-compose up -d core-identity
 # or
 systemctl start identity-core
 ```

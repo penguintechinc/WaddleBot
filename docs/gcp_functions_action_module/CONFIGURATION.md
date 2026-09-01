@@ -496,7 +496,7 @@ Configuration is validated on startup. In production mode (TESTING_MODE=false):
 
 **Errors stop application:**
 ```bash
-docker-compose logs gcp_functions_action_module
+docker-compose logs action-gcp-functions
 # Configuration error: GCP_PROJECT_ID is required
 ```
 

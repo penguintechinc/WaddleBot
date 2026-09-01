@@ -338,10 +338,8 @@ Initial proof-of-concept implementation.
    psql -d waddlebot -f migrations/007_add_radio_config.sql
    ```
 
-5. **Restart service**
-   ```bash
-   docker-compose restart unified-music-module
-   ```
+5. **Restart service** (not currently wired into `docker-compose.yml` as its own service — restart
+   the process directly, e.g. via your process manager or `kubectl rollout restart` if deployed)
 
 6. **Verify health**
    ```bash

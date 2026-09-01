@@ -42,8 +42,8 @@ This file acknowledges the libraries, contributors, reviewers, beta testers, and
 |------------|---------|---------|
 | [PostgreSQL](https://www.postgresql.org/) | PostgreSQL License | Primary database |
 | [Redis](https://redis.io/) | BSD | Caching & message queue |
-| [Docker](https://www.docker.com/) | Apache 2.0 | Containerization |
-| [Kong](https://konghq.com/) | Apache 2.0 | API Gateway |
+| [Docker](https://www.docker.com/) | Apache 2.0 | Containerization (local dev) |
+| [Kubernetes](https://kubernetes.io/) | Apache 2.0 | Container orchestration (Helm-deployed) |
 | [Nginx](https://nginx.org/) | BSD | Reverse proxy |
 
 ### Platform Integrations
