@@ -2444,3 +2444,83 @@ def bind_app_bundle_tables(dal: Any, *, migrate: bool = False) -> None:
         Field("updated_at", "datetime"),
         migrate=migrate,
     )
+
+
+def bind_ai_routing_tables(dal: Any, *, migrate: bool = False) -> None:
+    """Define the tables the premium-AI model-routing layer owns.
+
+    Greenfield feature (no Node controller to port) --
+    `config/postgres/migrations/077_premium_ai_routing.sql` is this
+    group's own migration. `ai_model_config`/`ai_byok_keys` back
+    `services/ai_routing/config_service.py` (per-community tier choice +
+    AES-256-GCM-encrypted-at-rest BYOK provider keys -- see
+    `services/ai_routing/byok_crypto.py`, the same primitive/pattern
+    `services/github_sync_service.py`'s token-at-rest encryption already
+    uses, never plaintext). `ai_token_balances`/`ai_token_transactions`
+    back `services/token_ledger.py`'s `debit_tokens()` -- a minimal, real
+    premium-AI-tokens ledger scoped to this PR. Table names are
+    deliberately distinct from the `community_token_balances`/
+    `token_transactions` names the parallel metered-token-billing spec
+    (`docs/plans/2026-08-31-metered-token-billing-design.md`) reserves
+    for the eventual multi-consumable ledger, so the two migrations never
+    collide -- that follow-on PR is expected to reconcile/union the two.
+
+    Called from `app.py::_bind_reference_tables()` (this PR's one
+    additive line there) and lazily from `services/ai_routing/
+    config_service.py`/`services/token_ledger.py` themselves --
+    idempotent either way, same "safe to call from more than one place"
+    property every other `bind_*_tables()` in this module already relies
+    on (see `bind_community_authz_tables()`'s own docstring).
+    """
+    if "ai_model_config" in dal.tables:
+        return
+
+    dal.define_table(
+        "ai_model_config",
+        Field("community_id", "integer", notnull=True),
+        Field("preferred_tier", "string", length=20, default="free"),
+        Field("byok_provider", "string", length=20),
+        Field("on_insufficient_balance", "string", length=20, default="fallback_free"),
+        Field("created_at", "datetime"),
+        Field("updated_at", "datetime"),
+        Field("updated_by_user_id", "integer"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "ai_byok_keys",
+        Field("community_id", "integer", notnull=True),
+        Field("provider", "string", length=20, notnull=True),
+        Field("encrypted_key", "text", notnull=True),
+        Field("key_last4", "string", length=8, notnull=True),
+        Field("is_active", "boolean", default=True),
+        Field("created_at", "datetime"),
+        Field("updated_at", "datetime"),
+        Field("rotated_at", "datetime"),
+        Field("created_by_user_id", "integer"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "ai_token_balances",
+        Field("community_id", "integer", notnull=True),
+        Field("consumable_type", "string", length=50, default="ai_premium_tokens"),
+        Field("balance_tokens", "bigint", default=0),
+        Field("lifetime_consumed", "bigint", default=0),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "ai_token_transactions",
+        Field("community_id", "integer", notnull=True),
+        Field("consumable_type", "string", length=50, notnull=True),
+        Field("amount_tokens", "bigint", notnull=True),
+        Field("balance_after", "bigint", notnull=True),
+        Field("idempotency_key", "string", length=255, notnull=True, unique=True),
+        Field("source_ref", "string", length=255),
+        Field("actor_user_id", "integer"),
+        Field("metadata", "json"),
+        Field("created_at", "datetime"),
+        migrate=migrate,
+    )

@@ -26,6 +26,15 @@ different `bind_streaming_tables()`/`bind_overlay_tables()` split (see
 `_seed_membership` are this group's own seeding helpers for
 `communities`/`community_members` (`services.community_access`'s authz
 checks).
+
+`ai_routing_db` (premium-AI model-routing group, greenfield) is another
+additive fixture in the exact same shape as `overlay_db` -- `bind_auth_
+tables()` (for `communities`/`community_members`, which `services.
+community_access`'s admin/member checks query) plus `services.schema.
+bind_ai_routing_tables()` (for `ai_model_config`/`ai_byok_keys`/
+`ai_token_balances`/`ai_token_transactions`). Reuses `seed_community`/
+`seed_membership` unchanged -- they take any `AsyncDAL`-like fixture with
+a `.dal` attribute, not just `overlay_db` specifically.
 """
 
 from __future__ import annotations
@@ -39,6 +48,7 @@ from pydal import DAL, Field
 
 from services.schema import (
     bind_admin_tables,
+    bind_ai_routing_tables,
     bind_app_bundle_tables,
     bind_auth_tables,
     bind_community_authz_tables,
@@ -151,6 +161,35 @@ def overlay_db(tmp_path: Any) -> Any:
     )
     bind_auth_tables(dal, migrate=True)
     bind_overlay_tables(dal, migrate=True)
+    dal.tenants.insert(slug=TENANT_SLUG, display_name="Acme Corp", is_active=True)
+    dal.tenants.insert(slug=OTHER_TENANT_SLUG, display_name="Other Corp", is_active=True)
+    dal.commit()
+    for table_name in dal.tables:
+        dal(dal[table_name]).count()
+    yield async_dal
+    dal.close()
+
+
+@pytest.fixture
+def ai_routing_db(tmp_path: Any) -> Any:
+    """File-backed `AsyncDAL` with `tenants` + auth tables + the premium-AI routing group's own.
+
+    Same connection-visibility rationale as `auth_db`/`overlay_db` above
+    -- a fresh file, not shared with any other group's fixture.
+    """
+    async_dal = AsyncDAL(f"sqlite://{tmp_path / 'ai_routing_test.db'}", pool_size=1)
+    dal = async_dal.dal
+    dal.define_table(
+        "tenants",
+        Field("slug", unique=True),
+        Field("display_name"),
+        Field("logo_url"),
+        Field("is_global", "boolean", default=False),
+        Field("is_active", "boolean", default=True),
+        Field("config", "json"),
+    )
+    bind_auth_tables(dal, migrate=True)
+    bind_ai_routing_tables(dal, migrate=True)
     dal.tenants.insert(slug=TENANT_SLUG, display_name="Acme Corp", is_active=True)
     dal.tenants.insert(slug=OTHER_TENANT_SLUG, display_name="Other Corp", is_active=True)
     dal.commit()
