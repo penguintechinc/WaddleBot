@@ -530,3 +530,38 @@ def user_auth_headers():
         return {"Authorization": f"Bearer {token}"}
 
     return _make
+
+
+@pytest.fixture
+def support_token_db(tenant_db: Any) -> Any:
+    """`tenant_db` + Community-module tables + support/access-token tables + one seeded community.
+
+    Mirrors `community_db`'s shape (`ensure_community_tables(dal,
+    migrate=True)`), additionally binding `services.schema.
+    bind_support_token_tables(dal, migrate=True)` for the support-ticket/
+    PAT/CAT port group -- same one-schema-definition-not-two rationale as
+    every other `<group>_db` fixture in this file. Also seeds two
+    `hub_users` rows (reporter + admin) and one `permission_scopes` catalog
+    entry, both needed by every PAT/CAT/ticket test in this group.
+    """
+    from services.community_common import ensure_community_tables
+    from services.schema import bind_support_token_tables
+
+    dal = tenant_db
+    ensure_community_tables(dal, migrate=True)
+    bind_support_token_tables(dal, migrate=True)
+
+    tenant_row = dal(dal.tenants.slug == TENANT_SLUG).select().first()
+    community_id = dal.communities.insert(name="test-community", tenant_id=tenant_row.id)
+    dal.hub_users.insert(
+        username="reporter", display_name="Reporter One", email="reporter@example.com"
+    )
+    dal.hub_users.insert(username="admin", display_name="Admin One", email="admin@example.com")
+    dal.permission_scopes.insert(
+        scope_key="chat:read",
+        display_name="Read chat",
+        description="Read chat messages",
+        category="chat",
+    )
+    dal.commit()
+    return dal, community_id
