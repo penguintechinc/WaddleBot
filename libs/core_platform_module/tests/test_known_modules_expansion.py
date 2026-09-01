@@ -3,14 +3,24 @@ KNOWN_MODULES expansion tests
 =================================
 
 Covers the Step 1 spine change: :data:`flask_core.app_manifest.KNOWN_MODULES`
-grows from the 4 product Modules (bot/social/marketing/customer) to include
-the 7 Core/platform namespaces this package registers Features under
-(analytics, video_proxy, auth, compliance, integrations, tenancy, core).
-:mod:`flask_core.feature_contract` imports ``KNOWN_MODULES`` from
+grows from the 4 legacy product Modules (bot/social/marketing/customer) to
+include the 7 Core/platform namespaces this package registers Features
+under (analytics, video_proxy, auth, compliance, integrations, tenancy,
+core). :mod:`flask_core.feature_contract` imports ``KNOWN_MODULES`` from
 ``app_manifest`` rather than re-declaring it, so a single passing test per
 validator (:func:`parse_manifest`, :func:`parse_feature_contract`) proves
 both consumers see the same expanded set -- and the bogus-module case
 proves the set is still a real allowlist, not accidentally opened wide.
+
+Updated for the P4 SCCEMBS taxonomy migration
+(docs/plans/2026-08-31-v3-sccembs-program-plan.md #1.1/#9): the 4 legacy
+product Modules are superseded by the 7 canonical SCCEMBS modules (Socials,
+Customers, Community, Event, Marketing, Bot, Streaming), with "social"/
+"customer" (singular) kept additively as transitional aliases so already
+-registered pre-P4 Feature contracts (module="social"/"customer") don't
+break -- see the KNOWN_MODULES docstring in app_manifest.py. This test's
+expected set now asserts SCCEMBS_MODULES | LEGACY_ALIASES |
+CORE_PLATFORM_NAMESPACES rather than the old 4-module set.
 
 Fail-on-purpose proof: ``test_bogus_module_still_rejected_by_manifest`` and
 ``test_bogus_module_still_rejected_by_feature_contract`` were verified to
@@ -30,7 +40,9 @@ from flask_core.app_manifest import ManifestError, parse_manifest
 from flask_core.feature_contract import REASON_UNKNOWN_MODULE as CONTRACT_REASON_UNKNOWN_MODULE
 from flask_core.feature_contract import FeatureContractError, parse_feature_contract
 
-PRODUCT_MODULES = {"bot", "social", "marketing", "customer"}
+SCCEMBS_MODULES = {"socials", "customers", "community", "event", "marketing", "bot", "streaming"}
+LEGACY_MODULE_ALIASES = {"social", "customer"}
+PRODUCT_MODULES = SCCEMBS_MODULES | LEGACY_MODULE_ALIASES
 CORE_PLATFORM_NAMESPACES = {
     "analytics",
     "video_proxy",
