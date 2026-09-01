@@ -732,6 +732,36 @@ def marketplace_catalog_db(tmp_path: Any) -> Any:
 
 
 @pytest.fixture
+def marketplace_billing_db(tenant_db: Any) -> Any:
+    """`tenant_db` + every M4 Marketplace Billing table (`migrate=True`) + one seeded community.
+
+    Sync `dal` only (this group never calls `AsyncDAL.*_async()` -- see
+    `services/marketplace_billing_service.py`'s module docstring), so
+    `tenant_db`'s plain `sqlite:memory` DAL is safe to reuse directly here,
+    unlike `auth_db`'s file-backed sqlite workaround for `AsyncDAL`'s
+    cross-thread connection scoping.
+    """
+    from services.schema import bind_marketplace_billing_tables
+
+    dal = tenant_db
+    bind_marketplace_billing_tables(dal, migrate=True)
+
+    tenant_row = dal(dal.tenants.slug == TENANT_SLUG).select().first()
+    community_id = dal.communities.insert(name="test-community", tenant_id=tenant_row.id)
+    dal.marketplace_settings.insert(
+        setting_key="community_premium_base_price_cents", setting_value="500"
+    )
+    dal.marketplace_settings.insert(
+        setting_key="community_premium_base_seat_limit", setting_value="50"
+    )
+    dal.marketplace_settings.insert(
+        setting_key="community_premium_overage_price_cents", setting_value="10"
+    )
+    dal.commit()
+    return dal, tenant_row.id, community_id
+
+
+@pytest.fixture
 def user_auth_headers():
     """Factory fixture: `user_auth_headers(user_id=42)` -> Authorization header dict.
 

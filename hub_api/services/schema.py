@@ -2080,3 +2080,181 @@ def bind_marketplace_vendor_tables(dal: Any, *, migrate: bool = False) -> None:
         Field("updated_at", "datetime"),
         migrate=migrate,
     )
+
+
+def bind_marketplace_billing_tables(dal: Any, *, migrate: bool = False) -> None:
+    """Define every table the M4 Marketplace Billing group (subs/payments/premium/discount) queries.
+
+    Idempotent per-table (mirrors `community_common.py::ensure_community_tables`,
+    not `bind_auth_tables`'s single-table early-return) -- this group shares
+    `communities`/`hub_users`/`community_members` with the Core/Community
+    groups, and `bind_auth_tables()` (called first, itself idempotent) is
+    the one that actually defines them with the `role` string column this
+    group's `is_community_admin()` check needs (`community_common.py`'s own
+    `community_members` binding omits `role` -- it never needed it). Calling
+    `bind_auth_tables()` here guarantees that column exists regardless of
+    which group's blueprint handles the first request in a given process.
+
+    Schema provenance: `config/postgres/migrations/017_add_marketplace.sql`
+    (marketplace_subscriptions, marketplace_payments, marketplace_settings),
+    `059_marketplace_consolidation.sql` (tenant_id columns,
+    community_premium_subscriptions), `000_create_base_schema.sql`
+    (hub_modules, hub_module_installations), `064_vendor_discount_codes.sql`
+    (vendor_discount_codes, discount_code_redemptions).
+
+    Gap fixed during this port (not a pre-existing-gap note like
+    `bind_auth_tables`'s three -- this one changes behavior, see
+    `hub_api/PORTING.md` Gotcha #4 pattern): Node's own
+    `discountCodeService.js` queries tables named `marketplace_discount_codes`/
+    `marketplace_discount_code_redemptions`, which do not exist in any
+    numbered migration -- the real tables (064) are `vendor_discount_codes`/
+    `discount_code_redemptions`, with a different column set (`vendor_id`
+    directly on `hub_users`, no `marketplace_sellers` indirection;
+    `discount_type` CHECK is `percentage`/`fixed_amount`/`free`, not
+    `percentage`/`fixed_cents`; `discount_amount_cents`, not
+    `savings_cents`). Node's code would 500 against the real schema; this
+    port binds and queries the REAL tables instead of faithfully
+    reproducing a query against tables that don't exist.
+    """
+    bind_auth_tables(dal, migrate=migrate)
+
+    if "hub_modules" not in dal.tables:
+        dal.define_table(
+            "hub_modules",
+            Field("name", "string", length=255, notnull=True, unique=True),
+            Field("display_name", "string", length=255),
+            Field("description", "text"),
+            Field("version", "string", length=50),
+            Field("author", "string", length=255),
+            Field("category", "string", length=100),
+            Field("icon_url", "text"),
+            Field("is_published", "boolean", default=False),
+            Field("is_core", "boolean", default=False),
+            migrate=migrate,
+        )
+
+    if "hub_module_installations" not in dal.tables:
+        dal.define_table(
+            "hub_module_installations",
+            Field("community_id", "integer", notnull=True),
+            Field("module_id", "integer"),
+            Field("installed_by", "integer"),
+            Field("config", "json"),
+            Field("is_enabled", "boolean", default=True),
+            Field("installed_at", "datetime"),
+            Field("updated_at", "datetime"),
+            migrate=migrate,
+        )
+
+    if "marketplace_subscriptions" not in dal.tables:
+        dal.define_table(
+            "marketplace_subscriptions",
+            Field("community_id", "integer", notnull=True),
+            Field("module_id", "integer", notnull=True),
+            Field("tenant_id", "integer"),
+            Field("status", "string", length=50, default="active"),
+            Field("is_enabled", "boolean", default=True),
+            Field("stripe_subscription_id", "string", length=255),
+            Field("paypal_subscription_id", "string", length=255),
+            Field("pricing_model", "string", length=50, default="flat"),
+            Field("current_seat_count", "integer"),
+            Field("last_seat_update", "datetime"),
+            Field("current_period_start", "datetime"),
+            Field("current_period_end", "datetime"),
+            Field("cancel_at_period_end", "boolean", default=False),
+            Field("subscribed_at", "datetime"),
+            Field("canceled_at", "datetime"),
+            migrate=migrate,
+        )
+
+    if "marketplace_payments" not in dal.tables:
+        dal.define_table(
+            "marketplace_payments",
+            Field("subscription_id", "integer"),
+            Field("community_id", "integer", notnull=True),
+            Field("module_id", "integer"),
+            Field("tenant_id", "integer"),
+            # `external_payment_id` is this group's idempotency key -- see
+            # `services/marketplace_webhook_service.py`'s module docstring.
+            # No DB-level UNIQUE constraint (no new migration in this PR,
+            # matching the established "no schema changes" port convention
+            # -- see `hub_api/PORTING.md` Gotcha #4) -- enforced at the
+            # application layer via a SELECT-before-INSERT check instead.
+            Field("payment_provider", "string", length=50, notnull=True),
+            Field("external_payment_id", "string", length=255),
+            Field("amount_cents", "integer", notnull=True),
+            Field("currency", "string", length=10, default="USD"),
+            Field("status", "string", length=50, notnull=True),
+            Field("platform_fee_cents", "integer", default=0),
+            Field("developer_amount_cents", "integer", default=0),
+            Field("created_at", "datetime"),
+            Field("metadata", "json"),
+            migrate=migrate,
+        )
+
+    if "community_premium_subscriptions" not in dal.tables:
+        dal.define_table(
+            "community_premium_subscriptions",
+            Field("community_id", "integer", notnull=True, unique=True),
+            Field("tenant_id", "integer"),
+            Field("status", "string", length=50, default="active"),
+            Field("stripe_subscription_id", "string", length=255),
+            Field("paypal_subscription_id", "string", length=255),
+            Field("current_seat_count", "integer", default=0),
+            Field("base_price_cents", "integer", notnull=True, default=500),
+            Field("overage_price_cents", "integer", notnull=True, default=10),
+            Field("base_seat_limit", "integer", notnull=True, default=50),
+            Field("current_period_start", "datetime"),
+            Field("current_period_end", "datetime"),
+            Field("cancel_at_period_end", "boolean", default=False),
+            Field("created_at", "datetime"),
+            Field("updated_at", "datetime"),
+            migrate=migrate,
+        )
+
+    if "marketplace_settings" not in dal.tables:
+        dal.define_table(
+            "marketplace_settings",
+            Field("setting_key", "string", length=100, notnull=True, unique=True),
+            Field("setting_value", "text"),
+            Field("updated_by", "integer"),
+            Field("updated_at", "datetime"),
+            migrate=migrate,
+        )
+
+    if "vendor_discount_codes" not in dal.tables:
+        dal.define_table(
+            "vendor_discount_codes",
+            Field("code", "string", length=50, notnull=True),
+            Field("vendor_id", "integer", notnull=True),
+            Field("module_id", "integer"),
+            Field("discount_type", "string", length=20, notnull=True),
+            Field("discount_value", "decimal(10,2)", default=0),
+            Field("max_uses", "integer"),
+            Field("current_uses", "integer", notnull=True, default=0),
+            Field("usage_window_days", "integer"),
+            Field("application_months", "integer"),
+            Field("valid_from", "datetime", notnull=True),
+            Field("valid_until", "datetime"),
+            Field("is_active", "boolean", notnull=True, default=True),
+            Field("description", "text"),
+            Field("created_at", "datetime", notnull=True),
+            Field("updated_at", "datetime", notnull=True),
+            migrate=migrate,
+        )
+
+    if "discount_code_redemptions" not in dal.tables:
+        dal.define_table(
+            "discount_code_redemptions",
+            Field("discount_code_id", "integer", notnull=True),
+            Field("community_id", "integer", notnull=True),
+            Field("subscription_id", "integer"),
+            Field("original_price_cents", "integer", notnull=True),
+            Field("discounted_price_cents", "integer", notnull=True),
+            Field("discount_amount_cents", "integer", notnull=True),
+            Field("redeemed_at", "datetime", notnull=True),
+            Field("expires_at", "datetime"),
+            migrate=migrate,
+        )
+
+
