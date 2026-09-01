@@ -18,6 +18,22 @@ def ai_routing_disabled(message: str = "AI routing is not enabled for this commu
     return ApiError(message, 503, "AI_ROUTING_DISABLED")
 
 
+def ai_disabled_by_deployment(
+    message: str = "AI features are disabled in this deployment",
+) -> ApiError:
+    """503 -- the deploy-time `WADDLES_AI_ENABLED` kill-switch (`config.py`'s `ai_enabled`) is off.
+
+    Distinct from `ai_routing_disabled()` (the per-community PostHog flag):
+    this one is a whole-deployment, ops-controlled switch checked before ANY
+    per-community flag/entitlement/DAL work happens or any outbound model
+    call is attempted -- lets hub-api run on a machine with no Ollama/model
+    backend reachable at all. `blueprints/v1/ai_routing.py`'s handlers raise
+    this before touching community auth/config; `router.route_completion()`
+    raises it as its own first line too, independent of the blueprint.
+    """
+    return ApiError(message, 503, "AI_DISABLED_DEPLOYMENT")
+
+
 def not_entitled(message: str = "This AI tier requires a higher plan") -> ApiError:
     """403 -- flag-or-license-tier gate failed for a premium/BYOK tier request."""
     return ApiError(message, 403, "AI_TIER_NOT_ENTITLED")

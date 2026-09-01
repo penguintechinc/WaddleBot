@@ -113,6 +113,91 @@ class TestBaseGate:
         assert exc_info.value.status_code == 503
 
 
+class TestAiEnabledKillSwitch:
+    """`route_completion(..., ai_enabled=...)` -- the deploy-time `WADDLES_AI_ENABLED` gate.
+
+    Distinct from `TestBaseGate` above (the per-community PostHog flag):
+    this is the whole-deployment ops switch (`config.py`'s `HubAPIConfig.
+    ai_enabled`, threaded in by `blueprints/v1/ai_routing.py`). Proves the
+    guard is `route_completion()`'s own first line, independent of the
+    blueprint -- unset/default keeps the normal flag+entitlement gating
+    path reachable; `ai_enabled=False` raises before that path, before any
+    DAL/config_service call, and before any model client is ever touched.
+    """
+
+    async def test_default_unset_reaches_normal_flag_gate(
+        self, router_db: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Omitting `ai_enabled` (the real call shape every pre-existing test above uses)."""
+        async_dal, community_id = router_db
+        _patch_feature_flags(monkeypatch)
+        _patch_free_ollama(monkeypatch)
+        response = await router.route_completion(
+            async_dal,
+            async_dal.dal,
+            tenant="acme-corp",
+            community_id=community_id,
+            actor_user_id=1,
+            ai_request=AIRequest(prompt="hi"),
+            idempotency_key="k1",
+        )
+        assert response.tier_used == "free"
+
+    async def test_ai_enabled_false_raises_before_flag_check(
+        self, router_db: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        async_dal, community_id = router_db
+
+        async def _fail_if_called(*args: Any, **kwargs: Any) -> bool:
+            raise AssertionError("feature_enabled() must never be called when ai_enabled=False")
+
+        monkeypatch.setattr(router, "feature_enabled", _fail_if_called)
+
+        with pytest.raises(ApiError) as exc_info:
+            await router.route_completion(
+                async_dal,
+                async_dal.dal,
+                tenant="acme-corp",
+                community_id=community_id,
+                actor_user_id=1,
+                ai_request=AIRequest(prompt="hi"),
+                idempotency_key="k1",
+                ai_enabled=False,
+            )
+        assert exc_info.value.status_code == 503
+        assert exc_info.value.code == "AI_DISABLED_DEPLOYMENT"
+
+    async def test_ai_enabled_false_never_calls_the_model_client(
+        self, router_db: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Mock the model client and assert it is never invoked -- no outbound call attempted."""
+        async_dal, community_id = router_db
+        _patch_feature_flags(monkeypatch)  # would allow every gate if reached -- proves it isn't
+
+        called = False
+
+        async def _fail_if_called(self: Any, ai_request: AIRequest, *, tier: str) -> AIResponse:
+            nonlocal called
+            called = True
+            raise AssertionError("OllamaClient.generate() must never be called")
+
+        monkeypatch.setattr(router.OllamaClient, "generate", _fail_if_called)
+
+        with pytest.raises(ApiError) as exc_info:
+            await router.route_completion(
+                async_dal,
+                async_dal.dal,
+                tenant="acme-corp",
+                community_id=community_id,
+                actor_user_id=1,
+                ai_request=AIRequest(prompt="hi", requested_tier="premium"),
+                idempotency_key="k1",
+                ai_enabled=False,
+            )
+        assert exc_info.value.code == "AI_DISABLED_DEPLOYMENT"
+        assert called is False
+
+
 class TestFreeTier:
     async def test_default_config_routes_to_free(
         self, router_db: Any, monkeypatch: pytest.MonkeyPatch

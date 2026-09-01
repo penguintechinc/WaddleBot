@@ -16,6 +16,14 @@ infrastructure:
     enabled: false
   qdrant:
     enabled: false
+
+# WADDLES_AI_ENABLED=false -- no Ollama deployed above (infrastructure.
+# ollama.enabled: false), so hub-api's AI-routing subsystem stays off too
+# rather than crash-looping/degrading against an unreachable backend.
+pipeline:
+  hubApi:
+    aiEnabled: false
+
 ingress:
   enabled: false
 spire:

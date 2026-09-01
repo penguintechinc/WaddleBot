@@ -12,6 +12,11 @@ gate; `ambient` invocations gracefully downgrade to free-local instead
 
 Free-local is always reachable once the base `waddles.ai.routing` flag is
 on -- it is the floor every fallback path lands on.
+
+`route_completion()`'s own `ai_enabled` parameter is a SEPARATE, deploy-time
+kill-switch (`WADDLES_AI_ENABLED`, `config.py`) checked before all of the
+above -- ONE-WAY (can only turn AI off), never a substitute for the
+flag/license gates this module already enforces.
 """
 
 from __future__ import annotations
@@ -29,6 +34,7 @@ from services.ai_routing.clients import (
     premium_ollama_config,
 )
 from services.ai_routing.errors import (
+    ai_disabled_by_deployment,
     ai_routing_disabled,
     byok_key_missing,
     insufficient_balance,
@@ -163,13 +169,30 @@ async def route_completion(
     actor_user_id: int | None,
     ai_request: AIRequest,
     idempotency_key: str,
+    ai_enabled: bool = True,
 ) -> AIResponse:
     """Route one completion request through the free/premium/BYOK ladder. Real dispatch throughout.
 
     `idempotency_key` must be unique per logical attempt (a caller retry
     after a network timeout should reuse the same key so a premium debit
     is never double-charged -- see `token_ledger.debit_tokens()`).
+
+    `ai_enabled` is the deploy-time `WADDLES_AI_ENABLED` kill-switch
+    (`config.py`'s `HubAPIConfig.ai_enabled`), threaded in by the caller
+    (`blueprints/v1/ai_routing.py` reads it off `HUB_API_CONFIG`) rather
+    than read from the environment here -- keeps this a pure function of
+    its arguments and matches every other config value this module already
+    receives as a parameter instead of reaching into `os.environ` itself.
+    Defaults `True` (current full-feature behavior) so existing callers/
+    tests that don't pass it are unaffected. Checked BEFORE the
+    `waddles.ai.routing` PostHog flag and before any DAL/config_service
+    call -- a deploy with `ai_enabled=False` never touches the community's
+    AI config row and never attempts an outbound Ollama/OpenAI/Anthropic
+    call.
     """
+    if not ai_enabled:
+        raise ai_disabled_by_deployment()
+
     if not await feature_enabled(FEATURE_AI_ROUTING, tenant=tenant, community=community_id):
         raise ai_routing_disabled()
 

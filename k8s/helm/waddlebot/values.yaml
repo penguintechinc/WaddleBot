@@ -437,6 +437,16 @@ pipeline:
     port: 8204
     grpcPort: 50204
     replicas: 2
+    # Maps to WADDLES_AI_ENABLED (hub_api/config.py) -- deploy-time
+    # kill-switch for the whole services/ai_routing/ subsystem, so
+    # hub-api can run on a non-beefy machine with no Ollama/model backend
+    # reachable at all (a ONE-WAY disable; never grants AI access on its
+    # own -- the PostHog flag + Enterprise license-tier gates still
+    # govern who can use it when this is true). Defaults true here
+    # (current full-feature behavior); values-alpha.yaml/values-beta.yaml
+    # override to false since their `infrastructure.ollama.enabled` is
+    # already false -- no AI backend actually deployed in either env.
+    aiEnabled: true
     resources:
       requests:
         cpu: "250m"

@@ -35,7 +35,7 @@ from tests.conftest import (
 )
 
 
-def _test_config() -> HubAPIConfig:
+def _test_config(*, ai_enabled: bool = True) -> HubAPIConfig:
     return HubAPIConfig(
         module_name="hub-api-test",
         module_version="0.0.0-test",
@@ -56,6 +56,7 @@ def _test_config() -> HubAPIConfig:
         frontend_origin="http://localhost:5173",
         log_level="INFO",
         overlay_base_url="https://overlay.example.test",
+        ai_enabled=ai_enabled,
     )
 
 
@@ -74,6 +75,24 @@ def app(ai_routing_db: Any) -> Quart:
 @pytest.fixture
 def client(app: Quart) -> Any:
     return app.test_client()
+
+
+@pytest.fixture
+def disabled_app(ai_routing_db: Any) -> Quart:
+    """Same wiring as `app`, but `WADDLES_AI_ENABLED=false` -- `HubAPIConfig.ai_enabled=False`."""
+    quart_app = Quart(__name__)
+    QuartSchema(quart_app)
+    quart_app.register_blueprint(ai_config_bp)
+    quart_app.register_blueprint(ai_completions_bp)
+    quart_app.config["dal"] = ai_routing_db.dal
+    quart_app.config["async_dal"] = ai_routing_db
+    quart_app.config["HUB_API_CONFIG"] = _test_config(ai_enabled=False)
+    return quart_app
+
+
+@pytest.fixture
+def disabled_client(disabled_app: Quart) -> Any:
+    return disabled_app.test_client()
 
 
 def _admin_headers(
@@ -277,3 +296,101 @@ class TestCompletions:
             json={"prompt": "hi"},
         )
         assert response.status_code == 403
+
+
+class TestAiDisabledKillSwitch:
+    """`WADDLES_AI_ENABLED=false` (`HubAPIConfig.ai_enabled=False`) -- every route 503s.
+
+    Uses `disabled_client`/`disabled_app` (`ai_enabled=False`), never the
+    default `client`/`app` fixture. `route_completion()` and
+    `config_service.*` are monkeypatched to raise `AssertionError` if
+    called at all -- proof the `_ai_enabled()` guard is a real early-return
+    in each handler, not just a status-code coincidence: reaching any of
+    them here would fail the test even if the eventual response still
+    happened to be a 503 for some other reason.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _fail_if_any_ai_backend_touched(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from blueprints.v1 import ai_routing as bp_module
+        from services.ai_routing import config_service
+
+        async def _fail_route_completion(*args: Any, **kwargs: Any) -> AIResponse:
+            raise AssertionError("route_completion() must never be called when AI is disabled")
+
+        async def _fail_config_service(*args: Any, **kwargs: Any) -> Any:
+            raise AssertionError("config_service.* must never be called when AI is disabled")
+
+        monkeypatch.setattr(bp_module, "route_completion", _fail_route_completion)
+        for fn_name in (
+            "get_ai_config",
+            "set_ai_config",
+            "list_byok_keys",
+            "set_byok_key",
+            "delete_byok_key",
+        ):
+            monkeypatch.setattr(config_service, fn_name, _fail_config_service)
+
+    async def test_get_config_is_503(self, disabled_client: Any, ai_routing_db: Any) -> None:
+        headers, community_id, _ = _admin_headers(ai_routing_db)
+        response = await disabled_client.get(
+            f"/api/v1/admin/{community_id}/ai/config", headers=headers
+        )
+        assert response.status_code == 503
+        body = await response.get_json()
+        assert body["error"]["code"] == "AI_DISABLED_DEPLOYMENT"
+
+    async def test_set_config_is_503(self, disabled_client: Any, ai_routing_db: Any) -> None:
+        headers, community_id, _ = _admin_headers(ai_routing_db)
+        response = await disabled_client.put(
+            f"/api/v1/admin/{community_id}/ai/config",
+            headers=headers,
+            json={"preferred_tier": "premium"},
+        )
+        assert response.status_code == 503
+
+    async def test_list_byok_keys_is_503(self, disabled_client: Any, ai_routing_db: Any) -> None:
+        headers, community_id, _ = _admin_headers(ai_routing_db)
+        response = await disabled_client.get(
+            f"/api/v1/admin/{community_id}/ai/byok-keys", headers=headers
+        )
+        assert response.status_code == 503
+
+    async def test_set_byok_key_is_503(self, disabled_client: Any, ai_routing_db: Any) -> None:
+        headers, community_id, _ = _admin_headers(ai_routing_db)
+        response = await disabled_client.put(
+            f"/api/v1/admin/{community_id}/ai/byok-keys",
+            headers=headers,
+            json={"provider": "openai", "api_key": "sk-whatever"},
+        )
+        assert response.status_code == 503
+
+    async def test_delete_byok_key_is_503(self, disabled_client: Any, ai_routing_db: Any) -> None:
+        headers, community_id, _ = _admin_headers(ai_routing_db)
+        response = await disabled_client.delete(
+            f"/api/v1/admin/{community_id}/ai/byok-keys/openai", headers=headers
+        )
+        assert response.status_code == 503
+
+    async def test_create_completion_is_503(self, disabled_client: Any, ai_routing_db: Any) -> None:
+        headers, community_id, _ = _admin_headers(ai_routing_db)
+        response = await disabled_client.post(
+            f"/api/v1/community/{community_id}/ai/completions",
+            headers=headers,
+            json={"prompt": "hi"},
+        )
+        assert response.status_code == 503
+        body = await response.get_json()
+        assert body["error"]["code"] == "AI_DISABLED_DEPLOYMENT"
+
+
+async def test_enabled_app_is_unaffected(client: Any, ai_routing_db: Any) -> None:
+    """Default `client` fixture (`ai_enabled=True`, unset default) -- unaffected, real logic runs.
+
+    Module-level (not inside `TestAiDisabledKillSwitch`) so it does NOT
+    inherit that class's autouse fail-if-touched fixture -- this test's
+    whole point is that `config_service.get_ai_config` DOES get called.
+    """
+    headers, community_id, _ = _admin_headers(ai_routing_db)
+    response = await client.get(f"/api/v1/admin/{community_id}/ai/config", headers=headers)
+    assert response.status_code == 200
