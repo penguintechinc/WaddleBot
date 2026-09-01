@@ -781,3 +781,27 @@ def support_token_db(tenant_db: Any) -> Any:
     )
     dal.commit()
     return dal, community_id
+
+
+@pytest.fixture
+def marketplace_db(tenant_db: Any, monkeypatch: Any) -> Any:
+    """`tenant_db` + every Marketplace-vendor-port table (`migrate=True`).
+
+    `bind_marketplace_vendor_tables(dal, migrate=True)` reuses production's
+    exact field definitions (see `services/schema.py`'s own docstring) --
+    additive-only fixture per `hub_api/PORTING.md`'s test-pattern
+    guidance, never edits `tenant_db`/`auth_db`/`community_db` in place.
+    Also sets `SERVICE_API_KEY` for the `internal_bp` (X-Service-Key)
+    endpoint tests, matching `community_db`'s own precedent.
+    """
+    from services.schema import bind_marketplace_vendor_tables
+
+    monkeypatch.setenv("SERVICE_API_KEY", SERVICE_API_KEY)
+    monkeypatch.setenv(
+        "MARKETPLACE_ENCRYPTION_KEY",
+        "0" * 64,  # 64 hex chars = 32 bytes, test-only key
+    )
+
+    dal = tenant_db
+    bind_marketplace_vendor_tables(dal, migrate=True)
+    return dal

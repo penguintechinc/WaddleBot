@@ -1729,3 +1729,354 @@ def bind_marketplace_catalog_tables(dal: Any, *, migrate: bool = False) -> None:
         Field("tenant_id", "integer"),
         migrate=migrate,
     )
+
+
+def bind_marketplace_vendor_tables(dal: Any, *, migrate: bool = False) -> None:
+    """Define every table the Marketplace-vendor port group queries.
+
+    `app.py` is frozen (see `services/community_common.py`'s module
+    docstring for the full rationale -- port agents never edit
+    `app.py`/`routers/*.py`/`blueprints/__init__.py`), so this is NOT
+    wired into `app.py::_bind_reference_tables`. Instead every
+    `marketplace_vendor`/`marketplace_admin_review` blueprint handler
+    calls this idempotently first (`"marketplace_sellers" not in
+    dal.tables` guard), mirroring `services/bot_tables.py::bind_bot_tables`'s
+    call-from-the-blueprint-not-app.py shape -- `blueprints/v1/bot.py` is
+    the precedent to follow, not `bind_auth_tables` (M1 is the one group
+    old enough to predate the "app.py is frozen" constraint).
+
+    Idempotent per-DAL-instance. `migrate=False` (production default):
+    schema owned by `config/postgres/migrations/017_add_marketplace.sql`,
+    `021_add_vendor_submissions.sql`, `023_add_vendor_requests.sql`,
+    `059_marketplace_consolidation.sql`, `064_vendor_discount_codes.sql`.
+    Tests pass `migrate=True` against a throwaway sqlite file.
+
+    Schema-drift gaps (Gotcha #4 pattern -- pre-existing in Node, not
+    introduced by this port; documented here rather than silently
+    invented away or silently dropped):
+      1. `commands.module_url` is referenced by
+         `routerIntegrationController.js`/`commandRegistrationService.js`
+         but is not defined by `002_add_commands_table.sql` or any later
+         migration. Bound anyway to stay byte-faithful to Node -- a real
+         Postgres deployment 500s on this exact query today, same as
+         Node's raw SQL would.
+      2. `vendorAnalyticsService.js` queries `community_vendor_installations`
+         columns (`module_id`, `status`, `uninstalled_at`, `last_active_at`,
+         `discount_code_id`) that don't exist on the table
+         `021_add_vendor_submissions.sql` actually creates (which has
+         `vendor_module_id`, no status/uninstalled_at/last_active_at/
+         discount_code_id). Bound here using Node's EXPECTED shape
+         (byte-faithful porting target), not the migration's real shape --
+         same gap, not introduced by this port.
+      3. `vendor_payments` similarly: Node's analytics queries expect
+         `seller_id`, `module_id`, `amount_cents`, `status`, `paid_at`;
+         the real migration defines `submission_id`, `gross_amount`,
+         `net_amount`, `payment_status`, no `paid_at`. Same treatment.
+      4. `vendor_discount_codes.module_id` REFERENCES
+         `approved_vendor_modules(id)` per migration 064, but
+         `vendorAnalyticsService.js`'s `getDiscountCodePerformance` joins
+         it against `marketplace_modules` instead -- a pre-existing Node
+         logic gap (wrong join target), ported byte-faithfully rather
+         than silently "corrected" to the migration's real FK target.
+    """
+    if "marketplace_sellers" in dal.tables:
+        return
+
+    # hub_users: M1's bind_auth_tables() always runs first in production
+    # (app.py::_bind_reference_tables is unconditional at startup); this
+    # minimal stand-in only matters for a test DAL that binds this group
+    # in isolation -- same "define if missing, never redefine" guard
+    # bot_tables.py uses for the same reason.
+    if "hub_users" not in dal.tables:
+        dal.define_table(
+            "hub_users",
+            Field("username", "string", length=255),
+            Field("email", "string", length=255),
+            Field("display_name", "string", length=255),
+            Field("is_super_admin", "boolean", default=False),
+            Field("is_vendor", "boolean", default=False),
+            migrate=migrate,
+        )
+
+    if "communities" not in dal.tables:
+        dal.define_table(
+            "communities",
+            Field("name", "string", length=255),
+            Field("tenant_id", "integer"),
+            migrate=migrate,
+        )
+
+    dal.define_table(
+        "marketplace_sellers",
+        Field("user_id", "integer", notnull=True, unique=True),
+        Field("tenant_id", "integer"),
+        Field("display_name", "string", length=255),
+        Field("description", "text"),
+        Field("website_url", "string", length=500),
+        Field("payout_method", "string", length=50),
+        Field("payout_account_id", "string", length=255),
+        Field("total_revenue_cents", "integer", default=0),
+        Field("total_subscribers", "integer", default=0),
+        Field("is_verified", "boolean", default=False),
+        Field("verified_at", "datetime"),
+        Field("created_at", "datetime"),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "marketplace_modules",
+        Field("seller_id", "integer"),
+        Field("tenant_id", "integer"),
+        Field("name", "string", length=255, notnull=True),
+        Field("slug", "string", length=255, notnull=True, unique=True),
+        Field("description", "text"),
+        Field("category", "string", length=100),
+        Field("developer_user_id", "integer"),
+        Field("documentation_url", "string", length=500),
+        Field("support_url", "string", length=500),
+        Field("icon_url", "string", length=500),
+        Field("webhook_url", "string", length=500, notnull=True),
+        Field("webhook_secret", "string", length=255, notnull=True),
+        Field("webhook_timeout_ms", "integer", default=5000),
+        Field("trigger_commands", "list:string"),
+        Field("trigger_events", "list:string"),
+        Field("requested_scopes", "list:string"),
+        Field("response_types", "list:string"),
+        Field("pricing_type", "string", length=50, default="free"),
+        Field("pricing_model", "string", length=50, default="flat"),
+        Field("price_cents", "integer", default=0),
+        Field("min_seats", "integer", default=1),
+        Field("billing_period", "string", length=20, default="monthly"),
+        Field("currency", "string", length=10, default="USD"),
+        Field("api_base_url", "string", length=500),
+        Field("auth_type", "string", length=50, default="hmac"),
+        Field("auth_config", "json"),
+        Field("communication_model", "string", length=50, default="webhook_push"),
+        Field("integration_type", "string", length=50, default="command_handler"),
+        Field("status", "string", length=50, default="pending"),
+        Field("approved_by", "integer"),
+        Field("approved_at", "datetime"),
+        Field("rejection_reason", "text"),
+        Field("install_count", "integer", default=0),
+        Field("total_requests", "integer", default=0),
+        Field("failed_requests", "integer", default=0),
+        Field("version", "string", length=50, default="1.0.0"),
+        Field("created_at", "datetime"),
+        Field("updated_at", "datetime"),
+        Field("deleted_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "marketplace_submissions",
+        Field("module_id", "integer", notnull=True),
+        Field("version", "string", length=50),
+        Field("changes_description", "text"),
+        Field("submitted_by", "integer"),
+        Field("submitted_at", "datetime"),
+        Field("status", "string", length=50, default="pending"),
+        Field("reviewed_by", "integer"),
+        Field("reviewed_at", "datetime"),
+        Field("review_notes", "text"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "marketplace_settings",
+        Field("setting_key", "string", length=100, notnull=True, unique=True),
+        Field("setting_value", "text"),
+        Field("updated_by", "integer"),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "vendor_role_requests",
+        Field("request_id", "string", length=36, unique=True),
+        Field("user_id", "integer", notnull=True),
+        Field("user_email", "string", length=255),
+        Field("user_display_name", "string", length=255),
+        Field("company_name", "string", length=255, notnull=True),
+        Field("company_website", "string", length=500),
+        Field("business_description", "text", notnull=True),
+        Field("experience_summary", "text"),
+        Field("contact_email", "string", length=255, notnull=True),
+        Field("contact_phone", "string", length=20),
+        Field("status", "string", length=50, default="pending"),
+        Field("rejection_reason", "text"),
+        Field("reviewed_by", "integer"),
+        Field("admin_notes", "text"),
+        Field("requested_at", "datetime"),
+        Field("reviewed_at", "datetime"),
+        Field("created_at", "datetime"),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "vendor_submissions",
+        Field("submission_id", "string", length=36, unique=True),
+        Field("tenant_id", "integer"),
+        Field("vendor_name", "string", length=255, notnull=True),
+        Field("vendor_email", "string", length=255, notnull=True),
+        Field("company_name", "string", length=255),
+        Field("contact_phone", "string", length=20),
+        Field("website_url", "string", length=500),
+        Field("module_name", "string", length=255, notnull=True),
+        Field("module_description", "text"),
+        Field("module_category", "string", length=100, default="interactive"),
+        Field("module_version", "string", length=50),
+        Field("repository_url", "string", length=500),
+        Field("webhook_url", "string", length=500, notnull=True),
+        Field("webhook_secret", "string", length=255),
+        Field("webhook_per_community", "boolean", default=False),
+        Field("scopes", "json"),
+        Field("scope_justification", "text"),
+        Field("pricing_model", "string", length=50, notnull=True),
+        Field("pricing_amount", "double", default=0),
+        Field("pricing_currency", "string", length=3, default="USD"),
+        Field("payment_method", "string", length=50, notnull=True),
+        Field("payment_details", "json"),
+        Field("status", "string", length=50, default="pending"),
+        Field("rejection_reason", "text"),
+        Field("admin_notes", "text"),
+        Field("supported_platforms", "json"),
+        Field("documentation_url", "string", length=500),
+        Field("support_email", "string", length=255),
+        Field("support_contact_url", "string", length=500),
+        Field("submitted_at", "datetime"),
+        Field("reviewed_at", "datetime"),
+        Field("reviewed_by", "integer"),
+        Field("is_verified", "boolean", default=False),
+        Field("requires_special_review", "boolean", default=False),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "vendor_submission_scopes",
+        Field("submission_id", "integer", notnull=True),
+        Field("scope_name", "string", length=100, notnull=True),
+        Field("risk_level", "string", length=50, default="low"),
+        Field("description", "text"),
+        Field("data_shared", "text"),
+        Field("created_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "vendor_submission_reviews",
+        Field("submission_id", "integer", notnull=True),
+        Field("reviewer_id", "integer"),
+        Field("action", "string", length=50, notnull=True),
+        Field("comments", "text"),
+        Field("created_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "approved_vendor_modules",
+        Field("submission_id", "integer", notnull=True),
+        Field("vendor_name", "string", length=255, notnull=True),
+        Field("module_name", "string", length=255, notnull=True),
+        Field("module_slug", "string", length=255, unique=True, notnull=True),
+        Field("webhook_url", "string", length=500, notnull=True),
+        Field("webhook_secret", "string", length=255),
+        Field("webhook_per_community", "boolean", default=False),
+        Field("is_active", "boolean", default=True),
+        Field("suspension_reason", "text"),
+        Field("suspended_at", "datetime"),
+        Field("is_featured", "boolean", default=False),
+        Field("feature_position", "integer"),
+        Field("install_count", "integer", default=0),
+        Field("rating", "double"),
+        Field("review_count", "integer", default=0),
+        Field("published_at", "datetime"),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    # Node-expected shape (Gotcha #4 note (2) above) -- NOT the shape
+    # `021_add_vendor_submissions.sql` actually creates.
+    dal.define_table(
+        "community_vendor_installations",
+        Field("community_id", "integer", notnull=True),
+        Field("module_id", "integer", notnull=True),
+        Field("status", "string", length=50, default="active"),
+        Field("discount_code_id", "integer"),
+        Field("installed_at", "datetime"),
+        Field("uninstalled_at", "datetime"),
+        Field("last_active_at", "datetime"),
+        migrate=migrate,
+    )
+
+    # Node-expected shape (Gotcha #4 note (3) above) -- NOT the shape
+    # `021_add_vendor_submissions.sql` actually creates.
+    dal.define_table(
+        "vendor_payments",
+        Field("seller_id", "integer"),
+        Field("module_id", "integer"),
+        Field("amount_cents", "integer", default=0),
+        Field("status", "string", length=50, default="pending"),
+        Field("paid_at", "datetime"),
+        Field("created_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "vendor_module_reviews",
+        Field("vendor_module_id", "integer", notnull=True),
+        Field("community_id", "integer", notnull=True),
+        Field("reviewer_id", "integer"),
+        Field("rating", "integer", notnull=True),
+        Field("review_text", "text"),
+        Field("created_at", "datetime"),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "vendor_discount_codes",
+        Field("code", "string", length=50, notnull=True),
+        Field("vendor_id", "integer", notnull=True),
+        Field("module_id", "integer"),
+        Field("discount_type", "string", length=20, notnull=True),
+        Field("discount_value", "double", default=0),
+        Field("max_uses", "integer"),
+        Field("current_uses", "integer", default=0),
+        Field("valid_from", "datetime"),
+        Field("valid_until", "datetime"),
+        Field("is_active", "boolean", default=True),
+        Field("created_at", "datetime"),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "discount_code_redemptions",
+        Field("discount_code_id", "integer", notnull=True),
+        Field("community_id", "integer", notnull=True),
+        Field("discount_amount_cents", "integer", notnull=True),
+        Field("redeemed_at", "datetime"),
+        migrate=migrate,
+    )
+
+    # Gotcha #4 note (1) above -- `module_url` is not defined by
+    # `002_add_commands_table.sql` or any later migration.
+    dal.define_table(
+        "commands",
+        Field("command", "string", length=100, notnull=True),
+        Field("module_name", "string", length=255, notnull=True),
+        Field("module_url", "string", length=500),
+        Field("description", "text"),
+        Field("usage", "text"),
+        Field("category", "string", length=100, default="general"),
+        Field("permission_level", "string", length=50, default="everyone"),
+        Field("cooldown_seconds", "integer", default=0),
+        Field("community_id", "integer"),
+        Field("is_enabled", "boolean", default=True),
+        Field("is_active", "boolean", default=True),
+        Field("created_at", "datetime"),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
