@@ -47,6 +47,7 @@ from tests.conftest import (
     make_user_token,
     seed_community,
     seed_membership,
+    seed_super_admin,
 )
 
 
@@ -351,6 +352,7 @@ class TestSuperAdminBypass:
         self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
         community_id = seed_community(overlay_db)  # no membership row at all
+        seed_super_admin(overlay_db, user_id=1)
         token = make_super_admin_token(user_id=1, scope=SCOPE_ADMIN)
         response = await client.get(
             f"/api/v1/admin/{community_id}/calls/rooms",
@@ -362,6 +364,7 @@ class TestSuperAdminBypass:
         self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
         community_id = seed_community(overlay_db)  # no membership row at all
+        seed_super_admin(overlay_db, user_id=1)
         token = make_super_admin_token(user_id=1, scope=SCOPE_READ)
         response = await client.get(
             f"/api/v1/community/{community_id}/interact/voice/rooms",

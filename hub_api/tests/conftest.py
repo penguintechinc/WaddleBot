@@ -354,6 +354,27 @@ def seed_membership(
     dal.commit()
 
 
+def seed_super_admin(overlay_db: Any, *, user_id: int, username: str = "root") -> None:
+    """Insert one `hub_users` row with `is_super_admin=True`, at `hub_users.id == user_id`.
+
+    Needed by any test asserting `services.community_authz.is_super_admin()`'s
+    DB-backed bypass (`community_access.require_community_admin`/
+    `require_community_member`'s super-admin path) -- `make_super_admin_token`
+    only mints a JWT `roles=["super_admin"]` claim, which is no longer what
+    that bypass checks (security.md: `roles` is audit/display only). Callers
+    must insert this BEFORE minting the matching token so `hub_users`' own
+    autoincrement lands on the same id `user_id` expects (fixtures' `hub_users`
+    table starts empty, so the first insert lands on id 1).
+    """
+    dal = overlay_db.dal
+    inserted_id: int = dal.hub_users.insert(username=username, is_super_admin=True)
+    dal.commit()
+    assert inserted_id == user_id, (
+        f"hub_users autoincrement landed on {inserted_id}, expected {user_id} -- "
+        "insert this before any other hub_users row in the same fixture"
+    )
+
+
 @pytest.fixture
 def privacy_db(tmp_path: Any) -> Any:
     """`auth_db`'s tables PLUS the Privacy/Compliance group's own.
@@ -638,7 +659,17 @@ def make_user_token(*, user_id: int, scope: str = "", tenant: str = TENANT_SLUG)
 
 
 def make_super_admin_token(*, user_id: int, scope: str = "", tenant: str = TENANT_SLUG) -> str:
-    """Mint a JWT with `roles=["super_admin"]` -- `services.community_access._is_super_admin`."""
+    """Mint a JWT with `roles=["super_admin"]` -- `sub` matches a `seed_super_admin()` row.
+
+    `roles=["super_admin"]` itself is no longer what
+    `services.community_access.require_community_admin`/
+    `require_community_member` check (that bypass is now
+    `services.community_authz.is_super_admin()`, DB-backed) -- callers must
+    also `seed_super_admin(db, user_id=...)` with the same `user_id` for the
+    bypass to actually trigger. Kept minting the `roles` claim anyway since
+    `services.community_authz`'s OTHER bypass (`require_community_admin`'s
+    platform-admin check, `_jwt_roles`) still reads it.
+    """
     return create_jwt_token(
         user_id=str(user_id),
         username="root",

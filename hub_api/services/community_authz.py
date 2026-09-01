@@ -37,7 +37,7 @@ The M2 Core Tenancy-Misc group's own scope this module originally shipped
 under explicitly did NOT cover Node's tenant-admin/platform-admin bypasses
 in `requireCommunityAdmin` (`req.isTenantAdmin`, `req.user.roles.includes
 ('platform-admin')`) -- only the global `hub_users.is_super_admin` bypass
-(`_is_super_admin`/`require_community_scope` below). The M-automation group
+(`is_super_admin`/`require_community_scope` below). The M-automation group
 (workflow/github_sync port) needs the FULL set of bypasses
 `routes/workflow.js`/`routes/githubSync.js` actually ship with in Node, so
 `require_community_admin`/`require_valid_community_id` below port those
@@ -92,8 +92,21 @@ class CommunityRole:
     scopes: frozenset[str]
 
 
-async def _is_super_admin(async_dal: Any, dal: Any, *, user_id: int) -> bool:
-    """Look up `hub_users.is_super_admin` for `user_id`. False if the user row is missing."""
+async def is_super_admin(async_dal: Any, dal: Any, *, user_id: int) -> bool:
+    """Look up `hub_users.is_super_admin` for `user_id`. False if the user row is missing.
+
+    THE canonical super-admin check -- DB-authoritative, per security.md's
+    "authz decisions on scope [or, here, a dedicated DB flag], never role
+    names/claims" (the JWT `roles` claim is audit/display only). Public
+    (no leading underscore) because `services/community_access.py` also
+    needs this exact check for its own `require_community_admin`/
+    `require_community_member` super-admin bypass -- that module
+    previously carried its own independent reimplementation that decoded
+    the bearer JWT's `roles` claim directly (`"super_admin" in roles`), a
+    security.md violation this consolidation also fixes: a claim can go
+    stale relative to a since-revoked `hub_users.is_super_admin` flag
+    within the token's validity window, where this DB lookup cannot.
+    """
     rows = await async_dal.select_async(dal(dal.hub_users.id == user_id))
     if not rows:
         return False
@@ -156,7 +169,7 @@ async def require_community_scope(
     anything -- it is always cross-checked against a real
     `community_members` row for the caller's own `user_id`, never assumed.
     """
-    if await _is_super_admin(async_dal, dal, user_id=user_id):
+    if await is_super_admin(async_dal, dal, user_id=user_id):
         return CommunityRole(name="super-admin", priority=999, scopes=frozenset(any_of))
 
     role = await get_caller_community_role(
@@ -187,7 +200,7 @@ async def require_community_admin(
 
     SECURITY: the tenant-admin bypass additionally cross-checks that
     `community_id` actually belongs to `ctx.tenant_id` via
-    `_community_belongs_to_tenant()` -- a `tenant_admins` row only proves
+    `community_belongs_to_tenant()` -- a `tenant_admins` row only proves
     the caller administers their own tenant, never that the *target*
     `community_id` in the URL also belongs to it. Without this check a
     tenant-A admin passing a tenant-B `community_id` would pass the bypass
@@ -201,7 +214,7 @@ async def require_community_admin(
 
     user_id = get_current_user_id(request)  # raises 401 if missing/invalid
 
-    if await _is_super_admin(async_dal, dal, user_id=user_id):
+    if await is_super_admin(async_dal, dal, user_id=user_id):
         return
 
     ctx: TenantContext | None = get_tenant_context(request)
@@ -212,7 +225,7 @@ async def require_community_admin(
                 & (dal.tenant_admins.user_id == user_id)
             )
         )
-        if ta_rows and await _community_belongs_to_tenant(
+        if ta_rows and await community_belongs_to_tenant(
             async_dal, dal, community_id=community_id, tenant_id=ctx.tenant_id
         ):
             return
@@ -284,19 +297,32 @@ async def _is_tenant_admin(async_dal: Any, dal: Any, *, user_id: int, tenant_id:
     return bool(rows)
 
 
-async def _community_belongs_to_tenant(
+async def community_belongs_to_tenant(
     async_dal: Any, dal: Any, *, community_id: int, tenant_id: int
 ) -> bool:
     """True if `community_id` exists and belongs to `tenant_id`.
 
-    Shared IDOR guard for every tenant-scoped bypass in this module (the
-    tenant-admin bypass in both `require_community_admin` above and
-    `resolve_community_membership_scoped` below) -- a `tenant_admins` row
-    proves the caller administers `tenant_id`, never that the *target*
-    `community_id` from the request also belongs to that tenant. Without
-    this check a tenant-A admin passing a tenant-B `community_id` would
-    pass the bypass and act cross-tenant (security hotfix: cross-tenant
-    IDOR via the tenant-admin bypass).
+    THE canonical tenant<->community cross-check (hotfix PR #226,
+    `aa360dd1`: "fix cross-tenant IDOR in community_authz tenant-admin
+    bypass") -- shared IDOR guard for every tenant-scoped bypass in this
+    module (the tenant-admin bypass in both `require_community_admin`
+    above and `resolve_community_membership_scoped` below) -- a
+    `tenant_admins` row proves the caller administers `tenant_id`, never
+    that the *target* `community_id` from the request also belongs to
+    that tenant. Without this check a tenant-A admin passing a tenant-B
+    `community_id` would pass the bypass and act cross-tenant.
+
+    Public (no leading underscore) because `services/community_access.py`
+    also needs this exact check for its own `require_community_admin`/
+    `require_community_member` tenant pre-check -- both modules previously
+    carried their own independent reimplementation of "does this
+    community_id belong to this tenant_id" (this function here, and a
+    separate `tenant_scoped()`-based query in `community_access.py`); this
+    is now the single shared implementation. `community_access.py` never
+    had the #226 IDOR gap itself (its tenant pre-check always ran
+    unconditionally before either bypass, not gated behind a tenant-admin
+    shortcut), so consolidating onto this function is a pure dedup, not a
+    behavior change for that module's callers.
     """
     rows = await async_dal.select_async(
         dal((dal.communities.id == community_id) & (dal.communities.tenant_id == tenant_id))
@@ -330,7 +356,7 @@ async def resolve_community_membership_scoped(
             role="super-admin", scopes=frozenset(), is_admin=True, bypass=True
         )
 
-    if not await _community_belongs_to_tenant(
+    if not await community_belongs_to_tenant(
         async_dal, dal, community_id=community_id, tenant_id=tenant_id
     ):
         # Either the community doesn't exist, or it belongs to a different
