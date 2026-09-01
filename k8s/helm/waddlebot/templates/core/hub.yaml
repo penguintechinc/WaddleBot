@@ -51,6 +51,16 @@ spec:
           value: "hub"
         - name: MODULE_PORT
           value: "8060"
+        {{- if .Values.modules.hub.env }}
+        {{- if hasKey .Values.modules.hub.env "RATE_LIMIT_MAX_REQUESTS" }}
+        - name: RATE_LIMIT_MAX_REQUESTS
+          value: {{ .Values.modules.hub.env.RATE_LIMIT_MAX_REQUESTS | quote }}
+        {{- end }}
+        {{- if hasKey .Values.modules.hub.env "RATE_LIMIT_WINDOW_MS" }}
+        - name: RATE_LIMIT_WINDOW_MS
+          value: {{ .Values.modules.hub.env.RATE_LIMIT_WINDOW_MS | quote }}
+        {{- end }}
+        {{- end }}
         livenessProbe:
           httpGet:
             path: /health
