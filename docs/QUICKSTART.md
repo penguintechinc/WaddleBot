@@ -1,456 +1,197 @@
 # Waddles Quick Start Guide
 
-Get Waddles running in minutes with this comprehensive quick start guide.
+Deploy Waddles with Helm and get a community connected in one pass. Docker Compose is not
+supported — Kubernetes via Helm is the only deployment path, alpha through production.
 
 ## Prerequisites
 
-Before you begin, ensure you have the following installed:
+### Required tooling
 
-### Required Software
+- **Kubernetes cluster**: MicroK8s or Docker Desktop for local/alpha; a managed cluster for beta/prod
+- **kubectl**, configured with a context for your cluster
+- **Helm 3**
+- **Git**
 
-- **Docker**: Version 20.04 or higher ([Install Docker](https://docs.docker.com/get-docker/))
-- **Docker Compose**: Version 2.0 or higher (included with Docker Desktop)
-- **Git**: For cloning the repository
-
-### Minimum System Requirements
+### Minimum system requirements (local/alpha)
 
 - **CPU**: 4 cores
 - **RAM**: 8 GB minimum, 16 GB recommended
-- **Disk Space**: 50 GB minimum, 100 GB recommended
-- **Operating System**: Linux, macOS, or Windows with WSL2
+- **Disk Space**: 50 GB minimum
 
-### Platform API Credentials (Optional for First Run)
+### Platform API credentials (optional for first run)
 
-To connect Waddles to your platforms, you'll need:
+To connect Waddles to a platform, you'll need:
 
 - **Twitch**: App ID, App Secret, Webhook Secret ([Create Twitch App](https://dev.twitch.tv/console/apps))
 - **Discord**: Bot Token, Application ID, Public Key ([Create Discord App](https://discord.com/developers/applications))
 - **Slack**: Bot Token, App Token, Signing Secret ([Create Slack App](https://api.slack.com/apps))
 - **YouTube**: API Key, Client ID, Client Secret ([Google Cloud Console](https://console.cloud.google.com/))
 
-## Quick Start with Docker Compose
+## Deploy with Helm
 
-### Step 1: Clone the Repository
+### Step 1: Clone the repository
 
 ```bash
-git clone https://github.com/waddlebot/waddlebot.git
+git clone https://github.com/penguintechinc/waddlebot.git
 cd waddlebot
 ```
 
-### Step 2: Configure Environment Variables
-
-Create your environment configuration file:
+### Step 2: Install
 
 ```bash
-cp .env.example .env
+# Local / alpha (MicroK8s or Docker Desktop)
+helm install waddlebot ./k8s/helm/waddlebot -n waddlebot --create-namespace \
+  --kube-context local-alpha \
+  -f k8s/helm/waddlebot/values-alpha.yaml
+
+# Beta
+helm install waddlebot ./k8s/helm/waddlebot -n waddlebot --create-namespace \
+  --kube-context dal2-beta \
+  -f k8s/helm/waddlebot/values-beta.yaml
 ```
 
-Edit `.env` with your preferred text editor. **Minimum required changes:**
+Secrets (database password, JWT signing key, platform OAuth credentials) are supplied via your
+cluster's secrets mechanism (Vault, Sealed Secrets, or External Secrets Operator) — never edit
+plaintext values into a values file. See [`docs/SECRETS_SETUP.md`](SECRETS_SETUP.md).
+
+### Step 3: Verify the deployment
 
 ```bash
-# Database password (change this!)
-POSTGRES_PASSWORD=your_secure_password_here
-
-# Redis password (change this!)
-REDIS_PASSWORD=your_secure_redis_password
-
-# JWT secret for authentication (change this!)
-JWT_SECRET=your_secure_jwt_secret_key_here
-
-# MinIO credentials (change these!)
-MINIO_ROOT_USER=minioadmin
-MINIO_ROOT_PASSWORD=your_secure_minio_password
-
-# Service API key (change this!)
-SERVICE_API_KEY=your_secure_service_api_key
-
-# Kong configuration (change these!)
-KONG_PG_PASSWORD=your_secure_kong_password
-KONG_SESSION_SECRET=your_secure_kong_session_secret
+kubectl --context local-alpha get pods -n waddlebot
+kubectl --context local-alpha rollout status deployment -n waddlebot --timeout=300s
 ```
 
-**Optional Platform Credentials** (add these to connect to platforms):
+Check the control-plane and community-facing services are healthy:
 
 ```bash
-# Twitch
-TWITCH_CLIENT_ID=your_twitch_client_id
-TWITCH_CLIENT_SECRET=your_twitch_client_secret
-TWITCH_WEBHOOK_SECRET=your_webhook_secret
+# hub-api (admin/tenancy/marketplace control plane)
+kubectl --context local-alpha exec -n waddlebot deploy/waddlebot-hub-api-v3 -- \
+  curl -sf http://localhost:8204/health
 
-# Discord
-DISCORD_BOT_TOKEN=your_discord_bot_token
-DISCORD_APPLICATION_ID=your_discord_app_id
-DISCORD_CLIENT_ID=your_discord_client_id
-DISCORD_CLIENT_SECRET=your_discord_client_secret
-
-# Slack
-SLACK_BOT_TOKEN=xoxb-your-bot-token
-SLACK_SIGNING_SECRET=your_signing_secret
-SLACK_CLIENT_ID=your_slack_client_id
-SLACK_CLIENT_SECRET=your_slack_client_secret
+# hub-webui (admin portal)
+curl -sf https://waddles.localhost.local/health
 ```
 
-### Step 3: Create Required Directories
+Expected response: `{"status":"healthy",...}`. If a pod is crash-looping, check its logs first —
+`kubectl --context local-alpha logs -n waddlebot deploy/<name> --tail=100`.
 
-```bash
-# Create log directory
-sudo mkdir -p /var/log/waddlebotlog
-sudo chown $USER:$USER /var/log/waddlebotlog
-```
+### Step 4: Access the Admin Portal
 
-### Step 4: Start WaddleBot
+- **Alpha:** `https://waddles.localhost.local`
+- **Beta:** `https://waddlebot.penguintech.cloud`
+- **Production:** `https://waddles.app`
 
-```bash
-# Start all services
-docker-compose up -d
-
-# Wait for services to start (this may take 2-3 minutes)
-docker-compose ps
-```
-
-### Step 5: Verify Installation
-
-Check that all services are running:
-
-```bash
-# View service status
-docker-compose ps
-
-# All services should show STATE: Up
-# Example output:
-# NAME                    SERVICE        STATUS
-# waddlebot-postgres      postgres       Up
-# waddlebot-redis         redis          Up
-# waddlebot-router        router         Up
-# waddlebot-hub           hub            Up
-# ...
-```
-
-Check service health:
-
-```bash
-# Check router health
-curl http://localhost:8000/health
-
-# Check hub health
-curl http://localhost:8060/health
-
-# Expected response: {"status":"healthy",...}
-```
-
-### Step 6: Access the Admin Portal
-
-Open your browser and navigate to:
-
-**http://localhost:8060**
-
-**Default Login Credentials:**
-- Email: `admin@localhost`
-- Password: `admin123`
-
-**IMPORTANT:** Change the default password immediately after first login!
+For a fresh local/alpha install with no admin account yet, seed one with
+`./scripts/seed-admin.sh --help` (creates a local-only default admin — **change the password
+immediately after first login**; never carry the default into beta or production).
 
 ## First-Time Configuration
 
-### 1. Create Your First Community
+### 1. Create your first community
 
 After logging in:
 
 1. Navigate to **Communities** in the sidebar
 2. Click **Create Community**
-3. Fill in the details:
-   - **Name**: Your community name
-   - **Description**: Brief description
-   - **Settings**: Configure defaults
+3. Fill in name, description, and defaults
 4. Click **Create**
 
-### 2. Configure Platform Connections
+### 2. Connect a platform
 
-#### Twitch Integration
+1. Go to **Settings → Platforms** and choose Twitch, Discord, or Slack
+2. Enter the platform credentials gathered above
+3. Complete the OAuth flow
+4. Select the channels/servers to monitor
 
-1. Go to **Settings** → **Platforms** → **Twitch**
-2. Enter your Twitch credentials:
-   - Client ID
-   - Client Secret
-   - Webhook Secret
-3. Click **Connect**
-4. Complete OAuth flow
-5. Select channels to monitor
+### 3. Activate App Bundles
 
-#### Discord Integration
+Waddles ships functionality as **App Bundles**, not fixed modules — a global admin installs a
+bundle, a tenant admin makes it available, and a community admin activates it. From **Modules /
+Marketplace** in the admin panel:
 
-1. Go to **Settings** → **Platforms** → **Discord**
-2. Enter your Discord bot token
-3. Click **Connect**
-4. Invite bot to your Discord server using the provided OAuth URL
-5. Configure command prefix and permissions
+1. Confirm the bundles you need are **installed** (global admin) and **available** (tenant admin)
+2. In your community's **Marketplace** tab, **activate** the bundles you want — e.g. AI chat,
+   loyalty, Music Station, giveaways
+3. Multiple bundles can be activated for the same feature at once (e.g. two giveaway variants) —
+   they run side by side unless one declares the other `incompatible_with` it
 
-#### Slack Integration
+See [Architecture — App Bundle model](ARCHITECTURE.md#app-bundle-model) for how installed →
+available → activated works.
 
-1. Go to **Settings** → **Platforms** → **Slack**
-2. Enter your Slack credentials:
-   - Bot Token
-   - App Token
-   - Signing Secret
-3. Click **Connect**
-4. Install app to your workspace
-
-### 3. Enable Modules
-
-Navigate to **Modules** in the admin panel:
-
-1. **AI Interaction**: Enable for AI chat responses
-   - Configure AI provider (Ollama, OpenAI, or MCP)
-   - Set system prompt
-   - Configure response triggers
-
-2. **Loyalty System**: Enable virtual currency
-   - Set earning rates
-   - Configure minigames (slots, coinflip, roulette)
-   - Enable duels
-
-3. **Music Integration**: Enable for music requests
-   - Configure YouTube Music
-   - Configure Spotify (requires Premium)
-   - Set up OBS browser source
-
-4. **Other Modules**: Enable as needed
-   - Calendar (event scheduling)
-   - Inventory (item management)
-   - Memories (community quotes)
-   - Shoutouts (highlight users)
-
-### 4. Configure Commands
+### 4. Configure commands
 
 1. Go to **Commands** in the admin panel
-2. View available commands by module
-3. Customize command aliases
-4. Set command permissions
-5. Enable/disable specific commands
+2. View available commands by activated bundle
+3. Customize aliases and per-command permissions
 
-### 5. Set Up OBS Integration (Optional)
+### 5. Set up OBS integration (optional)
 
-For streamers who want overlays:
+1. Navigate to **Overlays** in the admin panel
+2. Generate a browser-source URL for a surface: `full_screen`, `media`, `crawler`, or the Music
+   Station player
+3. In OBS: **Add Browser Source** → paste the URL → set dimensions (1920x1080 recommended)
 
-1. Navigate to **OBS Integration** → **Overlays**
-2. Generate overlay URLs for:
-   - Now Playing (music)
-   - Recent Events
-   - Chat Display
-   - Custom Alerts
-3. Add Browser Source in OBS:
-   - Copy overlay URL
-   - Add Browser Source in OBS
-   - Paste URL
-   - Set dimensions (1920x1080 recommended)
-
-## Docker Compose Commands
-
-### Service Management
+## Helm Commands
 
 ```bash
-# Start all services
-docker-compose up -d
+# Upgrade after a values change
+helm upgrade waddlebot ./k8s/helm/waddlebot -n waddlebot \
+  --kube-context local-alpha -f k8s/helm/waddlebot/values-alpha.yaml
 
-# Stop all services
-docker-compose down
+# View rendered manifests without applying
+helm template waddlebot ./k8s/helm/waddlebot -f k8s/helm/waddlebot/values-alpha.yaml
 
-# Restart a specific service
-docker-compose restart hub
-
-# View logs
-docker-compose logs -f router
-docker-compose logs -f hub
-
-# View logs for all services
-docker-compose logs -f
-
-# Rebuild and restart services
-docker-compose up -d --build
+# Uninstall
+helm uninstall waddlebot -n waddlebot --kube-context local-alpha
 ```
 
-### Database Management
+## Troubleshooting
+
+### Pod crash-looping
 
 ```bash
-# Access PostgreSQL shell
-docker-compose exec postgres psql -U waddlebot -d waddlebot
-
-# Create database backup
-docker-compose exec postgres pg_dump -U waddlebot waddlebot > backup.sql
-
-# Restore database
-docker-compose exec -T postgres psql -U waddlebot waddlebot < backup.sql
-
-# View database logs
-docker-compose logs postgres
+kubectl --context local-alpha logs -n waddlebot deploy/<name> --previous
+kubectl --context local-alpha describe pod -n waddlebot <pod-name>
 ```
 
-### Redis Management
+Common causes: missing secret, database not reachable yet (check the `db-migrate` init
+container's logs), or a resource limit too low for local Kubernetes.
+
+### Database connection errors
 
 ```bash
-# Access Redis CLI
-docker-compose exec redis redis-cli -a your_redis_password
-
-# View Redis logs
-docker-compose logs redis
-
-# Clear Redis cache
-docker-compose exec redis redis-cli -a your_redis_password FLUSHALL
+kubectl --context local-alpha logs -n waddlebot deploy/waddlebot-postgres
+kubectl --context local-alpha get secret -n waddlebot waddlebot-db-credentials -o yaml
 ```
 
-### Troubleshooting Commands
+### Cannot access the admin portal
 
 ```bash
-# Check container status
-docker-compose ps
-
-# View resource usage
-docker stats
-
-# Remove all stopped containers and volumes
-docker-compose down -v
-
-# Rebuild everything from scratch
-docker-compose down -v
-docker-compose build --no-cache
-docker-compose up -d
+kubectl --context local-alpha get ingress -n waddlebot
+kubectl --context local-alpha get pods -n waddlebot -l app.kubernetes.io/component=hub-webui-v3
 ```
 
-## Next Steps
-
-Now that WaddleBot is running, explore these resources:
-
-- **[Architecture Guide](ARCHITECTURE.md)**: Understand WaddleBot's microservices architecture
-- **[Module Documentation](module-details-core.md)**: Learn about available modules
-- **[API Reference](reference/api-reference.md)**: Integrate with WaddleBot's APIs
-- **[Development Guide](reference/development-rules.md)**: Build custom modules
-- **[Kubernetes Deployment](../k8s/QUICKSTART.md)**: Deploy to production with Kubernetes
-
-## Common Issues
-
-### Port Already in Use
-
-If you see errors about ports already in use:
-
-```bash
-# Check what's using the ports
-sudo lsof -i :8060  # Hub
-sudo lsof -i :8000  # Router
-sudo lsof -i :5432  # PostgreSQL
-
-# Change ports in docker-compose.yml if needed
-```
-
-### Database Connection Errors
-
-```bash
-# Check PostgreSQL is running
-docker-compose ps postgres
-
-# View PostgreSQL logs
-docker-compose logs postgres
-
-# Verify password in .env matches
-grep POSTGRES_PASSWORD .env
-```
-
-### Containers Keep Restarting
-
-```bash
-# View container logs
-docker-compose logs <service-name>
-
-# Check for common issues:
-# - Missing environment variables
-# - Database not ready
-# - Port conflicts
-# - Insufficient resources
-```
-
-### Cannot Access Admin Portal
-
-```bash
-# Verify hub is running
-docker-compose ps hub
-
-# Check hub logs
-docker-compose logs hub
-
-# Verify port mapping
-docker-compose port hub 8060
-
-# Try accessing directly
-curl http://localhost:8060/health
-```
-
-### Services Won't Start
-
-```bash
-# Check available disk space
-df -h
-
-# Check available memory
-free -h
-
-# Verify Docker is running
-docker ps
-
-# Check Docker logs
-docker-compose logs
-```
+Confirm your local DNS/hosts entry resolves `waddles.localhost.local` to the ingress controller's
+address for local/alpha clusters.
 
 ## Security Considerations
 
-### Change Default Credentials
+1. **Change default credentials immediately** — admin portal password, any seeded dev accounts
+2. **Secrets via Vault/Sealed Secrets/External Secrets Operator only** — never plaintext in a
+   values file or committed `.env`
+3. **TLS at ingress** — beta and production terminate TLS at the ingress controller
+4. **Regular backups** — automate PostgreSQL backups; see [`docs/DATABASE.md`](DATABASE.md)
+5. **Keep images current** — track Dependabot alerts and rebuild on security patches
 
-**Immediately change these after installation:**
+## Next Steps
 
-1. Admin portal password
-2. Database passwords in `.env`
-3. JWT secrets
-4. API keys
-
-### Production Deployment
-
-For production use:
-
-1. **Use HTTPS/TLS**: Configure SSL certificates
-2. **Firewall**: Restrict access to admin portal
-3. **Secrets Management**: Use Docker secrets or environment variable encryption
-4. **Regular Backups**: Automated database backups
-5. **Monitoring**: Set up Prometheus/Grafana
-6. **Updates**: Keep Docker images updated
-
-### Network Security
-
-By default, WaddleBot uses network isolation:
-
-- **Internal Network**: Database, Redis, inter-service communication
-- **Public Network**: Only hub, browser sources, and API gateway exposed
-- **Kong Gateway**: Rate limiting and API protection
+- **[Architecture](ARCHITECTURE.md)** — the 8-container pipeline and App Bundle model
+- **[App Bundle SDK](plans/2026-08-31-app-bundle-sdk-design.md)** — author your own bundle
+- **[Kubernetes](KUBERNETES.md)** — Helm chart reference
+- **[Database](DATABASE.md)** — schema, migrations, per-service accounts
+- **[Contributing](CONTRIBUTING.md)** — build and contribute new App Bundles
 
 ## Support
 
-### Getting Help
-
-- **Documentation**: Browse `/docs` directory
-- **GitHub Issues**: Report bugs at https://github.com/waddlebot/waddlebot/issues
-- **Community**: Join our Discord (coming soon)
-
-### Logs and Debugging
-
-When reporting issues, include:
-
-```bash
-# Collect logs
-docker-compose logs > waddlebot-logs.txt
-
-# System information
-docker version
-docker-compose version
-uname -a
-```
-
----
-
-**Ready for production?** Check out our [Kubernetes Deployment Guide](../k8s/QUICKSTART.md) for enterprise-grade deployment with high availability, auto-scaling, and monitoring.
+- **Documentation**: browse [`/docs`](.)
+- **GitHub Issues**: report bugs at [github.com/penguintechinc/waddlebot/issues](https://github.com/penguintechinc/waddlebot/issues)
