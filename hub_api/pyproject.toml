@@ -19,6 +19,12 @@ convention = "google"
 # (get_tenant_context always non-None on the success path) -- a defensive
 # invariant note, not a security assert-in-prod-strips-it concern.
 "blueprints/v2/platform.py" = ["S101"]
+# Community-module port (M6, docs/plans/2026-08-31-hubapi-node-to-quart-
+# migration.md): every blueprint's `_tenant_ok()`/inline helper repeats
+# platform.py's same `assert ctx is not None` postcondition after
+# `get_tenant_context()` -- the pattern every ported controller group
+# was documented to repeat (see platform.py's own per-file-ignore above).
+"blueprints/v1/community_*.py" = ["S101"]
 # Bot module (M5): DTO/service-dataclass field names are deliberately
 # camelCase to byte-match admin/hub_module/frontend/src/services/api.js's
 # frozen /api/v1 JSON contract (soEnabled, platformUsername, createdAt,
