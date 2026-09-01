@@ -15,7 +15,16 @@ establish for this repo (admin-only config vs member-facing action):
     (any active member, not just admins -- this is a usage endpoint, not a
     config one).
 
-Both gate on `tenant_middleware` first (security.md ordering contract).
+Both gate on `tenant_middleware` first (security.md ordering contract --
+tenant resolution/auth always runs before any handler body). Every
+handler's own body then checks `_ai_enabled()` as its very first line,
+before `_require_admin()`/`_require_member()` or any DAL/config_service
+call -- the deploy-time `WADDLES_AI_ENABLED` kill-switch (`config.py`)
+that lets hub-api run on a machine with no Ollama/model backend reachable
+at all. Disabled means a clean 503 (`ai_disabled_by_deployment()`), never
+a crash, never a DAL query, never anything that gets close to an outbound
+model call.
+
 Response DTOs are flat (no nested-dataclass fields) throughout -- safe
 under `@validate_response` even on routes that call `insert_async`
 first (`hub_api/PORTING.md` Gotcha #3's own "flat responses ... were
@@ -34,6 +43,7 @@ from quart import Blueprint, current_app, request
 from quart_schema import validate_request, validate_response
 
 from services.ai_routing import config_service
+from services.ai_routing.errors import ai_disabled_by_deployment
 from services.ai_routing.models import AIRequest
 from services.ai_routing.router import route_completion
 from services.community_access import require_community_admin, require_community_member
@@ -47,6 +57,23 @@ ai_completions_bp = Blueprint("v1_ai_completions", __name__, url_prefix="/api/v1
 def _dal() -> tuple[Any, Any]:
     """Return `(async_dal, dal)` from app config -- same accessor shape as every other blueprint."""
     return current_app.config["async_dal"], current_app.config["dal"]
+
+
+def _ai_enabled() -> bool:
+    """Read the deploy-time `WADDLES_AI_ENABLED` kill-switch off `HubAPIConfig` (`config.py`).
+
+    Every handler in this module calls this as the first line of its own
+    body -- after `tenant_middleware` (security.md's mandatory ordering:
+    tenant resolution/auth always runs first) but before
+    `_require_admin()`/`_require_member()` or any DAL/config_service call.
+    A deployment with AI disabled never touches a community's AI config row
+    and never gets close to an outbound Ollama/OpenAI/Anthropic call.
+    Defaults enabled if `HUB_API_CONFIG` is somehow unset (defensive only --
+    `app.py::create_app` always sets it; every test fixture that registers
+    these blueprints sets it too, see `tests/test_v1_ai_routing_blueprint.py`).
+    """
+    cfg = current_app.config.get("HUB_API_CONFIG")
+    return bool(cfg is None or cfg.ai_enabled)
 
 
 def _err(exc: ApiError) -> tuple[dict[str, object], int]:
@@ -208,6 +235,8 @@ def _key_dto(info: config_service.ByokKeyInfo) -> ByokKeyDTO:
 @validate_response(AIConfigResponse)
 async def get_config(community_id: int) -> AIConfigResponse | tuple[dict[str, object], int]:
     """`GET /api/v1/admin/<community_id>/ai/config`."""
+    if not _ai_enabled():
+        return _err(ai_disabled_by_deployment())
     async_dal, dal = _dal()
     try:
         await _require_admin(community_id)
@@ -225,6 +254,8 @@ async def set_config(
     data: SetAIConfigRequest, community_id: int
 ) -> AIConfigResponse | tuple[dict[str, object], int]:
     """`PUT /api/v1/admin/<community_id>/ai/config`."""
+    if not _ai_enabled():
+        return _err(ai_disabled_by_deployment())
     async_dal, dal = _dal()
     try:
         user_id = await _require_admin(community_id)
@@ -247,6 +278,8 @@ async def set_config(
 @validate_response(ListByokKeysResponse)
 async def list_byok_keys(community_id: int) -> ListByokKeysResponse | tuple[dict[str, object], int]:
     """`GET /api/v1/admin/<community_id>/ai/byok-keys` -- masked, never the real key."""
+    if not _ai_enabled():
+        return _err(ai_disabled_by_deployment())
     async_dal, dal = _dal()
     try:
         await _require_admin(community_id)
@@ -268,6 +301,8 @@ async def set_byok_key(
     Never logs or echoes `data.api_key` -- the response is the masked
     `ByokKeyDTO` (`key_last4` only), same object `list_byok_keys()` returns.
     """
+    if not _ai_enabled():
+        return _err(ai_disabled_by_deployment())
     async_dal, dal = _dal()
     try:
         user_id = await _require_admin(community_id)
@@ -291,6 +326,8 @@ async def delete_byok_key(
     community_id: int, provider: str
 ) -> MessageResponse | tuple[dict[str, object], int]:
     """`DELETE .../ai/byok-keys/<provider>` -- deactivates, not a hard delete."""
+    if not _ai_enabled():
+        return _err(ai_disabled_by_deployment())
     async_dal, dal = _dal()
     try:
         await _require_admin(community_id)
@@ -315,6 +352,8 @@ async def create_completion(
     data: CompletionRequestDTO, community_id: int
 ) -> CompletionResponseDTO | tuple[dict[str, object], int]:
     """`POST .../ai/completions` -- routes through `route_completion()`."""
+    if not _ai_enabled():
+        return _err(ai_disabled_by_deployment())
     async_dal, dal = _dal()
     try:
         user_id = await _require_member(community_id)
@@ -347,6 +386,12 @@ async def create_completion(
             actor_user_id=user_id,
             ai_request=ai_request,
             idempotency_key=idempotency_key,
+            # Belt-and-suspenders: this handler already 503'd above when
+            # disabled, so this is always True by the time we get here --
+            # threaded through anyway so `route_completion()`'s own guard
+            # is exercised on every real call path, not just its direct
+            # unit tests (`test_ai_routing_router.py`).
+            ai_enabled=_ai_enabled(),
         )
     except ApiError as exc:
         return _err(exc)

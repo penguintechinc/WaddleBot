@@ -152,6 +152,19 @@ class HubAPIConfig:
     paypal_webhook_id: str = ""
     paypal_mode: str = "sandbox"
 
+    # `WADDLES_AI_ENABLED` -- deploy-time kill-switch for the whole
+    # `services/ai_routing/` subsystem (`blueprints/v1/ai_routing.py`'s two
+    # blueprints, `services/ai_routing/router.py::route_completion()`), so
+    # hub-api runs on a non-beefy machine with no Ollama/model backend
+    # reachable at all. ONE-WAY: this flag can only ever turn AI OFF --
+    # `router.py`'s existing `waddles.ai.routing`/`waddles.ai.premium_models`/
+    # `waddles.ai.byok` PostHog-flag + Enterprise-license-tier gates are
+    # completely unaffected and still govern who gets access when this is
+    # left at its default `True` (current full-feature behavior, unchanged).
+    # Defaulted last for the same dataclass field-ordering reason as every
+    # other trailing field in this class.
+    ai_enabled: bool = True
+
     @classmethod
     def from_env(cls) -> HubAPIConfig:
         """Build config from the process environment. Raises on an invalid DB_TYPE."""
@@ -205,4 +218,5 @@ class HubAPIConfig:
             paypal_client_secret=os.getenv("PAYPAL_CLIENT_SECRET", ""),
             paypal_webhook_id=os.getenv("PAYPAL_WEBHOOK_ID", ""),
             paypal_mode=os.getenv("PAYPAL_MODE", "sandbox"),
+            ai_enabled=_bool_env("WADDLES_AI_ENABLED", True),
         )
