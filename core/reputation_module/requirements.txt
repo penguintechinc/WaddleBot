@@ -7,7 +7,17 @@ hypercorn>=0.16.0
 # gRPC Support
 grpcio>=1.60.0
 grpcio-tools>=1.60.0
-protobuf>=5.29.5,<6.0.0  # Latest v5 (CVE pending fix)
+# flask_core's opentelemetry-exporter-otlp-proto-grpc dep pulls in
+# googleapis-common-protos, whose bundled google/rpc/*_pb2.py stubs are
+# gencode-stamped 6.33.5 -- capping protobuf below that (previously
+# <6.0.0) makes the runtime OLDER than the gencode it's asked to load,
+# which 500s at import time: "Detected incompatible Protobuf
+# Gencode/Runtime versions ... Runtime version cannot be older than the
+# linked gencode version." reputation.proto's own generated stub
+# (proto/reputation_pb2.py) is gencode-stamped 5.27.2, and protobuf's
+# runtime check only requires runtime >= gencode, so raising the floor to
+# 6.33 is compatible with both.
+protobuf>=6.33.0,<7.0.0
 
 # Database
 pydal>=20240906.1,<20250101
