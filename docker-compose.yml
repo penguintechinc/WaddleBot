@@ -471,6 +471,30 @@ services:
       retries: 5
     restart: unless-stopped
 
+  hub-webui:
+    build:
+      context: .
+      dockerfile: admin/hub_module/Dockerfile.webui
+    container_name: hub-webui
+    environment:
+      PORT: 8080
+      HUB_API_URL: http://hub-api:8060
+    ports:
+      - "3000:8080"  # Hub WebUI (Express static + /api proxy, never nginx)
+    networks:
+      - waddlebot-public
+      - waddlebot-internal
+    depends_on:
+      hub-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 15s
+      retries: 5
+    restart: unless-stopped
+
   # =============================================================================
   # COLLECTOR MODULES (Internal)
   # =============================================================================

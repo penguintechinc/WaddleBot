@@ -147,7 +147,7 @@ function PasskeyButton({ onLogin }) {
 function LoginPage() {
   const navigate = useNavigate();
   const { tenantSlug } = useParams();
-  const { handleOAuthCallback, isAuthenticated } = useAuth();
+  const { refreshUser, isAuthenticated } = useAuth();
   const [signupEnabled, setSignupEnabled] = useState(false);
 
   useEffect(() => {
@@ -162,17 +162,26 @@ function LoginPage() {
     }
   }, [isAuthenticated, navigate]);
 
-  // LoginPageBuilder calls our API and returns the token via onSuccess.
-  // We use handleOAuthCallback which stores the token and fetches user state.
+  // LoginPageBuilder's onSuccess hands back the parsed login response
+  // ({success, token, user}) directly -- it already completed the
+  // email/password (or MFA) POST itself. That token is a real session JWT,
+  // not an OAuth exchange code, so store it and refresh user state rather
+  // than routing it through handleOAuthCallback (which POSTs to
+  // /api/v1/auth/exchange expecting a short-lived OAuth code and would
+  // reject a JWT, silently leaving the user unauthenticated).
   const handleSuccess = async (response) => {
     if (response.token) {
-      await handleOAuthCallback(response.token);
+      localStorage.setItem('token', response.token);
+      await refreshUser(true);
     }
     navigate('/dashboard');
   };
 
   const handlePasskeyLogin = async (token) => {
-    await handleOAuthCallback(token);
+    if (token) {
+      localStorage.setItem('token', token);
+      await refreshUser(true);
+    }
     navigate('/dashboard');
   };
 

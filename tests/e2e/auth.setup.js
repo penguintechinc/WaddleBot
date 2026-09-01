@@ -16,8 +16,9 @@ const TEST_PASS = process.env.HUB_TEST_PASS || 'admin123';
 const AUTH_STATE_PATH = path.join(__dirname, '.auth-state.json');
 
 async function injectCsrfCookie(page) {
-  // Navigate to the login page. The static HTML is served by hub-webui (nginx),
-  // so no hub-api response fires here — the XSRF-TOKEN cookie is not yet set.
+  // Navigate to the login page. The static HTML is served by hub-webui
+  // (Express), so no hub-api response fires here — the XSRF-TOKEN cookie is
+  // not yet set.
   await page.goto('/login', { waitUntil: 'networkidle' });
 
   // Use page.request (Playwright's APIRequestContext) to call hub-api directly.

@@ -1,0 +1,18 @@
+{
+  "name": "waddlebot-hub-webui-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Express static-file server + API proxy for the WaddleBot Hub WebUI. Serves the Vite-built SPA and proxies /api to hub-api -- static serving and proxying only, no business logic, never nginx.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "4.22.2",
+    "http-proxy-middleware": "4.2.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
