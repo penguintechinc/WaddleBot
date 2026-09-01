@@ -40,6 +40,21 @@ faithfully (not introduced by this port -- see `hub_api/PORTING.md`):
      `getTenantLoginInfo()`) is likewise undefined by any numbered
      migration -- bound here for the same byte-faithful-to-Node reason
      as gaps (1)/(2).
+  4. `communities.about_extended`/`social_links`/`website_url`/
+     `discord_invite_url`/`visibility` -- see the `communities`
+     `define_table()` call's own inline comment for detail. Added by
+     the M2 Core Tenancy-Misc group.
+
+M2 (Core Tenancy-Misc: `communityProfileController.js` +
+`joinRequestController.js`) extends this function's existing
+`communities`/`community_members` calls with the additional columns
+those two controllers need, and adds `community_roles`/
+`community_join_requests` -- per this file's own precedent (`app.py`'s
+`tenants` table) of extending the ONE existing `define_table()` call
+rather than redefining a table a second time elsewhere. `bind_auth_tables()`
+is still the sole call site (`app.py::_bind_reference_tables()`), so no
+`app.py` edit is needed for a group that only needs more columns on an
+already-bound table.
 """
 
 from __future__ import annotations
@@ -190,6 +205,35 @@ def bind_auth_tables(dal: Any, *, migrate: bool = False) -> None:
         Field("is_active", "boolean", default=True),
         Field("member_count", "integer", default=0),
         Field("config", "json"),
+        # Fields below were added by the M2 Core Tenancy-Misc group
+        # (communityProfileController.js / joinRequestController.js port,
+        # see `hub_api/PORTING.md`). `description`, `owner_id`, `join_mode`,
+        # `is_public`, `platform`, `deleted_at` are real columns
+        # (`config/postgres/migrations/000_create_base_schema.sql`).
+        # `about_extended`, `social_links`, `website_url`,
+        # `discord_invite_url`, `visibility` are a 4th pre-existing
+        # schema gap in the same family as gaps (1)-(3) above:
+        # `communityProfileController.js`'s own raw SQL reads/writes these
+        # exact column names on `communities`, but no numbered migration
+        # ever adds them (`social_links` migration 037 adds a same-named
+        # column to `community_members`, a DIFFERENT table -- not this
+        # one). Bound here anyway to stay byte-faithful to Node: a query
+        # touching these columns 500s against real Postgres exactly like
+        # Node's own controller does today. Needs a migration to
+        # reconcile -- out of scope for a "no schema changes" port PR.
+        Field("description", "text"),
+        Field("about_extended", "text"),  # gap -- see docstring above
+        Field("social_links", "json"),  # gap -- see docstring above
+        Field("website_url", "string", length=500),  # gap -- see docstring above
+        Field("discord_invite_url", "string", length=500),  # gap -- see docstring above
+        Field("visibility", "string", length=30, default="public"),  # gap -- see docstring above
+        Field("owner_id", "string", length=255),
+        Field("join_mode", "string", length=50, default="open"),
+        Field("is_public", "boolean", default=True),
+        Field("platform", "string", length=50, default="discord"),
+        Field("created_at", "datetime"),
+        Field("updated_at", "datetime"),
+        Field("deleted_at", "datetime"),
         migrate=migrate,
     )
 
@@ -203,6 +247,42 @@ def bind_auth_tables(dal: Any, *, migrate: bool = False) -> None:
         Field("role", "string", length=50, default="member"),
         Field("is_active", "boolean", default=True),
         Field("joined_at", "datetime"),
+        # FK to community_roles.id (`058_tenants_and_claims.sql`'s "1f.
+        # Update community_members" ALTER). Added by the M2 group for
+        # `services/community_authz.py`'s per-community admin check.
+        Field("community_role_id", "integer"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "community_roles",
+        # Schema: `058_tenants_and_claims.sql`'s "1e. Community roles
+        # table". Added by the M2 group -- `services/community_authz.py`
+        # resolves a caller's granted scopes for one community via this
+        # table (`base_claims.scopes`), the same DB-backed check Node's
+        # `middleware/auth.js::requireCommunityAdmin`/`requireMember` do.
+        Field("community_id", "integer", notnull=True),
+        Field("name", "string", length=50, notnull=True),
+        Field("display_name", "string", length=100),
+        Field("priority", "integer", default=0),
+        Field("base_claims", "json"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "community_join_requests",
+        # Schema: `049_add_auth_settings.sql`. Added by the M2 group
+        # (joinRequestController.js port). Unlike `community_members.
+        # user_id` (legacy VARCHAR), `user_id` here is a real INTEGER FK
+        # to `hub_users.id` -- matches Node's own INSERT/SELECT, which
+        # pass `req.user.userId` (an int) directly, never `str(...)`.
+        Field("community_id", "integer", notnull=True),
+        Field("user_id", "integer", notnull=True),
+        Field("status", "string", length=20, default="pending"),
+        Field("message", "text"),
+        Field("reviewed_by", "integer"),
+        Field("reviewed_at", "datetime"),
+        Field("created_at", "datetime"),
         migrate=migrate,
     )
 

@@ -50,6 +50,15 @@ convention = "google"
 "blueprints/v1/profile.py" = ["N815"]
 "blueprints/v1/user_management.py" = ["N815"]
 "services/profile_service.py" = ["S101"]
+# M2 Core Tenancy-Misc group (communityProfileController.js /
+# joinRequestController.js) -- same N815 rationale as the M1 entries
+# above (`avatarUrl`/`socialLinks`/etc are wire-contract field names, not
+# a naming-convention slip). `community_authz.py`/`community_profile_
+# service.py` use `_get_active_community`'s own postcondition assert.
+"blueprints/v1/community_profile.py" = ["N815"]
+"blueprints/v1/join_request.py" = ["N815"]
+"services/community_profile_service.py" = ["S101"]
+"services/join_request_service.py" = ["N815"]
 
 [tool.mypy]
 python_version = "3.13"
