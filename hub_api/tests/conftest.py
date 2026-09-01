@@ -28,6 +28,7 @@ from services.schema import (
     bind_admin_tables,
     bind_auth_tables,
     bind_platform_tables,
+    bind_privacy_tables,
     bind_superadmin_tenant_fields,
     bind_tenant_tables,
 )
@@ -96,6 +97,39 @@ def auth_db(tmp_path: Any) -> Any:
     # table once here, still on the main thread, forces that DDL to run
     # before any worker thread exists -- a test-only concern (production
     # Postgres has no such lazy-CREATE-races-a-thread failure mode).
+    for table_name in dal.tables:
+        dal(dal[table_name]).count()
+    yield async_dal
+    dal.close()
+
+
+@pytest.fixture
+def privacy_db(tmp_path: Any) -> Any:
+    """`auth_db`'s tables PLUS the Privacy/Compliance group's own.
+
+    See `services.schema.bind_privacy_tables`.
+
+    Same file-backed-sqlite/`pool_size=1`/eager-table-touch rationale as
+    `auth_db` -- see that fixture's own docstring for the full gotcha
+    writeup. A separate fixture (not a mutation of `auth_db`) per `hub_api/
+    PORTING.md`'s Test pattern: additive-only, never edit another group's
+    fixture in place.
+    """
+    async_dal = AsyncDAL(f"sqlite://{tmp_path / 'privacy_test.db'}", pool_size=1)
+    dal = async_dal.dal
+    dal.define_table(
+        "tenants",
+        Field("slug", unique=True),
+        Field("display_name"),
+        Field("logo_url"),
+        Field("is_global", "boolean", default=False),
+        Field("is_active", "boolean", default=True),
+        Field("config", "json"),
+    )
+    bind_auth_tables(dal, migrate=True)
+    bind_privacy_tables(dal, migrate=True)
+    dal.tenants.insert(slug=TENANT_SLUG, display_name="Acme Corp", is_active=True)
+    dal.commit()
     for table_name in dal.tables:
         dal(dal[table_name]).count()
     yield async_dal
