@@ -121,6 +121,16 @@ convention = "google"
 # JSON shape (`sourceId`, `displayName`, `avgRating`, `communityLogo`, ...) --
 # same rationale as `blueprints/v1/auth.py`'s own N815 ignore above.
 "services/marketplace_catalog_service.py" = ["N815"]
+# Marketplace-vendor port: request/query dict keys are camelCase to
+# byte-match `admin/hub_module/frontend/src/services/api.js`'s pinned
+# `vendorApi`/`marketplaceAdminApi` JSON contract -- this group returns
+# plain dicts (not quart-schema DTOs, matching the Community/Bot module
+# precedent, not M1's), so the camelCase keys are JSON string keys, not
+# Python identifiers -- N815 does not fire on them. Nothing group-
+# specific to ignore here beyond the shared E711/E712 pydal idiom
+# (inline `# noqa` at each call site, matching every other service
+# module's own convention -- see `services/auth_service.py`/
+# `services/community_activity.py`).
 
 [tool.mypy]
 python_version = "3.13"
