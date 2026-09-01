@@ -83,3 +83,52 @@ describe('admin.js proxy routes are gated by an inline allowlist regex test', ()
     });
   }
 });
+
+describe('admin.js proxy routes also guard communityId before proxying', () => {
+  // CodeQL's js/request-forgery query flagged req.params.communityId as a
+  // SECOND, independent taint source into the same URL template literal —
+  // requireCommunityAdmin authorizes it but never rewrites req.params
+  // itself, so the raw string still reached the downstream URL even after
+  // analyticsPath/securityPath were guarded. Confirmed via the
+  // code-scanning API: alerts 383-387 stayed open after the inline-regex
+  // rework above, with every remaining code flow citing
+  // `req.params.communityId` (not analyticsPath/securityPath) as the
+  // source.
+  const cases = [
+    ['get', '/:communityId/analytics/*'],
+    ['get', '/:communityId/security/*'],
+    ['put', '/:communityId/security/*'],
+    ['post', '/:communityId/security/*'],
+    ['delete', '/:communityId/security/*'],
+  ];
+
+  for (const [routerMethod, path] of cases) {
+    it(`${routerMethod.toUpperCase()} ${path} validates communityId before proxying`, () => {
+      const handler = extractHandler(routerMethod, path);
+
+      assert.match(
+        handler,
+        /const\s*\{\s*communityId\s*\}\s*=\s*req\.params\s*;/,
+        'handler must destructure communityId into a local before use'
+      );
+      assert.match(
+        handler,
+        /if\s*\(\s*!\/\^\\d\+\$\/\.test\(communityId\)\s*\)/,
+        'handler must inline-guard communityId with /^\\d+$/.test(communityId)'
+      );
+
+      const guardIndex = handler.search(/if\s*\(\s*!\/\^\\d\+\$\/\.test\(communityId\)/);
+      const axiosCallIndex = handler.search(/httpClient\.(get|put|post|delete)\(/);
+      assert.ok(guardIndex < axiosCallIndex, 'communityId guard must run before the downstream request');
+
+      // The URL/header construction must use the guarded local, never the
+      // raw, unvalidated req.params.communityId directly.
+      const sinkSection = handler.slice(axiosCallIndex, handler.indexOf(');', axiosCallIndex));
+      assert.doesNotMatch(
+        sinkSection,
+        /req\.params\.communityId/,
+        'downstream request must use the guarded local communityId, not req.params.communityId directly'
+      );
+    });
+  }
+});

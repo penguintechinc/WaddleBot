@@ -312,18 +312,22 @@ router.put('/:communityId/suspected-bots/:botId/review',
 // Analytics proxy routes
 router.get('/:communityId/analytics/*', requireCommunityAdmin, async (req, res) => {
   try {
+    const { communityId } = req.params;
+    if (!/^\d+$/.test(communityId)) {
+      return res.status(400).json({ error: 'Invalid community ID' });
+    }
     const analyticsPath = req.params[0];
     if (!ANALYTICS_GET_PATH.test(analyticsPath)) {
       return res.status(403).json({ error: 'Requested analytics path is not permitted' });
     }
     const httpClient = (await import('axios')).default;
     const response = await httpClient.get(
-      `http://analytics-core:8040/api/v1/analytics/${req.params.communityId}/${analyticsPath}`,
+      `http://analytics-core:8040/api/v1/analytics/${communityId}/${analyticsPath}`,
       {
         params: req.query,
         headers: {
           'X-API-Key': req.headers['x-api-key'],
-          'X-Community-ID': req.params.communityId,
+          'X-Community-ID': communityId,
         },
       }
     );
@@ -347,18 +351,22 @@ function isServiceUnavailable(error) {
 // Security proxy routes
 router.get('/:communityId/security/*', requireCommunityAdmin, async (req, res) => {
   try {
+    const { communityId } = req.params;
+    if (!/^\d+$/.test(communityId)) {
+      return res.status(400).json({ error: 'Invalid community ID' });
+    }
     const securityPath = req.params[0];
     if (!SECURITY_GET_PATH.test(securityPath)) {
       return res.status(403).json({ error: 'Requested security path is not permitted' });
     }
     const httpClient = (await import('axios')).default;
     const response = await httpClient.get(
-      `http://security-core:8041/api/v1/security/${req.params.communityId}/${securityPath}`,
+      `http://security-core:8041/api/v1/security/${communityId}/${securityPath}`,
       {
         params: req.query,
         headers: {
           'X-API-Key': req.headers['x-api-key'],
-          'X-Community-ID': req.params.communityId,
+          'X-Community-ID': communityId,
         },
       }
     );
@@ -376,19 +384,23 @@ router.get('/:communityId/security/*', requireCommunityAdmin, async (req, res) =
 
 router.put('/:communityId/security/*', requireCommunityAdmin, async (req, res) => {
   try {
+    const { communityId } = req.params;
+    if (!/^\d+$/.test(communityId)) {
+      return res.status(400).json({ error: 'Invalid community ID' });
+    }
     const securityPath = req.params[0];
     if (!SECURITY_PUT_PATH.test(securityPath)) {
       return res.status(403).json({ error: 'Requested security path is not permitted' });
     }
     const httpClient = (await import('axios')).default;
     const response = await httpClient.put(
-      `http://security-core:8041/api/v1/security/${req.params.communityId}/${securityPath}`,
+      `http://security-core:8041/api/v1/security/${communityId}/${securityPath}`,
       req.body,
       {
         params: req.query,
         headers: {
           'X-API-Key': req.headers['x-api-key'],
-          'X-Community-ID': req.params.communityId,
+          'X-Community-ID': communityId,
         },
       }
     );
@@ -406,19 +418,23 @@ router.put('/:communityId/security/*', requireCommunityAdmin, async (req, res) =
 
 router.post('/:communityId/security/*', requireCommunityAdmin, async (req, res) => {
   try {
+    const { communityId } = req.params;
+    if (!/^\d+$/.test(communityId)) {
+      return res.status(400).json({ error: 'Invalid community ID' });
+    }
     const securityPath = req.params[0];
     if (!SECURITY_POST_PATH.test(securityPath)) {
       return res.status(403).json({ error: 'Requested security path is not permitted' });
     }
     const httpClient = (await import('axios')).default;
     const response = await httpClient.post(
-      `http://security-core:8041/api/v1/security/${req.params.communityId}/${securityPath}`,
+      `http://security-core:8041/api/v1/security/${communityId}/${securityPath}`,
       req.body,
       {
         params: req.query,
         headers: {
           'X-API-Key': req.headers['x-api-key'],
-          'X-Community-ID': req.params.communityId,
+          'X-Community-ID': communityId,
         },
       }
     );
@@ -436,18 +452,22 @@ router.post('/:communityId/security/*', requireCommunityAdmin, async (req, res) 
 
 router.delete('/:communityId/security/*', requireCommunityAdmin, async (req, res) => {
   try {
+    const { communityId } = req.params;
+    if (!/^\d+$/.test(communityId)) {
+      return res.status(400).json({ error: 'Invalid community ID' });
+    }
     const securityPath = req.params[0];
     if (!SECURITY_DELETE_PATH.test(securityPath)) {
       return res.status(403).json({ error: 'Requested security path is not permitted' });
     }
     const httpClient = (await import('axios')).default;
     const response = await httpClient.delete(
-      `http://security-core:8041/api/v1/security/${req.params.communityId}/${securityPath}`,
+      `http://security-core:8041/api/v1/security/${communityId}/${securityPath}`,
       {
         params: req.query,
         headers: {
           'X-API-Key': req.headers['x-api-key'],
-          'X-Community-ID': req.params.communityId,
+          'X-Community-ID': communityId,
         },
       }
     );
