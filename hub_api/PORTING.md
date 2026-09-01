@@ -289,6 +289,28 @@ provider-claimed attribute (email, username) ever silently merge into an
 existing account instead of requiring an authenticated linking action?
 See `tests/test_v1_oauth_security.py` for the fail-first regression tests.
 
+### Gotcha #8 -- SECURITY: never put a session JWT in a redirect URL/query string
+
+A third post-merge finding, same "faithful port of a Node bug" shape as
+Gotcha #7: `oauth_callback` originally redirected with
+`?token={jwt}` directly in the URL. Query strings leak into proxy/access
+logs, browser history, and the `Referer` header of any outbound request the
+landing page happens to make -- an OAuth login callback is exactly the kind
+of page a Content-Security-Policy report, an analytics beacon, or a
+third-party font/script load can leak that `Referer` from. **Fix: hand off
+via a short-lived (60s), single-use opaque exchange code instead**
+(`oauth_service.create_oauth_exchange_code`/`redeem_oauth_exchange_code`,
+`hub_oauth_exchange_codes` table, migration 075) -- the code goes in the
+URL, the frontend immediately redeems it for the real JWT via
+`POST /api/v1/auth/exchange`, delivered over the response BODY. Single-use
+is enforced the same way as `community_welcomed_users` (migration 068): an
+atomic `UPDATE ... WHERE used = FALSE AND expires_at > NOW()` claim, not an
+app-level check-then-act. Any future flow that hands a secret from a
+redirect (magic links, SSO callbacks, etc.) should use this same
+exchange-code pattern rather than a URL parameter. See
+`tests/test_v1_auth_blueprint.py`'s `TestOAuthExchangeCodeHandoff` for the
+fail-first regression tests.
+
 ---
 
 ## What M1 does NOT cover (explicit scope boundaries, not gaps)

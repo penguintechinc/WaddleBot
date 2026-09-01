@@ -170,6 +170,26 @@ def bind_auth_tables(dal: Any, *, migrate: bool = False) -> None:
     )
 
     dal.define_table(
+        "hub_oauth_exchange_codes",
+        # `config/postgres/migrations/075_oauth_exchange_codes.sql` -- backs the
+        # exchange-code handoff fix for the JWT-in-URL leak in
+        # `blueprints/v1/auth.py::oauth_callback` (see that route's docstring
+        # and `hub_api/PORTING.md` Gotcha #8). Single-use is enforced by an
+        # atomic `UPDATE ... WHERE used = FALSE AND expires_at > NOW()` claim
+        # in `oauth_service.redeem_oauth_exchange_code` -- the database, not
+        # application logic, arbitrates a concurrent-redemption race (same
+        # pattern as `community_welcomed_users`, migration 068).
+        Field("code", "string", length=255, notnull=True, unique=True),
+        Field("token", "text", notnull=True),
+        Field("platform", "string", length=50),
+        Field("used", "boolean", default=False),
+        Field("used_at", "datetime"),
+        Field("expires_at", "datetime", notnull=True),
+        Field("created_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
         "hub_temp_passwords",
         Field("user_identifier", "string", length=255, notnull=True),
         Field("password_hash", "string", length=255, notnull=True),

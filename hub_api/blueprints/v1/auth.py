@@ -289,6 +289,21 @@ class OAuthStartResponse:
 
 
 @dataclass(slots=True, frozen=True)
+class ExchangeCodeRequest:
+    """Request DTO for the OAuth exchange-code handoff endpoint."""
+
+    code: str
+
+
+@dataclass(slots=True, frozen=True)
+class ExchangeCodeResponse:
+    """Response DTO for the OAuth exchange-code handoff endpoint."""
+
+    success: bool
+    token: str
+
+
+@dataclass(slots=True, frozen=True)
 class TenantConfigDTO:
     """Tenant config DTO."""
 
@@ -674,7 +689,17 @@ async def oauth_start(platform: str) -> OAuthStartResponse | tuple[dict[str, obj
 
 @auth_bp.route("/oauth/<platform>/callback", methods=["GET"])
 async def oauth_callback(platform: str):  # type: ignore[no-untyped-def]
-    """Oauth callback."""
+    """Oauth callback.
+
+    SECURITY: does NOT put the session JWT in the redirect URL/query string
+    -- query strings leak into proxy/access logs, browser history, and the
+    `Referer` header of any outbound request the callback page happens to
+    make. Instead mints a short-lived (60s), single-use opaque exchange code
+    (`oauth_service.create_oauth_exchange_code`) and redirects with THAT in
+    the URL; the frontend immediately redeems it for the real JWT via
+    `POST /exchange` (`exchange_oauth_code` below), delivered over the
+    response BODY, never the URL. See `hub_api/PORTING.md` Gotcha #8.
+    """
     async_dal, dal = _dal()
     code = request.args.get("code")
     state = request.args.get("state")
@@ -698,7 +723,32 @@ async def oauth_callback(platform: str):  # type: ignore[no-untyped-def]
         )
     except ApiError:
         return redirect(f"{frontend_origin}/login?error=oauth_failed")
-    return redirect(f"{frontend_origin}/auth/callback?token={token}")
+
+    exchange_code = await oauth_service.create_oauth_exchange_code(
+        async_dal, dal, token=token, platform=platform
+    )
+    return redirect(f"{frontend_origin}/auth/callback?code={exchange_code}")
+
+
+@auth_bp.route("/exchange", methods=["POST"])
+@validate_request(ExchangeCodeRequest)
+@validate_response(ExchangeCodeResponse)
+async def exchange_oauth_code(
+    data: ExchangeCodeRequest,
+) -> ExchangeCodeResponse | tuple[dict[str, object], int]:
+    """Exchange a short-lived, single-use OAuth callback code for the session JWT.
+
+    Completes the exchange-code handoff `oauth_callback` starts -- see that
+    route's docstring. No `tenant_middleware`/`require_scope`: like `login`/
+    `refresh`, there is no session yet at this point -- only the opaque code
+    the callback redirect just handed the frontend via the URL.
+    """
+    async_dal, dal = _dal()
+    try:
+        token = await oauth_service.redeem_oauth_exchange_code(async_dal, dal, code=data.code)
+    except ApiError as exc:
+        return _err(exc)
+    return ExchangeCodeResponse(success=True, token=token)
 
 
 @auth_bp.route("/oauth/<platform>/link", methods=["GET"])
