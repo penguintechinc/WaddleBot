@@ -53,3 +53,8 @@ def not_found(message: str = "Not found") -> ApiError:
 def conflict(message: str = "Conflict") -> ApiError:
     """409 -- e.g. duplicate email."""
     return ApiError(message, 409, "CONFLICT")
+
+
+def unprocessable(message: str = "Unprocessable") -> ApiError:
+    """422 -- request is well-formed but semantically rejected (policy/provider state)."""
+    return ApiError(message, 422, "UNPROCESSABLE")

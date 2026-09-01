@@ -29,6 +29,7 @@ from services.schema import (
     bind_auth_tables,
     bind_community_authz_tables,
     bind_github_sync_tables,
+    bind_music_tables,
     bind_platform_tables,
     bind_privacy_tables,
     bind_streaming_tables,
@@ -136,6 +137,40 @@ def streaming_db(tmp_path: Any) -> Any:
     dal.commit()
     # See auth_db's own docstring -- forces lazy-table DDL to run on the
     # main thread before any AsyncDAL executor thread exists.
+    for table_name in dal.tables:
+        dal(dal[table_name]).count()
+    yield async_dal
+    dal.close()
+
+
+@pytest.fixture
+def music_station_db(tmp_path: Any) -> Any:
+    """File-backed `AsyncDAL` for the Music Station queue feature.
+
+    Additive fixture, same rationale as `streaming_db` above -- extends
+    `bind_auth_tables()` with BOTH `bind_streaming_tables()` (needed for
+    the `coordination`/`community_servers` category-restriction check,
+    `services.community_music_queue_service._is_live_music_category()`)
+    AND this feature's own `bind_music_tables()`
+    (`music_tracks`/`music_station_queue`/`music_policy`/
+    `music_moderation_log`).
+    """
+    async_dal = AsyncDAL(f"sqlite://{tmp_path / 'music_station_test.db'}", pool_size=1)
+    dal = async_dal.dal
+    dal.define_table(
+        "tenants",
+        Field("slug", unique=True),
+        Field("display_name"),
+        Field("logo_url"),
+        Field("is_global", "boolean", default=False),
+        Field("is_active", "boolean", default=True),
+        Field("config", "json"),
+    )
+    bind_auth_tables(dal, migrate=True)
+    bind_streaming_tables(dal, migrate=True)
+    bind_music_tables(dal, migrate=True)
+    dal.tenants.insert(slug=TENANT_SLUG, display_name="Acme Corp", is_active=True)
+    dal.commit()
     for table_name in dal.tables:
         dal(dal[table_name]).count()
     yield async_dal
