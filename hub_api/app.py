@@ -31,7 +31,12 @@ from quart_schema import Info, QuartSchema
 from blueprints import register_blueprints
 from config import HubAPIConfig
 from openapi.routes import register_openapi_docs
-from services.schema import bind_ai_routing_tables, bind_lifecycle_tables, bind_platform_tables
+from services.schema import (
+    bind_ai_routing_tables,
+    bind_lifecycle_tables,
+    bind_platform_tables,
+    bind_token_billing_tables,
+)
 
 
 def _bind_reference_tables(dal: Any) -> None:
@@ -83,6 +88,11 @@ def _bind_reference_tables(dal: Any) -> None:
     # Premium-AI model-routing (services/ai_routing/, services/token_ledger.py)
     # -- see services/schema.py::bind_ai_routing_tables() for the full rationale.
     bind_ai_routing_tables(dal)
+    # Metered token billing (migration 076, marketplace module) -- this
+    # group's own PORTING.md instruction: "one call at END of
+    # app.py::_bind_reference_tables", appended after every existing
+    # group's own bind_*_tables() call rather than interleaved with them.
+    bind_token_billing_tables(dal)
 
 
 def create_app(config: HubAPIConfig | None = None) -> Quart:

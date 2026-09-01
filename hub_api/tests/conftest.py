@@ -60,6 +60,7 @@ from services.schema import (
     bind_streaming_tables,
     bind_superadmin_tenant_fields,
     bind_tenant_tables,
+    bind_token_billing_tables,
 )
 
 #: Matches flask_core.tenancy/authz's own os.getenv("SECRET_KEY", ...) fallback.
@@ -991,3 +992,76 @@ def marketplace_db(tenant_db: Any, monkeypatch: Any) -> Any:
     dal = tenant_db
     bind_marketplace_vendor_tables(dal, migrate=True)
     return dal
+
+
+@pytest.fixture
+def token_billing_db(tmp_path: Any) -> Any:
+    """File-backed `AsyncDAL` for the metered token billing group (migration 076).
+
+    Same file-backed-sqlite/`pool_size=1`/eager-table-touch rationale as
+    `auth_db` above (see its own docstring). `bind_auth_tables()` supplies
+    every table `services.community_authz.authorize_community()` needs
+    (`communities`, `community_members`, `community_roles`,
+    `tenant_admins`); `bind_token_billing_tables()` adds this group's own
+    three (`token_products`, `community_token_balances`,
+    `token_transactions`). Two tenants seeded (`TENANT_SLUG`/
+    `OTHER_TENANT_SLUG`, same pair `overlay_db` seeds) for the
+    cross-tenant balance-IDOR regression test.
+    """
+    async_dal = AsyncDAL(f"sqlite://{tmp_path / 'token_billing_test.db'}", pool_size=1)
+    dal = async_dal.dal
+    dal.define_table(
+        "tenants",
+        Field("slug", unique=True),
+        Field("display_name"),
+        Field("logo_url"),
+        Field("is_global", "boolean", default=False),
+        Field("is_active", "boolean", default=True),
+        Field("config", "json"),
+    )
+    bind_auth_tables(dal, migrate=True)
+    bind_token_billing_tables(dal, migrate=True)
+    dal.tenants.insert(slug=TENANT_SLUG, display_name="Acme Corp", is_active=True)
+    dal.tenants.insert(slug=OTHER_TENANT_SLUG, display_name="Other Corp", is_active=True)
+    dal.commit()
+    # See auth_db's own comment above -- forces lazy CREATE TABLE DDL to
+    # run on the main thread before any async_dal worker thread exists.
+    for table_name in dal.tables:
+        dal(dal[table_name]).count()
+    yield async_dal
+    dal.close()
+
+
+def seed_token_product(
+    token_billing_db: Any,
+    *,
+    key: str = "ai_routing_call",
+    name: str = "AI Routing Call",
+    unit: str = "call",
+    price_cents: int = 100,
+    tokens_granted: int = 10,
+    active: bool = True,
+) -> int:
+    """Insert one `token_products` row; returns its id."""
+    dal = token_billing_db.dal
+    product_id: int = dal.token_products.insert(
+        key=key,
+        name=name,
+        unit=unit,
+        price_cents=price_cents,
+        tokens_granted=tokens_granted,
+        active=active,
+    )
+    dal.commit()
+    return product_id
+
+
+def seed_token_balance(
+    token_billing_db: Any, *, community_id: int, product_id: int, balance: int
+) -> None:
+    """Insert one `community_token_balances` row for a `(community_id, product_id)` pair."""
+    dal = token_billing_db.dal
+    dal.community_token_balances.insert(
+        community_id=community_id, product_id=product_id, balance=balance
+    )
+    dal.commit()
