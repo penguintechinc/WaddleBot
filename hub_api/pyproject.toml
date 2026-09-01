@@ -149,6 +149,13 @@ convention = "google"
 # port group's own blueprint uses (see blueprints/v2/platform.py's own
 # per-file-ignore above).
 "blueprints/v1/marketplace_lifecycle.py" = ["S101", "N815"]
+# Distribution API (svc-ingest/svc-process stage-runner poll endpoint) --
+# `DistributionBundleDTO`'s appId/communityId are deliberately camelCase to
+# match this repo's established v1 DTO convention (see the M1/M3/M7 entries
+# above), and `list_distribution_bundles` repeats the same
+# `assert ctx is not None` tenant_middleware postcondition as
+# blueprints/v2/platform.py.
+"blueprints/v1/distribution.py" = ["N815", "S101"]
 
 [tool.mypy]
 python_version = "3.13"

@@ -39,6 +39,7 @@ from pydal import DAL, Field
 
 from services.schema import (
     bind_admin_tables,
+    bind_app_bundle_tables,
     bind_auth_tables,
     bind_community_authz_tables,
     bind_github_sync_tables,
@@ -456,6 +457,38 @@ def lifecycle_db(tmp_path: Any) -> Any:
         community_role_id=role_id,
         is_active=True,
     )
+    dal.commit()
+    for table_name in dal.tables:
+        dal(dal[table_name]).count()
+    yield async_dal
+    dal.close()
+
+
+@pytest.fixture
+def distribution_db(tmp_path: Any) -> Any:
+    """File-backed `AsyncDAL` for the Distribution API (`blueprints/v1/distribution.py`).
+
+    Same file-backed-sqlite/`pool_size=1`/lazy-table-touch rationale as
+    `auth_db` above (see its own docstring). `bind_app_bundle_tables()`
+    depends on `tenants`/`communities` already being bound -- `bind_auth_tables()`
+    provides `communities`; `tenants` is defined narrowly here the same way
+    every other fixture in this file bootstraps it (production's own
+    `app.py::_bind_reference_tables` equivalent).
+    """
+    async_dal = AsyncDAL(f"sqlite://{tmp_path / 'distribution_test.db'}", pool_size=1)
+    dal = async_dal.dal
+    dal.define_table(
+        "tenants",
+        Field("slug", unique=True),
+        Field("display_name"),
+        Field("logo_url"),
+        Field("is_global", "boolean", default=False),
+        Field("is_active", "boolean", default=True),
+        Field("config", "json"),
+    )
+    bind_auth_tables(dal, migrate=True)
+    bind_app_bundle_tables(dal, migrate=True)
+    dal.tenants.insert(slug=TENANT_SLUG, display_name="Acme Corp", is_active=True)
     dal.commit()
     for table_name in dal.tables:
         dal(dal[table_name]).count()
