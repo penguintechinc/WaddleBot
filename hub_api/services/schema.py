@@ -228,6 +228,21 @@ def bind_auth_tables(dal: Any, *, migrate: bool = False) -> None:
         "communities",
         Field("name", "string", length=255),
         Field("display_name", "string", length=255),
+        # Added by the Analytics-module port (M9): this table can only be
+        # `define_table()`-d once per DAL instance, and `create_app()`
+        # binds this M1 definition (via `_bind_reference_tables`) before
+        # any request runs -- `services/community_common.py::
+        # ensure_community_tables()`'s own idempotent guard then silently
+        # skips its (separately-defined) `tenant_id` column, so
+        # `community_in_tenant()` would `AttributeError` in production
+        # against a real app (pre-existing gap, only masked because every
+        # Community-module blueprint's own tests build an isolated app +
+        # dal that never loads `bind_auth_tables` at all). Extending here
+        # -- not redefining -- per this module's own docstring guidance for
+        # `tenants` columns, generalized to `communities`: the real
+        # Postgres column already exists (058_tenants_and_claims.sql),
+        # this just maps pydal onto it.
+        Field("tenant_id", "integer"),
         Field("is_global", "boolean", default=False),
         Field("is_active", "boolean", default=True),
         Field("member_count", "integer", default=0),

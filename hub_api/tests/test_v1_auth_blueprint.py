@@ -92,6 +92,7 @@ def _seed_user(
     is_active: bool = True,
     email_verified: bool = True,
     is_super_admin: bool = False,
+    is_analytics_consumer: bool = False,
 ) -> int:
     user_id: int = auth_db.dal.hub_users.insert(
         email=email,
@@ -100,6 +101,7 @@ def _seed_user(
         is_active=is_active,
         email_verified=email_verified,
         is_super_admin=is_super_admin,
+        is_analytics_consumer=is_analytics_consumer,
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
     )
@@ -186,6 +188,47 @@ class TestLogin:
         assert response.status_code == 403
         body = await response.get_json()
         assert body["requiresVerification"] is True
+
+    async def test_login_analytics_consumer_grants_analytics_read_scope(
+        self, client: Any, auth_db: Any
+    ) -> None:
+        """Analytics module port (M9) -- see `services/auth_service.py::create_session_token`.
+
+        Without this scope grant, no `is_analytics_consumer` user could
+        ever satisfy `blueprints/v1/analytics.py`'s platform-overview
+        `require_scope("analytics:read")` gate.
+        """
+        from flask_core.auth import verify_jwt_token
+
+        _seed_user(
+            auth_db,
+            email="carol@example.com",
+            password="hunter22",
+            is_analytics_consumer=True,
+        )
+        response = await client.post(
+            "/api/v1/auth/login", json={"email": "carol@example.com", "password": "hunter22"}
+        )
+        assert response.status_code == 200
+        body = await response.get_json()
+        payload = verify_jwt_token(body["token"], "change-me-in-production")
+        assert payload is not None
+        assert "analytics:read" in payload["scope"].split()
+
+    async def test_login_non_consumer_has_no_analytics_read_scope(
+        self, client: Any, auth_db: Any
+    ) -> None:
+        from flask_core.auth import verify_jwt_token
+
+        _seed_user(auth_db, email="dave@example.com", password="hunter22")
+        response = await client.post(
+            "/api/v1/auth/login", json={"email": "dave@example.com", "password": "hunter22"}
+        )
+        assert response.status_code == 200
+        body = await response.get_json()
+        payload = verify_jwt_token(body["token"], "change-me-in-production")
+        assert payload is not None
+        assert "analytics:read" not in payload["scope"].split()
 
 
 class TestMe:
