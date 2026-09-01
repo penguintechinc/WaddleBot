@@ -487,12 +487,15 @@ pipeline:
         cpu: "1000m"
         memory: "1Gi"
 
-  # v3.0.x — SCAFFOLD ONLY. Streaming module's control plane (RTC + broadcast media),
-  # fronting external MarchProxy (transcode) + LiveKit (SFU) — see
+  # v3.0.x — REAL Streaming module control plane + real ffmpeg data plane — see
   # templates/svc-streaming.yaml header and docs/plans/2026-08-31-svc-streaming-design.md.
   # Gated only on `enabled` here (same pattern as svcPresentation), NOT on
-  # modules.streaming.enabled — that module doesn't exist in modules.* yet (§6 target state,
-  # out of scope for this scaffold). svc-rtc / video_proxy_module are untouched.
+  # modules.streaming.enabled — that module doesn't exist in modules.* yet. svc-rtc /
+  # video_proxy_module are untouched (separate, existing containers).
+  # Resource limits bumped from the original scaffold's generic pipeline-stage defaults —
+  # this pod now actually runs ffmpeg (passthrough copy is cheap; TRANSCODE is real CPU work).
+  # A dedicated node pool for transcode-heavy replicas (design spec §7's "beefy-host"
+  # proposal) is follow-up, not done here.
   svcStreaming:
     enabled: true
     port: 8208
@@ -503,8 +506,8 @@ pipeline:
         cpu: "250m"
         memory: "256Mi"
       limits:
-        cpu: "1000m"
-        memory: "1Gi"
+        cpu: "2000m"
+        memory: "2Gi"
 
 # Processing Module
 modules:
