@@ -31,7 +31,7 @@ from quart_schema import Info, QuartSchema
 from blueprints import register_blueprints
 from config import HubAPIConfig
 from openapi.routes import register_openapi_docs
-from services.schema import bind_lifecycle_tables, bind_platform_tables
+from services.schema import bind_ai_routing_tables, bind_lifecycle_tables, bind_platform_tables
 
 
 def _bind_reference_tables(dal: Any) -> None:
@@ -80,6 +80,9 @@ def _bind_reference_tables(dal: Any) -> None:
     # per hub_api/PORTING.md's per-group isolation note; see
     # services/schema.py::bind_lifecycle_tables's own docstring.
     bind_lifecycle_tables(dal)
+    # Premium-AI model-routing (services/ai_routing/, services/token_ledger.py)
+    # -- see services/schema.py::bind_ai_routing_tables() for the full rationale.
+    bind_ai_routing_tables(dal)
 
 
 def create_app(config: HubAPIConfig | None = None) -> Quart:
