@@ -1,18 +1,33 @@
-"""`services/community_authz.py` -- direct + integration coverage of `require_community_admin()`.
+"""`services/community_authz.py` -- direct + integration coverage.
 
 `tests/test_v1_workflow_blueprint.py`/`test_v1_github_sync_blueprint.py`
 exercise the "not an admin -> 403" and "is a community member with the
 right scope -> 200" paths through the real HTTP blueprints already --
-this file closes the remaining branches: the three bypasses (`super-
-admin`, `tenant-admin`, `platform-admin`), the "member but wrong scope"
-403, and `_jwt_roles()`'s own defensive branches (unreachable through
-the normal HTTP flow, since `tenant_middleware`/`get_current_user_id`
-already validate the bearer token before `_jwt_roles()` ever runs --
-covered here as a direct unit test of the function instead).
+`TestJwtRolesDirect`/`TestRequireCommunityAdminBypasses` below close the
+remaining branches for the M-automation group's `require_community_admin()`:
+the three bypasses (`super-admin`, `tenant-admin`, `platform-admin`), the
+"member but wrong scope" 403, and `_jwt_roles()`'s own defensive branches
+(unreachable through the normal HTTP flow, since `tenant_middleware`/
+`get_current_user_id` already validate the bearer token before
+`_jwt_roles()` ever runs -- covered here as a direct unit test of the
+function instead).
+
+`TestParseClaimsScopes`/`TestDecodeCaller`/`TestAuthorizeCommunityMissingTenantContext`
+below cover the M7 Streaming group's own `_scoped` variant instead --
+`_decode_caller`/`authorize_community`'s early-return branches (missing
+bearer token, invalid token, missing `sub` claim, unresolved tenant
+context) are similarly unreachable through the normal route path once
+`tenant_middleware` has already run (it 401s on exactly those same
+conditions first) -- same "defensive, second independent decode" shape
+`services.current_user`'s own docstring describes. Tested directly here
+against a minimal request-like stand-in, mirroring how
+`tests/test_event_calendar_proxy.py` unit-tests `event_calendar_proxy.py`
+below the blueprint layer.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from unittest.mock import Mock
@@ -25,11 +40,99 @@ from quart_schema import QuartSchema
 
 import blueprints.v1.workflow as workflow_module
 from blueprints.v1.workflow import workflow_bp
-from services.community_authz import _jwt_roles
+from services.community_authz import (
+    _decode_caller,
+    _jwt_roles,
+    _parse_claims_scopes,
+    authorize_community,
+)
+from services.errors import ApiError
 from services.workflow_service import ProxyResult
 from tests.conftest import SECRET_KEY, TENANT_SLUG
 
 COMMUNITY_ID = 1
+
+
+@dataclass(slots=True)
+class _FakeRequest:
+    """Minimal stand-in for `quart.Request` -- only the attributes these functions touch."""
+
+    headers: dict[str, str] = field(default_factory=dict)
+    tenant_context: Any = None
+
+
+class TestParseClaimsScopes:
+    def test_none_is_empty(self) -> None:
+        assert _parse_claims_scopes(None) == frozenset()
+
+    def test_valid_json_string_list(self) -> None:
+        assert _parse_claims_scopes('["a:read", "b:write"]') == {"a:read", "b:write"}
+
+    def test_invalid_json_string_is_empty(self) -> None:
+        assert _parse_claims_scopes("not json") == frozenset()
+
+    def test_list(self) -> None:
+        assert _parse_claims_scopes(["a:read"]) == {"a:read"}
+
+    def test_dict_with_scopes(self) -> None:
+        assert _parse_claims_scopes({"scopes": ["a:read"]}) == {"a:read"}
+
+    def test_dict_without_scopes_key_is_empty(self) -> None:
+        assert _parse_claims_scopes({"other": True}) == frozenset()
+
+    def test_unrecognized_type_is_empty(self) -> None:
+        assert _parse_claims_scopes(42) == frozenset()
+
+
+class TestDecodeCaller:
+    def test_missing_authorization_header_is_401(self) -> None:
+        with pytest.raises(ApiError) as exc_info:
+            _decode_caller(_FakeRequest(headers={}))
+        assert exc_info.value.status_code == 401
+
+    def test_non_bearer_header_is_401(self) -> None:
+        with pytest.raises(ApiError) as exc_info:
+            _decode_caller(_FakeRequest(headers={"Authorization": "Basic xyz"}))
+        assert exc_info.value.status_code == 401
+
+    def test_invalid_token_is_401(self) -> None:
+        with pytest.raises(ApiError) as exc_info:
+            _decode_caller(_FakeRequest(headers={"Authorization": "Bearer not-a-real-jwt"}))
+        assert exc_info.value.status_code == 401
+
+    def test_token_missing_subject_claim_is_401(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import services.community_authz as module
+
+        monkeypatch.setattr(module, "verify_jwt_token", lambda token, key: {"roles": []})
+        with pytest.raises(ApiError) as exc_info:
+            _decode_caller(_FakeRequest(headers={"Authorization": "Bearer x"}))
+        assert exc_info.value.status_code == 401
+
+    def test_success_returns_user_id_and_roles(self) -> None:
+        token = create_jwt_token(
+            user_id="7",
+            username="alice",
+            email="alice@example.com",
+            roles=["super_admin"],
+            secret_key=SECRET_KEY,
+            tenant="acme-corp",
+        )
+        user_id, roles = _decode_caller(_FakeRequest(headers={"Authorization": f"Bearer {token}"}))
+        assert user_id == 7
+        assert roles == ["super_admin"]
+
+
+class TestAuthorizeCommunityMissingTenantContext:
+    async def test_no_tenant_context_is_403(self) -> None:
+        with pytest.raises(ApiError) as exc_info:
+            await authorize_community(
+                _FakeRequest(headers={}, tenant_context=None),
+                async_dal=None,
+                dal=None,
+                community_id=1,
+                admin=True,
+            )
+        assert exc_info.value.status_code == 403
 
 
 class _StubWorkflowCore:

@@ -251,7 +251,13 @@ def bind_auth_tables(dal: Any, *, migrate: bool = False) -> None:
         # tenant_id` verbatim. `tenant_id` is NOT NULL in Postgres -- every
         # public/platform-admin query that lists communities MUST filter on
         # this (security.md Tenant Isolation); see services/public_service.
-        # py's module docstring for the pre-auth resolution mechanism.
+        # py's module docstring for the pre-auth resolution mechanism. Also
+        # relied on by the M7 Streaming group: `flask_core.tenancy.
+        # tenant_scoped()`'s community_id-owning-table fallback path reads
+        # `dal.communities.tenant_id` directly -- no group before M7 queried
+        # a community_id-owning table through that helper, so this was the
+        # first caller to actually need the column bound (not just present
+        # in Postgres).
         # `about_extended`, `social_links`, `website_url`,
         # `discord_invite_url`, `visibility` are a pre-existing schema gap:
         # `communityProfileController.js`'s own raw SQL reads/writes these
@@ -327,10 +333,13 @@ def bind_auth_tables(dal: Any, *, migrate: bool = False) -> None:
         # above by the M3 Platform-admin/Public group -- same column, not
         # duplicated). `community_role_id` is the same FK to
         # community_roles.id (`058_tenants_and_claims.sql`'s "1f. Update
-        # community_members" ALTER) the M2 Core Tenancy-Misc group's AND
-        # the M-automation group's `services/community_authz.py` both
-        # rely on for their per-community admin checks -- bound once
-        # here, not duplicated.
+        # community_members" ALTER) the M2 Core Tenancy-Misc group's, the
+        # M-automation group's, and the M7 Streaming group's own
+        # `services/community_authz.py` (`_scoped` variant) all rely on
+        # for their per-community admin checks -- bound once here, not
+        # duplicated. `claims_cache` is the same faithful-port source the
+        # M7 group's `resolve_community_membership_scoped()` parses for
+        # the caller's community-scoped OIDC scopes.
         # `removed_at`/`removed_by`/`removal_reason` are a pre-existing
         # schema gap (adminController.js's removeMember() references them,
         # but no migration defines them -- same class of gap as
@@ -405,6 +414,205 @@ def bind_auth_tables(dal: Any, *, migrate: bool = False) -> None:
         "hub_settings",
         Field("setting_key", "string", length=100, notnull=True),
         Field("setting_value", "text"),
+        migrate=migrate,
+    )
+
+
+def bind_streaming_tables(dal: Any, *, migrate: bool = False) -> None:
+    """Define every table the M7 Streaming group (music/stream/streaming) queries.
+
+    Idempotent per-DAL-instance, `migrate=False` in production -- same
+    contract as `bind_auth_tables()` above (see its own docstring and
+    `hub_api/PORTING.md`'s Gotcha #2). Unlike M1, this function is never
+    called from `app.py::_bind_reference_tables()` -- the M7 port's own
+    scope explicitly forbids editing `app.py`/`routers/*.py`/
+    `blueprints/__init__.py` (auto-discovery is the only wiring point for
+    blueprints; table binding has no equivalent auto-discovery hook yet).
+    Each M7 service module calls this itself, guarded by pydal's own
+    `if "<table>" in dal.tables: return`-per-`define_table()` idempotency
+    (`DAL.define_table()` no-ops on a name that's already bound against
+    this `dal` instance) -- safe to call on every request; the real cost
+    is paid exactly once per process.
+
+    `community_roles` (migration 058_tenants_and_claims.sql) is relied on
+    by `services.community_authz`'s community-scoped-role join
+    (`middleware/auth.js`'s `requireMember`/`requireCommunityAdmin`,
+    byte-faithfully ported: LEFT JOIN `community_members.community_role_id
+    -> community_roles.id`, parse `claims_cache`/`base_claims` for the
+    caller's scopes) but is NOT bound here -- `bind_auth_tables()` above
+    (extended by the M2 Core Tenancy-Misc group) already binds it
+    unconditionally at app startup, before this function's own lazy first
+    call could ever run. `coordination` (also bound by `bind_platform_tables()`,
+    identical field list either way) and `community_servers` (also bound
+    by `bind_admin_tables()`, whose field list is a strict superset of the
+    4 fields this group's own `stream_service.py` reads) are each
+    individually guarded below rather than redefined, so whichever group's
+    binding runs first in this shared, long-lived `dal` instance wins
+    without error -- this function deliberately mirrors `bind_admin_tables()`'s
+    fuller `community_servers` field list (not just this group's own
+    narrower 4) so a streaming route hit before any admin route never
+    leaves `community_servers` bound too narrowly for `bind_admin_tables()`
+    to use later.
+
+    This function's own top-level idempotency guard therefore checks
+    `community_music_settings` (a table genuinely unique to this group),
+    not `coordination`/`community_roles`/any other table another group
+    also binds -- checking a shared table would short-circuit this
+    function's own tables as a false-positive "already done" the moment
+    that other group's binding landed first (caught the hard way during
+    the M7-onto-release merge: this function originally guarded on
+    `community_roles`, which `bind_auth_tables()` already binds
+    unconditionally at app startup, so the guard skipped every table below
+    -- including this function's own -- unconditionally, for every real
+    request; `coordination`/`community_music_settings`/etc. never bound at
+    all). `coordination`/`community_servers` are likewise real, pre-existing
+    tables (`004_add_missing_tables.sql` / `000_create_base_schema.sql`)
+    queried read-only by `stream_service.py`.
+
+    Schema gap (`hub_api/PORTING.md` Gotcha #4's pattern, a larger
+    instance of it): `musicController.js` queries five tables --
+    `community_music_settings`, `community_music_providers`,
+    `community_radio_stations`, `oauth_state_tokens`, `oauth_tokens` --
+    that exist in NEITHER the numbered migrations NOR
+    `config/postgres/init.sql`. `config/postgres/migrations/
+    005_add_music_tables.sql` / `012_add_music_providers.sql` define a
+    DIFFERENT, non-overlapping music schema (`music_settings`,
+    `music_provider_config`, `music_radio_state`, `music_queue`, ...) that
+    appears to supersede whatever `musicController.js` was originally
+    written against -- and `admin/hub_module/backend/src/routes/music.js`
+    (the only place these 8 controller functions are wired to routes) is
+    itself never mounted in `routes/index.js`, so this entire code path is
+    unreachable dead code in the Node app today, hit by nothing in
+    production. Per Gotcha #4's rule ("document it, don't silently invent
+    a column, don't silently drop the whole feature either") and the M7
+    port's explicit instruction to port the EXISTING controller endpoints
+    faithfully: these 5 tables are bound here with the exact columns
+    Node's SQL references, `migrate=False` in production (byte-faithful --
+    a real deployment 500s on first use exactly like Node's dead code
+    would if it were ever wired up), `migrate=True` in tests (so the
+    ported logic itself has real characterization coverage against
+    sqlite). A follow-up ticket should either (a) write the missing
+    migration for this schema, or (b) confirm with product that
+    `music.py`'s settings/providers/radio-stations surface should be
+    rebuilt against the real `music_provider_config`/`music_radio_state`
+    schema instead -- out of scope for a byte-faithful controller port.
+    """
+    if "community_music_settings" in dal.tables:
+        return
+
+    # `coordination` is ALSO bound by `bind_platform_tables()` above (same
+    # exact field list -- both groups ported it from the same real
+    # `004_add_missing_tables.sql` table independently) and
+    # `community_servers` by `bind_admin_tables()` below (a strict
+    # superset of the 4 fields this group's own `stream_service.py` reads
+    # -- `platform_server_name`/`link_type`/`is_primary`/`config`/
+    # `added_by`/`approved_by`/`verified_at`/`created_at` on top of this
+    # group's `community_id`/`platform`/`platform_server_id`/`status`).
+    # Both guarded on existence here (not redefined) so whichever group's
+    # binding runs first in this process wins -- for `coordination` that's
+    # inconsequential (identical fields either way); for `community_servers`
+    # this function intentionally uses `bind_admin_tables()`'s fuller field
+    # list even though this group only reads the narrower 4, so a caller
+    # that hits a streaming route before any admin route never ends up
+    # with an admin-incompatible narrower table bound first (the exact
+    # failure mode this docstring's `coordination`/`community_roles`
+    # history above already describes for a same-name guard chosen wrong).
+    if "coordination" not in dal.tables:
+        dal.define_table(
+            "coordination",
+            Field("entity_id", "string", length=255, notnull=True),
+            Field("platform", "string", length=50, notnull=True),
+            Field("server_id", "string", length=255),
+            Field("channel_id", "string", length=255),
+            Field("channel_name", "string", length=255),
+            Field("is_live", "boolean", default=False),
+            Field("viewer_count", "integer", default=0),
+            Field("live_since", "datetime"),
+            Field("stream_title", "text"),
+            Field("game_name", "string", length=255),
+            Field("thumbnail_url", "text"),
+            Field("last_updated", "datetime"),
+            migrate=migrate,
+        )
+
+    if "community_servers" not in dal.tables:
+        dal.define_table(
+            "community_servers",
+            Field("community_id", "integer", notnull=True),
+            Field("platform", "string", length=50, notnull=True),
+            Field("platform_server_id", "string", length=255, notnull=True),
+            Field("platform_server_name", "string", length=255),
+            Field("link_type", "string", length=50, default="standard"),
+            Field("status", "string", length=50, default="pending"),
+            Field("is_primary", "boolean", default=False),
+            Field("config", "json"),
+            Field("added_by", "integer"),
+            Field("approved_by", "integer"),
+            Field("verified_at", "datetime"),
+            Field("created_at", "datetime"),
+            migrate=migrate,
+        )
+
+    # --- Schema-gap tables (see module docstring above) ---------------
+
+    dal.define_table(
+        "community_music_settings",
+        Field("community_id", "integer", notnull=True, unique=True),
+        Field("default_provider", "string", length=50),
+        Field("autoplay_enabled", "boolean", default=False),
+        Field("volume_limit", "integer", default=100),
+        Field("allowed_genres", "json"),
+        Field("blocked_artists", "json"),
+        Field("require_dj_approval", "boolean", default=False),
+        Field("is_active", "boolean", default=True),
+        Field("created_at", "datetime"),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "community_music_providers",
+        Field("community_id", "integer", notnull=True),
+        Field("provider_name", "string", length=50, notnull=True),
+        Field("is_connected", "boolean", default=False),
+        Field("is_active", "boolean", default=False),
+        Field("oauth_expires_at", "datetime"),
+        Field("last_sync", "datetime"),
+        Field("config", "text"),
+        Field("created_at", "datetime"),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "community_radio_stations",
+        Field("community_id", "integer", notnull=True),
+        Field("name", "string", length=255, notnull=True),
+        Field("url", "string", length=2048, notnull=True),
+        Field("description", "text"),
+        Field("genre", "string", length=100),
+        Field("is_active", "boolean", default=True),
+        Field("created_by", "integer"),
+        Field("created_at", "datetime"),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "oauth_state_tokens",
+        Field("community_id", "integer", notnull=True),
+        Field("provider", "string", length=50, notnull=True),
+        Field("state_token", "string", length=255, notnull=True, unique=True),
+        Field("redirect_uri", "text"),
+        Field("expires_at", "datetime", notnull=True),
+        Field("created_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "oauth_tokens",
+        Field("community_id", "integer", notnull=True),
+        Field("provider", "string", length=50, notnull=True),
         migrate=migrate,
     )
 
@@ -752,22 +960,28 @@ def bind_platform_tables(dal: Any, *, migrate: bool = False) -> None:
         migrate=migrate,
     )
 
-    dal.define_table(
-        "coordination",
-        Field("entity_id", "string", length=255, notnull=True),
-        Field("platform", "string", length=50, notnull=True),
-        Field("server_id", "string", length=255),
-        Field("channel_id", "string", length=255),
-        Field("channel_name", "string", length=255),
-        Field("is_live", "boolean", default=False),
-        Field("viewer_count", "integer", default=0),
-        Field("live_since", "datetime"),
-        Field("stream_title", "text"),
-        Field("game_name", "string", length=255),
-        Field("thumbnail_url", "text"),
-        Field("last_updated", "datetime"),
-        migrate=migrate,
-    )
+    # Also bound by `bind_streaming_tables()` above (identical field list --
+    # both groups ported it from the same real `004_add_missing_tables.sql`
+    # table independently); guarded on existence here (not redefined) so
+    # whichever group's binding runs first in this shared, long-lived `dal`
+    # instance wins without a duplicate-define error.
+    if "coordination" not in dal.tables:
+        dal.define_table(
+            "coordination",
+            Field("entity_id", "string", length=255, notnull=True),
+            Field("platform", "string", length=50, notnull=True),
+            Field("server_id", "string", length=255),
+            Field("channel_id", "string", length=255),
+            Field("channel_name", "string", length=255),
+            Field("is_live", "boolean", default=False),
+            Field("viewer_count", "integer", default=0),
+            Field("live_since", "datetime"),
+            Field("stream_title", "text"),
+            Field("game_name", "string", length=255),
+            Field("thumbnail_url", "text"),
+            Field("last_updated", "datetime"),
+            migrate=migrate,
+        )
 
     dal.define_table(
         "hub_modules",
