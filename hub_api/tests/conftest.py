@@ -515,6 +515,222 @@ def service_key_headers() -> dict[str, str]:
     return {"X-Service-Key": SERVICE_API_KEY}
 
 
+#: Matches `flask_core.auth.DEFAULT_TENANT_SLUG` -- the always-visible global catalog tenant.
+GLOBAL_TENANT_SLUG = "global"
+#: A second, non-global tenant distinct from `TENANT_SLUG` -- proves the marketplace-catalog
+#: port's tenant-scoping never leaks a THIRD tenant's rows to `TENANT_SLUG`'s caller.
+OTHER_TENANT_SLUG = "other-corp"
+
+
+@pytest.fixture
+def marketplace_catalog_db(tmp_path: Any) -> Any:
+    """File-backed pydal DB for the marketplace-catalog port group, `migrate=True`.
+
+    Sync `dal` only, no `async_dal` -- this group never calls `*_async()`
+    (see `services/marketplace_catalog_service.py`'s module docstring), so
+    `hub_api/PORTING.md` Gotcha #2 (the executor-thread `sqlite:memory`
+    isolation gotcha) does not apply on its own terms. A `tmp_path`-backed
+    sqlite FILE is used anyway rather than `sqlite:memory` -- empirically,
+    running this fixture back-to-back across ~40 tests in the same process
+    as `tests/test_app_factory.py`'s own `sqlite:memory` `create_app()`
+    DAL caused `test_healthz_returns_200` to fail (`pydal.DAL`'s
+    thread-local connection-URI bookkeeping does not cleanly support many
+    short-lived `DAL("sqlite:memory")` instances sharing one process/
+    thread -- confirmed by bisecting which test file combination
+    reproduced it). A uniquely-named file per test sidesteps the shared-
+    URI collision entirely, matching `auth_db`'s own file-backed choice
+    (for an unrelated reason -- see that fixture's docstring).
+
+    Seeds three tenants (global, `TENANT_SLUG`, `OTHER_TENANT_SLUG`) and one
+    `marketplace_catalog` row per visibility case a caller can hit: a core row
+    (`tenant_id=None`, always visible), a global-tenant marketplace row (always
+    visible), `TENANT_SLUG`'s own private marketplace row (visible only to
+    `TENANT_SLUG`'s own caller or an anonymous global-only caller's absence
+    thereof), and `OTHER_TENANT_SLUG`'s private marketplace row (must NEVER be
+    visible to a `TENANT_SLUG` caller -- the cross-tenant-leak regression this
+    group's port fixes over Node's unscoped original).
+
+    Also seeds `hub_modules`/`hub_module_reviews`/`hub_module_installations`/
+    `communities` for `blueprints/v1/marketplace_modules.py`'s tests. Yields
+    `(dal, ids)` -- `ids` a dict of every id a test needs (`community_id`,
+    `published_module_id`, `unpublished_module_id`, `core_module_id`),
+    matching `community_db`'s own `(dal, community_id)` tuple-return
+    convention rather than attaching ad hoc attributes to the `DAL` object.
+    """
+    from services.schema import bind_marketplace_catalog_tables
+
+    dal = DAL(f"sqlite://{tmp_path / 'marketplace_catalog_test.db'}")
+    dal.define_table(
+        "tenants",
+        Field("slug", unique=True),
+        Field("display_name"),
+        Field("is_active", "boolean", default=True),
+    )
+    global_id = dal.tenants.insert(slug=GLOBAL_TENANT_SLUG, display_name="Global", is_active=True)
+    tenant_id = dal.tenants.insert(slug=TENANT_SLUG, display_name="Acme Corp", is_active=True)
+    other_id = dal.tenants.insert(slug=OTHER_TENANT_SLUG, display_name="Other Corp", is_active=True)
+    dal.commit()
+
+    bind_marketplace_catalog_tables(dal, migrate=True)
+
+    now = "2026-01-01 00:00:00"
+    dal.marketplace_catalog.insert(
+        source="core",
+        source_id=1,
+        name="core-widget",
+        display_name="Core Widget",
+        description="A core module",
+        category="utility",
+        is_core=True,
+        pricing_type="free",
+        price_cents=0,
+        pricing_model="flat",
+        version="1.0.0",
+        author="PenguinTech",
+        avg_rating=4.5,
+        review_count=2,
+        install_count=10,
+        created_at=now,
+        updated_at=now,
+        tenant_id=None,
+    )
+    dal.marketplace_catalog.insert(
+        source="marketplace",
+        source_id=1,
+        name="global-vendor-widget",
+        display_name="Global Vendor Widget",
+        description="A globally-approved vendor module",
+        category="utility",
+        is_core=False,
+        pricing_type="free",
+        price_cents=0,
+        pricing_model="flat",
+        version="1.0.0",
+        author="Vendor A",
+        avg_rating=4.0,
+        review_count=1,
+        install_count=5,
+        created_at=now,
+        updated_at=now,
+        tenant_id=global_id,
+    )
+    dal.marketplace_catalog.insert(
+        source="marketplace",
+        source_id=2,
+        name="acme-private-widget",
+        display_name="Acme Private Widget",
+        description="Acme Corp's own private vendor module",
+        category="utility",
+        is_core=False,
+        pricing_type="paid",
+        price_cents=500,
+        pricing_model="flat",
+        version="1.0.0",
+        author="Vendor B",
+        avg_rating=5.0,
+        review_count=1,
+        install_count=1,
+        created_at=now,
+        updated_at=now,
+        tenant_id=tenant_id,
+    )
+    dal.marketplace_catalog.insert(
+        source="marketplace",
+        source_id=3,
+        name="other-private-widget",
+        display_name="Other Corp Private Widget",
+        description="Other Corp's own private vendor module -- must never leak",
+        category="utility",
+        is_core=False,
+        pricing_type="paid",
+        price_cents=999,
+        pricing_model="flat",
+        version="1.0.0",
+        author="Vendor C",
+        avg_rating=3.0,
+        review_count=1,
+        install_count=1,
+        created_at=now,
+        updated_at=now,
+        tenant_id=other_id,
+    )
+
+    # `hub_modules`/`hub_module_reviews`/`hub_module_installations`/`communities`
+    # -- for `blueprints/v1/marketplace_modules.py` (moduleController.js port).
+    # `communities` is a fresh, minimal binding local to this fixture (only
+    # `name`/`display_name`/`logo_url`), never the shared `bind_auth_tables`/
+    # `ensure_community_tables` definitions -- this fixture owns its own DAL
+    # instance, so there is no double-`define_table` collision to guard against.
+    dal.define_table(
+        "communities",
+        Field("name"),
+        Field("display_name"),
+        Field("logo_url"),
+    )
+    community_id = dal.communities.insert(
+        name="test-community",
+        display_name="Test Community",
+        logo_url="https://example.com/logo.png",
+    )
+
+    published_id = dal.hub_modules.insert(
+        name="published-module",
+        display_name="Published Module",
+        description="A published core module",
+        version="1.0.0",
+        author="PenguinTech",
+        category="utility",
+        is_published=True,
+        is_core=False,
+        is_featured=True,
+        config_schema={"type": "object"},
+        created_at=now,
+        updated_at=now,
+    )
+    unpublished_id = dal.hub_modules.insert(
+        name="unpublished-module",
+        display_name="Unpublished Module",
+        version="0.1.0",
+        is_published=False,
+        is_core=False,
+        is_featured=False,
+        created_at=now,
+        updated_at=now,
+    )
+    core_module_id = dal.hub_modules.insert(
+        name="core-module",
+        display_name="Core Module",
+        version="2.0.0",
+        is_published=True,
+        is_core=True,
+        is_featured=False,
+        created_at=now,
+        updated_at=now,
+    )
+    dal.hub_module_reviews.insert(
+        module_id=published_id, community_id=community_id, user_id=1, rating=5, created_at=now
+    )
+    dal.hub_module_installations.insert(
+        community_id=community_id,
+        module_id=published_id,
+        is_enabled=True,
+        installed_at=now,
+        updated_at=now,
+    )
+    dal.commit()
+
+    yield (
+        dal,
+        {
+            "community_id": community_id,
+            "published_module_id": published_id,
+            "unpublished_module_id": unpublished_id,
+            "core_module_id": core_module_id,
+        },
+    )
+    dal.close()
+
+
 @pytest.fixture
 def user_auth_headers():
     """Factory fixture: `user_auth_headers(user_id=42)` -> Authorization header dict.

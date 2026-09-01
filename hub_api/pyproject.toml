@@ -115,6 +115,12 @@ convention = "google"
 # assert as blueprints/v2/platform.py above (`get_tenant_context` always
 # non-None on the success path for Scenario 2/4 routes).
 "blueprints/v1/analytics.py" = ["S101"]
+# Marketplace-catalog port group: `CatalogEntry`/`ModuleEntry`/`ModuleDetail`/
+# `ModuleSubscription`/etc DTO fields are deliberately camelCase to byte-match
+# `catalogService.js`'s `formatCatalogEntry`/`moduleService.js`'s `formatModule`
+# JSON shape (`sourceId`, `displayName`, `avgRating`, `communityLogo`, ...) --
+# same rationale as `blueprints/v1/auth.py`'s own N815 ignore above.
+"services/marketplace_catalog_service.py" = ["N815"]
 
 [tool.mypy]
 python_version = "3.13"

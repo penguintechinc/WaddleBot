@@ -1597,3 +1597,135 @@ def bind_tenant_tables(dal: Any, *, migrate: bool = False) -> None:
         Field("created_at", "datetime"),
         migrate=migrate,
     )
+
+
+def bind_marketplace_catalog_tables(dal: Any, *, migrate: bool = False) -> None:
+    """Define every table the marketplace-catalog group's port queries.
+
+    `app.py`/`routers/*.py`/`blueprints/__init__.py` are frozen (the
+    parallel port wave's auto-discovery contract -- see
+    `routers/_discovery.py`'s own docstring), so unlike `bind_auth_tables`
+    this is never called from `app.py::_bind_reference_tables`. Instead it
+    is idempotent (`dal.tables` membership guard, same idiom as
+    `services/community_common.py::ensure_community_tables`) and called at
+    the top of every `services/marketplace_catalog_service.py` function,
+    matching the pattern the Community-module port (M6) already
+    established once `app.py` stopped being editable.
+
+    `marketplace_catalog` is a read-only Postgres VIEW
+    (`config/postgres/migrations/059_marketplace_consolidation.sql`,
+    unions `hub_modules` + approved `marketplace_modules`), not a table --
+    pydal has no notion of "view" so it is bound as an ordinary table this
+    process only ever `select()`s (`migrate=True` in tests creates a real
+    throwaway TABLE with the same columns instead of a view; the test
+    fixture seeds rows directly rather than replicating the view's
+    Postgres-side UNION/aggregation, matching this repo's established
+    "one field definition, tests seed it directly" convention -- see
+    `tests/conftest.py::auth_db`). No single-column primary key exists on
+    the view, so `primarykey=["source", "source_id"]` (the view's own
+    natural composite key) is used instead, the same `primarykey=`
+    pattern `flask_core.app_bundle_tables.init_app_bundle_tables` uses for
+    `app_catalog`.
+
+    `hub_modules.is_featured` -- see this module's own docstring gap (4)
+    -- and `marketplace_modules` itself are NOT queried directly by
+    either ported controller (`catalogController.js` only ever queries
+    the `marketplace_catalog` view; `moduleController.js` only ever
+    queries `hub_modules`/`hub_module_reviews`/`hub_module_installations`)
+    -- `marketplace_modules` is therefore intentionally not bound here;
+    a future group porting vendor self-service
+    (`vendorController.js`) binds it then.
+    """
+    if "marketplace_catalog" in dal.tables:
+        return
+
+    dal.define_table(
+        "marketplace_catalog",
+        Field("source", "string", length=20, notnull=True),
+        Field("source_id", "integer", notnull=True),
+        Field("name", "string", length=255),
+        Field("display_name", "string", length=255),
+        Field("description", "text"),
+        Field("category", "string", length=100),
+        Field("icon_url", "text"),
+        Field("is_core", "boolean", default=False),
+        Field("pricing_type", "string", length=50, default="free"),
+        Field("price_cents", "integer", default=0),
+        Field("pricing_model", "string", length=50, default="flat"),
+        Field("version", "string", length=50),
+        Field("author", "string", length=255),
+        Field("webhook_url", "text"),
+        Field("communication_model", "string", length=50),
+        Field("integration_type", "string", length=50),
+        Field("avg_rating", "double", default=0),
+        Field("review_count", "integer", default=0),
+        Field("install_count", "integer", default=0),
+        Field("created_at", "datetime"),
+        Field("updated_at", "datetime"),
+        # NULL for 'core' rows (always globally visible); the owning
+        # tenant for 'marketplace' rows (backfilled to the global tenant
+        # by 059's own migration when unset). Filtered by
+        # `visible_tenant_ids()` -- see marketplace_catalog_service.py's
+        # module docstring for the cross-tenant-leak fix this closes.
+        Field("tenant_id", "integer"),
+        primarykey=["source", "source_id"],
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "hub_modules",
+        Field("name", "string", length=255, notnull=True, unique=True),
+        Field("display_name", "string", length=255),
+        Field("description", "text"),
+        Field("version", "string", length=50),
+        Field("author", "string", length=255),
+        Field("category", "string", length=100),
+        Field("icon_url", "text"),
+        Field("is_published", "boolean", default=False),
+        Field("is_core", "boolean", default=False),
+        # See module docstring gap (4) -- no numbered migration defines
+        # this column on hub_modules; bound anyway to stay byte-faithful
+        # to moduleService.js's create/update/format queries.
+        Field("is_featured", "boolean", default=False),
+        Field("config_schema", "json", default={}),
+        Field("created_at", "datetime"),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "hub_module_reviews",
+        Field("module_id", "integer", notnull=True),
+        Field("community_id", "integer"),
+        Field("user_id", "integer"),
+        Field("rating", "integer"),
+        Field("review_text", "text"),
+        Field("admin_notes", "text"),
+        Field("created_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "hub_module_installations",
+        Field("community_id", "integer", notnull=True),
+        Field("module_id", "integer"),
+        Field("installed_by", "integer"),
+        Field("config", "json", default={}),
+        Field("is_enabled", "boolean", default=True),
+        Field("installed_at", "datetime"),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    # Minimal projection -- schema-owned by
+    # `059_marketplace_consolidation.sql`'s extension of
+    # `017_add_marketplace.sql`'s original table; only the columns the
+    # catalog's install-status enrichment needs.
+    dal.define_table(
+        "marketplace_subscriptions",
+        Field("community_id", "integer", notnull=True),
+        Field("module_id", "integer", notnull=True),
+        Field("is_enabled", "boolean", default=True),
+        Field("tenant_id", "integer"),
+        migrate=migrate,
+    )
