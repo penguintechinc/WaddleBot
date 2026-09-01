@@ -34,6 +34,7 @@ from openapi.routes import register_openapi_docs
 from services.schema import (
     bind_ai_routing_tables,
     bind_lifecycle_tables,
+    bind_music_tables,
     bind_platform_tables,
     bind_token_billing_tables,
 )
@@ -93,6 +94,12 @@ def _bind_reference_tables(dal: Any) -> None:
     # app.py::_bind_reference_tables", appended after every existing
     # group's own bind_*_tables() call rather than interleaved with them.
     bind_token_billing_tables(dal)
+    # Music Station queue feature (new schema, not a Node port) --
+    # services/schema.py::bind_music_tables()'s own docstring explains why
+    # it follows PORTING.md's normal "call from _bind_reference_tables"
+    # checklist step instead of bind_streaming_tables()'s per-request
+    # lazy-bind workaround.
+    bind_music_tables(dal)
 
 
 def create_app(config: HubAPIConfig | None = None) -> Quart:

@@ -55,6 +55,11 @@ def conflict(message: str = "Conflict") -> ApiError:
     return ApiError(message, 409, "CONFLICT")
 
 
+def unprocessable(message: str = "Unprocessable") -> ApiError:
+    """422 -- request is well-formed but semantically rejected (policy/provider state)."""
+    return ApiError(message, 422, "UNPROCESSABLE")
+
+
 def payment_required(message: str = "This feature requires a higher plan") -> ApiError:
     """402 -- the two-gate `feature_enabled(...)` check denied the request.
 

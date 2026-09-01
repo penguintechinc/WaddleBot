@@ -2584,3 +2584,85 @@ def bind_token_billing_tables(dal: Any, *, migrate: bool = False) -> None:
         Field("created_at", "datetime"),
         migrate=migrate,
     )
+
+
+def bind_music_tables(dal: Any, *, migrate: bool = False) -> None:
+    """Define every table the Music Station queue feature queries.
+
+    New-feature schema (`config/postgres/migrations/072_music_station.sql`),
+    not a Node port -- backs `services/community_music_queue_service.py` +
+    `blueprints/v1/community_music_queue.py`. `migrate=False` in production
+    (schema owned by the numbered migration, same contract as every other
+    `bind_<group>_tables()` in this file); tests pass `migrate=True` against
+    a throwaway sqlite file (`hub_api/PORTING.md` Gotcha #2).
+
+    `music_station_queue` (not `music_queue`) -- see 072's own migration
+    file header comment: `012_add_music_providers.sql` already created a
+    real, deployed `music_queue` table with a different, denormalized
+    column set that no application code queries today; reusing that name
+    here would silently bind the WRONG columns in any environment where
+    012 already ran (`dal.define_table` maps onto whatever really exists),
+    so this feature owns its own table name instead.
+
+    Called from `app.py::_bind_reference_tables()` (this is new-feature
+    schema this app owns outright, unlike the M7 Streaming group's
+    schema-gap tables, which is why -- unlike `bind_streaming_tables()`
+    above -- this function follows `hub_api/PORTING.md`'s normal checklist
+    step 2 instead of that group's per-request lazy-bind workaround).
+    """
+    if "music_tracks" in dal.tables:
+        return
+
+    dal.define_table(
+        "music_tracks",
+        Field("tenant_id", "integer", notnull=True),
+        Field("provider", "string", length=20, notnull=True),
+        Field("external_id", "string", length=512, notnull=True),
+        Field("title", "string", length=500, notnull=True),
+        Field("artist", "string", length=500, notnull=True),
+        Field("duration_ms", "integer", notnull=True, default=0),
+        Field("artwork_url", "text"),
+        Field("url", "text", notnull=True),
+        Field("created_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "music_station_queue",
+        Field("tenant_id", "integer", notnull=True),
+        Field("community_id", "integer", notnull=True),
+        Field("track_id", "integer", notnull=True),
+        Field("position", "integer", notnull=True, default=0),
+        Field("status", "string", length=20, notnull=True, default="queued"),
+        Field("source", "string", length=20, notnull=True, default="request"),
+        Field("playlist_id", "string", length=64),
+        Field("requested_by", "integer"),
+        Field("added_at", "datetime"),
+        Field("started_at", "datetime"),
+        Field("ended_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "music_policy",
+        Field("tenant_id", "integer", notnull=True),
+        Field("community_id", "integer", notnull=True, unique=True),
+        Field("song_requests_allowed", "boolean", notnull=True, default=True),
+        Field("requests_category_restricted", "boolean", notnull=True, default=False),
+        Field("updated_by", "integer"),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "music_moderation_log",
+        Field("tenant_id", "integer", notnull=True),
+        Field("community_id", "integer", notnull=True),
+        Field("actor_user_id", "integer"),
+        Field("action", "string", length=30, notnull=True),
+        Field("target_queue_id", "integer"),
+        Field("target_playlist_id", "string", length=64),
+        Field("reason", "text"),
+        Field("created_at", "datetime"),
+        migrate=migrate,
+    )
