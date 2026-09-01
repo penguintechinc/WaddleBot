@@ -36,6 +36,9 @@ export async function getForms(req, res) {
 export async function getForm(req, res) {
   try {
     const { communityId, formId } = req.params;
+    if (!/^\d+$/.test(formId)) {
+      return res.status(400).json({ success: false, error: 'formId must be a positive integer' });
+    }
     const response = await axios.get(`${ENGAGEMENT_URL}/api/v1/forms/${formId}`, {
       params: { community_id: communityId },
       headers: { Authorization: req.headers.authorization }
@@ -96,6 +99,9 @@ export async function createForm(req, res) {
 export async function deleteForm(req, res) {
   try {
     const { communityId, formId } = req.params;
+    if (!/^\d+$/.test(formId)) {
+      return res.status(400).json({ success: false, error: 'formId must be a positive integer' });
+    }
     await axios.delete(`${ENGAGEMENT_URL}/api/v1/forms/${formId}`, {
       params: { community_id: communityId },
       headers: { Authorization: req.headers.authorization }
@@ -116,6 +122,9 @@ export async function deleteForm(req, res) {
 export async function getFormSubmissions(req, res) {
   try {
     const { communityId, formId } = req.params;
+    if (!/^\d+$/.test(formId)) {
+      return res.status(400).json({ success: false, error: 'formId must be a positive integer' });
+    }
     const response = await axios.get(`${ENGAGEMENT_URL}/api/v1/forms/${formId}/submissions`, {
       params: { community_id: communityId },
       headers: { Authorization: req.headers.authorization }

@@ -26,6 +26,8 @@ router.get(
 router.get(
   '/:communityId/polls/:pollId',
   requireCommunityAdmin,
+  validators.id('pollId'),
+  validateRequest,
   pollsController.getPoll
 );
 
@@ -48,6 +50,8 @@ router.post(
 router.delete(
   '/:communityId/polls/:pollId',
   requireCommunityAdmin,
+  validators.id('pollId'),
+  validateRequest,
   pollsController.deletePoll
 );
 

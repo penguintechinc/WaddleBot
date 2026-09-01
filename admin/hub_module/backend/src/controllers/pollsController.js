@@ -36,6 +36,9 @@ export async function getPolls(req, res) {
 export async function getPoll(req, res) {
   try {
     const { communityId, pollId } = req.params;
+    if (!/^\d+$/.test(pollId)) {
+      return res.status(400).json({ success: false, error: 'pollId must be a positive integer' });
+    }
     const response = await axios.get(`${ENGAGEMENT_URL}/api/v1/polls/${pollId}`, {
       params: { community_id: communityId },
       headers: { Authorization: req.headers.authorization }
@@ -96,6 +99,9 @@ export async function createPoll(req, res) {
 export async function deletePoll(req, res) {
   try {
     const { communityId, pollId } = req.params;
+    if (!/^\d+$/.test(pollId)) {
+      return res.status(400).json({ success: false, error: 'pollId must be a positive integer' });
+    }
     await axios.delete(`${ENGAGEMENT_URL}/api/v1/polls/${pollId}`, {
       params: { community_id: communityId },
       headers: { Authorization: req.headers.authorization }
