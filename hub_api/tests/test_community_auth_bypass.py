@@ -35,17 +35,24 @@ from blueprints import register_blueprints
 # 401 (missing JWT for tenant routes, missing/invalid service key for
 # internal routes -- both surface as 401, so one assertion covers both).
 #
-# `GET /public/communities/<id>/profile` (community_profile.py) is the
-# one Core-tenancy route that's ALSO deliberately pre-auth -- byte-faithful
-# port of Node's own `routes/public.js`, no `@tenant_middleware` by design
-# (see that handler's own docstring/comment). This app-fixture (no
-# `async_dal` in `app.config`, only `dal`) can't actually serve it, but
-# that's an artifact of this exhaustive sweep's minimal fixture, not a
-# missing auth check -- the per-group `test_v1_community_profile_
-# blueprint.py` covers this route's real (200) success path.
+# `GET /public/communities/<id>/profile` (community_profile.py) and
+# `GET /public/communities/<id>` (public.py's own `get_community`, M3
+# Platform-admin/Public group) are the two Core-tenancy routes that are
+# ALSO deliberately pre-auth -- byte-faithful ports of Node's own
+# `routes/public.js`, no `@tenant_middleware` by design (see each
+# handler's own docstring/comment). This app-fixture (no `async_dal` in
+# `app.config`, only `dal`) can't actually serve either, but that's an
+# artifact of this exhaustive sweep's minimal fixture, not a missing auth
+# check -- the per-group `test_v1_community_profile_blueprint.py` /
+# `test_v1_platform_blueprint.py` cover each route's real (200) success
+# path. (`get_community`'s endpoint name is the only other `public.py`
+# handler this sweep's `"community" in rule.endpoint` filter matches --
+# `list_communities`/`get_spotlighted_communities` don't, since
+# "community" (singular) isn't a substring of "communities".)
 _EXEMPT_PATHS = {
     ("POST", "/api/v1/auth/login"),
     ("GET", "/api/v1/public/communities/1/profile"),
+    ("GET", "/api/v1/public/communities/1"),
 }
 
 

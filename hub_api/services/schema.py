@@ -206,15 +206,20 @@ def bind_auth_tables(dal: Any, *, migrate: bool = False) -> None:
         Field("member_count", "integer", default=0),
         Field("config", "json"),
         # Columns below added by the M3 Platform-admin group (adminController.js
-        # /superadminController.js) and the M2 Core Tenancy-Misc group
-        # (communityProfileController.js / joinRequestController.js port,
-        # see `hub_api/PORTING.md`) -- `communities` is bound once, here, by
-        # M1; every column any later group needs joins this same Field list
-        # rather than a second define_table() call (pydal allows exactly one
-        # per table name per DAL instance). `tenant_id`, `description`,
-        # `platform`, `owner_id`, `join_mode`, `is_public`, `deleted_at`
-        # match 000_create_base_schema.sql + 058_tenants_and_claims.sql's
-        # `ALTER TABLE communities ADD COLUMN tenant_id` verbatim.
+        # /superadminController.js), the M2 Core Tenancy-Misc group
+        # (communityProfileController.js / joinRequestController.js port),
+        # and the M3 Platform-admin/Public group (platformController.js/
+        # publicController.js -- see `hub_api/PORTING.md`) -- `communities`
+        # is bound once, here, by M1; every column any later group needs
+        # joins this same Field list rather than a second define_table()
+        # call (pydal allows exactly one per table name per DAL instance).
+        # `tenant_id`, `description`, `platform`, `owner_id`, `join_mode`,
+        # `is_public`, `deleted_at` match 000_create_base_schema.sql +
+        # 058_tenants_and_claims.sql's `ALTER TABLE communities ADD COLUMN
+        # tenant_id` verbatim. `tenant_id` is NOT NULL in Postgres -- every
+        # public/platform-admin query that lists communities MUST filter on
+        # this (security.md Tenant Isolation); see services/public_service.
+        # py's module docstring for the pre-auth resolution mechanism.
         # `about_extended`, `social_links`, `website_url`,
         # `discord_invite_url`, `visibility` are a pre-existing schema gap:
         # `communityProfileController.js`'s own raw SQL reads/writes these
@@ -225,6 +230,9 @@ def bind_auth_tables(dal: Any, *, migrate: bool = False) -> None:
         # touching these columns 500s against real Postgres exactly like
         # Node's own controller does today. Needs a migration to
         # reconcile -- out of scope for a "no schema changes" port PR.
+        # `logo_url`/`banner_url`/`primary_platform` are genuine columns
+        # platformController.js/publicController.js read, same
+        # 000_create_base_schema.sql origin as the rest of this list.
         Field("tenant_id", "integer"),
         Field("description", "text"),
         Field("about_extended", "text"),  # gap -- see docstring above
@@ -232,6 +240,9 @@ def bind_auth_tables(dal: Any, *, migrate: bool = False) -> None:
         Field("website_url", "string", length=500),  # gap -- see docstring above
         Field("discord_invite_url", "string", length=500),  # gap -- see docstring above
         Field("visibility", "string", length=30, default="public"),  # gap -- see docstring above
+        Field("logo_url", "text"),
+        Field("banner_url", "text"),
+        Field("primary_platform", "string", length=50),
         Field("platform", "string", length=50, default="discord"),
         Field("platform_server_id", "string", length=255),
         # VARCHAR in Postgres, not a hub_users.id FK -- see community_members.user_id below.
@@ -257,16 +268,35 @@ def bind_auth_tables(dal: Any, *, migrate: bool = False) -> None:
         # not a FK to hub_users.id -- bound as string and callers pass
         # str(user_id), matching how Node's pg driver serializes it.
         Field("user_id", "string", length=255),
+        # platform/platform_user_id/display_name/reputation added by the M3
+        # group (platformController.js's getUsers/getUser/getStats) -- all
+        # real columns in 000_create_base_schema.sql.
+        Field("platform", "string", length=50),
+        Field("platform_user_id", "string", length=255),
+        Field("display_name", "string", length=255),
+        Field("reputation", "integer", default=600),
         Field("role", "string", length=50, default="member"),
         Field("is_active", "boolean", default=True),
         Field("joined_at", "datetime"),
+        # Gap (4): platformController.js's getUsers()/getUser()/getStats()
+        # all reference `community_members.last_activity`/`created_at`, but
+        # no numbered migration (nor init.sql) ever adds either -- only an
+        # unrelated `analytics_suspected_bots.last_activity_at` exists. Same
+        # class of pre-existing gap as (1)/(2)/(3): bound here to stay
+        # byte-faithful to Node; a real query against either 500s exactly
+        # like Node's does today. Needs a migration to reconcile -- out of
+        # scope here.
+        Field("last_activity", "datetime"),
+        Field("created_at", "datetime"),
         # Columns below added by the M3 Platform-admin group -- same
         # single-define_table() rationale as `communities` above.
-        # `reputation`/`claims_cache` match 000_create_base_schema.sql /
-        # 058_tenants_and_claims.sql exactly. `community_role_id` is the
-        # same FK to community_roles.id (`058_tenants_and_claims.sql`'s
-        # "1f. Update community_members" ALTER) the M2 Core Tenancy-Misc
-        # group's `services/community_authz.py` also relies on for its
+        # `claims_cache` matches 000_create_base_schema.sql /
+        # 058_tenants_and_claims.sql exactly (`reputation` is already bound
+        # above by the M3 Platform-admin/Public group -- same column, not
+        # duplicated). `community_role_id` is the same FK to
+        # community_roles.id (`058_tenants_and_claims.sql`'s "1f. Update
+        # community_members" ALTER) the M2 Core Tenancy-Misc group's
+        # `services/community_authz.py` also relies on for its
         # per-community admin check -- bound once here, not duplicated.
         # `removed_at`/`removed_by`/`removal_reason` are a pre-existing
         # schema gap (adminController.js's removeMember() references them,
@@ -274,7 +304,6 @@ def bind_auth_tables(dal: Any, *, migrate: bool = False) -> None:
         # hub_users.email_verification_expires above; bound here to stay
         # byte-faithful to Node, which 500s against real Postgres today for
         # the exact same reason).
-        Field("reputation", "integer", default=600),
         Field("community_role_id", "integer"),
         Field("claims_cache", "json"),
         Field("removed_at", "datetime"),
@@ -343,6 +372,167 @@ def bind_auth_tables(dal: Any, *, migrate: bool = False) -> None:
         "hub_settings",
         Field("setting_key", "string", length=100, notnull=True),
         Field("setting_value", "text"),
+        migrate=migrate,
+    )
+
+
+def bind_platform_tables(dal: Any, *, migrate: bool = False) -> None:
+    """Define every table the M3 Platform-admin/Public group queries.
+
+    Calls `bind_auth_tables()` first (dependency: `communities`,
+    `community_members`, `hub_settings`, `tenants` all live there, extended
+    in place -- see that function's own field-list comments), then defines
+    this group's own new tables. Idempotent per-DAL-instance, same guard
+    pattern as `bind_auth_tables()`.
+
+    Gap (5): `platformController.js`'s `getUsers()`/`getUser()`/
+    `updateUserRole()`/`deactivateUser()` all query a `platform_admins`
+    table that does not exist in ANY migration OR `init.sql` -- a step
+    beyond gaps (1)-(4) above (those were missing *columns* on real
+    tables; this is a missing *table*). Combined with `requirePlatformAdmin`
+    checking `req.user.roles.includes('platform-admin')`, a claim
+    `createSession()` (authController.js) never actually populates (only
+    'admin'/'super_admin'/'vendor' are ever pushed), this makes
+    `platformController.js`'s entire route group unreachable AND
+    non-functional in Node today: every caller gets 403 (no JWT ever
+    carries the role) and, even if that were bypassed, half the queries
+    would 500 (table absent). This port's authz fix (see
+    `blueprints/v1/platform.py`'s module docstring) grants access via the
+    existing `*:admin` global-admin wildcard scope instead of the
+    never-populated role string -- restoring the group to reachable AND
+    functional, matching the evident product intent (Node's own
+    `createSession()` pushes 'admin' for `is_super_admin`, strongly
+    suggesting a global admin was always meant to satisfy this check).
+    `platform_admins` is bound here (byte-faithful field guesses from the
+    controller's own SELECT/INSERT usage) so the group is fully testable;
+    real Postgres needs a migration to add the table before this is
+    functional in a live environment -- tracked as a follow-up, not
+    silently invented schema.
+
+    Gap (6): `getModuleRegistry()` queries a `collector_modules` table,
+    likewise absent from every migration and `init.sql`. Same treatment:
+    bound here from the controller's own column usage, real-environment
+    functionality blocked on a follow-up migration.
+    """
+    if "platform_admins" in dal.tables:
+        return
+
+    bind_auth_tables(dal, migrate=migrate)
+
+    dal.define_table(
+        "platform_admins",
+        Field("user_id", "integer", notnull=True),
+        Field("role", "string", length=50),
+        Field("is_active", "boolean", default=True),
+        Field("deactivated_at", "datetime"),
+        Field("created_at", "datetime"),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "collector_modules",
+        Field("module_name", "string", length=255, notnull=True),
+        Field("module_version", "string", length=50),
+        Field("platform", "string", length=50),
+        Field("endpoint_url", "text"),
+        Field("status", "string", length=50),
+        Field("last_heartbeat", "datetime"),
+        Field("created_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "audit_log",
+        Field("user_id", "integer"),
+        Field("action", "string", length=100, notnull=True),
+        Field("target_type", "string", length=50),
+        Field("target_id", "string", length=255),
+        Field("details", "json"),
+        Field("ip_address", "string", length=45),
+        Field("user_agent", "text"),
+        Field("created_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "coordination",
+        Field("entity_id", "string", length=255, notnull=True),
+        Field("platform", "string", length=50, notnull=True),
+        Field("server_id", "string", length=255),
+        Field("channel_id", "string", length=255),
+        Field("channel_name", "string", length=255),
+        Field("is_live", "boolean", default=False),
+        Field("viewer_count", "integer", default=0),
+        Field("live_since", "datetime"),
+        Field("stream_title", "text"),
+        Field("game_name", "string", length=255),
+        Field("thumbnail_url", "text"),
+        Field("last_updated", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "hub_modules",
+        Field("name", "string", length=255, notnull=True),
+        Field("display_name", "string", length=255),
+        Field("description", "text"),
+        Field("version", "string", length=50),
+        Field("author", "string", length=255),
+        Field("category", "string", length=100),
+        Field("icon_url", "text"),
+        Field("is_published", "boolean", default=False),
+        Field("is_core", "boolean", default=False),
+        Field("config_schema", "json"),
+        Field("created_at", "datetime"),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "hub_module_reviews",
+        Field("module_id", "integer"),
+        Field("community_id", "integer"),
+        Field("user_id", "integer"),
+        Field("rating", "integer"),
+        Field("review_text", "text"),
+        Field("admin_notes", "text"),
+        Field("created_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "hub_module_installations",
+        Field("community_id", "integer", notnull=True),
+        Field("module_id", "integer"),
+        Field("installed_by", "integer"),
+        Field("config", "json"),
+        Field("is_enabled", "boolean", default=True),
+        Field("installed_at", "datetime"),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "platform_integrations",
+        Field("platform", "string", length=50, notnull=True),
+        Field("integration_type", "string", length=20, notnull=True),
+        Field("community_id", "integer"),
+        Field("user_id", "integer"),
+        Field("access_token", "text"),
+        Field("refresh_token", "text"),
+        Field("client_id", "string", length=255),
+        Field("client_secret", "text"),
+        Field("token_type", "string", length=50, default="Bearer"),
+        Field("expires_at", "datetime"),
+        Field("scopes", "list:string"),
+        Field("config_data", "json"),
+        Field("is_active", "boolean", default=True),
+        Field("is_encrypted", "boolean", default=True),
+        Field("created_at", "datetime"),
+        Field("updated_at", "datetime"),
+        Field("created_by_user_id", "integer"),
+        Field("updated_by_user_id", "integer"),
         migrate=migrate,
     )
 

@@ -27,6 +27,7 @@ from pydal import DAL, Field
 from services.schema import (
     bind_admin_tables,
     bind_auth_tables,
+    bind_platform_tables,
     bind_superadmin_tenant_fields,
     bind_tenant_tables,
 )
@@ -95,6 +96,38 @@ def auth_db(tmp_path: Any) -> Any:
     # table once here, still on the main thread, forces that DDL to run
     # before any worker thread exists -- a test-only concern (production
     # Postgres has no such lazy-CREATE-races-a-thread failure mode).
+    for table_name in dal.tables:
+        dal(dal[table_name]).count()
+    yield async_dal
+    dal.close()
+
+
+@pytest.fixture
+def platform_db(tmp_path: Any) -> Any:
+    """File-backed `AsyncDAL` for the M3 Platform-admin/Public group.
+
+    Same `tmp_path`-backed-sqlite-file / `pool_size=1` / touch-every-table
+    rationale as `auth_db` above (see its own docstring) -- additive, new
+    fixture rather than editing `auth_db` in place (`hub_api/PORTING.md`'s
+    Test pattern: "add your own `bind_<group>_tables()` call ... never
+    edit the M1 group's own fixture logic"). `bind_platform_tables()`
+    calls `bind_auth_tables()` itself, so this fixture alone covers every
+    table this group's blueprints query.
+    """
+    async_dal = AsyncDAL(f"sqlite://{tmp_path / 'platform_test.db'}", pool_size=1)
+    dal = async_dal.dal
+    dal.define_table(
+        "tenants",
+        Field("slug", unique=True),
+        Field("display_name"),
+        Field("logo_url"),
+        Field("is_global", "boolean", default=False),
+        Field("is_active", "boolean", default=True),
+        Field("config", "json"),
+    )
+    bind_platform_tables(dal, migrate=True)
+    dal.tenants.insert(slug=TENANT_SLUG, display_name="Acme Corp", is_active=True)
+    dal.commit()
     for table_name in dal.tables:
         dal(dal[table_name]).count()
     yield async_dal
