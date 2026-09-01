@@ -2,7 +2,16 @@
 
 ## Overview
 
-All Waddles APIs are routed through the **Hub Module**, which provides centralized routing, authentication, and rate limiting. Kong API Gateway has been removed in favor of direct service routing through the Hub Module.
+**Scope note:** this reference covers the pre-v3.0.x per-module API surface (router, marketplace,
+identity-core, etc.), which still runs today as legacy Deployments alongside the v3 8-container
+pipeline — see [`ARCHITECTURE.md`](../ARCHITECTURE.md#build-status-caveats). For the v3
+control-plane API (hub-api: tenancy, marketplace, billing, AI routing, MCP), see
+[`hub_api/README.md`](../../hub_api/README.md) and its OpenAPI spec under `hub_api/openapi/`.
+
+All legacy Waddles APIs are routed through the **Hub Module**, which provides centralized routing,
+authentication, and rate limiting. There is no Kong or other third-party API gateway in this
+repo — routing is direct service-to-service through the Hub Module, and in Kubernetes, external
+traffic terminates at Ingress/HTTPRoute before reaching it.
 
 The Hub Module acts as the single entry point for all API requests, handling:
 - API key authentication via `X-API-Key` header

@@ -33,10 +33,9 @@ Waddles is a microservices-based application designed for Kubernetes deployment.
 - **4 Platform Action Modules**: Discord, Slack, Twitch, YouTube
 
 **Deployment Options**:
-- Automated installation scripts (MicroK8s, kind, minikube)
-- Helm chart (recommended for production)
-- Raw Kubernetes manifests
-- GitHub Actions CI/CD (automated deployments)
+- Automated installation scripts (MicroK8s, kind, minikube) — wrap Helm
+- Helm chart directly (`helm install`/`helm upgrade`) — the only supported method
+- GitHub Actions CI/CD (automated Helm deployments to beta)
 
 ---
 
@@ -127,12 +126,17 @@ cd /home/penguin/code/Waddles/k8s
 
 ## Deployment Tool by Environment
 
-| Environment | Tool | Rationale |
-|---|---|---|
-| **Beta** (`dal2-beta`) | **Helm** | Release tracking, rollback history, atomic upgrades, values-based config per env |
-| **Alpha** (local/minikube) | **Kustomize** | Lightweight, no Helm dependency for local dev, fast iteration |
+**Helm is the only supported deployment path, alpha through production** — see
+[`QUICKSTART.md`](../QUICKSTART.md#deploy-with-helm). `k8s/kustomize/` exists in this repo but is
+deprecated (see [`ARCHITECTURE.md`](../ARCHITECTURE.md#build-status-caveats)); do not use it for
+new deployments. The install scripts below (`install-microk8s.sh`, `install-k8s.sh`) also expose a
+`--manifests` flag that applies `k8s/manifests/` via Kustomize — that directory does not exist in
+this repo today, so `--manifests` is non-functional. Use the default `--helm` deployment method.
 
-> **This split is canonical.** Do not mix deployment tools within an environment.
+| Environment | Tool |
+|---|---|
+| **Beta** (`dal2-beta`) | **Helm** — release tracking, rollback history, atomic upgrades |
+| **Alpha** (local/MicroK8s/kind/minikube) | **Helm** |
 
 ### Beta Deploy Command
 
@@ -157,9 +161,6 @@ helm upgrade --install waddlebot k8s/helm/waddlebot \
 ```bash
 # Full installation with image builds
 ./install-microk8s.sh --build-images
-
-# Using raw manifests instead of Helm
-./install-microk8s.sh --manifests --build-images
 
 # Skip MicroK8s setup (if already configured)
 ./install-microk8s.sh --skip-setup --build-images
@@ -216,218 +217,9 @@ helm install waddlebot ./k8s/helm/waddlebot \
 - Release management
 - Values file customization
 
-### Method 3: Raw Manifests
-
-**Deploy with Kustomize**:
-```bash
-kubectl apply -k ./k8s/manifests/
-```
-
-**Deploy with kubectl**:
-```bash
-kubectl apply -f ./k8s/manifests/namespace.yaml
-kubectl apply -f ./k8s/manifests/configmap.yaml
-kubectl apply -f ./k8s/manifests/secrets.yaml
-kubectl apply -f ./k8s/manifests/infrastructure/
-kubectl apply -f ./k8s/manifests/core/
-kubectl apply -f ./k8s/manifests/collectors/
-kubectl apply -f ./k8s/manifests/interactive/
-kubectl apply -f ./k8s/manifests/pushing/
-kubectl apply -f ./k8s/manifests/ingress.yaml
-```
-
-**Advantages**:
-- Simple, transparent YAML files
-- No Helm dependency
-- Direct kubectl control
-- Easy to version control
-
 ---
 
-## Kubectl Deployment Steps
-
-### Step 1: Create Namespace
-
-```bash
-kubectl create namespace waddlebot
-```
-
-**Verify**:
-```bash
-kubectl get namespace waddlebot
-```
-
-### Step 2: Configure Secrets
-
-**Create secrets file** (do NOT commit to git):
-```yaml
-# k8s/manifests/secrets.yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: waddlebot-secrets
-  namespace: waddlebot
-type: Opaque
-stringData:
-  # Database
-  POSTGRES_PASSWORD: "your-secure-password"
-  DB_PASSWORD: "your-secure-password"
-
-  # Redis
-  REDIS_PASSWORD: "your-redis-password"
-
-  # MinIO
-  MINIO_ROOT_USER: "admin"
-  MINIO_ROOT_PASSWORD: "your-minio-password"
-  MINIO_ACCESS_KEY: "admin"
-  MINIO_SECRET_KEY: "your-minio-password"
-
-  # Platform API Keys
-  TWITCH_CLIENT_ID: "your-twitch-client-id"
-  TWITCH_CLIENT_SECRET: "your-twitch-secret"
-  DISCORD_BOT_TOKEN: "your-discord-token"
-  SLACK_BOT_TOKEN: "your-slack-token"
-  YOUTUBE_API_KEY: "your-youtube-key"
-
-  # AI Providers
-  OPENAI_API_KEY: "your-openai-key"
-```
-
-**Apply secrets**:
-```bash
-kubectl apply -f k8s/manifests/secrets.yaml
-```
-
-### Step 3: Deploy Infrastructure Services
-
-**PostgreSQL**:
-```bash
-kubectl apply -f k8s/manifests/infrastructure/postgres.yaml
-```
-
-**Redis**:
-```bash
-kubectl apply -f k8s/manifests/infrastructure/redis.yaml
-```
-
-**MinIO**:
-```bash
-kubectl apply -f k8s/manifests/infrastructure/minio.yaml
-```
-
-**Qdrant**:
-```bash
-kubectl apply -f k8s/manifests/infrastructure/qdrant.yaml
-```
-
-**Ollama**:
-```bash
-kubectl apply -f k8s/manifests/infrastructure/ollama.yaml
-```
-
-**Verify infrastructure**:
-```bash
-kubectl get pods -n waddlebot -l tier=infrastructure
-kubectl get svc -n waddlebot -l tier=infrastructure
-```
-
-**Wait for infrastructure to be ready**:
-```bash
-kubectl wait --for=condition=ready pod -l tier=infrastructure -n waddlebot --timeout=300s
-```
-
-### Step 4: Deploy Core Modules
-
-**Router (Central Processing)**:
-```bash
-kubectl apply -f k8s/manifests/core/router.yaml
-```
-
-**Hub (Admin Portal)**:
-```bash
-kubectl apply -f k8s/manifests/core/hub.yaml
-```
-
-**Identity, Labels, Community, etc.**:
-```bash
-kubectl apply -f k8s/manifests/core/identity.yaml
-kubectl apply -f k8s/manifests/core/labels.yaml
-kubectl apply -f k8s/manifests/core/community.yaml
-kubectl apply -f k8s/manifests/core/reputation.yaml
-kubectl apply -f k8s/manifests/core/browser-source.yaml
-kubectl apply -f k8s/manifests/core/ai-researcher.yaml
-```
-
-**Verify core modules**:
-```bash
-kubectl get pods -n waddlebot -l tier=core
-```
-
-### Step 5: Deploy Collector Modules
-
-**Platform Collectors**:
-```bash
-kubectl apply -f k8s/manifests/collectors/twitch.yaml
-kubectl apply -f k8s/manifests/collectors/discord.yaml
-kubectl apply -f k8s/manifests/collectors/slack.yaml
-kubectl apply -f k8s/manifests/collectors/youtube-live.yaml
-kubectl apply -f k8s/manifests/collectors/kick.yaml
-```
-
-**Verify collectors**:
-```bash
-kubectl get pods -n waddlebot -l tier=collector
-```
-
-### Step 6: Deploy Interactive Modules
-
-**Interactive Action Modules**:
-```bash
-kubectl apply -f k8s/manifests/interactive/ai.yaml
-kubectl apply -f k8s/manifests/interactive/alias.yaml
-kubectl apply -f k8s/manifests/interactive/shoutout.yaml
-kubectl apply -f k8s/manifests/interactive/inventory.yaml
-kubectl apply -f k8s/manifests/interactive/calendar.yaml
-kubectl apply -f k8s/manifests/interactive/memories.yaml
-kubectl apply -f k8s/manifests/interactive/youtube-music.yaml
-kubectl apply -f k8s/manifests/interactive/spotify.yaml
-kubectl apply -f k8s/manifests/interactive/loyalty.yaml
-```
-
-**Verify interactive modules**:
-```bash
-kubectl get pods -n waddlebot -l tier=interactive
-```
-
-### Step 7: Deploy Platform Action Modules
-
-**Platform Pushers**:
-```bash
-kubectl apply -f k8s/manifests/pushing/discord-action.yaml
-kubectl apply -f k8s/manifests/pushing/slack-action.yaml
-kubectl apply -f k8s/manifests/pushing/twitch-action.yaml
-kubectl apply -f k8s/manifests/pushing/youtube-action.yaml
-```
-
-### Step 8: Configure Ingress
-
-**Apply ingress**:
-```bash
-kubectl apply -f k8s/manifests/ingress.yaml
-```
-
-**Add to /etc/hosts**:
-```bash
-echo "127.0.0.1 waddlebot.local" | sudo tee -a /etc/hosts
-```
-
-**Verify ingress**:
-```bash
-kubectl get ingress -n waddlebot
-kubectl describe ingress waddlebot-ingress -n waddlebot
-```
-
-### Step 9: Verify Deployment
+## Verify Deployment
 
 **Check all pods**:
 ```bash
@@ -1158,7 +950,7 @@ kubectl describe nodes | grep -A 5 "Allocated resources"
 
 # Delete and recreate PVC (WARNING: data loss)
 kubectl delete pvc postgres-pvc -n waddlebot
-kubectl apply -f k8s/manifests/infrastructure/postgres.yaml
+helm upgrade waddlebot ./k8s/helm/waddlebot -n waddlebot -f ./k8s/helm/waddlebot/values-<env>.yaml
 ```
 
 ### Ingress Not Working
@@ -1579,18 +1371,13 @@ spec:
 
 ## Related Documentation
 
-- **WORKFLOWS.md**: GitHub Actions CI/CD workflows
-- **STANDARDS.md**: Microservices architecture patterns
-- **k8s/README.md**: Kubernetes deployment overview
-- **k8s/QUICKSTART.md**: Quick start guide
-- **k8s/INSTALL.md**: Installation guide
-- **k8s/hpa/README.md**: Horizontal Pod Autoscaler guide
-- **k8s/helm/waddlebot/README.md**: Helm chart documentation
+- [`QUICKSTART.md`](../QUICKSTART.md) — fastest path to a running Helm deployment
+- [`ARCHITECTURE.md`](../ARCHITECTURE.md) — the v3.0.x 8-container pipeline and build status
+- [`WORKFLOWS.md`](../WORKFLOWS.md) — GitHub Actions CI/CD workflows
+- [`k8s/hpa/README.md`](../../k8s/hpa/README.md) — the separate Kustomize-based HPA overlay
+- [`k8s/helm/waddlebot/README.md`](../../k8s/helm/waddlebot/README.md) — Helm chart documentation
 
 ---
 
-**Last Updated**: 2025-12-16
-**Waddles Version**: 0.2.0
 **Kubernetes Minimum**: 1.23+
 **Helm Version**: 3.x
-**Total Services**: 32 (24+ app modules + 6 infrastructure + 2 optional)

@@ -33,7 +33,7 @@ curl -X POST https://slack.com/api/auth.test \
 export SLACK_BOT_TOKEN=xoxb-new-token-here
 
 # 5. Restart module
-docker-compose restart slack-action-module
+docker-compose restart action-slack
 
 # 6. Verify health check
 curl http://localhost:8071/health
@@ -57,7 +57,7 @@ curl http://localhost:8071/health
 export SLACK_BOT_TOKEN=xoxb-new-token
 
 # 3. Restart module
-docker-compose restart slack-action-module
+docker-compose restart action-slack
 ```
 
 ### Channel Errors
@@ -157,7 +157,7 @@ reactions:read - Read reaction data
 EOF
 
 # 4. Restart module after adding scopes
-docker-compose restart slack-action-module
+docker-compose restart action-slack
 ```
 
 ### Message Errors
@@ -343,10 +343,10 @@ echo $DATABASE_URL
 psql $DATABASE_URL -c "SELECT 1"
 
 # 3. Check database is running
-docker-compose ps postgres
+docker-compose ps infra-postgres
 
 # 4. Check logs for connection errors
-docker-compose logs postgres
+docker-compose logs infra-postgres
 
 # 5. Verify credentials
 # In PostgreSQL shell:
@@ -356,7 +356,7 @@ psql -U mod_action_slack -h localhost -d waddlebot
 docker-compose up -d postgres
 
 # 7. Wait for database to be ready
-docker-compose exec postgres pg_isready -U mod_action_slack
+docker-compose exec infra-postgres pg_isready -U mod_action_slack
 
 # 8. Health check should pass after restart
 curl http://localhost:8071/health
@@ -429,7 +429,7 @@ echo $TOKEN | cut -d'.' -f2 | base64 -d | jq .
 ```bash
 # Set environment variable before starting
 export SLACK_BOT_TOKEN=xoxb-your-token
-docker-compose up slack-action-module
+docker-compose up action-slack
 
 # Or add to .env file
 echo "SLACK_BOT_TOKEN=xoxb-your-token" >> .env
@@ -444,7 +444,7 @@ echo "SLACK_BOT_TOKEN=xoxb-your-token" >> .env
 ```bash
 # Set DATABASE_URL
 export DATABASE_URL=postgresql://user:pass@postgres:5432/waddlebot
-docker-compose up slack-action-module
+docker-compose up action-slack
 ```
 
 ### Logging and Debugging
@@ -453,10 +453,10 @@ docker-compose up slack-action-module
 ```bash
 # Set log level to DEBUG
 export LOG_LEVEL=DEBUG
-docker-compose restart slack-action-module
+docker-compose restart action-slack
 
 # View logs
-docker-compose logs -f slack-action-module
+docker-compose logs -f action-slack
 
 # Expected debug output:
 # [2024-01-15 10:30:00] DEBUG slack_service:send_message:123 Sending message to C01234567
@@ -475,16 +475,16 @@ watch -n 5 'curl -s http://localhost:8071/health | jq .'
 #### Monitor Container Logs
 ```bash
 # Real-time logs
-docker-compose logs -f slack-action-module
+docker-compose logs -f action-slack
 
 # Last 50 lines
 docker-compose logs --tail=50 slack-action-module
 
 # Filter for errors
-docker-compose logs slack-action-module | grep ERROR
+docker-compose logs action-slack | grep ERROR
 
 # Follow specific log file
-docker-compose exec slack-action-module tail -f /var/log/waddlebotlog/slack_action.log
+docker-compose exec action-slack tail -f /var/log/waddlebotlog/slack_action.log
 ```
 
 ### Performance Issues
@@ -503,14 +503,14 @@ docker-compose exec slack-action-module tail -f /var/log/waddlebotlog/slack_acti
 docker-compose stats slack-action-module
 
 # 2. Restart container to clear memory
-docker-compose restart slack-action-module
+docker-compose restart action-slack
 
 # 3. Check for connection leaks in logs
-docker-compose logs slack-action-module | grep -i leak
+docker-compose logs action-slack | grep -i leak
 
 # 4. Reduce MAX_CONCURRENT_REQUESTS
 export MAX_CONCURRENT_REQUESTS=50
-docker-compose restart slack-action-module
+docker-compose restart action-slack
 
 # 5. Set memory limit in docker-compose.yml
 deploy:
@@ -534,16 +534,16 @@ deploy:
 curl https://status.slack.com/api/v2.0/status
 
 # 2. Test database query performance
-docker-compose exec postgres \
+docker-compose exec infra-postgres \
   psql -U mod_action_slack -d waddlebot \
   -c "SELECT COUNT(*) FROM action_history;"
 
 # 3. Check network latency
-docker-compose exec slack-action-module ping -c 5 slack.com
+docker-compose exec action-slack ping -c 5 slack.com
 
 # 4. Increase REQUEST_TIMEOUT if needed
 export REQUEST_TIMEOUT=60
-docker-compose restart slack-action-module
+docker-compose restart action-slack
 ```
 
 ## Health Checks and Monitoring
@@ -574,8 +574,8 @@ livenessProbe:
 
 If issues persist:
 
-1. **Check logs**: `docker-compose logs -f slack-action-module`
-2. **Verify configuration**: `docker-compose exec slack-action-module env | grep SLACK`
+1. **Check logs**: `docker-compose logs -f action-slack`
+2. **Verify configuration**: `docker-compose exec action-slack env | grep SLACK`
 3. **Test Slack token**: `curl -H "Authorization: Bearer $SLACK_BOT_TOKEN" https://slack.com/api/auth.test`
 4. **Review this guide**: Search for the error message
 5. **Contact support**: support@penguintech.io

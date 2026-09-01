@@ -18,10 +18,10 @@ Before running the module, ensure you have:
 
 ### Docker Compose (Recommended)
 
-The module is already defined in the main `docker-compose.yml` and `docker-compose.dev.yml`:
+The module is already defined in the repo's `docker-compose.yml` (service name `interactive-youtube-music`):
 
 ```yaml
-youtube-music-interaction:
+interactive-youtube-music:
   build:
     context: .
     dockerfile: action/interactive/youtube_music_interaction_module/Dockerfile
@@ -104,10 +104,10 @@ docker run -it \
 docker-compose -f docker-compose.yml up -d youtube-music-interaction
 
 # View logs
-docker-compose logs -f youtube-music-interaction
+docker-compose logs -f interactive-youtube-music
 
 # Stop the service
-docker-compose down youtube-music-interaction
+docker-compose down interactive-youtube-music
 ```
 
 ## OAuth 2.0 Setup
@@ -241,7 +241,7 @@ curl -v http://localhost:8025/health
 curl http://localhost:8025/metrics | grep youtube_music
 
 # View container logs
-docker-compose logs youtube-music-interaction
+docker-compose logs interactive-youtube-music
 ```
 
 ### Test API Endpoints
@@ -264,7 +264,7 @@ The module includes a comprehensive test script:
 1. Update environment variables or `.env` file
 2. Restart the container:
 ```bash
-docker-compose restart youtube-music-interaction
+docker-compose restart interactive-youtube-music
 ```
 
 3. Verify with health check:
@@ -277,7 +277,7 @@ curl http://localhost:8025/health
 **Docker Compose:**
 ```bash
 # Real-time logs
-docker-compose logs -f youtube-music-interaction
+docker-compose logs -f interactive-youtube-music
 
 # Last 100 lines
 docker-compose logs --tail=100 youtube-music-interaction
@@ -304,7 +304,7 @@ The module automatically initializes the database connection on startup. To veri
 
 ```bash
 # Check logs for startup messages
-docker-compose logs youtube-music-interaction | grep "database"
+docker-compose logs interactive-youtube-music | grep "database"
 
 # Connect to PostgreSQL directly
 psql postgresql://waddlebot:password@localhost:5432/waddlebot
@@ -346,7 +346,7 @@ Ensure credentials are set:
 env | grep YOUTUBE_
 
 # Check inside container
-docker-compose exec youtube-music-interaction env | grep YOUTUBE_
+docker-compose exec interactive-youtube-music env | grep YOUTUBE_
 ```
 
 For detailed troubleshooting, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).

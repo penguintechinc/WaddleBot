@@ -80,16 +80,16 @@ youtube-action-module:
 
 ```bash
 # Development mode
-docker-compose up youtube-action-module
+docker-compose up action-youtube
 
 # Production mode (background)
 docker-compose up -d youtube-action-module
 
 # View logs
-docker-compose logs -f youtube-action-module
+docker-compose logs -f action-youtube
 
 # Stop container
-docker-compose down youtube-action-module
+docker-compose down action-youtube
 ```
 
 ## OAuth 2.0 Setup (Client ID/Secret)
@@ -151,7 +151,7 @@ curl http://localhost:8073/health
 
 ```bash
 # Docker health check
-docker-compose ps youtube-action-module
+docker-compose ps action-youtube
 
 # Should show: healthy status after 30 seconds
 ```

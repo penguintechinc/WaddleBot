@@ -552,7 +552,7 @@ All endpoints return standard error shapes:
 
 ## Rate Limits
 
-No built-in rate limiting in the Python module. Rate limiting is enforced at the Kong API gateway layer. Recommended limits:
+No built-in rate limiting in the Python module. Rate limiting is enforced at the Hub Module / Kubernetes Ingress layer, not by any API gateway product. Recommended limits:
 
 | Endpoint Class | Recommended Limit |
 |---|---|

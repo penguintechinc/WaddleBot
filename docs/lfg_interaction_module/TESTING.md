@@ -168,7 +168,7 @@ Test service layer interactions with real (test) PostgreSQL database and Redis.
 ### Running Integration Tests
 ```bash
 make test-integration
-# Requires: docker-compose up postgres redis
+# Requires: docker-compose up infra-postgres redis
 ```
 
 ### Setup (Docker Compose)

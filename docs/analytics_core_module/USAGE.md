@@ -72,17 +72,17 @@ docker-compose -f docker-compose.yml up analytics-core
 ### Development Environment
 
 ```bash
-# Start all services including analytics-core
-docker-compose -f docker-compose.dev.yml up
+# Start all services including core-analytics
+docker-compose up
 
 # Or just the analytics module
-docker-compose -f docker-compose.dev.yml up -d analytics-core
+docker-compose up -d core-analytics
 
 # View logs
-docker-compose -f docker-compose.dev.yml logs -f analytics-core
+docker-compose logs -f core-analytics
 
 # Stop the service
-docker-compose -f docker-compose.dev.yml down analytics-core
+docker-compose stop core-analytics
 ```
 
 ### Docker Build
@@ -160,7 +160,7 @@ curl http://localhost:8040/health
 
 ```bash
 # Check from app logs
-docker-compose logs analytics-core | grep "Database initialized"
+docker-compose logs core-analytics | grep "Database initialized"
 
 # Or test directly
 python -c "from config import Config; import psycopg2; \
@@ -174,7 +174,7 @@ python -c "from config import Config; import psycopg2; \
 redis-cli -h redis -p 6379 ping
 
 # From app logs
-docker-compose logs analytics-core | grep "Listening for credential refresh"
+docker-compose logs core-analytics | grep "Listening for credential refresh"
 ```
 
 ### Complete Health Check Script

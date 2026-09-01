@@ -353,7 +353,7 @@ curl http://localhost:8006/api/v1/status | jq .version
 
 # Update Docker image
 docker pull penguintech/youtube-live:latest
-docker-compose restart youtube-live
+docker-compose restart trigger-youtube
 
 # Update from source
 cd trigger/receiver/youtube_live_module

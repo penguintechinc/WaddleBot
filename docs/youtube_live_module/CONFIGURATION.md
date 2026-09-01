@@ -444,7 +444,7 @@ Most configurations take effect immediately:
 To apply some changes, restart the module:
 
 ```bash
-docker-compose restart youtube-live
+docker-compose restart trigger-youtube
 ```
 
 ## Related Documentation

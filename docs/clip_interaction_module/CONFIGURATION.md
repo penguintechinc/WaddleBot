@@ -317,9 +317,9 @@ CLIP_RETENTION_DAYS=7
 ### Docker Compose Development
 
 ```yaml
-# docker-compose.dev.yml excerpt
+# docker-compose.yml excerpt (service name: interactive-clip)
 services:
-  clip-interaction:
+  interactive-clip:
     image: waddlebot-clip-interaction:latest
     ports:
       - "8098:8098"

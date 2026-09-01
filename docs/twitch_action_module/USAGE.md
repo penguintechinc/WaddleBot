@@ -73,16 +73,16 @@ twitch-action-module:
 
 ```bash
 # Development mode
-docker-compose up twitch-action-module
+docker-compose up action-twitch
 
 # Production mode (background)
 docker-compose up -d twitch-action-module
 
 # View logs
-docker-compose logs -f twitch-action-module
+docker-compose logs -f action-twitch
 
 # Stop container
-docker-compose down twitch-action-module
+docker-compose down action-twitch
 ```
 
 ## Twitch App Registration
@@ -190,7 +190,7 @@ curl http://localhost:8072/health
 
 ```bash
 # Docker health check
-docker-compose ps twitch-action-module
+docker-compose ps action-twitch
 
 # Should show: healthy status after 30 seconds
 ```

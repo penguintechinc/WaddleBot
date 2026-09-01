@@ -1047,28 +1047,6 @@ Get hub settings.
 
 ---
 
-### GET /superadmin/kong/services
-Get Kong Gateway services.
-
-**Response:** `200 OK`
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": "service-123",
-      "name": "identity-core",
-      "protocol": "http",
-      "host": "identity-core",
-      "port": 8050,
-      "path": "/api/v1"
-    }
-  ]
-}
-```
-
----
-
 ## Marketplace Endpoints
 
 ### GET /admin/:communityId/marketplace/modules

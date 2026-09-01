@@ -5,7 +5,7 @@ Solutions for common issues and error scenarios.
 ## General Troubleshooting Process
 
 1. **Check health status**: `curl http://localhost:8006/health`
-2. **Review logs**: `docker-compose logs -f youtube-live` or stdout
+2. **Review logs**: `docker-compose logs -f trigger-youtube` or stdout
 3. **Check configuration**: Verify all environment variables are set
 4. **Test connectivity**: `curl -I https://www.googleapis.com/youtube/v3/`
 5. **Verify database**: `psql $DATABASE_URL -c "SELECT * FROM youtube_channels;"`
@@ -51,7 +51,7 @@ If still failing:
 
 ```bash
 # Check PostgreSQL logs
-docker-compose logs postgres
+docker-compose logs infra-postgres
 
 # Verify host resolution
 ping $(echo $DATABASE_URL | sed -E 's/.*@([^:\/]+).*/\1/')
@@ -126,7 +126,7 @@ curl http://localhost:8006/api/v1/channels | jq .
 curl http://localhost:8006/api/v1/broadcasts/UCxxxxxxxxxx | jq .
 
 # Check logs for polling errors
-docker-compose logs youtube-live | grep -i "error\|exception\|failed"
+docker-compose logs trigger-youtube | grep -i "error\|exception\|failed"
 
 # Verify API key works
 curl "https://www.googleapis.com/youtube/v3/channels?part=statistics&forUsername=youtube&key=$YOUTUBE_API_KEY"
@@ -269,10 +269,10 @@ curl -X POST http://router:8000/api/v1/message \
   -d '{"test": true}'
 
 # Check YouTube Live logs for routing errors
-docker-compose logs youtube-live | grep "router\|failed"
+docker-compose logs trigger-youtube | grep "router\|failed"
 
 # Monitor outgoing requests
-docker-compose logs youtube-live | grep "POST.*router"
+docker-compose logs trigger-youtube | grep "POST.*router"
 ```
 
 **Solutions:**
@@ -306,7 +306,7 @@ export DB_POOL_SIZE=30
 export DB_MAX_OVERFLOW=10
 
 # Restart module
-docker-compose restart youtube-live
+docker-compose restart trigger-youtube
 
 # Check current connections
 psql $DATABASE_URL -c "SELECT count(*) FROM pg_stat_activity;"
@@ -377,7 +377,7 @@ docker stats youtube-live --no-stream | watch
 # memswap_limit: 512m
 
 # Restart module weekly to clear memory
-0 2 * * 0 docker-compose restart youtube-live
+0 2 * * 0 docker-compose restart trigger-youtube
 ```
 
 ---
@@ -420,7 +420,7 @@ top -p $(docker exec youtube-live pgrep -f python)
 
 ```bash
 # Check module logs for slow operations
-docker-compose logs youtube-live | grep "slow\|latency"
+docker-compose logs trigger-youtube | grep "slow\|latency"
 
 # Check database query performance
 psql $DATABASE_URL << EOF
@@ -501,7 +501,7 @@ export WEBHOOK_SECRET="my-secret-key"
 # WEBHOOK_VERIFY_SIGNATURE=false python main.py
 
 # Restart module
-docker-compose restart youtube-live
+docker-compose restart trigger-youtube
 ```
 
 ---
@@ -519,7 +519,7 @@ youtube-live exited with code 1
 
 ```bash
 # Check logs
-docker-compose logs youtube-live
+docker-compose logs trigger-youtube
 
 # Run with interactive terminal
 docker-compose run --rm youtube-live python main.py
@@ -559,7 +559,7 @@ docker-compose exec -u root youtube-live chown -R nobody:nobody /app
 LOG_LEVEL=DEBUG python main.py 2>&1 | tee debug.log
 
 # Filter specific module
-docker-compose logs youtube-live | grep "ChatPoller"
+docker-compose logs trigger-youtube | grep "ChatPoller"
 ```
 
 ---
@@ -628,7 +628,7 @@ SELECT pg_reload_conf();
 EOF
 
 # View logs
-docker-compose exec postgres tail -f /var/log/postgresql/postgresql.log
+docker-compose exec infra-postgres tail -f /var/log/postgresql/postgresql.log
 ```
 
 ---
@@ -649,7 +649,7 @@ while true; do
       -d "YouTube Live module failed health check"
 
     # Auto-restart
-    docker-compose restart youtube-live
+    docker-compose restart trigger-youtube
   fi
 
   sleep 60
@@ -672,7 +672,7 @@ Run with: `bash health-monitor.sh &`
 
 ## Getting Help
 
-1. **Check logs**: `docker-compose logs -f youtube-live`
+1. **Check logs**: `docker-compose logs -f trigger-youtube`
 2. **Check this guide**: Search for your error message
 3. **Check health**: `curl http://localhost:8006/health`
 4. **Debug configuration**: `env | grep YOUTUBE`

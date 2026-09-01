@@ -347,7 +347,7 @@ For questions or issues:
    - Search troubleshooting guide
 
 2. **Check Logs**
-   - View module logs: `docker-compose logs youtube-music-interaction`
+   - View module logs: `docker-compose logs interactive-youtube-music`
    - Look for error messages or warnings
 
 3. **Run Tests**

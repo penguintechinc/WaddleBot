@@ -155,7 +155,7 @@ MICROSOFT_CALENDAR_CLIENT_SECRET=your-azure-client-secret-value
 
 ## Kubernetes Deployment Configuration
 
-When deploying via Kubernetes (Kustomize), environment variables are set through a ConfigMap and Secrets manifest. Do not store OAuth client secrets in ConfigMaps — use Kubernetes Secrets.
+When deploying via the Helm chart (`k8s/helm/waddlebot/`), environment variables are set through a ConfigMap and Secrets template. Do not store OAuth client secrets in ConfigMaps — use Kubernetes Secrets.
 
 Example Secret manifest (do not commit to version control):
 

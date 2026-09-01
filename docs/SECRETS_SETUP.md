@@ -1,32 +1,45 @@
 # Secrets Setup Guide
 
-## Alpha (Kustomize)
+Helm is the only supported deployment path, alpha through production (see
+[`QUICKSTART.md`](QUICKSTART.md#deploy-with-helm)) — secrets are supplied through Helm for every
+environment. Never commit real credentials into a values file.
 
-Generate strong secrets and create a local (gitignored) secretGenerator override:
+## Local/Alpha
+
+For a quick local install, generate strong secrets and pass them with `--set`:
 
 ```bash
 JWT_SECRET=$(openssl rand -hex 32)
 DB_PASS=$(openssl rand -hex 16)
 REDIS_PASS=$(openssl rand -hex 16)
-kubectl create secret generic waddlebot-secrets \
-  --from-literal=JWT_SECRET="$JWT_SECRET" \
-  --from-literal=DATABASE_PASSWORD="$DB_PASS" \
-  --from-literal=REDIS_PASSWORD="$REDIS_PASS" \
-  --dry-run=client -o yaml > k8s/kustomize/overlays/alpha/secrets-override.yaml
+
+helm install waddlebot ./k8s/helm/waddlebot -n waddlebot --create-namespace \
+  --kube-context local-alpha \
+  -f k8s/helm/waddlebot/values-alpha.yaml \
+  --set secrets.jwtSecret="$JWT_SECRET" \
+  --set secrets.dbPassword="$DB_PASS" \
+  --set secrets.redisPassword="$REDIS_PASS"
 ```
 
-## Beta/Prod (Helm)
-
-Use `--set` flags or a local (gitignored) values override, or Sealed Secrets / External Secrets Operator:
+Or create a `values-secrets.yaml` file (gitignored, never committed) with real values and pass it
+alongside the environment values file:
 
 ```bash
-helm upgrade waddlebot ./k8s/helm/waddlebot \
-  --set secrets.jwtSecret="$(openssl rand -hex 32)" \
-  --set secrets.dbPassword="$(openssl rand -hex 16)"
+helm install waddlebot ./k8s/helm/waddlebot -n waddlebot --create-namespace \
+  -f k8s/helm/waddlebot/values-alpha.yaml \
+  -f values-secrets.yaml
 ```
 
-Alternatively, create a `values-secrets.yaml` file (gitignored) with real values and pass it:
+## Beta/Production
+
+Use a proper secrets mechanism instead of `--set`/plaintext values files — Vault, Sealed Secrets,
+or External Secrets Operator, feeding `k8s/helm/waddlebot/templates/secrets.yaml`:
 
 ```bash
-helm upgrade waddlebot ./k8s/helm/waddlebot -f values-secrets.yaml
+helm upgrade waddlebot ./k8s/helm/waddlebot -n waddlebot \
+  --kube-context dal2-beta \
+  -f k8s/helm/waddlebot/values-beta.yaml
 ```
+
+See [`CREDENTIALS-ROTATION-CHECKLIST.md`](CREDENTIALS-ROTATION-CHECKLIST.md) for what to rotate
+and how.

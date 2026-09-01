@@ -497,7 +497,7 @@ Key metrics:
 
 The module validates configuration on startup:
 ```bash
-docker-compose up lfg-module
+docker-compose up interactive-lfg
 ```
 
 If configuration is invalid:

@@ -16,7 +16,7 @@
 **Solutions**:
 ```bash
 # 1. Check token expiry in database
-docker-compose exec postgres psql -U mod_action_youtube -d waddlebot \
+docker-compose exec infra-postgres psql -U mod_action_youtube -d waddlebot \
   -c "SELECT channel_id, expires_at FROM youtube_oauth_credentials WHERE channel_id='UCxxxxx';"
 
 # 2. Refresh token manually if expired
@@ -29,7 +29,7 @@ curl -X POST https://oauth2.googleapis.com/token \
   -d "refresh_token=$REFRESH_TOKEN"
 
 # 3. Verify scopes in database
-docker-compose exec postgres psql -U mod_action_youtube -d waddlebot \
+docker-compose exec infra-postgres psql -U mod_action_youtube -d waddlebot \
   -c "SELECT scopes FROM youtube_oauth_credentials WHERE channel_id='UCxxxxx';"
 
 # 4. If needed, revoke and re-authorize
@@ -48,7 +48,7 @@ curl -X DELETE http://localhost:8073/oauth/revoke/UCxxxxx \
 **Solutions**:
 ```bash
 # 1. Remove existing credentials
-docker-compose exec postgres psql -U mod_action_youtube -d waddlebot \
+docker-compose exec infra-postgres psql -U mod_action_youtube -d waddlebot \
   -c "DELETE FROM youtube_oauth_credentials WHERE channel_id='UCxxxxx';"
 
 # 2. Initiate new OAuth flow
@@ -70,7 +70,7 @@ curl -G http://localhost:8073/oauth/authorize -d "state=UCxxxxx"
 **Solutions**:
 ```bash
 # 1. Check what caused quota usage
-docker-compose logs youtube-action-module | grep quota
+docker-compose logs action-youtube | grep quota
 
 # 2. Wait until next day (quota resets at midnight PT)
 # Module will auto-retry after waiting
@@ -130,7 +130,7 @@ echo "ENABLE_CHAT_ACTIONS=$ENABLE_CHAT_ACTIONS"
 echo "ENABLE_VIDEO_ACTIONS=$ENABLE_VIDEO_ACTIONS"
 
 # 3. Verify channel_id and user_id
-docker-compose exec postgres psql -U mod_action_youtube -d waddlebot \
+docker-compose exec infra-postgres psql -U mod_action_youtube -d waddlebot \
   -c "SELECT channel_id, is_active FROM youtube_oauth_credentials WHERE channel_id='UCxxxxx';"
 
 # 4. Check if actions are disabled in config
@@ -174,10 +174,10 @@ docker-compose exec postgres psql -U mod_action_youtube -d waddlebot \
 **Solutions**:
 ```bash
 # 1. Check database status
-docker-compose ps postgres
+docker-compose ps infra-postgres
 
 # 2. Test connection
-docker-compose exec postgres psql -U mod_action_youtube -d waddlebot -c "SELECT 1;"
+docker-compose exec infra-postgres psql -U mod_action_youtube -d waddlebot -c "SELECT 1;"
 
 # 3. Check connection string
 echo $DATABASE_URL
@@ -186,7 +186,7 @@ echo $DATABASE_URL
 docker-compose up -d postgres
 
 # 5. Wait for database ready
-docker-compose exec postgres pg_isready -U mod_action_youtube
+docker-compose exec infra-postgres pg_isready -U mod_action_youtube
 ```
 
 #### Configuration Error: YOUTUBE_CLIENT_ID Not Configured
@@ -196,7 +196,7 @@ docker-compose exec postgres pg_isready -U mod_action_youtube
 ```bash
 export YOUTUBE_CLIENT_ID=your-id
 export YOUTUBE_CLIENT_SECRET=your-secret
-docker-compose up youtube-action-module
+docker-compose up action-youtube
 ```
 
 #### Configuration Error: DATABASE_URL Required
@@ -205,7 +205,7 @@ docker-compose up youtube-action-module
 **Solution**:
 ```bash
 export DATABASE_URL=postgresql://user:pass@postgres:5432/waddlebot
-docker-compose up youtube-action-module
+docker-compose up action-youtube
 ```
 
 ## Debugging
@@ -213,10 +213,10 @@ docker-compose up youtube-action-module
 ### Enable Debug Logging
 ```bash
 export LOG_LEVEL=DEBUG
-docker-compose restart youtube-action-module
+docker-compose restart action-youtube
 
 # Watch logs
-docker-compose logs -f youtube-action-module
+docker-compose logs -f action-youtube
 ```
 
 ### Check Health Status
@@ -231,30 +231,30 @@ watch -n 5 'curl -s http://localhost:8073/health | jq .'
 ### Monitor Logs
 ```bash
 # Real-time
-docker-compose logs -f youtube-action-module
+docker-compose logs -f action-youtube
 
 # Last 50 lines
 docker-compose logs --tail=50 youtube-action-module
 
 # Filter for errors
-docker-compose logs youtube-action-module | grep ERROR
+docker-compose logs action-youtube | grep ERROR
 
 # Filter for quota messages
-docker-compose logs youtube-action-module | grep -i quota
+docker-compose logs action-youtube | grep -i quota
 ```
 
 ### Check Credentials
 ```bash
 # List all credentials
-docker-compose exec postgres psql -U mod_action_youtube -d waddlebot \
+docker-compose exec infra-postgres psql -U mod_action_youtube -d waddlebot \
   -c "SELECT channel_id, expires_at, is_active FROM youtube_oauth_credentials;"
 
 # Check specific channel
-docker-compose exec postgres psql -U mod_action_youtube -d waddlebot \
+docker-compose exec infra-postgres psql -U mod_action_youtube -d waddlebot \
   -c "SELECT * FROM youtube_oauth_credentials WHERE channel_id='UCxxxxx';"
 
 # Check expiring soon
-docker-compose exec postgres psql -U mod_action_youtube -d waddlebot \
+docker-compose exec infra-postgres psql -U mod_action_youtube -d waddlebot \
   -c "SELECT channel_id, expires_at FROM youtube_oauth_credentials WHERE expires_at < NOW() + INTERVAL '1 hour';"
 ```
 
@@ -267,35 +267,35 @@ docker-compose stats youtube-action-module
 
 # Reduce workers
 export MAX_WORKERS=10
-docker-compose restart youtube-action-module
+docker-compose restart action-youtube
 
 # Clear memory (restart)
-docker-compose restart youtube-action-module
+docker-compose restart action-youtube
 ```
 
 ### Slow Response Times
 ```bash
 # Check if quota limited
-docker-compose logs youtube-action-module | grep quota
+docker-compose logs action-youtube | grep quota
 
 # Check Google Cloud status
 curl https://status.cloud.google.com/
 
 # Increase timeout
 export REQUEST_TIMEOUT=60
-docker-compose restart youtube-action-module
+docker-compose restart action-youtube
 
 # Reduce rate limits
 export RATE_LIMIT_REQUESTS=50
 export RATE_LIMIT_WINDOW=60
-docker-compose restart youtube-action-module
+docker-compose restart action-youtube
 ```
 
 ## Getting Help
 
-1. Check logs: `docker-compose logs -f youtube-action-module`
+1. Check logs: `docker-compose logs -f action-youtube`
 2. Enable debug: `export LOG_LEVEL=DEBUG`
-3. Verify config: `docker-compose exec youtube-action-module env | grep YOUTUBE`
+3. Verify config: `docker-compose exec action-youtube env | grep YOUTUBE`
 4. Test OAuth: Visit https://console.cloud.google.com → OAuth client
 5. Review this guide: Search for your error
 6. Contact support: support@penguintech.io

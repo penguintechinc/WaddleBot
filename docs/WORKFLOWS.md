@@ -344,7 +344,7 @@ detect-changes:
 
 **Module Categories**:
 
-1. **Core Modules**: router, marketplace, portal, kong-admin
+1. **Core Modules**: router, marketplace, identity, labels, security, credentials
 2. **Collector Modules**: twitch, discord, slack
 3. **Interaction Modules**: ai, inventory, labels, alias, shoutout
 

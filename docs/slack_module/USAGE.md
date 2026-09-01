@@ -153,13 +153,13 @@ make run-slack-module
 
 ```bash
 # If running with docker-compose
-docker-compose logs -f slack-module
+docker-compose logs -f trigger-slack
 
 # If running directly
 tail -f logs/slack-module.log
 
 # Filter for errors
-docker-compose logs slack-module | grep ERROR
+docker-compose logs trigger-slack | grep ERROR
 ```
 
 ### Debugging Commands
@@ -220,7 +220,7 @@ Test form submissions with proper validation:
 # Or success response if all valid
 
 # 4. Check logs for submission details
-docker-compose logs slack-module | grep "view_submission"
+docker-compose logs trigger-slack | grep "view_submission"
 ```
 
 ---
@@ -318,7 +318,7 @@ echo $DATABASE_URL
 
 ```bash
 # Check if module is receiving the request
-docker-compose logs slack-module | grep -i "slash command"
+docker-compose logs trigger-slack | grep -i "slash command"
 
 # Test router connectivity
 curl -X POST http://localhost:5001/execute-command \
@@ -326,7 +326,7 @@ curl -X POST http://localhost:5001/execute-command \
   -d '{"command": "test"}'
 
 # Check router logs
-docker-compose logs router
+docker-compose logs core-router
 ```
 
 ### Ephemeral Responses Not Appearing
@@ -335,10 +335,10 @@ docker-compose logs router
 
 ```bash
 # Verify ephemeral flag in response
-docker-compose logs slack-module | grep -i ephemeral
+docker-compose logs trigger-slack | grep -i ephemeral
 
 # Check if using correct response_url
-docker-compose logs slack-module | grep -i response_url
+docker-compose logs trigger-slack | grep -i response_url
 
 # Test ephemeral response format
 curl -X POST $RESPONSE_URL \
@@ -352,7 +352,7 @@ curl -X POST $RESPONSE_URL \
 
 ```bash
 # Check validation logic in logs
-docker-compose logs slack-module | grep -i validation
+docker-compose logs trigger-slack | grep -i validation
 
 # Verify modal schema definition
 grep -r "callback_id" src/services/ | head -5
@@ -375,7 +375,7 @@ echo $SLACK_APP_TOKEN | head -c 10  # Should start with xapp-
 export LOG_LEVEL=DEBUG
 
 # Check for connection errors
-docker-compose logs slack-module | grep -i "socket\|websocket"
+docker-compose logs trigger-slack | grep -i "socket\|websocket"
 
 # Test Slack API directly
 curl -X POST https://slack.com/api/apps.connections.open \

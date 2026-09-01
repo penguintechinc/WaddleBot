@@ -29,7 +29,7 @@ curl -s http://localhost:8096/health | jq .
 ### Step 2: Check Logs
 ```bash
 # Docker Compose
-docker-compose logs -f lfg-module
+docker-compose logs -f interactive-lfg
 
 # Kubernetes
 kubectl logs -f deployment/lfg-module -n waddlebot
@@ -67,7 +67,7 @@ kill -9 <PID>
 
 # Or use different port
 export MODULE_PORT=8097
-docker-compose up lfg-module
+docker-compose up interactive-lfg
 ```
 
 **Prevention**:
@@ -117,7 +117,7 @@ psql postgresql://postgres:password@localhost:5432/waddlebot -c "SELECT 1;"
    # May need to wait 10-30 seconds after starting
    docker-compose up -d postgres
    sleep 30
-   docker-compose up lfg-module
+   docker-compose up interactive-lfg
    ```
 
 5. **Check network (Kubernetes)**:
@@ -139,14 +139,14 @@ Relation "lfg_posts" already exists
 **Solution**:
 ```bash
 # Option 1: Drop existing tables (development only)
-docker-compose exec postgres psql -U postgres -d waddlebot -c "
+docker-compose exec infra-postgres psql -U postgres -d waddlebot -c "
   DROP TABLE IF EXISTS lfg_joins CASCADE;
   DROP TABLE IF EXISTS lfg_posts CASCADE;
 "
 
 # Option 2: Disable auto-migration and run manually
 export AUTO_MIGRATE=false
-docker-compose up lfg-module
+docker-compose up interactive-lfg
 
 # Run migrations manually
 psql $DATABASE_URL < migrations/001_create_tables.sql
@@ -221,7 +221,7 @@ curl -s "http://localhost:8096/api/v1/lfg/posts/community-uuid" \
   -H "Authorization: Bearer $TOKEN" | jq '.data.posts | length'
 
 # 2. Check database directly
-docker-compose exec postgres psql -U postgres -d waddlebot -c "
+docker-compose exec infra-postgres psql -U postgres -d waddlebot -c "
   SELECT id, community_id, status, created_at FROM lfg_posts LIMIT 5;
 "
 
@@ -274,7 +274,7 @@ curl -s "http://localhost:8096/api/v1/lfg/posts/community-uuid?status=open" \
 3. **Database corruption**:
    ```bash
    # Check join records
-   docker-compose exec postgres psql -U postgres -d waddlebot -c "
+   docker-compose exec infra-postgres psql -U postgres -d waddlebot -c "
      SELECT post_id, user_id, joined_at FROM lfg_joins
      WHERE post_id = 'post-uuid';
    "
@@ -298,12 +298,12 @@ curl -s "http://localhost:8096/api/v1/lfg/posts/community-uuid" \
   -H "Authorization: Bearer $TOKEN" | jq '.data.posts[] | select(.id=="post-uuid")'
 
 # Check join count in database
-docker-compose exec postgres psql -U postgres -d waddlebot -c "
+docker-compose exec infra-postgres psql -U postgres -d waddlebot -c "
   SELECT COUNT(*) FROM lfg_joins WHERE post_id='post-uuid';
 "
 
 # Compare with player_count_needed
-docker-compose exec postgres psql -U postgres -d waddlebot -c "
+docker-compose exec infra-postgres psql -U postgres -d waddlebot -c "
   SELECT player_count_needed, status FROM lfg_posts WHERE id='post-uuid';
 "
 ```
@@ -315,7 +315,7 @@ docker-compose exec postgres psql -U postgres -d waddlebot -c "
 
 2. **Manual status fix** (admin only):
    ```bash
-   docker-compose exec postgres psql -U postgres -d waddlebot -c "
+   docker-compose exec infra-postgres psql -U postgres -d waddlebot -c "
      UPDATE lfg_posts
      SET status = CASE
        WHEN (SELECT COUNT(*) FROM lfg_joins WHERE post_id='post-uuid') >= player_count_needed
@@ -342,7 +342,7 @@ docker-compose exec postgres psql -U postgres -d waddlebot -c "
 **Diagnosis**:
 ```bash
 # Check when expire endpoint was last called
-docker-compose logs lfg-module | grep "expire"
+docker-compose logs interactive-lfg | grep "expire"
 
 # Check if scheduler is configured
 echo $LFG_DEFAULT_EXPIRY_MINUTES
@@ -410,7 +410,7 @@ echo $LFG_DEFAULT_EXPIRY_MINUTES
 docker stats lfg-module
 
 # Check for memory leaks
-docker-compose exec lfg-module ps aux | grep python
+docker-compose exec interactive-lfg ps aux | grep python
 ```
 
 **Solutions**:
@@ -457,14 +457,14 @@ time curl -s "http://localhost:8096/api/v1/lfg/posts/community-uuid" \
   -H "Authorization: Bearer $TOKEN" > /dev/null
 
 # Check database query time
-docker-compose exec postgres psql -U postgres -d waddlebot -c "
+docker-compose exec infra-postgres psql -U postgres -d waddlebot -c "
   EXPLAIN ANALYZE
   SELECT * FROM lfg_posts WHERE community_id='...' AND status='open'
   ORDER BY created_at DESC LIMIT 50;
 "
 
 # Check slow query log
-docker-compose exec postgres psql -U postgres -d waddlebot -c "
+docker-compose exec infra-postgres psql -U postgres -d waddlebot -c "
   SELECT * FROM pg_stat_statements
   ORDER BY mean_time DESC LIMIT 10;
 "
@@ -473,7 +473,7 @@ docker-compose exec postgres psql -U postgres -d waddlebot -c "
 **Solutions**:
 1. **Add missing indexes**:
    ```bash
-   docker-compose exec postgres psql -U postgres -d waddlebot -c "
+   docker-compose exec infra-postgres psql -U postgres -d waddlebot -c "
      CREATE INDEX IF NOT EXISTS idx_community_status
      ON lfg_posts(community_id, status);
    "
@@ -585,12 +585,12 @@ redis-cli ping
 
 **Level 1**: Check logs, restart service
 ```bash
-docker-compose restart lfg-module
+docker-compose restart interactive-lfg
 ```
 
 **Level 2**: Check database and Redis
 ```bash
-docker-compose logs postgres redis
+docker-compose logs infra-postgres redis
 ```
 
 **Level 3**: Clear state and reinitialize

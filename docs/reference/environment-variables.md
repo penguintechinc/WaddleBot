@@ -1,6 +1,6 @@
 # Waddles Environment Variables Reference
 
-This document provides a comprehensive reference for all environment variables used across Waddles modules. Each module's configuration is organized by category with descriptions and default values where applicable.
+This document provides a comprehensive reference for environment variables used across Waddles's legacy per-module services (still running today alongside the v3.0.x 8-container pipeline — see [`ARCHITECTURE.md`](../ARCHITECTURE.md#build-status-caveats)). Each module's configuration is organized by category with descriptions and default values where applicable. For the v3 control-plane API (hub-api), see [`hub_api/README.md`](../../hub_api/README.md).
 
 ## Table of Contents
 
@@ -557,7 +557,7 @@ VERIFICATION_TIMEOUT_MINUTES=10
 RESEND_COOLDOWN_SECONDS=60
 MAX_VERIFICATION_ATTEMPTS=5
 
-# Email Configuration (py4web Mailer)
+# Email Configuration (SMTP)
 SMTP_HOST=smtp.company.com
 SMTP_PORT=587
 SMTP_USERNAME=identity@company.com
@@ -714,7 +714,6 @@ MAX_API_KEYS_PER_USER=5                     # Per-user key limit
 
 ## Related Documentation
 
-- [Architecture Overview](../CLAUDE.md)
-- [Module Development Guide](module-development.md)
-- [Deployment Guide](deployment.md)
-- [Security Best Practices](security.md)
+- [Architecture Overview](../ARCHITECTURE.md)
+- [Deployment Guide](../getting-started/deployment-guide.md)
+- [Security Policy](../SECURITY.md)

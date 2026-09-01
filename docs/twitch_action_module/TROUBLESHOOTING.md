@@ -15,7 +15,7 @@
 **Solutions**:
 ```bash
 # 1. Check token expiration in database
-docker-compose exec postgres psql -U mod_action_twitch -d waddlebot \
+docker-compose exec infra-postgres psql -U mod_action_twitch -d waddlebot \
   -c "SELECT broadcaster_id, expires_at FROM twitch_action_tokens WHERE broadcaster_id='123456789';"
 
 # 2. Verify token is still valid at Twitch
@@ -67,7 +67,7 @@ curl -X POST https://id.twitch.tv/oauth2/token \
 # 4. Update environment and restart
 export TWITCH_CLIENT_ID=new-id
 export TWITCH_CLIENT_SECRET=new-secret
-docker-compose restart twitch-action-module
+docker-compose restart action-twitch
 
 # 5. Verify credentials are loaded
 curl http://localhost:8072/health | jq .
@@ -87,7 +87,7 @@ curl http://localhost:8072/health | jq .
 # If error occurs, token refresh failed
 
 # 2. Check refresh token validity
-docker-compose exec postgres psql -U mod_action_twitch -d waddlebot \
+docker-compose exec infra-postgres psql -U mod_action_twitch -d waddlebot \
   -c "SELECT broadcaster_id, refresh_token FROM twitch_action_tokens WHERE broadcaster_id='123456789';"
 
 # 3. Try manual refresh
@@ -117,7 +117,7 @@ curl -X POST http://localhost:8072/api/v1/tokens/revoke \
 **Solutions**:
 ```bash
 # 1. Check network connectivity
-docker-compose exec twitch-action-module ping irc.chat.twitch.tv
+docker-compose exec action-twitch ping irc.chat.twitch.tv
 
 # 2. Check firewall rules (if using UFW)
 sudo ufw allow 6667
@@ -131,7 +131,7 @@ telnet irc.chat.twitch.tv 6667
 # 5. Retry connection (module auto-retries with backoff)
 # Enable debug logging to see retry attempts
 export LOG_LEVEL=DEBUG
-docker-compose restart twitch-action-module
+docker-compose restart action-twitch
 ```
 
 #### ERR_NOTREGISTERED
@@ -145,14 +145,14 @@ docker-compose restart twitch-action-module
 **Solutions**:
 ```bash
 # 1. Check logs for authentication error
-docker-compose logs -f twitch-action-module | grep -i auth
+docker-compose logs -f action-twitch | grep -i auth
 
 # 2. Verify token being used is valid
 # Token should start with "oauth:" in IRC
 
 # 3. Enable detailed IRC logging
 export LOG_LEVEL=DEBUG
-docker-compose restart twitch-action-module
+docker-compose restart action-twitch
 
 # 4. Test IRC authentication manually
 # telnet irc.chat.twitch.tv 6667
@@ -173,11 +173,11 @@ docker-compose restart twitch-action-module
 **Solutions**:
 ```bash
 # 1. Check network latency to Twitch
-docker-compose exec twitch-action-module ping -c 5 irc.chat.twitch.tv
+docker-compose exec action-twitch ping -c 5 irc.chat.twitch.tv
 
 # 2. Increase timeout if network is slow
 export REQUEST_TIMEOUT=60
-docker-compose restart twitch-action-module
+docker-compose restart action-twitch
 
 # 3. Check if IRC server is overloaded
 # Monitor CPU and memory on Twitch infrastructure
@@ -199,7 +199,7 @@ docker-compose restart twitch-action-module
 **Solutions**:
 ```bash
 # 1. Check if token exists in database
-docker-compose exec postgres psql -U mod_action_twitch -d waddlebot \
+docker-compose exec infra-postgres psql -U mod_action_twitch -d waddlebot \
   -c "SELECT broadcaster_id FROM twitch_action_tokens WHERE broadcaster_id='123456789';"
 
 # 2. Store token if missing
@@ -217,7 +217,7 @@ curl -X POST http://localhost:8072/api/v1/tokens/store \
 # Get from: https://api.twitch.tv/helix/users?login=username
 
 # 4. List all stored tokens
-docker-compose exec postgres psql -U mod_action_twitch -d waddlebot \
+docker-compose exec infra-postgres psql -U mod_action_twitch -d waddlebot \
   -c "SELECT broadcaster_id, broadcaster_login FROM twitch_action_tokens ORDER BY created_at DESC LIMIT 10;"
 ```
 
@@ -282,11 +282,11 @@ EOF
 # Group messages for same broadcaster
 
 # 4. Check module logs
-docker-compose logs twitch-action-module | grep -i rate
+docker-compose logs action-twitch | grep -i rate
 
 # 5. Increase token refresh buffer to reduce token refresh rate
 export TOKEN_REFRESH_BUFFER=600
-docker-compose restart twitch-action-module
+docker-compose restart action-twitch
 ```
 
 #### invalid_batch_size
@@ -303,7 +303,7 @@ docker-compose restart twitch-action-module
 
 # 2. Increase MAX_BATCH_SIZE if needed
 export MAX_BATCH_SIZE=200
-docker-compose restart twitch-action-module
+docker-compose restart action-twitch
 
 # 3. Example correct batch size
 # {"actions": [...100 items max...]}
@@ -322,10 +322,10 @@ docker-compose restart twitch-action-module
 **Solutions**:
 ```bash
 # 1. Check database is running
-docker-compose ps postgres
+docker-compose ps infra-postgres
 
 # 2. Test connection manually
-docker-compose exec postgres psql -U mod_action_twitch -d waddlebot -c "SELECT 1;"
+docker-compose exec infra-postgres psql -U mod_action_twitch -d waddlebot -c "SELECT 1;"
 
 # 3. Check connection string
 echo $DATABASE_URL
@@ -337,7 +337,7 @@ psql -U mod_action_twitch -h localhost -d waddlebot
 docker-compose up -d postgres
 
 # 6. Wait for database to be ready
-docker-compose exec postgres pg_isready -U mod_action_twitch
+docker-compose exec infra-postgres pg_isready -U mod_action_twitch
 
 # 7. Health check should now pass
 curl http://localhost:8072/health
@@ -399,7 +399,7 @@ echo $TOKEN | cut -d'.' -f2 | base64 -d | jq .
 ```bash
 export TWITCH_CLIENT_ID=your-id
 export TWITCH_CLIENT_SECRET=your-secret
-docker-compose up twitch-action-module
+docker-compose up action-twitch
 ```
 
 #### Configuration Error: DATABASE_URL Required
@@ -408,7 +408,7 @@ docker-compose up twitch-action-module
 **Solution**:
 ```bash
 export DATABASE_URL=postgresql://user:pass@postgres:5432/waddlebot
-docker-compose up twitch-action-module
+docker-compose up action-twitch
 ```
 
 ## Debugging and Monitoring
@@ -416,10 +416,10 @@ docker-compose up twitch-action-module
 ### Enable Debug Logging
 ```bash
 export LOG_LEVEL=DEBUG
-docker-compose restart twitch-action-module
+docker-compose restart action-twitch
 
 # Watch logs in real-time
-docker-compose logs -f twitch-action-module
+docker-compose logs -f action-twitch
 ```
 
 ### Check Health Status
@@ -435,31 +435,31 @@ watch -n 5 'curl -s http://localhost:8072/health | jq .'
 
 ```bash
 # Real-time logs
-docker-compose logs -f twitch-action-module
+docker-compose logs -f action-twitch
 
 # Last 50 lines
 docker-compose logs --tail=50 twitch-action-module
 
 # Filter for errors
-docker-compose logs twitch-action-module | grep ERROR
+docker-compose logs action-twitch | grep ERROR
 
 # Filter for IRC logs
-docker-compose logs twitch-action-module | grep IRC
+docker-compose logs action-twitch | grep IRC
 ```
 
 ### Check Token Status
 
 ```bash
 # List all tokens
-docker-compose exec postgres psql -U mod_action_twitch -d waddlebot \
+docker-compose exec infra-postgres psql -U mod_action_twitch -d waddlebot \
   -c "SELECT broadcaster_id, expires_at, is_active FROM twitch_action_tokens ORDER BY created_at DESC;"
 
 # Check specific token
-docker-compose exec postgres psql -U mod_action_twitch -d waddlebot \
+docker-compose exec infra-postgres psql -U mod_action_twitch -d waddlebot \
   -c "SELECT * FROM twitch_action_tokens WHERE broadcaster_id='123456789';"
 
 # Check tokens expiring soon
-docker-compose exec postgres psql -U mod_action_twitch -d waddlebot \
+docker-compose exec infra-postgres psql -U mod_action_twitch -d waddlebot \
   -c "SELECT broadcaster_id, expires_at FROM twitch_action_tokens WHERE expires_at < NOW() + INTERVAL '1 hour';"
 ```
 
@@ -471,31 +471,31 @@ docker-compose exec postgres psql -U mod_action_twitch -d waddlebot \
 docker-compose stats twitch-action-module
 
 # Restart to clear
-docker-compose restart twitch-action-module
+docker-compose restart action-twitch
 
 # Reduce concurrent workers
 export MAX_WORKERS=10
-docker-compose restart twitch-action-module
+docker-compose restart action-twitch
 ```
 
 #### Slow Response Times
 ```bash
 # Check if rate limited
-docker-compose logs twitch-action-module | grep rate
+docker-compose logs action-twitch | grep rate
 
 # Check Twitch status
 curl https://status.twitch.tv/api/v2/status.json | jq .
 
 # Increase timeout
 export REQUEST_TIMEOUT=60
-docker-compose restart twitch-action-module
+docker-compose restart action-twitch
 ```
 
 ## Getting Help
 
-1. Check logs: `docker-compose logs -f twitch-action-module`
+1. Check logs: `docker-compose logs -f action-twitch`
 2. Enable debug: `export LOG_LEVEL=DEBUG`
-3. Verify configuration: `docker-compose exec twitch-action-module env | grep TWITCH`
-4. Test connectivity: `docker-compose exec twitch-action-module ping irc.chat.twitch.tv`
+3. Verify configuration: `docker-compose exec action-twitch env | grep TWITCH`
+4. Test connectivity: `docker-compose exec action-twitch ping irc.chat.twitch.tv`
 5. Review this guide: Search for your error message
 6. Contact support: support@penguintech.io

@@ -120,7 +120,7 @@ echo $GCP_PROJECT_ID
 1. GCP credentials: `echo $GCP_SERVICE_ACCOUNT_KEY`
 2. GCP project: `echo $GCP_PROJECT_ID`
 3. Database connectivity: `psql $DATABASE_URL -c "SELECT 1"`
-4. Logs: `docker-compose logs gcp_functions_action_module`
+4. Logs: `docker-compose logs action-gcp-functions`
 
 **Solutions:**
 
@@ -128,7 +128,7 @@ Restart with valid credentials:
 ```bash
 export GCP_SERVICE_ACCOUNT_KEY="/path/to/key.json"
 export GCP_PROJECT_ID="my-project"
-docker-compose restart gcp_functions_action_module
+docker-compose restart action-gcp-functions
 ```
 
 #### 2. Authentication Failures
@@ -299,7 +299,7 @@ curl -X POST http://localhost:8081/api/v1/functions/invoke \
 Increase function timeout:
 ```bash
 export FUNCTION_TIMEOUT=120  # 120 seconds
-docker-compose restart gcp_functions_action_module
+docker-compose restart action-gcp-functions
 ```
 
 Check GCP function performance:
@@ -360,7 +360,7 @@ Reduce invocations to <= 100:
 
 # Or increase limit
 export MAX_BATCH_SIZE=200
-docker-compose restart gcp_functions_action_module
+docker-compose restart action-gcp-functions
 ```
 
 #### 6. GCP Cloud Functions API Not Enabled
@@ -413,7 +413,7 @@ curl https://www.google.com/appsstatus/dashboard/incidents
 Reduce concurrency:
 ```bash
 export MAX_WORKERS=5
-docker-compose restart gcp_functions_action_module
+docker-compose restart action-gcp-functions
 ```
 
 #### 2. Too Many Concurrent Executions
@@ -434,7 +434,7 @@ gcloud compute project-info describe MY_PROJECT_ID \
 Reduce concurrent workers:
 ```bash
 export MAX_WORKERS=5
-docker-compose restart gcp_functions_action_module
+docker-compose restart action-gcp-functions
 ```
 
 Implement client-side rate limiting:
@@ -460,7 +460,7 @@ Request higher limits
 
 View real-time logs:
 ```bash
-docker-compose logs -f gcp_functions_action_module
+docker-compose logs -f action-gcp-functions
 ```
 
 View with timestamps:
@@ -470,8 +470,8 @@ docker-compose logs -f --timestamps gcp_functions_action_module
 
 Filter by log level:
 ```bash
-docker-compose logs gcp_functions_action_module | grep ERROR
-docker-compose logs gcp_functions_action_module | grep WARNING
+docker-compose logs action-gcp-functions | grep ERROR
+docker-compose logs action-gcp-functions | grep WARNING
 ```
 
 #### 2. Enable Debug Logging
@@ -479,19 +479,19 @@ docker-compose logs gcp_functions_action_module | grep WARNING
 Set debug level:
 ```bash
 export LOG_LEVEL=DEBUG
-docker-compose restart gcp_functions_action_module
+docker-compose restart action-gcp-functions
 ```
 
 View detailed logs:
 ```bash
-docker-compose logs gcp_functions_action_module | head -100
+docker-compose logs action-gcp-functions | head -100
 ```
 
 #### 3. Check Execution Logs
 
 Query database for execution history:
 ```bash
-docker-compose exec postgres psql -U waddlebot -d waddlebot << 'SQL'
+docker-compose exec infra-postgres psql -U waddlebot -d waddlebot << 'SQL'
 SELECT function_name, status_code, success, execution_time_ms, created_at
 FROM gcp_function_invocations
 ORDER BY created_at DESC
@@ -501,7 +501,7 @@ SQL
 
 Check specific function:
 ```bash
-docker-compose exec postgres psql -U waddlebot -d waddlebot << 'SQL'
+docker-compose exec infra-postgres psql -U waddlebot -d waddlebot << 'SQL'
 SELECT *
 FROM gcp_function_invocations
 WHERE function_name = 'my-function'
@@ -523,7 +523,7 @@ docker-compose ps
 
 **View logs:**
 ```bash
-docker-compose logs gcp_functions_action_module
+docker-compose logs action-gcp-functions
 ```
 
 **Rebuild:**
@@ -582,7 +582,7 @@ docker system prune -a
 | Batch size exceeded | Reduce to <= 100 functions or increase MAX_BATCH_SIZE |
 | Slow invocations | Check GCP function performance, reduce concurrency |
 | Port in use | Change REST_PORT or GRPC_PORT |
-| Container won't start | Check logs: docker-compose logs gcp_functions_action_module |
+| Container won't start | Check logs: docker-compose logs action-gcp-functions |
 | Disk full | Run docker system prune -a |
 
 ## Getting Help
@@ -591,7 +591,7 @@ If you can't resolve the issue:
 
 1. **Gather diagnostic info:**
    ```bash
-   docker-compose logs gcp_functions_action_module > logs.txt
+   docker-compose logs action-gcp-functions > logs.txt
    curl http://localhost:8081/health | jq . > health.json
    env | grep -E "GCP|DATABASE|JWT" > env.txt
    ```

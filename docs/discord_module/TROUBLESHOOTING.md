@@ -17,7 +17,7 @@
 
 2. **Check logs for connection errors**
    ```bash
-   docker-compose logs discord-module | grep -i "connection\|connected\|error"
+   docker-compose logs trigger-discord | grep -i "connection\|connected\|error"
    ```
 
 3. **Verify bot is in the server**
@@ -30,7 +30,7 @@
 
 **If bot is offline:**
 1. Check `DISCORD_BOT_TOKEN` is valid (hasn't been revoked)
-2. Restart container: `docker-compose restart discord-module`
+2. Restart container: `docker-compose restart trigger-discord`
 3. Check Discord status page: https://status.discord.com
 
 **If bot is in wrong server:**
@@ -83,7 +83,7 @@ This usually means token is invalid. Generate new token in Developer Portal.
 
 **To manually re-register commands:**
 ```bash
-docker-compose exec discord-module python -m scripts.register_commands --force
+docker-compose exec trigger-discord python -m scripts.register_commands --force
 ```
 
 **If still not showing:**
@@ -118,7 +118,7 @@ docker-compose exec discord-module python -m scripts.register_commands --force
 
 3. **Check database query times**
    ```bash
-   docker-compose logs db | grep duration | tail -10
+   docker-compose logs infra-postgres | grep duration | tail -10
    ```
 
 ### Solutions
@@ -129,7 +129,7 @@ docker-compose exec discord-module python -m scripts.register_commands --force
 3. Check network connectivity from bot to Discord
 
 **Slow router responses:**
-1. Check router logs: `docker-compose logs router`
+1. Check router logs: `docker-compose logs core-router`
 2. Scale router replicas if under load
 3. Add indexing to frequently queried database columns
 
@@ -150,13 +150,13 @@ docker-compose exec discord-module python -m scripts.register_commands --force
 
 ```bash
 # Check router timeout
-docker-compose logs router | grep timeout
+docker-compose logs core-router | grep timeout
 ```
 
 **Solutions:**
 1. Increase `ROUTER_TIMEOUT_SECONDS` in configuration
-2. Check router is running: `docker-compose ps router`
-3. Check router logs for errors: `docker-compose logs router`
+2. Check router is running: `docker-compose ps core-router`
+3. Check router logs for errors: `docker-compose logs core-router`
 4. Verify router URL is correct: `echo $ROUTER_API_URL`
 
 ### Error: "I don't have permission to do that"
@@ -183,7 +183,7 @@ docker-compose logs router | grep timeout
 3. Click "Reset Token"
 4. Copy new token
 5. Update `DISCORD_BOT_TOKEN` environment variable
-6. Restart container: `docker-compose restart discord-module`
+6. Restart container: `docker-compose restart trigger-discord`
 
 ### Error: "Unknown slash command"
 
@@ -194,7 +194,7 @@ docker-compose logs router | grep timeout
 2. Reload Discord client: `Ctrl+Shift+R`
 3. Re-register commands:
    ```bash
-   docker-compose exec discord-module python -m scripts.register_commands --force
+   docker-compose exec trigger-discord python -m scripts.register_commands --force
    ```
 
 ## Database Connection Issues
@@ -208,10 +208,10 @@ docker-compose logs router | grep timeout
 
 ```bash
 # Check database is running
-docker-compose ps db
+docker-compose ps infra-postgres
 
 # Test database connection
-docker-compose exec db psql -U waddlebot_user -d waddlebot -c "SELECT 1"
+docker-compose exec infra-postgres psql -U waddlebot_user -d waddlebot -c "SELECT 1"
 ```
 
 ### Solutions
@@ -231,14 +231,14 @@ docker-compose up -d db
 **If database is corrupted:**
 ```bash
 # Backup old data
-docker-compose exec db pg_dump waddlebot > backup.sql
+docker-compose exec infra-postgres pg_dump waddlebot > backup.sql
 
 # Reinitialize database
-docker-compose exec db psql -U postgres -c "DROP DATABASE waddlebot"
-docker-compose exec db psql -U postgres -c "CREATE DATABASE waddlebot"
+docker-compose exec infra-postgres psql -U postgres -c "DROP DATABASE waddlebot"
+docker-compose exec infra-postgres psql -U postgres -c "CREATE DATABASE waddlebot"
 
 # Run migrations
-docker-compose exec discord-module python -m scripts.migrate_db
+docker-compose exec trigger-discord python -m scripts.migrate_db
 ```
 
 ## Redis Connection Issues
@@ -252,10 +252,10 @@ docker-compose exec discord-module python -m scripts.migrate_db
 
 ```bash
 # Check Redis is running
-docker-compose ps redis
+docker-compose ps infra-redis
 
 # Test Redis connection
-docker-compose exec redis redis-cli ping
+docker-compose exec infra-redis redis-cli ping
 # Should respond: PONG
 ```
 
@@ -272,8 +272,8 @@ docker-compose up -d redis
 3. Verify host is reachable
 
 **If Redis is running but slow:**
-1. Check memory usage: `docker-compose exec redis redis-cli INFO memory`
-2. Clear old cache: `docker-compose exec redis redis-cli FLUSHDB`
+1. Check memory usage: `docker-compose exec infra-redis redis-cli INFO memory`
+2. Clear old cache: `docker-compose exec infra-redis redis-cli FLUSHDB`
 3. Check disk I/O: `docker stats redis`
 
 ## Memory and Resource Issues
@@ -293,7 +293,7 @@ docker stats discord-module
 docker inspect discord-module | grep -i memory
 
 # Check process memory
-docker-compose exec discord-module ps aux | grep python
+docker-compose exec trigger-discord ps aux | grep python
 ```
 
 ### Solutions
@@ -304,7 +304,7 @@ docker-compose exec discord-module ps aux | grep python
    discord-module:
      mem_limit: 512m  # Increase from 256m
    ```
-2. Restart container: `docker-compose restart discord-module`
+2. Restart container: `docker-compose restart trigger-discord`
 
 **If high CPU usage:**
 1. Check if many events are being processed: `docker logs discord-module | grep "Event received"`
@@ -328,13 +328,13 @@ docker-compose exec discord-module ps aux | grep python
 
 ```bash
 # Test router connectivity
-docker-compose exec discord-module curl -v http://router:5000/health
+docker-compose exec trigger-discord curl -v http://router:5000/health
 
 # Test database connectivity
-docker-compose exec discord-module python -c "import psycopg2; ..."
+docker-compose exec trigger-discord python -c "import psycopg2; ..."
 
 # Test Redis connectivity
-docker-compose exec discord-module python -c "import redis; ..."
+docker-compose exec trigger-discord python -c "import redis; ..."
 ```
 
 ### Solutions
@@ -425,7 +425,7 @@ docker-compose up -d
 **If autocomplete is disabled:**
 ```bash
 export AUTOCOMPLETE_ENABLED=true
-docker-compose restart discord-module
+docker-compose restart trigger-discord
 ```
 
 **If command options missing:**
@@ -460,7 +460,7 @@ docker logs discord-module | grep -i modal
 **If modals are disabled:**
 ```bash
 export MODAL_SUPPORT_ENABLED=true
-docker-compose restart discord-module
+docker-compose restart trigger-discord
 ```
 
 **If modal submission fails:**
@@ -474,7 +474,7 @@ docker-compose restart discord-module
 
 1. **Enable DEBUG logging temporarily**
    ```bash
-   LOG_LEVEL=DEBUG docker-compose up discord-module
+   LOG_LEVEL=DEBUG docker-compose up trigger-discord
    ```
 
 2. **Identify slow operations**
@@ -512,7 +512,7 @@ docker --version
 docker-compose ps
 
 # Recent logs (last 100 lines)
-docker-compose logs discord-module --tail 100
+docker-compose logs trigger-discord --tail 100
 
 # Status check
 curl http://localhost:8003/api/v1/status | jq

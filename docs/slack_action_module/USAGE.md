@@ -72,16 +72,16 @@ slack-action-module:
 
 ```bash
 # Development mode
-docker-compose up slack-action-module
+docker-compose up action-slack
 
 # Production mode (background)
 docker-compose up -d slack-action-module
 
 # View logs
-docker-compose logs -f slack-action-module
+docker-compose logs -f action-slack
 
 # Stop container
-docker-compose down slack-action-module
+docker-compose down action-slack
 ```
 
 ## SLACK_BOT_TOKEN Setup
@@ -173,7 +173,7 @@ curl http://localhost:8071/health
 
 ```bash
 # Docker health check
-docker-compose ps slack-action-module
+docker-compose ps action-slack
 
 # Should show: healthy status after 10-30 seconds
 ```

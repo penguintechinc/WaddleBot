@@ -736,7 +736,7 @@ If issues persist:
 
 1. **Check logs**:
 ```bash
-docker-compose logs -f lambda_action_module
+docker-compose logs -f action-lambda
 ```
 
 2. **Run tests**:

@@ -71,14 +71,14 @@ MODULE_SECRET_KEY=your_generated_key_here
 
 Restart module:
 ```bash
-docker-compose restart discord_action_module
+docker-compose restart action-discord
 ```
 
 #### 3. Module Crashes on Startup
 
 **Check logs:**
 ```bash
-docker-compose logs discord_action_module
+docker-compose logs action-discord
 ```
 
 **Common causes:**
@@ -114,14 +114,14 @@ export REST_PORT=8071
 ```
 
 **Check:**
-1. Database running: `docker-compose ps postgres`
+1. Database running: `docker-compose ps infra-postgres`
 2. Database accessible: `psql $DATABASE_URL -c "SELECT 1"`
-3. Logs: `docker-compose logs discord_action_module`
+3. Logs: `docker-compose logs action-discord`
 
 **Solution:**
 ```bash
 # Restart database connection
-docker-compose restart discord_action_module
+docker-compose restart action-discord
 ```
 
 #### 2. Authentication Failures
@@ -216,7 +216,7 @@ export DISCORD_BOT_TOKEN="your_new_token"
 
 Reload module:
 ```bash
-docker-compose restart discord_action_module
+docker-compose restart action-discord
 ```
 
 Verify token is loaded:
@@ -331,7 +331,7 @@ If hitting limits, increase (be cautious of Discord's global limits):
 ```bash
 export DISCORD_RATE_LIMIT_GLOBAL=100
 export DISCORD_RATE_LIMIT_PER_CHANNEL=10
-docker-compose restart discord_action_module
+docker-compose restart action-discord
 ```
 
 Better solution - Implement request queueing:
@@ -410,13 +410,13 @@ ping postgres  # if using docker
 
 Check logs for slowness:
 ```bash
-docker-compose logs discord_action_module | grep "slow\|timeout"
+docker-compose logs action-discord | grep "slow\|timeout"
 ```
 
 Increase timeout if needed (default: 30s):
 ```bash
 export REQUEST_TIMEOUT=60
-docker-compose restart discord_action_module
+docker-compose restart action-discord
 ```
 
 #### 2. Rate Limit Errors Occurring Frequently
@@ -435,7 +435,7 @@ docker-compose restart discord_action_module
 Monitor rate limits:
 ```bash
 # Check configuration
-docker-compose exec discord_action_module   curl http://localhost:8070/health | jq '.config'
+docker-compose exec action-discord   curl http://localhost:8070/health | jq '.config'
 ```
 
 Adjust limits (carefully):
@@ -466,7 +466,7 @@ def retry_with_backoff(func, max_retries=3):
 
 View real-time logs:
 ```bash
-docker-compose logs -f discord_action_module
+docker-compose logs -f action-discord
 ```
 
 View with timestamps:
@@ -476,8 +476,8 @@ docker-compose logs -f --timestamps discord_action_module
 
 Filter by log level:
 ```bash
-docker-compose logs discord_action_module | grep ERROR
-docker-compose logs discord_action_module | grep WARNING
+docker-compose logs action-discord | grep ERROR
+docker-compose logs action-discord | grep WARNING
 ```
 
 #### 2. Enable Debug Logging
@@ -485,31 +485,31 @@ docker-compose logs discord_action_module | grep WARNING
 Set log level to DEBUG:
 ```bash
 export LOG_LEVEL=DEBUG
-docker-compose restart discord_action_module
+docker-compose restart action-discord
 ```
 
 Check logs for detailed output:
 ```bash
-docker-compose logs discord_action_module | head -50
+docker-compose logs action-discord | head -50
 ```
 
 #### 3. Database Query Logging
 
 Check database logs:
 ```bash
-docker-compose logs postgres | grep ERROR
+docker-compose logs infra-postgres | grep ERROR
 ```
 
 Check database connections:
 ```bash
-docker-compose exec postgres psql -U waddlebot -d waddlebot -c "SELECT count(*) FROM pg_stat_activity;"
+docker-compose exec infra-postgres psql -U waddlebot -d waddlebot -c "SELECT count(*) FROM pg_stat_activity;"
 ```
 
 #### 4. Check Activity Log
 
 Query discord_actions table:
 ```bash
-docker-compose exec postgres psql -U waddlebot -d waddlebot << 'SQL'
+docker-compose exec infra-postgres psql -U waddlebot -d waddlebot << 'SQL'
 SELECT action_type, success, error_message, created_at 
 FROM discord_actions 
 ORDER BY created_at DESC 
@@ -530,7 +530,7 @@ docker-compose ps
 
 **View startup logs:**
 ```bash
-docker-compose logs discord_action_module
+docker-compose logs action-discord
 ```
 
 **Rebuild container:**
@@ -587,7 +587,7 @@ If you can't resolve the issue:
 
 1. **Gather information:**
    ```bash
-   docker-compose logs discord_action_module > logs.txt
+   docker-compose logs action-discord > logs.txt
    curl http://localhost:8070/health | jq . > health.json
    env | grep -E "DISCORD|DATABASE|JWT" > env.txt
    ```
@@ -599,7 +599,7 @@ If you can't resolve the issue:
 
 3. **Contact support:**
    - Create issue with logs attached
-   - Include version: `docker-compose exec discord_action_module cat requirements.txt`
+   - Include version: `docker-compose exec action-discord cat requirements.txt`
    - Include configuration summary (no secrets)
 
 ---

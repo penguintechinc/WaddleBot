@@ -9,8 +9,7 @@
 - **Default Value**: REMOVED (was: `waddlebot_secret`)
 - **Locations to Update**:
   - `.env` file (LOCAL ONLY - not in git)
-  - `docker-compose.yml` - expects value from environment
-  - K8s Secrets: `k8s/manifests/secrets.yaml` (base64 encoded in data field)
+  - `docker-compose.yml` - expects value from environment (local dev only)
   - Helm Secrets: `k8s/helm/waddlebot/templates/secrets.yaml` (templated value from values.yaml)
 - **Container Instances**: All services using DATABASE_URL
 - **Rotation Procedure**:
@@ -25,8 +24,7 @@
 - **Default Value**: REMOVED (was: `waddlebot_redis`)
 - **Locations to Update**:
   - `.env` file (LOCAL ONLY - not in git)
-  - `docker-compose.yml` - expects value from environment
-  - K8s Secrets: `k8s/manifests/secrets.yaml`
+  - `docker-compose.yml` - expects value from environment (local dev only)
   - Helm Secrets: `k8s/helm/waddlebot/templates/secrets.yaml`
 - **Container Instances**: redis, labels-core, identity-core, analytics-core, security-core, workflow-core
 - **Rotation Procedure**:
@@ -106,43 +104,6 @@
   4. Access MinIO console to verify
   5. Create new access keys if integrating with external systems
   6. Document rotation date in AUDIT log
-
-## Kong API Gateway
-
-### Kong PostgreSQL Password
-- **Environment Variable**: `KONG_PG_PASSWORD`
-- **Default Value**: REMOVED (was: `kong_db_pass_change_me`)
-- **Used By**: kong service
-- **Locations to Update**:
-  - `.env` file
-  - `docker-compose.yml`
-  - K8s Secrets
-  - Helm values.yaml
-- **Database**: Kong's PostgreSQL database (separate from main waddlebot database)
-- **Rotation Procedure**:
-  1. Generate new secure password
-  2. Update Kong PostgreSQL user password
-  3. Update environment variables
-  4. Restart Kong
-  5. Verify Kong health and routes
-  6. Document rotation date in AUDIT log
-
-### Kong Session Secret
-- **Environment Variable**: `KONG_SESSION_SECRET`
-- **Default Value**: REMOVED (was: `super-secret-session-key-change-in-production`)
-- **Used By**: kong service (Manager GUI sessions)
-- **Locations to Update**:
-  - `.env` file
-  - `docker-compose.yml` (KONG_ADMIN_GUI_SESSION_CONF)
-  - K8s Secrets
-  - Helm values.yaml
-- **Impact**: Invalidates all Kong Manager session tokens
-- **Rotation Procedure**:
-  1. Generate new 256-bit secret
-  2. Update KONG_ADMIN_GUI_SESSION_CONF in environment
-  3. Restart Kong
-  4. Admin users will need to re-login to Kong Manager
-  5. Document rotation date in AUDIT log
 
 ## Third-Party Integrations
 
@@ -323,14 +284,13 @@ result=SUCCESS details="POSTGRES_PASSWORD rotated" technician=username
 - No default fallback values (removed: `:-default_value` pattern)
 - All credentials must be provided via .env or environment
 
-### Kubernetes (K8s Secrets)
-- **Manifests** (`k8s/manifests/secrets.yaml`):
-  - Values are base64-encoded (NOT encrypted)
-  - Use K8s native secrets management
-  - Apply via `kubectl apply -f secrets.yaml`
-- **Helm** (`k8s/helm/waddlebot/templates/secrets.yaml`):
-  - Values are templated from `values.yaml`
-  - Use Helm Secrets plugin or encrypted values
+### Kubernetes (K8s Secrets via Helm)
+- **Helm** (`k8s/helm/waddlebot/templates/secrets.yaml`), the only deploy path — Helm is the sole
+  Kubernetes deployment mechanism for alpha through production:
+  - Values are templated from `values.yaml` / `values-{env}.yaml`
+  - Supply real secret values via your cluster's secrets mechanism (Vault, Sealed Secrets, or
+    External Secrets Operator) — never plaintext in a values file
+  - Deploy via `helm install`/`helm upgrade`
   - Deploy via `helm install/upgrade`
 
 ## Compliance & Security
@@ -353,9 +313,9 @@ result=SUCCESS details="POSTGRES_PASSWORD rotated" technician=username
 - Audit trail for compliance
 
 ## Related Documentation
-- See `docs/development-rules.md` for general security practices
-- See `docs/environment-variables.md` for complete environment variable reference
-- See `CLAUDE.md` for license server and integration points
+- See [`docs/reference/development-rules.md`](reference/development-rules.md) for general security practices
+- See [`docs/reference/environment-variables.md`](reference/environment-variables.md) for complete environment variable reference
+- See [`docs/SECRETS_SETUP.md`](SECRETS_SETUP.md) for the license server and secrets-injection setup
 
 ---
 

@@ -28,7 +28,7 @@ This section provides everything you need to get Waddles up and running in your 
     For contributors and module developers:
     
     - **Time**: 30-60 minutes  
-    - **Requirements**: Python 3.12, development tools
+    - **Requirements**: Python 3.13, development tools
     - **Platforms**: Local development environment
     - **Use Case**: Contributing code, building modules
     
@@ -40,7 +40,7 @@ This section provides everything you need to get Waddles up and running in your 
 
 === "Development"
     **Minimum Requirements:**
-    - Python 3.12 or later
+    - Python 3.13 or later
     - Docker and Docker Compose
     - 4GB RAM, 2 CPU cores
     - 10GB available disk space
@@ -80,7 +80,7 @@ Before setting up Waddles, you'll need to create applications on the platforms y
     - Use Slash Commands
     - Manage Roles (optional)
     
-    **Setup Guide:** [Discord Platform Setup](../platforms/discord.md)
+    **Setup Guide:** [Discord Module](../discord_module/CONFIGURATION.md)
 
 === "Twitch"
     **Required:**
@@ -94,7 +94,7 @@ Before setting up Waddles, you'll need to create applications on the platforms y
     - `channel:read:redemptions`
     - `moderator:read:followers`
     
-    **Setup Guide:** [Twitch Platform Setup](../platforms/twitch.md)
+    **Setup Guide:** [Twitch Module](../twitch_module/CONFIGURATION.md)
 
 === "Slack"
     **Required:**
@@ -108,7 +108,7 @@ Before setting up Waddles, you'll need to create applications on the platforms y
     - `users:read`
     - `reactions:write`
     
-    **Setup Guide:** [Slack Platform Setup](../platforms/slack.md)
+    **Setup Guide:** [Slack Module](../slack_module/CONFIGURATION.md)
 
 ## Architecture Decision Tree
 
@@ -151,29 +151,29 @@ Based on your needs, pick the appropriate setup guide:
 ### 2. Platform Configuration
 Set up your platform integrations:
 
-- **[Discord Integration](../platforms/discord.md)**
-- **[Twitch Integration](../platforms/twitch.md)**  
-- **[Slack Integration](../platforms/slack.md)**
+- **[Discord Integration](../discord_module/CONFIGURATION.md)**
+- **[Twitch Integration](../twitch_module/CONFIGURATION.md)**
+- **[Slack Integration](../slack_module/CONFIGURATION.md)**
 
 ### 3. Core Configuration
 Configure the core system components:
 
-- **[Router Configuration](../core-modules/router.md)**
-- **[Identity Management](../core-modules/identity.md)**
-- **[Database Setup](../deployment-guide.md#database-configuration)**
+- **[Architecture — module ownership](../ARCHITECTURE.md#module-ownership-sccembs)**
+- **[Identity Management](../identity_core_module/CONFIGURATION.md)**
+- **[Database Setup](../DATABASE.md)**
 
 ### 4. Feature Modules
 Enable the features your community needs:
 
-- **[AI Chat Integration](../interaction-modules/ai.md)**
-- **[Music Integration](../interaction-modules/youtube-music.md)**
+- **[AI Chat Integration](../ai_interaction_module/CONFIGURATION.md)**
+- **[Music Integration](../youtube_music_interaction_module/CONFIGURATION.md)**
 - **[Community Management](../interaction-modules/inventory.md)**
 
 ### 5. Administration
 Set up community management:
 
-- **[Portal Access](../admin/portal.md)**
-- **[User Management](../core-modules/identity.md)**
+- **[Admin Portal (hub-webui)](../ARCHITECTURE.md#the-8-containers)**
+- **[User Management](../identity_core_module/CONFIGURATION.md)**
 - **[Monitoring Setup](../admin/logging-and-monitoring.md)**
 
 ## Common Setup Issues
@@ -192,4 +192,4 @@ Set up community management:
 - **Discord/Twitch/Slack Issues**: Check platform-specific documentation
 - **Setup Problems**: Review our [troubleshooting guide](deployment-guide.md#troubleshooting)
 - **Development Questions**: See [contributing guidelines](contributing.md)
-- **Bug Reports**: [GitHub Issues](https://github.com/Waddles/Waddles/issues)
+- **Bug Reports**: [GitHub Issues](https://github.com/penguintechinc/waddlebot/issues)

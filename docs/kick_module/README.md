@@ -226,8 +226,8 @@ See [ARCHITECTURE.md](ARCHITECTURE.md#performance-characteristics) for detailed 
 1. **Make changes** in `trigger/receiver/kick_module_flask/`
 2. **Run tests**: `pytest tests/ -v`
 3. **Check linting**: `flake8 src/`
-4. **Build Docker image**: `docker build -t kick-module:test .`
-5. **Test locally**: `docker-compose -f docker-compose.test.yml up`
+4. **Build Docker image**: `docker build -f trigger/receiver/kick_module_flask/Dockerfile -t kick-module:test .`
+5. **Test locally**: `docker-compose up trigger-kick` (repo's `docker-compose.yml` — there is no separate test compose file)
 6. **Submit PR** with test results
 
 See [TESTING.md](TESTING.md) for full testing guide.

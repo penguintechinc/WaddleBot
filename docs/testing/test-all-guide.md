@@ -285,10 +285,9 @@ LOG_DIR="/my/custom/path/waddlebot-tests-${TIMESTAMP}"
 
 ## Related Documentation
 
-- [API Test Scripts](./api-testing.md) - Individual module API test documentation
-- [WebUI Testing](./webui-testing.md) - Frontend testing guide
-- [Docker Compose](../deployment/docker-compose.md) - Service orchestration
-- [CI/CD Setup](../ci-cd/github-actions.md) - Automation guide
+- [Contributing](../getting-started/contributing.md) - Local dev setup, including `docker-compose.yml`
+- [Deployment Guide](../getting-started/deployment-guide.md) - Production (Helm-only) deployment
+- [Workflows](../project/workflows.md) - CI/CD and automation
 
 ---
 **Last Updated:** 2025-12-19

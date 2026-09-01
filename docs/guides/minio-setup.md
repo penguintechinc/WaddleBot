@@ -17,7 +17,6 @@ docker-compose ps
 ### 2. Access Services
 
 - **Waddles Hub**: http://localhost:8060
-- **Kong API Gateway**: http://localhost:8000
 - **MinIO Console**: http://localhost:9001
 - **MinIO API**: http://localhost:9000
 
@@ -35,23 +34,23 @@ docker-compose ps
 ## Architecture Overview
 
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Waddles     │    │      Kong       │    │     MinIO       │
-│    Hub Module   │◄──►│   API Gateway   │◄──►│   S3 Storage    │
-│                 │    │                 │    │                 │
-│ - Image Upload  │    │ - API Routing   │    │ - Object Store  │
-│ - Gallery       │    │ - Auth          │    │ - Public Access │
-│ - Management    │    │ - Rate Limiting │    │ - Versioning    │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         │              ┌─────────────────┐              │
-         └──────────────►│   PostgreSQL    │◄─────────────┘
-                        │   Database      │
-                        │                 │
-                        │ - Image Meta    │
-                        │ - User Data     │
-                        │ - Communities   │
-                        └─────────────────┘
+┌─────────────────┐                          ┌─────────────────┐
+│   Waddles       │◄────────────────────────►│     MinIO       │
+│   Hub Module    │                          │   S3 Storage    │
+│                 │                          │                 │
+│ - Image Upload  │                          │ - Object Store  │
+│ - Gallery       │                          │ - Public Access │
+│ - Management    │                          │ - Versioning    │
+└─────────────────┘                          └─────────────────┘
+         │
+┌─────────────────┐
+│   PostgreSQL    │
+│   Database      │
+│                 │
+│ - Image Meta    │
+│ - User Data     │
+│ - Communities   │
+└─────────────────┘
 ```
 
 ## Storage Structure
@@ -175,7 +174,7 @@ cd Waddles
 docker-compose up -d
 
 # Check logs
-docker-compose logs -f hub
+docker-compose logs -f hub-api
 ```
 
 ### 2. Testing Image Upload
@@ -290,7 +289,7 @@ S3_BUCKET_NAME=waddlebot-assets
 
 ```bash
 # Check storage service health
-curl http://localhost:8000/api/images/storage-status
+curl http://localhost:8060/api/images/storage-status
 
 # Check MinIO health
 curl http://localhost:9000/minio/health/live
@@ -300,10 +299,10 @@ curl http://localhost:9000/minio/health/live
 
 ```bash
 # Hub module logs
-docker-compose logs -f hub
+docker-compose logs -f hub-api
 
 # MinIO logs
-docker-compose logs -f minio
+docker-compose logs -f infra-minio
 
 # Check all service health
 docker-compose ps
@@ -327,7 +326,7 @@ docker-compose exec postgres pg_dump -U waddlebot waddlebot > backup.sql
 ### Common Issues
 
 **1. Storage service not connecting**:
-- Check MinIO container is running: `docker-compose ps minio`
+- Check MinIO container is running: `docker-compose ps infra-minio`
 - Verify credentials and endpoint URL
 - Check network connectivity between containers
 
@@ -350,7 +349,7 @@ docker-compose exec postgres pg_dump -U waddlebot waddlebot > backup.sql
 
 ```bash
 # Test MinIO connectivity from hub container
-docker-compose exec hub wget -qO- http://minio:9000/minio/health/live
+docker-compose exec hub-api wget -qO- http://infra-minio:9000/minio/health/live
 
 # Check hub health
 curl http://localhost:8060/health

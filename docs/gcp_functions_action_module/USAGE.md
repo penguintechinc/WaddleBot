@@ -122,7 +122,7 @@ docker-compose up -d
 
 Verify it's running:
 ```bash
-docker-compose logs -f gcp_functions_action_module
+docker-compose logs -f action-gcp-functions
 ```
 
 ### 5. Check Health
@@ -231,12 +231,12 @@ volumes:
 
 View real-time logs:
 ```bash
-docker-compose logs -f gcp_functions_action_module
+docker-compose logs -f action-gcp-functions
 ```
 
 View specific module logs:
 ```bash
-docker-compose exec gcp_functions_action_module tail -f /var/log/waddlebotlog/gcp_functions_action.log
+docker-compose exec action-gcp-functions tail -f /var/log/waddlebotlog/gcp_functions_action.log
 ```
 
 ## Configuration
@@ -394,7 +394,7 @@ Response:
 - Check GCP_PROJECT_ID is set
 - Check GCP credentials file path
 - Check DATABASE_URL is valid
-- Check logs: `docker-compose logs gcp_functions_action_module`
+- Check logs: `docker-compose logs action-gcp-functions`
 
 **Health check fails:**
 - Database connectivity: Check PostgreSQL is running

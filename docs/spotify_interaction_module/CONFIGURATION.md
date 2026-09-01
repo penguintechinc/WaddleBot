@@ -415,7 +415,7 @@ ENABLE_HISTORY=true
 
 ## Kubernetes / ConfigMap Example
 
-For Kubernetes deployments using Kustomize, environment variables are split between
+For Kubernetes deployments using the Helm chart (`k8s/helm/waddlebot/`), environment variables are split between
 a ConfigMap (non-sensitive) and a Secret (sensitive):
 
 **ConfigMap** (non-sensitive):

@@ -396,7 +396,7 @@ pytest-cov>=4.1.0
 
 1. **Stop the service**
    ```bash
-   docker-compose down workflow-core
+   docker-compose down core-workflow
    ```
 
 2. **Backup database**
@@ -423,7 +423,7 @@ pytest-cov>=4.1.0
 
 6. **Rebuild and start**
    ```bash
-   docker-compose build workflow-core
+   docker-compose build core-workflow
    docker-compose up -d workflow-core
    ```
 

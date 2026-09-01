@@ -31,11 +31,10 @@ docs/
 ├── index.md               # Homepage
 ├── getting-started/       # Getting started guides
 ├── architecture/          # System architecture docs
-├── core-modules/          # Core module documentation
-├── interaction-modules/   # Interaction module docs
-├── platforms/            # Platform integration guides
+├── interaction-modules/   # Interaction module docs (inventory.md, details.md)
 ├── admin/                # Administration guides
 ├── sdk/                  # SDK and API documentation
+├── *_module/              # Per-legacy-module docs (still-running v2.2.x services)
 └── .github/workflows/    # CI/CD for documentation
 ```
 
@@ -122,6 +121,5 @@ graph TB
 
 ## Links
 
-- **Live Site**: https://docs.waddlebot.io
-- **GitHub Repository**: https://github.com/WaddleBot/WaddleBot
-- **Issue Tracker**: https://github.com/WaddleBot/WaddleBot/issues
+- **GitHub Repository**: https://github.com/penguintechinc/waddlebot
+- **Issue Tracker**: https://github.com/penguintechinc/waddlebot/issues
