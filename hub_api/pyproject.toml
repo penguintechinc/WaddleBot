@@ -61,6 +61,18 @@ convention = "google"
 # contract pinned to frontend/src/services/api.js's tenantApi.
 "blueprints/v1/tenant.py" = ["S101", "N815"]
 "services/profile_service.py" = ["S101"]
+# M7 Streaming group (overlay/calls) -- same postcondition-assert rationale
+# as blueprints/v1/auth.py above (`get_tenant_context(request)` is always
+# non-None after `tenant_middleware` already ran; worst case under -O is an
+# AttributeError -> 500, never an auth bypass). overlay.py's request/
+# response DTOs (`isActive`/`themeConfig`/`enabledSources`/`overlayUrl`)
+# and overlay_service.py's `OverlayRecord.overlayUrl` are wire contracts
+# pinned to `frontend/src/services/api.js` / `AdminStreamOverlays.jsx` --
+# deliberately mixed-case, not a naming-convention slip (see
+# `hub_api/PORTING.md`'s DTO casing note).
+"blueprints/v1/overlay.py" = ["S101", "N815"]
+"blueprints/v1/calls.py" = ["S101"]
+"services/overlay_service.py" = ["N815"]
 # M7 Streaming group (music/stream/streaming) -- same camelCase-DTO
 # rationale as blueprints/v1/auth.py above; DTO field names are wire
 # contracts pinned to frontend/src/services/api.js.

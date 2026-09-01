@@ -13,6 +13,19 @@ instead of relaxing that production invariant.
 needs its own tables should add its own `<group>_db` fixture here the
 same way, rather than editing `tenant_db`/`auth_db` in place (keeps this
 shared file append-only across the parallel port wave).
+
+`overlay_db` (M7 Streaming/overlay+calls group) is this port's own
+additive fixture, mirroring `auth_db`'s file-backed-sqlite/`migrate=True`
+shape but also calling `services.schema.bind_overlay_tables()` for
+`community_overlay_tokens`/`overlay_access_log` -- new tables `auth_db`
+doesn't bind. Named `overlay_db` (not `streaming_db`) to avoid colliding
+with the M7 Streaming (music/stream/streaming) group's own `streaming_db`
+fixture below, which binds an unrelated table set via a same-named-but-
+different `bind_streaming_tables()`/`bind_overlay_tables()` split (see
+`services/schema.py`'s own docstring on that rename). `_seed_community`/
+`_seed_membership` are this group's own seeding helpers for
+`communities`/`community_members` (`services.community_access`'s authz
+checks).
 """
 
 from __future__ import annotations
@@ -29,6 +42,7 @@ from services.schema import (
     bind_auth_tables,
     bind_community_authz_tables,
     bind_github_sync_tables,
+    bind_overlay_tables,
     bind_platform_tables,
     bind_privacy_tables,
     bind_streaming_tables,
@@ -106,6 +120,41 @@ def auth_db(tmp_path: Any) -> Any:
     dal.close()
 
 
+#: Second tenant slug -- exists only in `overlay_db`, for cross-tenant IDOR tests
+#: (`services.community_access._require_community_in_tenant`).
+OTHER_TENANT_SLUG = "other-corp"
+
+
+@pytest.fixture
+def overlay_db(tmp_path: Any) -> Any:
+    """File-backed `AsyncDAL` with `tenants` + auth tables + M7's own overlay/calls tables.
+
+    Same connection-visibility rationale as `auth_db` (see its own
+    docstring) -- a fresh file, not shared with `auth_db`, so tests in
+    this group don't collide with M1's own fixture instance.
+    """
+    async_dal = AsyncDAL(f"sqlite://{tmp_path / 'overlay_test.db'}", pool_size=1)
+    dal = async_dal.dal
+    dal.define_table(
+        "tenants",
+        Field("slug", unique=True),
+        Field("display_name"),
+        Field("logo_url"),
+        Field("is_global", "boolean", default=False),
+        Field("is_active", "boolean", default=True),
+        Field("config", "json"),
+    )
+    bind_auth_tables(dal, migrate=True)
+    bind_overlay_tables(dal, migrate=True)
+    dal.tenants.insert(slug=TENANT_SLUG, display_name="Acme Corp", is_active=True)
+    dal.tenants.insert(slug=OTHER_TENANT_SLUG, display_name="Other Corp", is_active=True)
+    dal.commit()
+    for table_name in dal.tables:
+        dal(dal[table_name]).count()
+    yield async_dal
+    dal.close()
+
+
 @pytest.fixture
 def streaming_db(tmp_path: Any) -> Any:
     """File-backed `AsyncDAL` for the M7 Streaming group (music/stream/streaming).
@@ -173,6 +222,30 @@ def automation_db(tmp_path: Any) -> Any:
         dal(dal[table_name]).count()
     yield async_dal
     dal.close()
+
+
+def seed_community(
+    overlay_db: Any, *, tenant_slug: str = TENANT_SLUG, name: str = "acme-community"
+) -> int:
+    """Insert one `communities` row scoped to `tenant_slug`; returns its id."""
+    dal = overlay_db.dal
+    tenant = dal(dal.tenants.slug == tenant_slug).select().first()
+    community_id: int = dal.communities.insert(
+        name=name, display_name=name, tenant_id=tenant.id, is_active=True
+    )
+    dal.commit()
+    return community_id
+
+
+def seed_membership(
+    overlay_db: Any, *, community_id: int, user_id: int, role: str = "community-owner"
+) -> None:
+    """Insert one active `community_members` row for `user_id` in `community_id`."""
+    dal = overlay_db.dal
+    dal.community_members.insert(
+        community_id=community_id, user_id=str(user_id), role=role, is_active=True
+    )
+    dal.commit()
 
 
 @pytest.fixture
@@ -340,6 +413,19 @@ def make_user_token(*, user_id: int, scope: str = "", tenant: str = TENANT_SLUG)
         username="alice",
         email="alice@example.com",
         roles=["viewer"],
+        secret_key=SECRET_KEY,
+        tenant=tenant,
+        scope=scope,
+    )
+
+
+def make_super_admin_token(*, user_id: int, scope: str = "", tenant: str = TENANT_SLUG) -> str:
+    """Mint a JWT with `roles=["super_admin"]` -- `services.community_access._is_super_admin`."""
+    return create_jwt_token(
+        user_id=str(user_id),
+        username="root",
+        email="root@example.com",
+        roles=["super_admin"],
         secret_key=SECRET_KEY,
         tenant=tenant,
         scope=scope,
