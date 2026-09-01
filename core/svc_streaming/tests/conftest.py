@@ -160,7 +160,7 @@ def seed_token_product(
     tokens_granted: int = 60,
     active: bool = True,
 ) -> None:
-    """Insert one `token_products` row -- mirrors migration 078's seed for local test DBs.
+    """Insert one `token_products` row -- mirrors migration 079's seed for local test DBs.
 
     svc-streaming's own DB never actually owns `token_products` (that's
     hub-api's table, migration 076) -- tests that need it define a

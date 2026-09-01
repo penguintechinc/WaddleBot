@@ -1,4 +1,4 @@
--- Migration 078: svc-streaming's own control-plane tables + the
+-- Migration 079: svc-streaming's own control-plane tables + the
 -- transcoding-token catalog seed.
 --
 -- Per-community stream configuration (`streaming_configs`), its forward

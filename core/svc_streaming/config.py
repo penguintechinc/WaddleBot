@@ -12,7 +12,7 @@ a code change here.
 
 This is the CONTROL PLANE + real data-plane orchestrator: it owns its own
 `streaming_configs`/`streaming_targets`/`streaming_sessions` tables
-(migration 078) and shells out to a real `ffmpeg` binary (`FFMPEG_BINARY`)
+(migration 079) and shells out to a real `ffmpeg` binary (`FFMPEG_BINARY`)
 to do the actual HLS/RTMP ingest + fan-out-to-N-targets forwarding --
 see `services/ffmpeg_engine.py`. This is a deliberate, documented scope
 choice vs the design spec's Rust-target / external-MarchProxy-fronting
@@ -71,7 +71,7 @@ class Config:
     db_pool_size: int
     #: `bind_streaming_tables(dal, migrate=db_migrate)` -- prod NEVER
     #: auto-migrates (backend-database.md rule 9: schema owned by the
-    #: numbered migration file, `078_svc_streaming.sql`); tests set this
+    #: numbered migration file, `079_svc_streaming.sql`); tests set this
     #: True to get real DDL against an ephemeral sqlite file.
     db_migrate: bool
 
@@ -100,7 +100,7 @@ class Config:
     #: the real, minimal admission-check this build implements -- see
     #: `services/token_ledger_client.py`).
     transcode_token_cost: int
-    #: `token_products.key` seeded by migration 078 -- the catalog entry
+    #: `token_products.key` seeded by migration 079 -- the catalog entry
     #: svc-streaming debits against via hub-api's real token ledger
     #: (`hub_api/services/token_billing_service.py`, `blueprints/v1/
     #: token_billing.py`'s `POST .../tokens/debit`).

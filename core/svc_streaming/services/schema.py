@@ -2,7 +2,7 @@
 
 svc-streaming owns three tables -- `streaming_configs`, `streaming_targets`,
 `streaming_sessions` -- physically created by `config/postgres/migrations/
-078_svc_streaming.sql` in the same shared Postgres instance every other
+079_svc_streaming.sql` in the same shared Postgres instance every other
 stage-runner writes to (`backend-database.md` Per-Service Database
 Accounts: same DB, per-service scoped credentials -- this service's own
 `DATABASE_URL`/`DB_USER`). `bind_streaming_tables()` mirrors `core/
