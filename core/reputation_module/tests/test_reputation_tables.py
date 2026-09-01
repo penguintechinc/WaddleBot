@@ -1,0 +1,181 @@
+r"""Regression coverage for reputation_events / reputation_global.
+
+Both tables are read/written by ``services/reputation_service.py`` (and
+``services/policy_enforcer.py``) but had no ``CREATE TABLE`` migration --
+every one of those call sites failed at runtime with
+``relation "reputation_events" does not exist`` /
+``relation "reputation_global" does not exist``. Migration
+080_add_reputation_tables.sql adds both tables; this suite exercises the
+real read/write SQL against a live Postgres running the actual migration
+files (not a hand-defined pydal/SQLite schema), so a regression on either
+table's columns is caught here instead of in production.
+
+``ReputationService.get_reputation()``/``.adjust()``/``.set_reputation()``/
+``.get_leaderboard()``/``.initialize_member()`` all additionally join
+against ``community_members.hub_user_id`` -- a column that does not exist on
+that table (it has ``user_id VARCHAR``, see
+config/postgres/migrations/000_create_base_schema.sql /
+037_fix_community_schema.sql). That is a separate, pre-existing bug outside
+this migration's scope (it exists independently of whether
+reputation_events/reputation_global exist) and is not exercised here; this
+suite only covers the code paths whose *only* runtime dependency was the
+missing reputation_events/reputation_global tables --
+``_update_global_reputation()``/``get_global_reputation()``,
+``get_history()``, and ``get_global_leaderboard()``.
+
+Run locally against a fresh migrated Postgres, e.g.:
+
+    docker run -d -p 55432:5432 -e POSTGRES_USER=waddlebot \\
+        -e POSTGRES_PASSWORD=password -e POSTGRES_DB=waddlebot \\
+        postgres:17-bookworm
+    for f in config/postgres/migrations/*.sql; do
+        psql postgresql://waddlebot:password@localhost:55432/waddlebot -f "$f"
+    done
+    TEST_DATABASE_URL=postgresql://waddlebot:password@localhost:55432/waddlebot \\
+        pytest core/reputation_module/tests/test_reputation_tables.py -v
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+
+import pytest
+from pydal import DAL
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+
+from config import Config
+from services.reputation_service import ReputationService
+from services.weight_manager import WeightManager
+from tests.conftest import NullLogger
+
+
+async def test_global_reputation_round_trip(dal: DAL, seeded_ids: tuple[int, int]) -> None:
+    """_update_global_reputation()'s upsert + get_global_reputation()'s SELECT.
+
+    Both hit reputation_global exclusively -- no community_members join.
+    Pre-080 this raised ``relation "reputation_global" does not exist``.
+    """
+    _, hub_user_id = seeded_ids
+    weight_manager = WeightManager(dal, NullLogger())
+    service = ReputationService(dal, weight_manager, NullLogger())
+
+    # No row yet -- default reputation returned, not an error.
+    default_rep = await service.get_global_reputation(hub_user_id)
+    assert default_rep is not None
+    assert default_rep.score == Config.REPUTATION_DEFAULT
+    assert default_rep.total_events == 0
+
+    # First event: upsert inserts a new row.
+    await service._update_global_reputation(hub_user_id, score_change=5.0)
+    dal.commit()
+
+    after_first = await service.get_global_reputation(hub_user_id)
+    assert after_first is not None
+    assert after_first.score == Config.REPUTATION_DEFAULT + 5
+    assert after_first.total_events == 1
+    # The INSERT's VALUES clause only sets hub_user_id/score/total_events --
+    # last_event_at is only assigned on the ON CONFLICT DO UPDATE branch, so
+    # it is still NULL after the very first event (matches the code's own
+    # INSERT statement, not a schema gap).
+    assert after_first.last_event_at is None
+
+    # Second event: upsert hits the ON CONFLICT DO UPDATE branch, which does
+    # set last_event_at.
+    await service._update_global_reputation(hub_user_id, score_change=-2.0)
+    dal.commit()
+
+    after_second = await service.get_global_reputation(hub_user_id)
+    assert after_second is not None
+    assert after_second.score == Config.REPUTATION_DEFAULT + 5 - 2
+    assert after_second.total_events == 2
+    assert after_second.last_event_at is not None
+
+    # Score is clamped to the FICO-style [300, 850] bounds by the CHECK
+    # constraint's own upstream clamp in the upsert's LEAST/GREATEST.
+    await service._update_global_reputation(hub_user_id, score_change=-10_000.0)
+    dal.commit()
+    clamped = await service.get_global_reputation(hub_user_id)
+    assert clamped is not None
+    assert clamped.score == 300
+
+
+async def test_reputation_events_insert_and_history(dal: DAL, seeded_ids: tuple[int, int]) -> None:
+    """Insert matching adjust()/set_reputation()'s exact reputation_events columns.
+
+    Then read it back via get_history() -- both hit reputation_events
+    exclusively. Pre-080 the INSERT raised
+    ``relation "reputation_events" does not exist``.
+    """
+    community_id, hub_user_id = seeded_ids
+    weight_manager = WeightManager(dal, NullLogger())
+    service = ReputationService(dal, weight_manager, NullLogger())
+
+    assert await service.get_history(community_id, hub_user_id) == []
+
+    dal.executesql(
+        """INSERT INTO reputation_events
+           (community_id, hub_user_id, platform, platform_user_id,
+            event_type, score_change, score_before, score_after,
+            reason, metadata)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+        [
+            community_id,
+            hub_user_id,
+            "discord",
+            "repmig-platform-user",
+            "follow",
+            1.0,
+            600,
+            601,
+            "regression test",
+            '{"source": "test"}',
+        ],
+    )
+    dal.commit()
+
+    history = await service.get_history(community_id, hub_user_id)
+    assert len(history) == 1
+    event = history[0]
+    assert event.event_type == "follow"
+    assert event.score_change == pytest.approx(1.0)
+    assert event.score_before == 600
+    assert event.score_after == 601
+    assert event.reason == "regression test"
+    assert event.metadata == {"source": "test"}
+
+    # get_reputation()'s two correlated subqueries against reputation_events
+    # (COUNT(*)/MAX(created_at)) use the same (community_id, hub_user_id)
+    # index this migration adds -- verify the raw subquery shape directly
+    # since get_reputation() itself also joins community_members.hub_user_id
+    # (the separate, out-of-scope bug documented in this file's docstring).
+    counts = dal.executesql(
+        """SELECT COUNT(*), MAX(created_at) FROM reputation_events re
+           WHERE re.community_id = %s AND re.hub_user_id = %s""",
+        [community_id, hub_user_id],
+    )
+    assert counts[0][0] == 1
+    assert counts[0][1] is not None
+
+
+async def test_global_leaderboard(dal: DAL, seeded_ids: tuple[int, int]) -> None:
+    """get_global_leaderboard() joins reputation_global to hub_users only.
+
+    No community_members involved, so it is fully exercised by this
+    migration. Pre-080 this raised
+    ``relation "reputation_global" does not exist``.
+    """
+    _, hub_user_id = seeded_ids
+    weight_manager = WeightManager(dal, NullLogger())
+    service = ReputationService(dal, weight_manager, NullLogger())
+
+    await service._update_global_reputation(hub_user_id, score_change=50.0)
+    dal.commit()
+
+    leaderboard = await service.get_global_leaderboard(limit=10)
+    assert any(row["user_id"] == hub_user_id for row in leaderboard)
+    entry = next(row for row in leaderboard if row["user_id"] == hub_user_id)
+    assert entry["score"] == Config.REPUTATION_DEFAULT + 50
+    assert entry["total_events"] == 1
+    assert entry["rank"] >= 1
