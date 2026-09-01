@@ -235,3 +235,148 @@ def bind_auth_tables(dal: Any, *, migrate: bool = False) -> None:
         Field("setting_value", "text"),
         migrate=migrate,
     )
+
+
+def bind_privacy_tables(dal: Any, *, migrate: bool = False) -> None:
+    """Define every table the Privacy/Compliance group (GDPR DSAR + cookie consent) queries.
+
+    Idempotent per-DAL-instance, same guard pattern as `bind_auth_tables()`.
+    `migrate=False` (default) matches production -- schema owned by
+    `config/postgres/migrations/*.sql`; tests pass `migrate=True`.
+
+    Deliberately NOT called from `app.py::_bind_reference_tables()` --
+    this port PR (`blueprints/v1/data_privacy.py` +
+    `blueprints/v1/cookie_consent.py`) is scoped to never touch
+    `app.py`/`routers/*.py`/`blueprints/__init__.py` (shared files a
+    parallel M-phase port wave would collide on). Instead,
+    `blueprints/v1/data_privacy.py` and `blueprints/v1/cookie_consent.py`
+    each call this from their own `before_request` hook -- a correctness-
+    equivalent substitute given the idempotent guard below: the first
+    request against either blueprint binds every table in this function,
+    every request after that is a no-op check. A future PR that touches
+    `app.py` for an unrelated reason should fold this call into
+    `_bind_reference_tables()` alongside `bind_auth_tables()` and delete
+    the two `before_request` hooks.
+
+    Column provenance: `config/postgres/migrations/000_create_base_schema.sql`
+    (cookie_policy_versions, cookie_consent, cookie_audit_log, hub_chat_messages),
+    `044_add_activity_tables.sql` (activity_watch_sessions, activity_message_events),
+    `062_data_deletion_requests.sql` (data_deletion_requests). Note
+    `006_add_cookie_consent.sql` defines an OLDER, incompatible shape for
+    the three cookie_* tables (different columns, e.g. `session_id`/
+    `consent_timestamp` instead of `consent_id`/`consented_at`) -- it never
+    runs in practice because `000_create_base_schema.sql`'s `CREATE TABLE
+    IF NOT EXISTS` always applies first (numeric ordering), so the columns
+    bound here match `000`'s definition, the one that actually wins in
+    every real environment. `hub_users`/`hub_user_profiles`/
+    `hub_user_identities`/`hub_sessions`/`user_passkeys` (also read by the
+    DSAR export) are already bound by `bind_auth_tables()`, called first
+    by every blueprint's `_ensure_tables()` hook.
+    """
+    if "cookie_consent" in dal.tables:
+        return
+
+    dal.define_table(
+        "cookie_policy_versions",
+        Field("version", "string", length=50, notnull=True, unique=True),
+        Field("content", "text", notnull=True),
+        Field("changes_summary", "text"),
+        Field("is_active", "boolean", default=False),
+        Field("effective_date", "datetime"),
+        Field("created_by", "integer"),
+        Field("created_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "cookie_consent",
+        Field("user_id", "integer"),
+        Field("consent_id", "string", length=255, notnull=True, unique=True),
+        Field("preferences", "json"),
+        Field("consent_version", "string", length=50, notnull=True),
+        Field("consent_method", "string", length=50, default="banner"),
+        Field("ip_address", "string", length=45),
+        Field("user_agent", "text"),
+        Field("consented_at", "datetime"),
+        Field("updated_at", "datetime"),
+        Field("expires_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "cookie_audit_log",
+        Field("consent_id", "string", length=255),
+        Field("user_id", "integer"),
+        Field("action", "string", length=50, notnull=True),
+        Field("category", "string", length=50),
+        Field("previous_value", "boolean"),
+        Field("new_value", "boolean"),
+        Field("consent_version", "string", length=50),
+        Field("ip_address", "string", length=45),
+        Field("user_agent", "text"),
+        Field("created_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "data_deletion_requests",
+        Field("hub_user_id", "integer", notnull=True),
+        Field("requested_at", "datetime", notnull=True),
+        Field("completed_at", "datetime"),
+        Field("status", "string", length=20, default="pending"),
+        Field("deletion_scope", "json"),
+        Field("error_detail", "text"),
+        migrate=migrate,
+    )
+
+    # Read by the DSAR export (`data_privacy_service.py::collect_user_data`)
+    # only -- schema-owned by the Engagement/Leaderboard group
+    # (activityController.js), not this group. Bound here the same way
+    # `bind_auth_tables()` binds `hub_settings` for a different group's
+    # own reads: table BINDING tracks "who queries it", not "who owns the
+    # schema".
+    dal.define_table(
+        "activity_message_events",
+        Field("community_id", "integer", notnull=True),
+        Field("hub_user_id", "integer"),
+        Field("platform", "string", length=50, notnull=True),
+        Field("platform_user_id", "string", length=255, notnull=True),
+        Field("platform_username", "string", length=255),
+        Field("channel_id", "string", length=255),
+        Field("created_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "activity_watch_sessions",
+        Field("community_id", "integer", notnull=True),
+        Field("hub_user_id", "integer"),
+        Field("platform", "string", length=50, notnull=True),
+        Field("platform_user_id", "string", length=255, notnull=True),
+        Field("platform_username", "string", length=255),
+        Field("channel_id", "string", length=255, notnull=True),
+        Field("session_start", "datetime"),
+        Field("session_end", "datetime"),
+        Field("duration_seconds", "integer", default=0),
+        Field("is_active", "boolean", default=True),
+        Field("created_at", "datetime"),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    # Read by the DSAR export only -- schema-owned by the Tenancy/
+    # Community group (communityInteractionController.js et al), same
+    # cross-group binding rationale as activity_* above.
+    dal.define_table(
+        "hub_chat_messages",
+        Field("community_id", "integer", notnull=True),
+        Field("channel_name", "string", length=255),
+        Field("sender_hub_user_id", "integer"),
+        Field("sender_platform", "string", length=50),
+        Field("sender_username", "string", length=255),
+        Field("sender_avatar_url", "text"),
+        Field("message_content", "text", notnull=True),
+        Field("message_type", "string", length=50, default="text"),
+        Field("created_at", "datetime"),
+        migrate=migrate,
+    )

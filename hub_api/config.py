@@ -110,6 +110,17 @@ class HubAPIConfig:
 
     log_level: str
 
+    # `cookieConsentController.js`/`cookieConsentService.js` fall back to
+    # `process.env.COOKIE_CONSENT_VERSION || '1.0.0'` at every call site
+    # (Privacy/Compliance group) -- one field here so hub-api reads it
+    # once at startup rather than re-reading the env var per request.
+    # Defaulted (unlike every field above it) so this group's addition
+    # doesn't break the positional/keyword `HubAPIConfig(...)` construction
+    # every other group's test file already does -- dataclass field-
+    # ordering rules only require defaults on fields declared AFTER this
+    # one, and there are none.
+    cookie_consent_version: str = "1.0.0"
+
     @classmethod
     def from_env(cls) -> HubAPIConfig:
         """Build config from the process environment. Raises on an invalid DB_TYPE."""
@@ -154,5 +165,6 @@ class HubAPIConfig:
                 "IDENTITY_CALLBACK_BASE_URL", "http://localhost:8204"
             ),
             frontend_origin=os.getenv("FRONTEND_ORIGIN", "http://localhost:5173"),
+            cookie_consent_version=os.getenv("COOKIE_CONSENT_VERSION", "1.0.0"),
             log_level=os.getenv("LOG_LEVEL", "INFO"),
         )

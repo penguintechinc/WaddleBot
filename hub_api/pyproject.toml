@@ -34,6 +34,13 @@ convention = "google"
 "blueprints/v1/profile.py" = ["N815"]
 "blueprints/v1/user_management.py" = ["N815"]
 "services/profile_service.py" = ["S101"]
+# Privacy/Compliance group (GDPR DSAR + cookie consent) -- cookie_consent.py's
+# request/response DTOs are wire contracts pinned to `frontend/src/contexts/
+# CookieConsentContext.jsx` (consentId, userId, consentMethod, ...), same
+# camelCase-is-deliberate rationale as blueprints/v1/auth.py above.
+# data_privacy.py has no camelCase DTOs (its own contract -- already_deleted,
+# exported_at, subject_id -- is snake_case) so needs no ignore.
+"blueprints/v1/cookie_consent.py" = ["N815"]
 
 [tool.mypy]
 python_version = "3.13"
