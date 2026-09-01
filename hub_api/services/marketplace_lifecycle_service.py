@@ -24,8 +24,10 @@ takes the lazy path.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from functools import partial
 from typing import Any
 
 from flask_core.app_binding import detect_conflict, resolve_apps
@@ -219,6 +221,48 @@ async def list_installed(
 # ---------------------------------------------------------------------------
 
 
+def _guarded_upsert_availability_sync(
+    dal: Any, *, tenant_id: int, app_id: str, config_defaults: dict[str, Any]
+) -> Any:
+    """The atomic make-available unit -- see `make_available()`'s own docstring for why this shape.
+
+    UPDATE-first, INSERT-if-missing, then a re-read, all inside ONE
+    executor job (no `await` anywhere in this function) submitted as a
+    single `loop.run_in_executor()` call -- the fix for the same class of
+    bug `services/token_billing_service.py`'s module docstring documents
+    in detail: the old `async with async_dal.transaction_async(): await
+    async_dal.update_async(...)` / `await async_dal.insert_async(...)`
+    shape used SEPARATE executor submissions with `await` points between
+    them, so `transaction_async()`'s commit/rollback (acting on `dal`'s
+    single ambient, connection-scoped transaction, not one scoped to this
+    call's own writes) could be interleaved with -- and have its write
+    wiped by -- a concurrently in-flight sibling call's rollback. Bundling
+    the whole read-modify-write + commit into one non-preemptible executor
+    job removes that window entirely for this process's own concurrent
+    callers.
+    """
+    updated = dal(
+        (dal.app_tenant_availability.tenant_id == tenant_id)
+        & (dal.app_tenant_availability.app_id == app_id)
+    ).update(available=True, config_defaults=config_defaults)
+    if not updated:
+        dal.app_tenant_availability.insert(
+            tenant_id=tenant_id,
+            app_id=app_id,
+            available=True,
+            config_defaults=config_defaults,
+        )
+    dal.commit()
+    return (
+        dal(
+            (dal.app_tenant_availability.tenant_id == tenant_id)
+            & (dal.app_tenant_availability.app_id == app_id)
+        )
+        .select()
+        .first()
+    )
+
+
 async def make_available(
     async_dal: Any,
     dal: Any,
@@ -245,47 +289,37 @@ async def make_available(
     if catalog_row is None or catalog_row.status != _ACTIVE_STATUS:
         raise conflict(f"Bundle {app_id!r} is not currently installed/active")
 
-    existing = await async_dal.select_async(
-        dal(
-            (dal.app_tenant_availability.tenant_id == tenant_id)
-            & (dal.app_tenant_availability.app_id == app_id)
-        )
-    )
     defaults = config_defaults if config_defaults is not None else {}
-    # `async with async_dal.transaction_async()` -- `insert_async`/`update_async`
-    # never call `.commit()` on their own (hub_api/PORTING.md Gotcha #2's
-    # third point); pydal's own THREAD_LOCAL connection pooling means the
-    # executor thread's uncommitted write is invisible to any OTHER
-    # thread's connection on the SAME `dal` object (a later sync `dal(...)`
-    # check, or even a later `async_dal.*_async()` call whose executor
-    # task happens to run on a different pool thread) until this commits.
-    async with async_dal.transaction_async():
-        if existing:
-            # `update_async` self-wraps (`self.dal(query)` internally,
-            # hub_api/PORTING.md Gotcha #1) -- a bare Query here, NOT
-            # `dal(...)` (a Set); double-wrapping raises pydal's own
-            # `RuntimeError: No table selected`.
-            await async_dal.update_async(
-                (dal.app_tenant_availability.tenant_id == tenant_id)
-                & (dal.app_tenant_availability.app_id == app_id),
-                available=True,
-                config_defaults=defaults,
-            )
-        else:
-            await async_dal.insert_async(
-                dal.app_tenant_availability,
-                tenant_id=tenant_id,
-                app_id=app_id,
-                available=True,
-                config_defaults=defaults,
-            )
-    row = await async_dal.select_async(
-        dal(
-            (dal.app_tenant_availability.tenant_id == tenant_id)
-            & (dal.app_tenant_availability.app_id == app_id)
-        )
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        async_dal.executor,
+        partial(
+            _guarded_upsert_availability_sync,
+            dal,
+            tenant_id=tenant_id,
+            app_id=app_id,
+            config_defaults=defaults,
+        ),
     )
-    return row.first()
+
+
+def _guarded_set_unavailable_sync(dal: Any, *, tenant_id: int, app_id: str) -> int:
+    """The atomic make-unavailable unit -- write + commit in ONE executor job.
+
+    Same rationale as `_guarded_upsert_availability_sync` above: even a
+    single `update_async()` call wrapped in `async with
+    async_dal.transaction_async(): ...` was still 3 SEPARATE executor
+    submissions (the context manager's own begin no-op, the update, and
+    its commit) with `await` points between them -- interleaving-vulnerable
+    the same way, just with a smaller window. Bundling the update and its
+    commit into one non-preemptible callable closes it.
+    """
+    updated = dal(
+        (dal.app_tenant_availability.tenant_id == tenant_id)
+        & (dal.app_tenant_availability.app_id == app_id)
+    ).update(available=False)
+    dal.commit()
+    return int(updated)
 
 
 async def make_unavailable(async_dal: Any, dal: Any, *, tenant_id: int, app_id: str) -> None:
@@ -302,8 +336,11 @@ async def make_unavailable(async_dal: Any, dal: Any, *, tenant_id: int, app_id: 
     existing = await async_dal.count_async(existing_query)
     if existing == 0:
         raise not_found(f"Bundle {app_id!r} is not available for this tenant")
-    async with async_dal.transaction_async():
-        await async_dal.update_async(existing_query, available=False)
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(
+        async_dal.executor,
+        partial(_guarded_set_unavailable_sync, dal, tenant_id=tenant_id, app_id=app_id),
+    )
 
 
 async def list_available(
@@ -352,6 +389,46 @@ async def list_available(
 # ---------------------------------------------------------------------------
 
 
+def _guarded_upsert_activation_sync(
+    dal: Any,
+    *,
+    community_id: int,
+    tenant_id: int,
+    app_id: str,
+    config: dict[str, Any],
+    activated_by: int,
+) -> Any:
+    """The atomic activate unit -- see `_guarded_upsert_availability_sync`'s docstring for why.
+
+    Same UPDATE-first/INSERT-if-missing + commit, all inside ONE executor
+    job -- `activated_by` is intentionally only set on the INSERT branch,
+    matching the pre-fix code's own behavior (a re-activation of an
+    already-known `(community_id, app_id)` pair does not change who
+    originally activated it).
+    """
+    updated = dal(
+        (dal.app_activations.community_id == community_id) & (dal.app_activations.app_id == app_id)
+    ).update(enabled=True, config=config, updated_at=datetime.now(UTC))
+    if not updated:
+        dal.app_activations.insert(
+            community_id=community_id,
+            tenant_id=tenant_id,
+            app_id=app_id,
+            enabled=True,
+            config=config,
+            activated_by=activated_by,
+        )
+    dal.commit()
+    return (
+        dal(
+            (dal.app_activations.community_id == community_id)
+            & (dal.app_activations.app_id == app_id)
+        )
+        .select()
+        .first()
+    )
+
+
 async def activate_bundle(
     async_dal: Any,
     dal: Any,
@@ -394,46 +471,39 @@ async def activate_bundle(
     if conflicting is not None:
         raise conflict(f"Bundle {app_id!r} conflicts with already-active bundle {conflicting!r}")
 
-    existing = await async_dal.select_async(
-        dal(
-            (dal.app_activations.community_id == community_id)
-            & (dal.app_activations.app_id == app_id)
-        )
-    )
     payload = config if config is not None else {}
-    async with async_dal.transaction_async():
-        if existing:
-            await async_dal.update_async(
-                (dal.app_activations.community_id == community_id)
-                & (dal.app_activations.app_id == app_id),
-                enabled=True,
-                config=payload,
-                updated_at=datetime.now(UTC),
-            )
-        else:
-            await async_dal.insert_async(
-                dal.app_activations,
-                community_id=community_id,
-                tenant_id=tenant_id,
-                app_id=app_id,
-                enabled=True,
-                config=payload,
-                activated_by=activated_by,
-            )
-    row = await async_dal.select_async(
-        dal(
-            (dal.app_activations.community_id == community_id)
-            & (dal.app_activations.app_id == app_id)
-        )
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        async_dal.executor,
+        partial(
+            _guarded_upsert_activation_sync,
+            dal,
+            community_id=community_id,
+            tenant_id=tenant_id,
+            app_id=app_id,
+            config=payload,
+            activated_by=activated_by,
+        ),
     )
-    return row.first()
+
+
+def _guarded_set_deactivated_sync(dal: Any, *, community_id: int, app_id: str) -> int:
+    """The atomic deactivate unit -- write + commit in ONE executor job.
+
+    Same rationale as `_guarded_set_unavailable_sync` above.
+    """
+    updated = dal(
+        (dal.app_activations.community_id == community_id) & (dal.app_activations.app_id == app_id)
+    ).update(enabled=False, updated_at=datetime.now(UTC))
+    dal.commit()
+    return int(updated)
 
 
 async def deactivate_bundle(async_dal: Any, dal: Any, *, community_id: int, app_id: str) -> None:
     """Soft-disable: set `app_activations.enabled = False`. Raises 404 if no such row.
 
-    Same `async_dal.count_async`/`transaction_async` rationale as
-    `make_unavailable()`'s own comment.
+    Same `async_dal.count_async` rationale as `make_unavailable()`'s own
+    comment.
     """
     existing_query = (dal.app_activations.community_id == community_id) & (
         dal.app_activations.app_id == app_id
@@ -441,8 +511,11 @@ async def deactivate_bundle(async_dal: Any, dal: Any, *, community_id: int, app_
     existing = await async_dal.count_async(existing_query)
     if existing == 0:
         raise not_found(f"Bundle {app_id!r} is not activated for this community")
-    async with async_dal.transaction_async():
-        await async_dal.update_async(existing_query, enabled=False, updated_at=datetime.now(UTC))
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(
+        async_dal.executor,
+        partial(_guarded_set_deactivated_sync, dal, community_id=community_id, app_id=app_id),
+    )
 
 
 async def list_activated(
