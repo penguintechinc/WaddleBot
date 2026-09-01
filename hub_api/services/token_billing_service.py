@@ -235,6 +235,33 @@ async def list_balances(async_dal: Any, dal: Any, *, community_id: int) -> list[
     return result
 
 
+async def get_balance(async_dal: Any, dal: Any, *, community_id: int, product_key: str) -> int:
+    """Single-product spendable balance for `community_id` -- 0 if the product/balance don't exist.
+
+    Read-only, single-row convenience wrapper `services/token_ledger.py`'s
+    delegation layer uses ahead of its own `debit_tokens()` call (the AI
+    router's pre-check, `services/ai_routing/router.py::route_completion`)
+    -- cheaper than scanning `list_balances()`'s all-active-products LEFT
+    JOIN when the caller only cares about one product. An unknown/inactive
+    `product_key` is indistinguishable from "never credited" here (both
+    read as 0) -- same "unknown collapses to empty/zero rather than a
+    special-cased error" convention `list_transactions()` above already
+    uses for its own `product_key` filter.
+    """
+    product = await _get_active_product(async_dal, dal, product_key)
+    if product is None:
+        return 0
+    rows = await async_dal.select_async(
+        dal(
+            (dal.community_token_balances.community_id == community_id)
+            & (dal.community_token_balances.product_id == product.id)
+        )
+    )
+    if not rows:
+        return 0
+    return int(rows.first().balance)
+
+
 async def list_transactions(
     async_dal: Any,
     dal: Any,

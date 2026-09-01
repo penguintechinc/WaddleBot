@@ -172,3 +172,44 @@ class TestDebitTokens:
             async_dal, async_dal.dal, community_id=community_id, consumable_type="ai_premium_tokens"
         )
         assert ai_balance == 10
+
+
+class TestCreditTokens:
+    async def test_zero_or_negative_amount_raises(self, ledger_db: Any) -> None:
+        async_dal, community_id = ledger_db
+        with pytest.raises(ApiError):
+            await token_ledger.credit_tokens(
+                async_dal,
+                async_dal.dal,
+                community_id,
+                token_ledger.PREMIUM_AI_CONSUMABLE,
+                0,
+                idempotency_key="bad-credit",
+            )
+
+    async def test_replayed_idempotency_key_does_not_double_credit(self, ledger_db: Any) -> None:
+        async_dal, community_id = ledger_db
+        first = await token_ledger.credit_tokens(
+            async_dal,
+            async_dal.dal,
+            community_id,
+            token_ledger.PREMIUM_AI_CONSUMABLE,
+            100,
+            idempotency_key="same-credit-key",
+        )
+        second = await token_ledger.credit_tokens(
+            async_dal,
+            async_dal.dal,
+            community_id,
+            token_ledger.PREMIUM_AI_CONSUMABLE,
+            100,
+            idempotency_key="same-credit-key",
+        )
+        assert first.success is True
+        assert second.success is True
+        assert second.reason == "replayed"
+        assert second.balance_after == first.balance_after
+        balance = await token_ledger.get_balance(
+            async_dal, async_dal.dal, community_id=community_id
+        )
+        assert balance == 100  # only credited once, not 200

@@ -536,6 +536,64 @@ class TestListBalances:
         assert balances_b[0].balance == 0
 
 
+class TestGetBalance:
+    """`get_balance()` -- single-product read `services/token_ledger.py`'s adapter delegates to."""
+
+    async def test_unknown_product_returns_zero(self, token_billing_db: Any) -> None:
+        async_dal, dal = _dal(token_billing_db)
+        community_id = seed_community(token_billing_db)
+
+        balance = await svc.get_balance(
+            async_dal, dal, community_id=community_id, product_key="does-not-exist"
+        )
+
+        assert balance == 0
+
+    async def test_uncredited_product_returns_zero(self, token_billing_db: Any) -> None:
+        async_dal, dal = _dal(token_billing_db)
+        seed_token_product(token_billing_db, key="ai_call")
+        community_id = seed_community(token_billing_db)
+
+        balance = await svc.get_balance(
+            async_dal, dal, community_id=community_id, product_key="ai_call"
+        )
+
+        assert balance == 0
+
+    async def test_credited_product_returns_real_balance(self, token_billing_db: Any) -> None:
+        async_dal, dal = _dal(token_billing_db)
+        product_id = seed_token_product(token_billing_db, key="ai_call")
+        community_id = seed_community(token_billing_db)
+        seed_token_balance(
+            token_billing_db, community_id=community_id, product_id=product_id, balance=77
+        )
+
+        balance = await svc.get_balance(
+            async_dal, dal, community_id=community_id, product_key="ai_call"
+        )
+
+        assert balance == 77
+
+    async def test_scoped_to_its_own_community(self, token_billing_db: Any) -> None:
+        async_dal, dal = _dal(token_billing_db)
+        product_id = seed_token_product(token_billing_db, key="ai_call")
+        community_a = seed_community(token_billing_db, name="community-a")
+        community_b = seed_community(token_billing_db, name="community-b")
+        seed_token_balance(
+            token_billing_db, community_id=community_a, product_id=product_id, balance=55
+        )
+
+        balance_a = await svc.get_balance(
+            async_dal, dal, community_id=community_a, product_key="ai_call"
+        )
+        balance_b = await svc.get_balance(
+            async_dal, dal, community_id=community_b, product_key="ai_call"
+        )
+
+        assert balance_a == 55
+        assert balance_b == 0
+
+
 class TestListTransactions:
     """`list_transactions()` -- pagination + filter coverage."""
 

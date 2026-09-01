@@ -31,10 +31,19 @@ checks).
 additive fixture in the exact same shape as `overlay_db` -- `bind_auth_
 tables()` (for `communities`/`community_members`, which `services.
 community_access`'s admin/member checks query) plus `services.schema.
-bind_ai_routing_tables()` (for `ai_model_config`/`ai_byok_keys`/
-`ai_token_balances`/`ai_token_transactions`). Reuses `seed_community`/
-`seed_membership` unchanged -- they take any `AsyncDAL`-like fixture with
-a `.dal` attribute, not just `overlay_db` specifically.
+bind_ai_routing_tables()` (for `ai_model_config`/`ai_byok_keys`; the
+`ai_token_balances`/`ai_token_transactions` tables it also defines are
+unused dead schema now -- see that function's own docstring) plus
+`bind_token_billing_tables()` (migration 076's real
+`token_products`/`community_token_balances`/`token_transactions`, which
+`services/token_ledger.py` delegates to as of the #234 reconciliation).
+Seeds the `token_products` catalog rows that delegation needs before any
+credit/debit can succeed (`"ai_routing_call"` -- migration 078's
+production seed -- plus `"transcoding"`, exercised by `test_token_ledger.
+py::TestDebitTokens::test_separate_consumable_types_have_independent_
+balances`). Reuses `seed_community`/`seed_membership` unchanged -- they
+take any `AsyncDAL`-like fixture with a `.dal` attribute, not just
+`overlay_db` specifically.
 """
 
 from __future__ import annotations
@@ -192,8 +201,25 @@ def ai_routing_db(tmp_path: Any) -> Any:
     )
     bind_auth_tables(dal, migrate=True)
     bind_ai_routing_tables(dal, migrate=True)
+    bind_token_billing_tables(dal, migrate=True)
     dal.tenants.insert(slug=TENANT_SLUG, display_name="Acme Corp", is_active=True)
     dal.tenants.insert(slug=OTHER_TENANT_SLUG, display_name="Other Corp", is_active=True)
+    dal.token_products.insert(
+        key="ai_routing_call",
+        name="AI Routing Call (Premium)",
+        unit="token",
+        price_cents=0,
+        tokens_granted=1,
+        active=True,
+    )
+    dal.token_products.insert(
+        key="transcoding",
+        name="Transcoding",
+        unit="minute",
+        price_cents=0,
+        tokens_granted=1,
+        active=True,
+    )
     dal.commit()
     for table_name in dal.tables:
         dal(dal[table_name]).count()

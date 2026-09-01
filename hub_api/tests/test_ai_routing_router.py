@@ -6,10 +6,16 @@ HTTP clients (`OllamaClient.generate`/`byok_client_for`) are monkeypatched
 clients.py`, flask_core's own test suite). Everything else here is real:
 entitlement's license-tier half (`communities.license_tier`, a genuine DB
 read), the community AI config (`config_service`, real pydal writes), and
-the token ledger (`services.token_ledger`, real atomic decrement against
-`ai_routing_db`) -- so "metering debit called on premium" and "block vs
-fallback on insufficient balance" are both exercised end-to-end, not
-asserted against a mock call.
+the token ledger (`services.token_ledger`, which delegates to `services.
+token_billing_service`'s real, atomic `community_token_balances`/
+`token_transactions` ledger, migration 076, against `ai_routing_db`) -- so
+"metering debit called on premium" and "block vs fallback on insufficient
+balance" are both exercised end-to-end, not asserted against a mock call.
+`test_premium_succeeds_and_meters_when_affordable`/`test_premium_ambient_
+falls_back_to_free_when_unaffordable` additionally assert directly against
+`token_billing_service`'s own tables (not just `token_ledger`'s balance
+abstraction) -- proof the real ledger, not a parallel one, is what's
+written.
 
 Fail-first proof (executed, not narrated): temporarily changed the
 `if balance > 0:` pre-check in `route_completion` to `if balance >= 0:`
@@ -24,7 +30,7 @@ from typing import Any
 
 import pytest
 
-from services import token_ledger
+from services import token_billing_service, token_ledger
 from services.ai_routing import config_service, router
 from services.ai_routing.errors import ApiError
 from services.ai_routing.models import AIRequest, AIResponse
@@ -176,6 +182,25 @@ class TestPremiumTier:
         )
         assert balance == 850  # 1000 - (100 + 50), real metering debit
 
+        # Prove it's the REAL ledger (`token_billing_service`, migration
+        # 076's `community_token_balances`/`token_transactions`) being
+        # written, not just `token_ledger`'s own abstraction agreeing with
+        # itself -- read both tables directly.
+        real_balances = await token_billing_service.list_balances(
+            async_dal, async_dal.dal, community_id=community_id
+        )
+        ai_balance = next(b for b in real_balances if b.product_key == "ai_routing_call")
+        assert ai_balance.balance == 850
+
+        real_transactions, total = await token_billing_service.list_transactions(
+            async_dal, async_dal.dal, community_id=community_id, product_key="ai_routing_call"
+        )
+        assert total == 2  # the seed credit (+1000) and this debit (-150)
+        debit_row = next(t for t in real_transactions if t.delta < 0)
+        assert debit_row.delta == -150
+        assert debit_row.balance_after == 850
+        assert debit_row.ref == "debit-1"  # idempotency_key stored as the real ledger's `ref`
+
     async def test_premium_ambient_falls_back_to_free_when_unaffordable(
         self, router_db: Any, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -197,6 +222,16 @@ class TestPremiumTier:
         assert response.tier_used == "free"
         assert response.fallback_reason == "insufficient_balance"
         assert response.billed_tokens == 0
+
+        # No real debit occurred -- the pre-check (`token_ledger.get_
+        # balance()`) blocked the premium path before `_run_premium()`
+        # (and therefore `token_billing_service.debit_tokens()`) was ever
+        # called, so the real ledger has zero transaction rows for this
+        # community.
+        _real_transactions, total = await token_billing_service.list_transactions(
+            async_dal, async_dal.dal, community_id=community_id, product_key="ai_routing_call"
+        )
+        assert total == 0
 
     async def test_premium_interactive_blocks_when_policy_is_block(
         self, router_db: Any, monkeypatch: pytest.MonkeyPatch
