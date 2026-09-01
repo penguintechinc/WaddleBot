@@ -31,7 +31,7 @@ from quart_schema import Info, QuartSchema
 from blueprints import register_blueprints
 from config import HubAPIConfig
 from openapi.routes import register_openapi_docs
-from services.schema import bind_auth_tables
+from services.schema import bind_platform_tables
 
 
 def _bind_reference_tables(dal: Any) -> None:
@@ -54,6 +54,16 @@ def _bind_reference_tables(dal: Any) -> None:
     `services/schema.py::bind_auth_tables()` instead, called below, to
     keep this shared function's diff small for parallel port PRs -- see
     `hub_api/PORTING.md`.
+
+    `bind_platform_tables()` (M3 Platform-admin/Public group) supersedes
+    the plain `bind_auth_tables()` call here -- it calls `bind_auth_tables()`
+    itself first, then binds its own additional tables
+    (`platform_admins`/`collector_modules`/`audit_log`/`coordination`/
+    `hub_modules`/`hub_module_reviews`/`hub_module_installations`/
+    `platform_integrations`). PORTING.md's checklist step 2 calls for
+    every group's `bind_<group>_tables()` to be wired in from exactly this
+    function; M3 is the first group after M1 with its own new tables, so
+    this is a net-new call site, not a redefinition of M1's own tables.
     """
     dal.define_table(
         "tenants",
@@ -65,7 +75,7 @@ def _bind_reference_tables(dal: Any) -> None:
         Field("config", "json"),
         migrate=False,
     )
-    bind_auth_tables(dal)
+    bind_platform_tables(dal)
 
 
 def create_app(config: HubAPIConfig | None = None) -> Quart:
