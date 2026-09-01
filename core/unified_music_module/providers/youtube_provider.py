@@ -112,6 +112,40 @@ class YouTubeProvider(BaseMusicProvider):
                 return match.group(1)
         return None
 
+    @staticmethod
+    def is_youtube_url(value: str) -> bool:
+        """Return True only when `value` is a URL whose host is exactly
+        youtube.com, a youtube.com subdomain, or youtu.be.
+
+        Uses `urlparse().hostname` for an exact-match/allowlist check --
+        never a substring test (`"youtube.com" in value`), which a crafted
+        string such as "https://evil.com/?redirect=youtube.com" or
+        "https://notyoutube.com.evil.com/" would incorrectly pass. Mirrors
+        the safe-provider-detection pattern in
+        `hub_api/services/music_providers/__init__.py::_detect_provider`.
+
+        Args:
+            value: candidate URL or bare video ID
+
+        Returns:
+            True if `value` is a genuine youtube.com/youtu.be URL
+        """
+        parsed = urlparse(value)
+        hostname = parsed.hostname
+        if not hostname and "://" not in value:
+            # No scheme (e.g. "youtu.be/xyz" pasted without "https://") --
+            # urlparse can't find a host without one; re-parse as
+            # scheme-relative so the same host logic below still applies.
+            parsed = urlparse(f"//{value}")
+            hostname = parsed.hostname
+        if not hostname:
+            return False
+        return (
+            hostname == "youtu.be"
+            or hostname == "youtube.com"
+            or hostname.endswith(".youtube.com")
+        )
+
     def _parse_duration(self, duration_str: str) -> int:
         """Parse ISO 8601 duration string to milliseconds.
 
@@ -289,7 +323,7 @@ class YouTubeProvider(BaseMusicProvider):
             raise YouTubeAuthenticationError("YouTube API key not configured")
 
         # If track_id is a URL, extract the video ID
-        if "youtube.com" in track_id or "youtu.be" in track_id:
+        if self.is_youtube_url(track_id):
             video_id = self.extract_video_id(track_id)
             if not video_id:
                 logger.warning(f"Could not extract video ID from URL: {track_id}")
