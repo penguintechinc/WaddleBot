@@ -33,6 +33,12 @@ from services.errors import bad_request, conflict
 
 VALID_PLATFORMS = ("discord", "twitch", "slack")
 
+#: TTL for the opaque OAuth exchange code minted by `oauth_callback` --
+#: long enough for the frontend's own redirect+fetch round trip, short
+#: enough that a leaked code (e.g. still visible in a browser history entry
+#: for the split-second before it's consumed) is worthless shortly after.
+EXCHANGE_CODE_TTL_SECONDS = 60
+
 _AUTHORIZE_URLS = {
     "discord": "https://discord.com/api/oauth2/authorize",
     "twitch": "https://id.twitch.tv/oauth2/authorize",
@@ -355,6 +361,55 @@ async def oauth_callback(
     )
 
     return await create_session_token(async_dal, dal, cfg, user=user)
+
+
+async def create_oauth_exchange_code(
+    async_dal: Any, dal: Any, *, token: str, platform: str
+) -> str:
+    """Mint a short-lived, single-use opaque code standing in for a just-issued session JWT.
+
+    Used by `blueprints/v1/auth.py::oauth_callback` to hand the session off
+    to the frontend via the OAuth redirect WITHOUT putting the JWT itself in
+    the URL -- query strings leak into proxy/access logs, browser history,
+    and the `Referer` header of any outbound request the callback page
+    happens to make. The code is redeemed exactly once, server-side, via
+    `redeem_oauth_exchange_code` (`POST /api/v1/auth/exchange`).
+    """
+    code = secrets.token_urlsafe(32)
+    await async_dal.insert_async(
+        dal.hub_oauth_exchange_codes,
+        code=code,
+        token=token,
+        platform=platform,
+        used=False,
+        expires_at=datetime.now(UTC) + timedelta(seconds=EXCHANGE_CODE_TTL_SECONDS),
+        created_at=datetime.now(UTC),
+    )
+    return code
+
+
+async def redeem_oauth_exchange_code(async_dal: Any, dal: Any, *, code: str) -> str:
+    """Redeem a single-use OAuth exchange code for the session JWT it stands in for.
+
+    The `UPDATE ... WHERE used = FALSE AND expires_at > NOW()` clause is the
+    atomic claim -- the database (not a separate app-level lock) decides
+    which concurrent caller, if any, wins a race against the same code,
+    mirroring `community_welcomed_users`'s `ON CONFLICT DO NOTHING` pattern
+    (migration 068). A second redemption attempt against the same code
+    updates zero rows and is rejected, same as an unknown or expired one.
+    """
+    claimed = await async_dal.update_async(
+        (dal.hub_oauth_exchange_codes.code == code)
+        & (dal.hub_oauth_exchange_codes.used == False)  # noqa: E712 - pydal Field comparison
+        & (dal.hub_oauth_exchange_codes.expires_at > datetime.now(UTC)),
+        used=True,
+        used_at=datetime.now(UTC),
+    )
+    if not claimed:
+        raise bad_request("Invalid or expired exchange code")
+
+    rows = await async_dal.select_async(dal(dal.hub_oauth_exchange_codes.code == code))
+    return str(rows.first().token)
 
 
 async def start_link(

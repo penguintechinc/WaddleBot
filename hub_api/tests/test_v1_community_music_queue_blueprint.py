@@ -6,6 +6,23 @@ Standalone Quart app registering only `music_queue_bp` against the
 authz chain (mirrors `tests/test_v1_music_blueprint.py`'s own pattern,
 the closest sibling feature in this repo).
 
+Provider resolution: `services.music_providers.resolve()` (PR #225,
+merged to `release/v3.0.X`) makes REAL YouTube Data API v3 / Spotify Web
+API network calls -- exactly right for production, wrong for this
+module's own fast/deterministic queue/policy/moderation test suite. Every
+test that needs a successful enqueue uses the `fake_resolve` fixture
+below (monkeypatches `services.community_music_queue_service.resolve`
+only, never the shared `services.music_providers` package itself) --
+provider-resolution-specific coverage (real network mocking, credential
+handling, `ProviderUnavailable`/`TrackNotFound` mapping) lives in PR
+#225's own `tests/test_music_providers.py`.
+`test_enqueue_unsupported_provider_is_422` is the one exception: it calls
+the REAL (unmocked) `resolve()` with a provider name outside
+`{"youtube", "spotify"}`, which raises `TrackNotFound` with no network
+call at all (`services/music_providers/__init__.py::resolve()`'s own
+`_KNOWN_PROVIDERS` check runs before any dispatch) -- deterministic and
+worth proving end-to-end without a mock.
+
 Every test seeds ALL sync (`music_station_db.dal.*.insert()`) fixtures
 BEFORE making any async `client.*()` call, and verifies post-write state
 either via the route's own JSON response or via `music_station_db.
@@ -56,6 +73,7 @@ from quart_schema import QuartSchema
 
 from blueprints.v1.community_music_queue import music_queue_bp
 from config import HubAPIConfig
+from services.music_providers.track import Track
 from tests.conftest import TENANT_SLUG, make_user_token, make_user_token_with_roles
 
 
@@ -96,6 +114,24 @@ def app(music_station_db: Any) -> Quart:
 @pytest.fixture
 def client(app: Quart) -> Any:
     return app.test_client()
+
+
+@pytest.fixture
+def fake_resolve(monkeypatch: Any) -> None:
+    """Deterministic stand-in for the real, network-calling `resolve()` -- see module docstring."""
+
+    async def _fake(url_or_query: str, provider: str | None = None) -> Track:
+        return Track(
+            provider=provider or "youtube",
+            external_id=url_or_query,
+            title=f"Track for {url_or_query}",
+            artist="Test Artist",
+            duration_ms=210000,
+            artwork_url=None,
+            url=url_or_query,
+        )
+
+    monkeypatch.setattr("services.community_music_queue_service.resolve", _fake)
 
 
 def _tenant_id(db: Any) -> int:
@@ -243,7 +279,7 @@ class TestPolicy:
 
 class TestEnqueueRequest:
     async def test_song_requests_disabled_rejects_enqueue(
-        self, client: Any, music_station_db: Any
+        self, client: Any, music_station_db: Any, fake_resolve: None
     ) -> None:
         community_id = _seed_community(music_station_db)
         admin_headers = _admin_headers(music_station_db, community_id=community_id, user_id=1)
@@ -259,12 +295,12 @@ class TestEnqueueRequest:
         response = await client.post(
             f"/api/v1/admin/{community_id}/music-station/queue/requests",
             headers=member_headers,
-            json={"urlOrQuery": "https://cdn.example.com/tracks/song.mp3"},
+            json={"urlOrQuery": "https://www.youtube.com/watch?v=abc123"},
         )
         assert response.status_code == 403
 
     async def test_category_restricted_rejects_offline_request(
-        self, client: Any, music_station_db: Any
+        self, client: Any, music_station_db: Any, fake_resolve: None
     ) -> None:
         community_id = _seed_community(music_station_db)
         admin_headers = _admin_headers(music_station_db, community_id=community_id, user_id=1)
@@ -281,12 +317,12 @@ class TestEnqueueRequest:
         response = await client.post(
             f"/api/v1/admin/{community_id}/music-station/queue/requests",
             headers=member_headers,
-            json={"urlOrQuery": "https://cdn.example.com/tracks/song.mp3"},
+            json={"urlOrQuery": "https://www.youtube.com/watch?v=abc123"},
         )
         assert response.status_code == 422
 
     async def test_category_restricted_allows_when_live_music(
-        self, client: Any, music_station_db: Any
+        self, client: Any, music_station_db: Any, fake_resolve: None
     ) -> None:
         community_id = _seed_community(music_station_db)
         admin_headers = _admin_headers(music_station_db, community_id=community_id, user_id=1)
@@ -301,12 +337,12 @@ class TestEnqueueRequest:
         response = await client.post(
             f"/api/v1/admin/{community_id}/music-station/queue/requests",
             headers=member_headers,
-            json={"urlOrQuery": "https://cdn.example.com/tracks/song.mp3"},
+            json={"urlOrQuery": "https://www.youtube.com/watch?v=abc123"},
         )
         assert response.status_code == 201
 
     async def test_admin_override_bypasses_category_restriction(
-        self, client: Any, music_station_db: Any
+        self, client: Any, music_station_db: Any, fake_resolve: None
     ) -> None:
         community_id = _seed_community(music_station_db)
         admin_headers = _admin_headers(music_station_db, community_id=community_id, user_id=1)
@@ -321,7 +357,7 @@ class TestEnqueueRequest:
             f"/api/v1/admin/{community_id}/music-station/queue/requests",
             headers=admin_headers,
             json={
-                "urlOrQuery": "https://cdn.example.com/tracks/song.mp3",
+                "urlOrQuery": "https://www.youtube.com/watch?v=abc123",
                 "overrideCategoryRestriction": True,
             },
         )
@@ -333,37 +369,38 @@ class TestEnqueueRequest:
         )
         assert len(log_rows) == 1
 
-    async def test_enqueue_direct_media_url_fallback(
-        self, client: Any, music_station_db: Any
+    async def test_enqueue_success_via_mocked_provider(
+        self, client: Any, music_station_db: Any, fake_resolve: None
     ) -> None:
-        """No `provider` given -- local direct-media resolver kicks in for a `.mp3` URL."""
+        """Real queue insert/dedup/DTO-mapping path -- provider resolution itself is mocked."""
         community_id = _seed_community(music_station_db)
         headers = _member_headers(music_station_db, community_id=community_id)
         response = await client.post(
             f"/api/v1/admin/{community_id}/music-station/queue/requests",
             headers=headers,
-            json={"urlOrQuery": "https://cdn.example.com/tracks/Artist%20-%20Cool%20Song.mp3"},
+            json={"urlOrQuery": "https://www.youtube.com/watch?v=abc123"},
         )
         assert response.status_code == 201
         body = await response.get_json()
-        assert body["item"]["track"]["provider"] == "direct"
-        assert body["item"]["track"]["artist"] == "Artist"
-        assert body["item"]["track"]["title"] == "Cool Song"
+        assert body["item"]["track"]["provider"] == "youtube"
+        assert body["item"]["track"]["externalId"] == "https://www.youtube.com/watch?v=abc123"
+        assert body["item"]["track"]["artist"] == "Test Artist"
+        assert body["item"]["status"] == "queued"
 
-    async def test_enqueue_unavailable_provider_is_422(
+    async def test_enqueue_unsupported_provider_is_422(
         self, client: Any, music_station_db: Any
     ) -> None:
-        """YouTube integration not installed yet -- rejected with a clear 422, not a fake track."""
+        """Real (unmocked) `resolve()` -- an unsupported provider is a real, deterministic 422."""
         community_id = _seed_community(music_station_db)
         headers = _member_headers(music_station_db, community_id=community_id)
         response = await client.post(
             f"/api/v1/admin/{community_id}/music-station/queue/requests",
             headers=headers,
-            json={"urlOrQuery": "https://www.youtube.com/watch?v=abc123", "provider": "youtube"},
+            json={"urlOrQuery": "some song request", "provider": "soundcloud"},
         )
         assert response.status_code == 422
         body = await response.get_json()
-        assert "youtube" in body["error"]["message"].lower()
+        assert "no track found" in body["error"]["message"].lower()
 
     async def test_enqueue_missing_url_is_400(self, client: Any, music_station_db: Any) -> None:
         community_id = _seed_community(music_station_db)
@@ -378,7 +415,7 @@ class TestEnqueueRequest:
 
 class TestEnqueuePlaylist:
     async def test_enqueue_playlist_groups_under_one_playlist_id(
-        self, client: Any, music_station_db: Any
+        self, client: Any, music_station_db: Any, fake_resolve: None
     ) -> None:
         community_id = _seed_community(music_station_db)
         headers = _member_headers(music_station_db, community_id=community_id)
@@ -387,8 +424,8 @@ class TestEnqueuePlaylist:
             headers=headers,
             json={
                 "items": [
-                    "https://cdn.example.com/tracks/One.mp3",
-                    "https://cdn.example.com/tracks/Two.mp3",
+                    "https://www.youtube.com/watch?v=one",
+                    "https://www.youtube.com/watch?v=two",
                 ]
             },
         )
@@ -427,12 +464,16 @@ class TestQueueLifecycle:
         )
 
     async def test_list_queue_now_playing_and_upcoming(
-        self, client: Any, music_station_db: Any
+        self, client: Any, music_station_db: Any, fake_resolve: None
     ) -> None:
         community_id = _seed_community(music_station_db)
         member_headers = _member_headers(music_station_db, community_id=community_id)
-        await self._enqueue(client, member_headers, community_id, "https://cdn.example.com/a.mp3")
-        await self._enqueue(client, member_headers, community_id, "https://cdn.example.com/b.mp3")
+        await self._enqueue(
+            client, member_headers, community_id, "https://www.youtube.com/watch?v=a"
+        )
+        await self._enqueue(
+            client, member_headers, community_id, "https://www.youtube.com/watch?v=b"
+        )
 
         list_response = await client.get(
             f"/api/v1/admin/{community_id}/music-station/queue", headers=member_headers
@@ -443,13 +484,19 @@ class TestQueueLifecycle:
         assert len(body["upcoming"]) == 2
         assert body["upcoming"][0]["position"] < body["upcoming"][1]["position"]
 
-    async def test_advance_promotes_next_track(self, client: Any, music_station_db: Any) -> None:
+    async def test_advance_promotes_next_track(
+        self, client: Any, music_station_db: Any, fake_resolve: None
+    ) -> None:
         community_id = _seed_community(music_station_db)
         member_headers = _member_headers(music_station_db, community_id=community_id, user_id=2)
         admin_headers = _admin_headers(music_station_db, community_id=community_id, user_id=99)
 
-        await self._enqueue(client, member_headers, community_id, "https://cdn.example.com/a.mp3")
-        await self._enqueue(client, member_headers, community_id, "https://cdn.example.com/b.mp3")
+        await self._enqueue(
+            client, member_headers, community_id, "https://www.youtube.com/watch?v=a"
+        )
+        await self._enqueue(
+            client, member_headers, community_id, "https://www.youtube.com/watch?v=b"
+        )
 
         response = await client.post(
             f"/api/v1/admin/{community_id}/music-station/queue/advance", headers=admin_headers
@@ -466,16 +513,18 @@ class TestQueueLifecycle:
         assert list_body["nowPlaying"]["status"] == "playing"
         assert len(list_body["upcoming"]) == 1
 
-    async def test_reorder_queue(self, client: Any, music_station_db: Any) -> None:
+    async def test_reorder_queue(
+        self, client: Any, music_station_db: Any, fake_resolve: None
+    ) -> None:
         community_id = _seed_community(music_station_db)
         member_headers = _member_headers(music_station_db, community_id=community_id, user_id=2)
         admin_headers = _admin_headers(music_station_db, community_id=community_id, user_id=99)
 
         first = await self._enqueue(
-            client, member_headers, community_id, "https://cdn.example.com/a.mp3"
+            client, member_headers, community_id, "https://www.youtube.com/watch?v=a"
         )
         second = await self._enqueue(
-            client, member_headers, community_id, "https://cdn.example.com/b.mp3"
+            client, member_headers, community_id, "https://www.youtube.com/watch?v=b"
         )
         first_id = (await first.get_json())["item"]["id"]
         second_id = (await second.get_json())["item"]["id"]
@@ -490,12 +539,16 @@ class TestQueueLifecycle:
         assert body["upcoming"][0]["id"] == second_id
         assert body["upcoming"][1]["id"] == first_id
 
-    async def test_reorder_mismatched_ids_is_400(self, client: Any, music_station_db: Any) -> None:
+    async def test_reorder_mismatched_ids_is_400(
+        self, client: Any, music_station_db: Any, fake_resolve: None
+    ) -> None:
         community_id = _seed_community(music_station_db)
         member_headers = _member_headers(music_station_db, community_id=community_id, user_id=2)
         admin_headers = _admin_headers(music_station_db, community_id=community_id, user_id=99)
 
-        await self._enqueue(client, member_headers, community_id, "https://cdn.example.com/a.mp3")
+        await self._enqueue(
+            client, member_headers, community_id, "https://www.youtube.com/watch?v=a"
+        )
 
         response = await client.put(
             f"/api/v1/admin/{community_id}/music-station/queue/reorder",
@@ -512,7 +565,7 @@ class TestQueueLifecycle:
 
 class TestModeration:
     async def test_kick_song_requires_admin_is_403(
-        self, client: Any, music_station_db: Any
+        self, client: Any, music_station_db: Any, fake_resolve: None
     ) -> None:
         community_id = _seed_community(music_station_db)
         member_headers = _member_headers(music_station_db, community_id=community_id, user_id=2)
@@ -523,7 +576,7 @@ class TestModeration:
         enqueue_response = await client.post(
             f"/api/v1/admin/{community_id}/music-station/queue/requests",
             headers=member_headers,
-            json={"urlOrQuery": "https://cdn.example.com/a.mp3"},
+            json={"urlOrQuery": "https://www.youtube.com/watch?v=a"},
         )
         queue_id = (await enqueue_response.get_json())["item"]["id"]
 
@@ -534,7 +587,7 @@ class TestModeration:
         assert response.status_code == 403
 
     async def test_kick_song_by_admin_removes_and_logs(
-        self, client: Any, music_station_db: Any
+        self, client: Any, music_station_db: Any, fake_resolve: None
     ) -> None:
         community_id = _seed_community(music_station_db)
         member_headers = _member_headers(music_station_db, community_id=community_id, user_id=2)
@@ -543,7 +596,7 @@ class TestModeration:
         enqueue_response = await client.post(
             f"/api/v1/admin/{community_id}/music-station/queue/requests",
             headers=member_headers,
-            json={"urlOrQuery": "https://cdn.example.com/a.mp3"},
+            json={"urlOrQuery": "https://www.youtube.com/watch?v=a"},
         )
         queue_id = (await enqueue_response.get_json())["item"]["id"]
 
@@ -565,7 +618,7 @@ class TestModeration:
         assert log_rows.first().reason == "spam"
 
     async def test_kick_playlist_removes_all_queued_entries(
-        self, client: Any, music_station_db: Any
+        self, client: Any, music_station_db: Any, fake_resolve: None
     ) -> None:
         community_id = _seed_community(music_station_db)
         member_headers = _member_headers(music_station_db, community_id=community_id, user_id=2)
@@ -576,8 +629,8 @@ class TestModeration:
             headers=member_headers,
             json={
                 "items": [
-                    "https://cdn.example.com/a.mp3",
-                    "https://cdn.example.com/b.mp3",
+                    "https://www.youtube.com/watch?v=a",
+                    "https://www.youtube.com/watch?v=b",
                 ]
             },
         )

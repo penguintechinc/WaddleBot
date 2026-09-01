@@ -133,6 +133,25 @@ class HubAPIConfig:
     # `identity_callback_base_url`/`frontend_origin` above.
     overlay_base_url: str = "https://overlay.waddlebot.io"
 
+    # M4 Marketplace Billing group -- Stripe/PayPal credentials, mirroring
+    # marketplace_module's own `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET`/
+    # `PAYPAL_CLIENT_ID`/`PAYPAL_CLIENT_SECRET`/`PAYPAL_WEBHOOK_ID`/
+    # `PAYPAL_MODE` env vars byte-for-byte (`admin/marketplace_module/
+    # backend/src/config/index.js` had no typed config object for these --
+    # `paymentService.js`/`stripeService.js`/`paypalService.js` all read
+    # `process.env.*` ad hoc). Defaulted to empty/sandbox rather than
+    # raising at import time: `blueprints/v1/marketplace_webhooks.py` fails
+    # closed on an empty `stripe_webhook_secret`/`paypal_webhook_id` (every
+    # signature check requires a non-empty secret to even attempt a
+    # comparison), so an unconfigured deployment safely rejects every
+    # webhook rather than crashing hub-api's whole app factory.
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    paypal_client_id: str = ""
+    paypal_client_secret: str = ""
+    paypal_webhook_id: str = ""
+    paypal_mode: str = "sandbox"
+
     @classmethod
     def from_env(cls) -> HubAPIConfig:
         """Build config from the process environment. Raises on an invalid DB_TYPE."""
@@ -180,4 +199,10 @@ class HubAPIConfig:
             cookie_consent_version=os.getenv("COOKIE_CONSENT_VERSION", "1.0.0"),
             overlay_base_url=os.getenv("OVERLAY_BASE_URL", "https://overlay.waddlebot.io"),
             log_level=os.getenv("LOG_LEVEL", "INFO"),
+            stripe_secret_key=os.getenv("STRIPE_SECRET_KEY", ""),
+            stripe_webhook_secret=os.getenv("STRIPE_WEBHOOK_SECRET", ""),
+            paypal_client_id=os.getenv("PAYPAL_CLIENT_ID", ""),
+            paypal_client_secret=os.getenv("PAYPAL_CLIENT_SECRET", ""),
+            paypal_webhook_id=os.getenv("PAYPAL_WEBHOOK_ID", ""),
+            paypal_mode=os.getenv("PAYPAL_MODE", "sandbox"),
         )

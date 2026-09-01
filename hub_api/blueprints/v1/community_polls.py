@@ -12,6 +12,7 @@ auto-discovery -- no edit to `routers/v1.py` needed.
 from __future__ import annotations
 
 from flask_core.authz import require_scope
+from flask_core.feature_flags import feature_enabled
 from flask_core.tenancy import get_tenant_context, tenant_middleware
 from quart import Blueprint, current_app, request
 
@@ -19,6 +20,10 @@ from services import community_engagement_proxy as proxy
 from services.community_common import community_in_tenant
 
 polls_bp = Blueprint("v1_community_polls", __name__, url_prefix="/api/v1/admin")
+
+#: Two-gate Feature flag -- `libs/community_module/features.py`'s
+#: `community.polls` Feature contract, free tier.
+FEATURE_COMMUNITY_POLLS = "waddles.community.polls"
 
 
 @polls_bp.route("/<int:community_id>/polls", methods=["GET"])
@@ -28,6 +33,8 @@ async def list_polls(community_id: int) -> tuple[dict[str, object], int]:
     """`GET /api/v1/admin/<id>/polls`."""
     ctx = get_tenant_context(request)
     assert ctx is not None  # nosec B101
+    if not await feature_enabled(FEATURE_COMMUNITY_POLLS, tenant=ctx.tenant_slug):
+        return {"success": False, "error": "Community polls are not enabled for this plan"}, 402
     if not community_in_tenant(current_app.config["dal"], community_id, ctx):
         return {"success": False, "error": "Community not found"}, 404
     return await proxy.get_polls(community_id, request.headers.get("Authorization"))

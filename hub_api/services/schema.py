@@ -170,6 +170,26 @@ def bind_auth_tables(dal: Any, *, migrate: bool = False) -> None:
     )
 
     dal.define_table(
+        "hub_oauth_exchange_codes",
+        # `config/postgres/migrations/075_oauth_exchange_codes.sql` -- backs the
+        # exchange-code handoff fix for the JWT-in-URL leak in
+        # `blueprints/v1/auth.py::oauth_callback` (see that route's docstring
+        # and `hub_api/PORTING.md` Gotcha #8). Single-use is enforced by an
+        # atomic `UPDATE ... WHERE used = FALSE AND expires_at > NOW()` claim
+        # in `oauth_service.redeem_oauth_exchange_code` -- the database, not
+        # application logic, arbitrates a concurrent-redemption race (same
+        # pattern as `community_welcomed_users`, migration 068).
+        Field("code", "string", length=255, notnull=True, unique=True),
+        Field("token", "text", notnull=True),
+        Field("platform", "string", length=50),
+        Field("used", "boolean", default=False),
+        Field("used_at", "datetime"),
+        Field("expires_at", "datetime", notnull=True),
+        Field("created_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
         "hub_temp_passwords",
         Field("user_identifier", "string", length=255, notnull=True),
         Field("password_hash", "string", length=255, notnull=True),
@@ -228,6 +248,21 @@ def bind_auth_tables(dal: Any, *, migrate: bool = False) -> None:
         "communities",
         Field("name", "string", length=255),
         Field("display_name", "string", length=255),
+        # Added by the Analytics-module port (M9): this table can only be
+        # `define_table()`-d once per DAL instance, and `create_app()`
+        # binds this M1 definition (via `_bind_reference_tables`) before
+        # any request runs -- `services/community_common.py::
+        # ensure_community_tables()`'s own idempotent guard then silently
+        # skips its (separately-defined) `tenant_id` column, so
+        # `community_in_tenant()` would `AttributeError` in production
+        # against a real app (pre-existing gap, only masked because every
+        # Community-module blueprint's own tests build an isolated app +
+        # dal that never loads `bind_auth_tables` at all). Extending here
+        # -- not redefining -- per this module's own docstring guidance for
+        # `tenants` columns, generalized to `communities`: the real
+        # Postgres column already exists (058_tenants_and_claims.sql),
+        # this just maps pydal onto it.
+        Field("tenant_id", "integer"),
         Field("is_global", "boolean", default=False),
         Field("is_active", "boolean", default=True),
         Field("member_count", "integer", default=0),
@@ -418,6 +453,137 @@ def bind_auth_tables(dal: Any, *, migrate: bool = False) -> None:
         Field("setting_value", "text"),
         migrate=migrate,
     )
+
+
+def bind_support_token_tables(dal: Any, *, migrate: bool = False) -> None:
+    """Define every table the Support-ticket + PAT/CAT-token port group queries.
+
+    Idempotent per-DAL-instance, same contract as `bind_auth_tables()` above.
+    Not wired into `app.py::_bind_reference_tables()` -- `app.py`/`routers/*.py`/
+    `blueprints/__init__.py` are frozen for the parallel port wave (see
+    `services/community_common.py::ensure_community_tables()`'s own docstring
+    for why). Callers (`services/support_service.py`, `services/
+    access_token_service.py`) call this idempotently at the top of every
+    service function instead, matching that same established pattern.
+
+    Does NOT bind `communities`/`hub_users` -- those are owned by
+    `bind_auth_tables()`/`ensure_community_tables()`; callers needing tenant
+    isolation (`community_in_tenant()`) must ensure one of those has already
+    run against the same `dal` (matches `services/community_*.py`'s own
+    established convention of calling `ensure_community_tables(dal)` first).
+
+    Column provenance: `support_ticket_categories`/`support_tickets`/
+    `support_ticket_comments` are created at Node runtime startup
+    (`admin/hub_module/backend/src/index.js`'s `initializeDatabase()`), not
+    by any numbered SQL migration -- ported here verbatim from that CREATE
+    TABLE block. `user_access_tokens`/`community_access_tokens` come from
+    `config/postgres/migrations/048_add_pat_cat_tables.sql`.
+
+    One more pre-existing gap, same category as `hub_api/PORTING.md`'s
+    Gotcha #4: `048_add_pat_cat_tables.sql` never creates a `permission_scopes`
+    table with `scope_key`/`display_name` columns -- the only migration that
+    creates `permission_scopes` at all (`011_add_scoped_tokens.sql`) defines
+    `scope_name` (not `scope_key`) and has no `display_name` column, yet
+    `tokenController.js`'s `createCAT()`/`listScopes()` query exactly
+    `scope_key`/`display_name` from it. This is a pre-existing runtime gap in
+    Node's own code today (its query would already fail against the real,
+    migrated schema), not introduced by this port. Bound here byte-faithful
+    to Node's query, not silently renamed to the migration's real column --
+    needs a migration to reconcile (`ALTER TABLE permission_scopes RENAME
+    COLUMN scope_name TO scope_key`, `ADD COLUMN display_name`), out of scope
+    for a "no schema changes" port PR.
+    """
+    if "support_ticket_categories" not in dal.tables:
+        dal.define_table(
+            "support_ticket_categories",
+            Field("community_id", "integer", notnull=True),
+            Field("name", "string", length=255, notnull=True),
+            Field("description", "text"),
+            Field("sort_order", "integer", default=0),
+            Field("is_active", "boolean", default=True),
+            Field("form_fields", "json"),
+            Field("created_at", "datetime"),
+            migrate=migrate,
+        )
+
+    if "support_tickets" not in dal.tables:
+        dal.define_table(
+            "support_tickets",
+            Field("community_id", "integer", notnull=True),
+            Field("category_id", "integer"),
+            Field("ticket_number", "string", length=20, notnull=True),
+            Field("subject", "string", length=500, notnull=True),
+            Field("description", "text"),
+            Field("status", "string", length=20, default="open"),
+            Field("priority", "string", length=20, default="medium"),
+            Field("reporter_user_id", "integer"),
+            Field("reporter_name", "string", length=255),
+            Field("reporter_email", "string", length=255),
+            Field("assignee_user_id", "integer"),
+            Field("custom_fields", "json"),
+            Field("resolved_at", "datetime"),
+            Field("created_at", "datetime"),
+            Field("updated_at", "datetime"),
+            migrate=migrate,
+        )
+
+    if "support_ticket_comments" not in dal.tables:
+        dal.define_table(
+            "support_ticket_comments",
+            Field("ticket_id", "integer", notnull=True),
+            Field("author_user_id", "integer"),
+            Field("author_name", "string", length=255),
+            Field("content", "text", notnull=True),
+            Field("is_internal", "boolean", default=False),
+            Field("created_at", "datetime"),
+            migrate=migrate,
+        )
+
+    if "user_access_tokens" not in dal.tables:
+        dal.define_table(
+            "user_access_tokens",
+            Field("user_id", "integer", notnull=True, unique=True),
+            Field("name", "string", length=100, notnull=True),
+            # SHA-256 hex of the plaintext token; plaintext is never stored.
+            Field("token_hash", "string", length=64, notnull=True, unique=True),
+            # NULL = inherit the user's full permissions; pydal has no native
+            # Postgres TEXT[] type -- "list:string" round-trips a Python list
+            # portably across Postgres/MySQL/sqlite (pydal's own abstraction).
+            Field("scope_ceiling", "list:string"),
+            Field("created_at", "datetime"),
+            Field("last_used_at", "datetime"),
+            Field("expires_at", "datetime"),
+            Field("is_revoked", "boolean", notnull=True, default=False),
+            migrate=migrate,
+        )
+
+    if "community_access_tokens" not in dal.tables:
+        dal.define_table(
+            "community_access_tokens",
+            Field("community_id", "integer", notnull=True),
+            Field("created_by_user_id", "integer"),
+            Field("name", "string", length=100, notnull=True),
+            Field("token_hash", "string", length=64, notnull=True, unique=True),
+            Field("scopes", "list:string", notnull=True),
+            Field("created_at", "datetime"),
+            Field("last_used_at", "datetime"),
+            Field("expires_at", "datetime"),
+            Field("is_revoked", "boolean", notnull=True, default=False),
+            migrate=migrate,
+        )
+
+    if "permission_scopes" not in dal.tables:
+        dal.define_table(
+            "permission_scopes",
+            # See this function's own docstring -- `scope_key`/`display_name`
+            # match Node's query, not `011_add_scoped_tokens.sql`'s real
+            # `scope_name` column (pre-existing schema-drift gap).
+            Field("scope_key", "string", length=100, notnull=True, unique=True),
+            Field("display_name", "string", length=255),
+            Field("description", "text"),
+            Field("category", "string", length=50),
+            migrate=migrate,
+        )
 
 
 def bind_overlay_tables(dal: Any, *, migrate: bool = False) -> None:
@@ -1428,6 +1594,993 @@ def bind_tenant_tables(dal: Any, *, migrate: bool = False) -> None:
         Field("is_core", "boolean", default=False),
         Field("is_published", "boolean", default=False),
         Field("version", "string", length=50),
+        Field("created_at", "datetime"),
+        migrate=migrate,
+    )
+
+
+def bind_marketplace_catalog_tables(dal: Any, *, migrate: bool = False) -> None:
+    """Define every table the marketplace-catalog group's port queries.
+
+    `app.py`/`routers/*.py`/`blueprints/__init__.py` are frozen (the
+    parallel port wave's auto-discovery contract -- see
+    `routers/_discovery.py`'s own docstring), so unlike `bind_auth_tables`
+    this is never called from `app.py::_bind_reference_tables`. Instead it
+    is idempotent (`dal.tables` membership guard, same idiom as
+    `services/community_common.py::ensure_community_tables`) and called at
+    the top of every `services/marketplace_catalog_service.py` function,
+    matching the pattern the Community-module port (M6) already
+    established once `app.py` stopped being editable.
+
+    `marketplace_catalog` is a read-only Postgres VIEW
+    (`config/postgres/migrations/059_marketplace_consolidation.sql`,
+    unions `hub_modules` + approved `marketplace_modules`), not a table --
+    pydal has no notion of "view" so it is bound as an ordinary table this
+    process only ever `select()`s (`migrate=True` in tests creates a real
+    throwaway TABLE with the same columns instead of a view; the test
+    fixture seeds rows directly rather than replicating the view's
+    Postgres-side UNION/aggregation, matching this repo's established
+    "one field definition, tests seed it directly" convention -- see
+    `tests/conftest.py::auth_db`). No single-column primary key exists on
+    the view, so `primarykey=["source", "source_id"]` (the view's own
+    natural composite key) is used instead, the same `primarykey=`
+    pattern `flask_core.app_bundle_tables.init_app_bundle_tables` uses for
+    `app_catalog`.
+
+    `hub_modules.is_featured` -- see this module's own docstring gap (4)
+    -- and `marketplace_modules` itself are NOT queried directly by
+    either ported controller (`catalogController.js` only ever queries
+    the `marketplace_catalog` view; `moduleController.js` only ever
+    queries `hub_modules`/`hub_module_reviews`/`hub_module_installations`)
+    -- `marketplace_modules` is therefore intentionally not bound here;
+    a future group porting vendor self-service
+    (`vendorController.js`) binds it then.
+    """
+    if "marketplace_catalog" in dal.tables:
+        return
+
+    dal.define_table(
+        "marketplace_catalog",
+        Field("source", "string", length=20, notnull=True),
+        Field("source_id", "integer", notnull=True),
+        Field("name", "string", length=255),
+        Field("display_name", "string", length=255),
+        Field("description", "text"),
+        Field("category", "string", length=100),
+        Field("icon_url", "text"),
+        Field("is_core", "boolean", default=False),
+        Field("pricing_type", "string", length=50, default="free"),
+        Field("price_cents", "integer", default=0),
+        Field("pricing_model", "string", length=50, default="flat"),
+        Field("version", "string", length=50),
+        Field("author", "string", length=255),
+        Field("webhook_url", "text"),
+        Field("communication_model", "string", length=50),
+        Field("integration_type", "string", length=50),
+        Field("avg_rating", "double", default=0),
+        Field("review_count", "integer", default=0),
+        Field("install_count", "integer", default=0),
+        Field("created_at", "datetime"),
+        Field("updated_at", "datetime"),
+        # NULL for 'core' rows (always globally visible); the owning
+        # tenant for 'marketplace' rows (backfilled to the global tenant
+        # by 059's own migration when unset). Filtered by
+        # `visible_tenant_ids()` -- see marketplace_catalog_service.py's
+        # module docstring for the cross-tenant-leak fix this closes.
+        Field("tenant_id", "integer"),
+        primarykey=["source", "source_id"],
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "hub_modules",
+        Field("name", "string", length=255, notnull=True, unique=True),
+        Field("display_name", "string", length=255),
+        Field("description", "text"),
+        Field("version", "string", length=50),
+        Field("author", "string", length=255),
+        Field("category", "string", length=100),
+        Field("icon_url", "text"),
+        Field("is_published", "boolean", default=False),
+        Field("is_core", "boolean", default=False),
+        # See module docstring gap (4) -- no numbered migration defines
+        # this column on hub_modules; bound anyway to stay byte-faithful
+        # to moduleService.js's create/update/format queries.
+        Field("is_featured", "boolean", default=False),
+        Field("config_schema", "json", default={}),
+        Field("created_at", "datetime"),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "hub_module_reviews",
+        Field("module_id", "integer", notnull=True),
+        Field("community_id", "integer"),
+        Field("user_id", "integer"),
+        Field("rating", "integer"),
+        Field("review_text", "text"),
+        Field("admin_notes", "text"),
+        Field("created_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "hub_module_installations",
+        Field("community_id", "integer", notnull=True),
+        Field("module_id", "integer"),
+        Field("installed_by", "integer"),
+        Field("config", "json", default={}),
+        Field("is_enabled", "boolean", default=True),
+        Field("installed_at", "datetime"),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    # Minimal projection -- schema-owned by
+    # `059_marketplace_consolidation.sql`'s extension of
+    # `017_add_marketplace.sql`'s original table; only the columns the
+    # catalog's install-status enrichment needs.
+    dal.define_table(
+        "marketplace_subscriptions",
+        Field("community_id", "integer", notnull=True),
+        Field("module_id", "integer", notnull=True),
+        Field("is_enabled", "boolean", default=True),
+        Field("tenant_id", "integer"),
+        migrate=migrate,
+    )
+
+
+def bind_marketplace_vendor_tables(dal: Any, *, migrate: bool = False) -> None:
+    """Define every table the Marketplace-vendor port group queries.
+
+    `app.py` is frozen (see `services/community_common.py`'s module
+    docstring for the full rationale -- port agents never edit
+    `app.py`/`routers/*.py`/`blueprints/__init__.py`), so this is NOT
+    wired into `app.py::_bind_reference_tables`. Instead every
+    `marketplace_vendor`/`marketplace_admin_review` blueprint handler
+    calls this idempotently first (`"marketplace_sellers" not in
+    dal.tables` guard), mirroring `services/bot_tables.py::bind_bot_tables`'s
+    call-from-the-blueprint-not-app.py shape -- `blueprints/v1/bot.py` is
+    the precedent to follow, not `bind_auth_tables` (M1 is the one group
+    old enough to predate the "app.py is frozen" constraint).
+
+    Idempotent per-DAL-instance. `migrate=False` (production default):
+    schema owned by `config/postgres/migrations/017_add_marketplace.sql`,
+    `021_add_vendor_submissions.sql`, `023_add_vendor_requests.sql`,
+    `059_marketplace_consolidation.sql`, `064_vendor_discount_codes.sql`.
+    Tests pass `migrate=True` against a throwaway sqlite file.
+
+    Schema-drift gaps (Gotcha #4 pattern -- pre-existing in Node, not
+    introduced by this port; documented here rather than silently
+    invented away or silently dropped):
+      1. `commands.module_url` is referenced by
+         `routerIntegrationController.js`/`commandRegistrationService.js`
+         but is not defined by `002_add_commands_table.sql` or any later
+         migration. Bound anyway to stay byte-faithful to Node -- a real
+         Postgres deployment 500s on this exact query today, same as
+         Node's raw SQL would.
+      2. `vendorAnalyticsService.js` queries `community_vendor_installations`
+         columns (`module_id`, `status`, `uninstalled_at`, `last_active_at`,
+         `discount_code_id`) that don't exist on the table
+         `021_add_vendor_submissions.sql` actually creates (which has
+         `vendor_module_id`, no status/uninstalled_at/last_active_at/
+         discount_code_id). Bound here using Node's EXPECTED shape
+         (byte-faithful porting target), not the migration's real shape --
+         same gap, not introduced by this port.
+      3. `vendor_payments` similarly: Node's analytics queries expect
+         `seller_id`, `module_id`, `amount_cents`, `status`, `paid_at`;
+         the real migration defines `submission_id`, `gross_amount`,
+         `net_amount`, `payment_status`, no `paid_at`. Same treatment.
+      4. `vendor_discount_codes.module_id` REFERENCES
+         `approved_vendor_modules(id)` per migration 064, but
+         `vendorAnalyticsService.js`'s `getDiscountCodePerformance` joins
+         it against `marketplace_modules` instead -- a pre-existing Node
+         logic gap (wrong join target), ported byte-faithfully rather
+         than silently "corrected" to the migration's real FK target.
+    """
+    if "marketplace_sellers" in dal.tables:
+        return
+
+    # hub_users: M1's bind_auth_tables() always runs first in production
+    # (app.py::_bind_reference_tables is unconditional at startup); this
+    # minimal stand-in only matters for a test DAL that binds this group
+    # in isolation -- same "define if missing, never redefine" guard
+    # bot_tables.py uses for the same reason.
+    if "hub_users" not in dal.tables:
+        dal.define_table(
+            "hub_users",
+            Field("username", "string", length=255),
+            Field("email", "string", length=255),
+            Field("display_name", "string", length=255),
+            Field("is_super_admin", "boolean", default=False),
+            Field("is_vendor", "boolean", default=False),
+            migrate=migrate,
+        )
+
+    if "communities" not in dal.tables:
+        dal.define_table(
+            "communities",
+            Field("name", "string", length=255),
+            Field("tenant_id", "integer"),
+            migrate=migrate,
+        )
+
+    dal.define_table(
+        "marketplace_sellers",
+        Field("user_id", "integer", notnull=True, unique=True),
+        Field("tenant_id", "integer"),
+        Field("display_name", "string", length=255),
+        Field("description", "text"),
+        Field("website_url", "string", length=500),
+        Field("payout_method", "string", length=50),
+        Field("payout_account_id", "string", length=255),
+        Field("total_revenue_cents", "integer", default=0),
+        Field("total_subscribers", "integer", default=0),
+        Field("is_verified", "boolean", default=False),
+        Field("verified_at", "datetime"),
+        Field("created_at", "datetime"),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "marketplace_modules",
+        Field("seller_id", "integer"),
+        Field("tenant_id", "integer"),
+        Field("name", "string", length=255, notnull=True),
+        Field("slug", "string", length=255, notnull=True, unique=True),
+        Field("description", "text"),
+        Field("category", "string", length=100),
+        Field("developer_user_id", "integer"),
+        Field("documentation_url", "string", length=500),
+        Field("support_url", "string", length=500),
+        Field("icon_url", "string", length=500),
+        Field("webhook_url", "string", length=500, notnull=True),
+        Field("webhook_secret", "string", length=255, notnull=True),
+        Field("webhook_timeout_ms", "integer", default=5000),
+        Field("trigger_commands", "list:string"),
+        Field("trigger_events", "list:string"),
+        Field("requested_scopes", "list:string"),
+        Field("response_types", "list:string"),
+        Field("pricing_type", "string", length=50, default="free"),
+        Field("pricing_model", "string", length=50, default="flat"),
+        Field("price_cents", "integer", default=0),
+        Field("min_seats", "integer", default=1),
+        Field("billing_period", "string", length=20, default="monthly"),
+        Field("currency", "string", length=10, default="USD"),
+        Field("api_base_url", "string", length=500),
+        Field("auth_type", "string", length=50, default="hmac"),
+        Field("auth_config", "json"),
+        Field("communication_model", "string", length=50, default="webhook_push"),
+        Field("integration_type", "string", length=50, default="command_handler"),
+        Field("status", "string", length=50, default="pending"),
+        Field("approved_by", "integer"),
+        Field("approved_at", "datetime"),
+        Field("rejection_reason", "text"),
+        Field("install_count", "integer", default=0),
+        Field("total_requests", "integer", default=0),
+        Field("failed_requests", "integer", default=0),
+        Field("version", "string", length=50, default="1.0.0"),
+        Field("created_at", "datetime"),
+        Field("updated_at", "datetime"),
+        Field("deleted_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "marketplace_submissions",
+        Field("module_id", "integer", notnull=True),
+        Field("version", "string", length=50),
+        Field("changes_description", "text"),
+        Field("submitted_by", "integer"),
+        Field("submitted_at", "datetime"),
+        Field("status", "string", length=50, default="pending"),
+        Field("reviewed_by", "integer"),
+        Field("reviewed_at", "datetime"),
+        Field("review_notes", "text"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "marketplace_settings",
+        Field("setting_key", "string", length=100, notnull=True, unique=True),
+        Field("setting_value", "text"),
+        Field("updated_by", "integer"),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "vendor_role_requests",
+        Field("request_id", "string", length=36, unique=True),
+        Field("user_id", "integer", notnull=True),
+        Field("user_email", "string", length=255),
+        Field("user_display_name", "string", length=255),
+        Field("company_name", "string", length=255, notnull=True),
+        Field("company_website", "string", length=500),
+        Field("business_description", "text", notnull=True),
+        Field("experience_summary", "text"),
+        Field("contact_email", "string", length=255, notnull=True),
+        Field("contact_phone", "string", length=20),
+        Field("status", "string", length=50, default="pending"),
+        Field("rejection_reason", "text"),
+        Field("reviewed_by", "integer"),
+        Field("admin_notes", "text"),
+        Field("requested_at", "datetime"),
+        Field("reviewed_at", "datetime"),
+        Field("created_at", "datetime"),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "vendor_submissions",
+        Field("submission_id", "string", length=36, unique=True),
+        Field("tenant_id", "integer"),
+        Field("vendor_name", "string", length=255, notnull=True),
+        Field("vendor_email", "string", length=255, notnull=True),
+        Field("company_name", "string", length=255),
+        Field("contact_phone", "string", length=20),
+        Field("website_url", "string", length=500),
+        Field("module_name", "string", length=255, notnull=True),
+        Field("module_description", "text"),
+        Field("module_category", "string", length=100, default="interactive"),
+        Field("module_version", "string", length=50),
+        Field("repository_url", "string", length=500),
+        Field("webhook_url", "string", length=500, notnull=True),
+        Field("webhook_secret", "string", length=255),
+        Field("webhook_per_community", "boolean", default=False),
+        Field("scopes", "json"),
+        Field("scope_justification", "text"),
+        Field("pricing_model", "string", length=50, notnull=True),
+        Field("pricing_amount", "double", default=0),
+        Field("pricing_currency", "string", length=3, default="USD"),
+        Field("payment_method", "string", length=50, notnull=True),
+        Field("payment_details", "json"),
+        Field("status", "string", length=50, default="pending"),
+        Field("rejection_reason", "text"),
+        Field("admin_notes", "text"),
+        Field("supported_platforms", "json"),
+        Field("documentation_url", "string", length=500),
+        Field("support_email", "string", length=255),
+        Field("support_contact_url", "string", length=500),
+        Field("submitted_at", "datetime"),
+        Field("reviewed_at", "datetime"),
+        Field("reviewed_by", "integer"),
+        Field("is_verified", "boolean", default=False),
+        Field("requires_special_review", "boolean", default=False),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "vendor_submission_scopes",
+        Field("submission_id", "integer", notnull=True),
+        Field("scope_name", "string", length=100, notnull=True),
+        Field("risk_level", "string", length=50, default="low"),
+        Field("description", "text"),
+        Field("data_shared", "text"),
+        Field("created_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "vendor_submission_reviews",
+        Field("submission_id", "integer", notnull=True),
+        Field("reviewer_id", "integer"),
+        Field("action", "string", length=50, notnull=True),
+        Field("comments", "text"),
+        Field("created_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "approved_vendor_modules",
+        Field("submission_id", "integer", notnull=True),
+        Field("vendor_name", "string", length=255, notnull=True),
+        Field("module_name", "string", length=255, notnull=True),
+        Field("module_slug", "string", length=255, unique=True, notnull=True),
+        Field("webhook_url", "string", length=500, notnull=True),
+        Field("webhook_secret", "string", length=255),
+        Field("webhook_per_community", "boolean", default=False),
+        Field("is_active", "boolean", default=True),
+        Field("suspension_reason", "text"),
+        Field("suspended_at", "datetime"),
+        Field("is_featured", "boolean", default=False),
+        Field("feature_position", "integer"),
+        Field("install_count", "integer", default=0),
+        Field("rating", "double"),
+        Field("review_count", "integer", default=0),
+        Field("published_at", "datetime"),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    # Node-expected shape (Gotcha #4 note (2) above) -- NOT the shape
+    # `021_add_vendor_submissions.sql` actually creates.
+    dal.define_table(
+        "community_vendor_installations",
+        Field("community_id", "integer", notnull=True),
+        Field("module_id", "integer", notnull=True),
+        Field("status", "string", length=50, default="active"),
+        Field("discount_code_id", "integer"),
+        Field("installed_at", "datetime"),
+        Field("uninstalled_at", "datetime"),
+        Field("last_active_at", "datetime"),
+        migrate=migrate,
+    )
+
+    # Node-expected shape (Gotcha #4 note (3) above) -- NOT the shape
+    # `021_add_vendor_submissions.sql` actually creates.
+    dal.define_table(
+        "vendor_payments",
+        Field("seller_id", "integer"),
+        Field("module_id", "integer"),
+        Field("amount_cents", "integer", default=0),
+        Field("status", "string", length=50, default="pending"),
+        Field("paid_at", "datetime"),
+        Field("created_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "vendor_module_reviews",
+        Field("vendor_module_id", "integer", notnull=True),
+        Field("community_id", "integer", notnull=True),
+        Field("reviewer_id", "integer"),
+        Field("rating", "integer", notnull=True),
+        Field("review_text", "text"),
+        Field("created_at", "datetime"),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "vendor_discount_codes",
+        Field("code", "string", length=50, notnull=True),
+        Field("vendor_id", "integer", notnull=True),
+        Field("module_id", "integer"),
+        Field("discount_type", "string", length=20, notnull=True),
+        Field("discount_value", "double", default=0),
+        Field("max_uses", "integer"),
+        Field("current_uses", "integer", default=0),
+        Field("valid_from", "datetime"),
+        Field("valid_until", "datetime"),
+        Field("is_active", "boolean", default=True),
+        Field("created_at", "datetime"),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "discount_code_redemptions",
+        Field("discount_code_id", "integer", notnull=True),
+        Field("community_id", "integer", notnull=True),
+        Field("discount_amount_cents", "integer", notnull=True),
+        Field("redeemed_at", "datetime"),
+        migrate=migrate,
+    )
+
+    # Gotcha #4 note (1) above -- `module_url` is not defined by
+    # `002_add_commands_table.sql` or any later migration.
+    dal.define_table(
+        "commands",
+        Field("command", "string", length=100, notnull=True),
+        Field("module_name", "string", length=255, notnull=True),
+        Field("module_url", "string", length=500),
+        Field("description", "text"),
+        Field("usage", "text"),
+        Field("category", "string", length=100, default="general"),
+        Field("permission_level", "string", length=50, default="everyone"),
+        Field("cooldown_seconds", "integer", default=0),
+        Field("community_id", "integer"),
+        Field("is_enabled", "boolean", default=True),
+        Field("is_active", "boolean", default=True),
+        Field("created_at", "datetime"),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+
+def bind_marketplace_billing_tables(dal: Any, *, migrate: bool = False) -> None:
+    """Define every table the M4 Marketplace Billing group (subs/payments/premium/discount) queries.
+
+    Idempotent per-table (mirrors `community_common.py::ensure_community_tables`,
+    not `bind_auth_tables`'s single-table early-return) -- this group shares
+    `communities`/`hub_users`/`community_members` with the Core/Community
+    groups, and `bind_auth_tables()` (called first, itself idempotent) is
+    the one that actually defines them with the `role` string column this
+    group's `is_community_admin()` check needs (`community_common.py`'s own
+    `community_members` binding omits `role` -- it never needed it). Calling
+    `bind_auth_tables()` here guarantees that column exists regardless of
+    which group's blueprint handles the first request in a given process.
+
+    Schema provenance: `config/postgres/migrations/017_add_marketplace.sql`
+    (marketplace_subscriptions, marketplace_payments, marketplace_settings),
+    `059_marketplace_consolidation.sql` (tenant_id columns,
+    community_premium_subscriptions), `000_create_base_schema.sql`
+    (hub_modules, hub_module_installations), `064_vendor_discount_codes.sql`
+    (vendor_discount_codes, discount_code_redemptions).
+
+    Gap fixed during this port (not a pre-existing-gap note like
+    `bind_auth_tables`'s three -- this one changes behavior, see
+    `hub_api/PORTING.md` Gotcha #4 pattern): Node's own
+    `discountCodeService.js` queries tables named `marketplace_discount_codes`/
+    `marketplace_discount_code_redemptions`, which do not exist in any
+    numbered migration -- the real tables (064) are `vendor_discount_codes`/
+    `discount_code_redemptions`, with a different column set (`vendor_id`
+    directly on `hub_users`, no `marketplace_sellers` indirection;
+    `discount_type` CHECK is `percentage`/`fixed_amount`/`free`, not
+    `percentage`/`fixed_cents`; `discount_amount_cents`, not
+    `savings_cents`). Node's code would 500 against the real schema; this
+    port binds and queries the REAL tables instead of faithfully
+    reproducing a query against tables that don't exist.
+    """
+    bind_auth_tables(dal, migrate=migrate)
+
+    if "hub_modules" not in dal.tables:
+        dal.define_table(
+            "hub_modules",
+            Field("name", "string", length=255, notnull=True, unique=True),
+            Field("display_name", "string", length=255),
+            Field("description", "text"),
+            Field("version", "string", length=50),
+            Field("author", "string", length=255),
+            Field("category", "string", length=100),
+            Field("icon_url", "text"),
+            Field("is_published", "boolean", default=False),
+            Field("is_core", "boolean", default=False),
+            migrate=migrate,
+        )
+
+    if "hub_module_installations" not in dal.tables:
+        dal.define_table(
+            "hub_module_installations",
+            Field("community_id", "integer", notnull=True),
+            Field("module_id", "integer"),
+            Field("installed_by", "integer"),
+            Field("config", "json"),
+            Field("is_enabled", "boolean", default=True),
+            Field("installed_at", "datetime"),
+            Field("updated_at", "datetime"),
+            migrate=migrate,
+        )
+
+    if "marketplace_subscriptions" not in dal.tables:
+        dal.define_table(
+            "marketplace_subscriptions",
+            Field("community_id", "integer", notnull=True),
+            Field("module_id", "integer", notnull=True),
+            Field("tenant_id", "integer"),
+            Field("status", "string", length=50, default="active"),
+            Field("is_enabled", "boolean", default=True),
+            Field("stripe_subscription_id", "string", length=255),
+            Field("paypal_subscription_id", "string", length=255),
+            Field("pricing_model", "string", length=50, default="flat"),
+            Field("current_seat_count", "integer"),
+            Field("last_seat_update", "datetime"),
+            Field("current_period_start", "datetime"),
+            Field("current_period_end", "datetime"),
+            Field("cancel_at_period_end", "boolean", default=False),
+            Field("subscribed_at", "datetime"),
+            Field("canceled_at", "datetime"),
+            migrate=migrate,
+        )
+
+    if "marketplace_payments" not in dal.tables:
+        dal.define_table(
+            "marketplace_payments",
+            Field("subscription_id", "integer"),
+            Field("community_id", "integer", notnull=True),
+            Field("module_id", "integer"),
+            Field("tenant_id", "integer"),
+            # `external_payment_id` is this group's idempotency key -- see
+            # `services/marketplace_webhook_service.py`'s module docstring.
+            # No DB-level UNIQUE constraint (no new migration in this PR,
+            # matching the established "no schema changes" port convention
+            # -- see `hub_api/PORTING.md` Gotcha #4) -- enforced at the
+            # application layer via a SELECT-before-INSERT check instead.
+            Field("payment_provider", "string", length=50, notnull=True),
+            Field("external_payment_id", "string", length=255),
+            Field("amount_cents", "integer", notnull=True),
+            Field("currency", "string", length=10, default="USD"),
+            Field("status", "string", length=50, notnull=True),
+            Field("platform_fee_cents", "integer", default=0),
+            Field("developer_amount_cents", "integer", default=0),
+            Field("created_at", "datetime"),
+            Field("metadata", "json"),
+            migrate=migrate,
+        )
+
+    if "community_premium_subscriptions" not in dal.tables:
+        dal.define_table(
+            "community_premium_subscriptions",
+            Field("community_id", "integer", notnull=True, unique=True),
+            Field("tenant_id", "integer"),
+            Field("status", "string", length=50, default="active"),
+            Field("stripe_subscription_id", "string", length=255),
+            Field("paypal_subscription_id", "string", length=255),
+            Field("current_seat_count", "integer", default=0),
+            Field("base_price_cents", "integer", notnull=True, default=500),
+            Field("overage_price_cents", "integer", notnull=True, default=10),
+            Field("base_seat_limit", "integer", notnull=True, default=50),
+            Field("current_period_start", "datetime"),
+            Field("current_period_end", "datetime"),
+            Field("cancel_at_period_end", "boolean", default=False),
+            Field("created_at", "datetime"),
+            Field("updated_at", "datetime"),
+            migrate=migrate,
+        )
+
+    if "marketplace_settings" not in dal.tables:
+        dal.define_table(
+            "marketplace_settings",
+            Field("setting_key", "string", length=100, notnull=True, unique=True),
+            Field("setting_value", "text"),
+            Field("updated_by", "integer"),
+            Field("updated_at", "datetime"),
+            migrate=migrate,
+        )
+
+    if "vendor_discount_codes" not in dal.tables:
+        dal.define_table(
+            "vendor_discount_codes",
+            Field("code", "string", length=50, notnull=True),
+            Field("vendor_id", "integer", notnull=True),
+            Field("module_id", "integer"),
+            Field("discount_type", "string", length=20, notnull=True),
+            Field("discount_value", "decimal(10,2)", default=0),
+            Field("max_uses", "integer"),
+            Field("current_uses", "integer", notnull=True, default=0),
+            Field("usage_window_days", "integer"),
+            Field("application_months", "integer"),
+            Field("valid_from", "datetime", notnull=True),
+            Field("valid_until", "datetime"),
+            Field("is_active", "boolean", notnull=True, default=True),
+            Field("description", "text"),
+            Field("created_at", "datetime", notnull=True),
+            Field("updated_at", "datetime", notnull=True),
+            migrate=migrate,
+        )
+
+    if "discount_code_redemptions" not in dal.tables:
+        dal.define_table(
+            "discount_code_redemptions",
+            Field("discount_code_id", "integer", notnull=True),
+            Field("community_id", "integer", notnull=True),
+            Field("subscription_id", "integer"),
+            Field("original_price_cents", "integer", notnull=True),
+            Field("discounted_price_cents", "integer", notnull=True),
+            Field("discount_amount_cents", "integer", notnull=True),
+            Field("redeemed_at", "datetime", notnull=True),
+            Field("expires_at", "datetime"),
+            migrate=migrate,
+        )
+
+
+
+
+def bind_lifecycle_tables(dal: Any, *, migrate: bool = False) -> None:
+    """Define `app_catalog` / `app_tenant_availability` / `app_activations` (App Bundle 3-tier).
+
+    Schema owned by `config/postgres/migrations/069_app_bundle_tiers.sql`
+    (+ `070_app_bundle_catalog_name.sql`'s `app_catalog.name` column,
+    `071_app_catalog_stages.sql`'s `app_catalog.stages` column -- see
+    below) -- `migrate=False` always in production, same "this process
+    never issues DDL" invariant every `bind_*_tables()` function in this
+    file documents (see `bind_auth_tables()`'s own docstring). `migrate=True`
+    is test-only (`hub_api/PORTING.md` Gotcha #2): pydal never issues
+    `CREATE TABLE` DDL against the throwaway sqlite file otherwise.
+
+    `libs/flask_core/flask_core/app_bundle_tables.py::init_app_bundle_tables`
+    already defines these same three tables, but hardcodes `migrate=False`
+    unconditionally -- unusable for this group's own test fixtures, which
+    need `migrate=True` against a file-backed sqlite DB (Gotcha #2). This
+    function is a parallel, hub-api-owned definition (not a wrapper around
+    that one) so `migrate` can thread through normally; field lists are
+    kept in lockstep with `app_bundle_tables.py`'s own (and with migration
+    069/070/071's columns) -- verify both if either ever drifts.
+
+    Plain `"integer"`/`"string"` FK-shaped columns (`tenant_id`,
+    `community_id`, `app_id` cross-references), not pydal `"reference ..."`
+    fields -- matches every other `bind_*_tables()` call in this file
+    (e.g. `oauth_state_tokens.community_id` above); the subset invariant
+    those FKs imply (`activated <= available <= installed`) is enforced at
+    the application layer at write time
+    (`flask_core.app_installations_db.check_availability_insert_allowed`/
+    `check_activation_insert_allowed`), matching migration 069's own
+    top-of-file comment that this is deliberately not a SQL-level
+    constraint spanning three tables.
+
+    Called once, unconditionally, at the END of
+    `app.py::_bind_reference_tables` (append-only per this port's task
+    scope) -- idempotency guard below makes a second call (e.g. from a
+    test fixture that also wants `migrate=True`) a cheap no-op check
+    rather than a `pydal` "table already defined" error. This is also the
+    ONLY `app_catalog`/`app_tenant_availability`/`app_activations`
+    definition that ever actually runs in production: this function
+    registers these three tables before any request is served, so
+    `blueprints/v1/distribution.py`'s own lazy `bind_app_bundle_tables()`
+    call (Distribution-API port group, `services/distribution_service.py`)
+    always hits ITS OWN identical idempotency guard and no-ops -- the two
+    functions independently defined the same three tables (parallel port
+    tasks, same precedent `bind_admin_tables`'s `community_servers` vs
+    `bind_streaming_tables`'s own copy already sets in this file), so
+    `stages` (needed only by the Distribution API's own code) is added
+    HERE, not left in the shadowed definition, so it's actually present in
+    production. `bind_app_bundle_tables()`'s own field list below is kept
+    in lockstep with this one (same plain-FK types, same lengths) so a
+    test fixture calling it directly (`tests/conftest.py`) builds the
+    identical schema this function does -- no split-brain between the two
+    entry points.
+    """
+    if "app_catalog" in dal.tables:
+        return
+
+    dal.define_table(
+        "app_catalog",
+        Field("app_id", "string", length=255, notnull=True),
+        Field("name", "string", length=255),
+        Field("manifest_version", "string", length=50, notnull=True),
+        Field("module", "string", length=100, notnull=True),
+        Field("feature", "string", length=150, notnull=True),
+        Field("provider", "string", length=50, notnull=True),
+        Field("execution_model", "string", length=50, notnull=True),
+        Field("is_default", "boolean", default=False),
+        Field("compatible_with", "list:string"),
+        Field("incompatible_with", "list:string"),
+        Field("platform_compatibility", "json", notnull=True),
+        Field("status", "string", length=20, default="active"),
+        Field("installed_at", "datetime"),
+        # migration 071 -- {"ingest": {"entrypoint", "config", "spec"}, ...},
+        # keyed by stage name. Added by the Distribution-API port group
+        # (`bind_app_bundle_tables()` below) -- see this function's own
+        # docstring for why it lives here, not there. default={} so a
+        # pre-071 row (or a row written before this column existed) reads
+        # back as an empty dict, never None.
+        Field("stages", "json", default={}),
+        primarykey=["app_id"],
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "app_tenant_availability",
+        Field("tenant_id", "integer", notnull=True),
+        Field("app_id", "string", length=255, notnull=True),
+        Field("available", "boolean", default=True),
+        Field("config_defaults", "json"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "app_activations",
+        Field("community_id", "integer", notnull=True),
+        Field("tenant_id", "integer", notnull=True),
+        Field("app_id", "string", length=255, notnull=True),
+        Field("enabled", "boolean", default=True),
+        Field("config", "json"),
+        Field("activated_by", "integer"),
+        Field("activated_at", "datetime"),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+
+def bind_app_bundle_tables(dal: Any, *, migrate: bool = False) -> None:
+    """Define `app_catalog`/`app_tenant_availability`/`app_activations` for the distribution API.
+
+    `app.py` is frozen for this port (same rationale as `bind_community_authz_tables`/
+    `bind_privacy_tables` above) -- called lazily, idempotent, from
+    `blueprints/v1/distribution.py`'s own request path rather than at app
+    startup. Depends on `tenants`/`communities` already being bound on
+    `dal` -- both are unconditionally bound by `app.py::_bind_reference_tables`
+    before any request is served, so this ordering is always satisfied in
+    production; test fixtures bind them via `bind_auth_tables()` first.
+
+    SHADOWED IN PRODUCTION by `bind_lifecycle_tables()` above: that
+    function is called unconditionally at the END of
+    `app.py::_bind_reference_tables`, so `app_catalog` already exists on
+    `dal` by the time any request handler runs -- this function's own
+    `if "app_catalog" in dal.tables: return` guard then no-ops every time
+    in production. Field lists below are kept in lockstep with
+    `bind_lifecycle_tables()`'s own (same plain `"integer"`/`"string"`
+    FK-shaped columns, not pydal `"reference ..."` fields, same lengths)
+    -- this function exists so `tests/conftest.py` fixtures that build an
+    isolated `dal` and call this one directly (without first calling
+    `bind_lifecycle_tables()`) still get the identical schema production
+    actually uses, `stages` included. Two independently-callable entry
+    points defining the same three tables has precedent in this exact file
+    (see `bind_admin_tables`'s `community_servers` vs
+    `bind_streaming_tables`'s own copy) -- `bind_lifecycle_tables()` is the
+    one that matters at runtime; this one exists for lazy/test call sites
+    and must never drift from it.
+
+    `stages` (migration 071): per-stage `{entrypoint, config, spec}` JSON,
+    keyed by `ingest`/`process`/`action` -- see that migration's own
+    docstring. `default={}` so a pre-071 row (or a row a future writer
+    inserts without stage data) reads back as an empty dict, never `None`.
+    """
+    if "app_catalog" in dal.tables:
+        return
+
+    dal.define_table(
+        "app_catalog",
+        Field("app_id", "string", length=255, notnull=True),
+        Field("name", "string", length=255),
+        Field("manifest_version", "string", length=50, notnull=True),
+        Field("module", "string", length=100, notnull=True),
+        Field("feature", "string", length=150, notnull=True),
+        Field("provider", "string", length=50, notnull=True),
+        Field("execution_model", "string", length=50, notnull=True),
+        Field("is_default", "boolean", default=False),
+        Field("compatible_with", "list:string"),
+        Field("incompatible_with", "list:string"),
+        Field("platform_compatibility", "json", notnull=True),
+        Field("status", "string", length=20, default="active"),
+        Field("installed_at", "datetime"),
+        Field("stages", "json", default={}),
+        primarykey=["app_id"],
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "app_tenant_availability",
+        Field("tenant_id", "integer", notnull=True),
+        Field("app_id", "string", length=255, notnull=True),
+        Field("available", "boolean", default=True),
+        Field("config_defaults", "json"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "app_activations",
+        Field("community_id", "integer", notnull=True),
+        Field("tenant_id", "integer", notnull=True),
+        Field("app_id", "string", length=255, notnull=True),
+        Field("enabled", "boolean", default=True),
+        Field("config", "json"),
+        Field("activated_by", "integer"),
+        Field("activated_at", "datetime"),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+
+def bind_ai_routing_tables(dal: Any, *, migrate: bool = False) -> None:
+    """Define the tables the premium-AI model-routing layer owns.
+
+    Greenfield feature (no Node controller to port) --
+    `config/postgres/migrations/077_premium_ai_routing.sql` is this
+    group's own migration. `ai_model_config`/`ai_byok_keys` back
+    `services/ai_routing/config_service.py` (per-community tier choice +
+    AES-256-GCM-encrypted-at-rest BYOK provider keys -- see
+    `services/ai_routing/byok_crypto.py`, the same primitive/pattern
+    `services/github_sync_service.py`'s token-at-rest encryption already
+    uses, never plaintext). `ai_token_balances`/`ai_token_transactions`
+    back `services/token_ledger.py`'s `debit_tokens()` -- a minimal, real
+    premium-AI-tokens ledger scoped to this PR. Table names are
+    deliberately distinct from the `community_token_balances`/
+    `token_transactions` names the parallel metered-token-billing spec
+    (`docs/plans/2026-08-31-metered-token-billing-design.md`) reserves
+    for the eventual multi-consumable ledger, so the two migrations never
+    collide -- that follow-on PR is expected to reconcile/union the two.
+
+    Called from `app.py::_bind_reference_tables()` (this PR's one
+    additive line there) and lazily from `services/ai_routing/
+    config_service.py`/`services/token_ledger.py` themselves --
+    idempotent either way, same "safe to call from more than one place"
+    property every other `bind_*_tables()` in this module already relies
+    on (see `bind_community_authz_tables()`'s own docstring).
+    """
+    if "ai_model_config" in dal.tables:
+        return
+
+    dal.define_table(
+        "ai_model_config",
+        Field("community_id", "integer", notnull=True),
+        Field("preferred_tier", "string", length=20, default="free"),
+        Field("byok_provider", "string", length=20),
+        Field("on_insufficient_balance", "string", length=20, default="fallback_free"),
+        Field("created_at", "datetime"),
+        Field("updated_at", "datetime"),
+        Field("updated_by_user_id", "integer"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "ai_byok_keys",
+        Field("community_id", "integer", notnull=True),
+        Field("provider", "string", length=20, notnull=True),
+        Field("encrypted_key", "text", notnull=True),
+        Field("key_last4", "string", length=8, notnull=True),
+        Field("is_active", "boolean", default=True),
+        Field("created_at", "datetime"),
+        Field("updated_at", "datetime"),
+        Field("rotated_at", "datetime"),
+        Field("created_by_user_id", "integer"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "ai_token_balances",
+        Field("community_id", "integer", notnull=True),
+        Field("consumable_type", "string", length=50, default="ai_premium_tokens"),
+        Field("balance_tokens", "bigint", default=0),
+        Field("lifetime_consumed", "bigint", default=0),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "ai_token_transactions",
+        Field("community_id", "integer", notnull=True),
+        Field("consumable_type", "string", length=50, notnull=True),
+        Field("amount_tokens", "bigint", notnull=True),
+        Field("balance_after", "bigint", notnull=True),
+        Field("idempotency_key", "string", length=255, notnull=True, unique=True),
+        Field("source_ref", "string", length=255),
+        Field("actor_user_id", "integer"),
+        Field("metadata", "json"),
+        Field("created_at", "datetime"),
+        migrate=migrate,
+    )
+
+
+def bind_token_billing_tables(dal: Any, *, migrate: bool = False) -> None:
+    """Define the metered-token-billing ledger tables (migration 076).
+
+    The third metering axis alongside node/seat licensing (critical-
+    rules.md "Licensing Model: Nodes & Seats") -- premium metered
+    consumables (e.g. AI-routing calls) sold as pre-paid token packs.
+    `token_products` is a global catalog (no `community_id`/`tenant_id`
+    column, matching the literal migration 076 schema); the per-community
+    `balance`/`transactions` tables below are tenant-isolated
+    transitively via `community_id -> communities.tenant_id`, the same
+    pattern every other community-scoped table in this schema already
+    uses (`inventory_items`, `community_members`, ...) -- enforced at the
+    API layer by `services/community_authz.py::authorize_community()`,
+    not a redundant `tenant_id` column here.
+
+    Called unconditionally from `app.py::_bind_reference_tables` (this
+    group's own PORTING.md instruction: "one call at END of
+    app.py::_bind_reference_tables") -- no idempotency guard needed since
+    that is the ONLY call site (contrast `bind_community_authz_tables`,
+    which guards against being called lazily from multiple request
+    paths).
+    """
+    dal.define_table(
+        "token_products",
+        Field("key", "string", length=100, notnull=True, unique=True),
+        Field("name", "string", length=255, notnull=True),
+        Field("unit", "string", length=50, notnull=True, default="token"),
+        Field("price_cents", "integer", notnull=True),
+        Field("tokens_granted", "integer", notnull=True),
+        Field("active", "boolean", notnull=True, default=True),
+        Field("created_at", "datetime"),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "community_token_balances",
+        Field("community_id", "integer", notnull=True),
+        Field("product_id", "integer", notnull=True),
+        Field("balance", "integer", notnull=True, default=0),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    # Append-only -- no service-layer code ever UPDATEs or DELETEs a row
+    # here (see the migration's own docstring: the ledger alone can
+    # reconstruct the balance history via `balance_after`).
+    dal.define_table(
+        "token_transactions",
+        Field("community_id", "integer", notnull=True),
+        Field("product_id", "integer", notnull=True),
+        Field("delta", "integer", notnull=True),
+        Field("reason", "string", length=255, notnull=True),
+        Field("ref", "string", length=255),
+        Field("balance_after", "integer", notnull=True),
         Field("created_at", "datetime"),
         migrate=migrate,
     )

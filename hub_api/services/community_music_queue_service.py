@@ -30,8 +30,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from services.errors import bad_request, forbidden, not_found, unprocessable
-from services.music_providers import ProviderUnavailable, detect_provider, resolve
-from services.music_providers.track import Track
+from services.music_providers import ProviderUnavailable, Track, TrackNotFound, resolve
 from services.schema import bind_streaming_tables
 
 _LIVE_PLATFORM = "twitch"
@@ -315,13 +314,22 @@ async def _enforce_request_policy(
 
 
 async def _resolve_track(url_or_query: str, provider: str | None) -> Track:
-    provider_key = provider or detect_provider(url_or_query)
+    """Resolve via `services.music_providers.resolve()` -- the shared, safe provider contract.
+
+    `resolve()` auto-detects the provider from the URL host when possible
+    (`youtube.com`/`youtu.be` -> youtube, `open.spotify.com` -> spotify);
+    `provider` is only needed as a fallback for bare search text. Real
+    network calls throughout (`services/music_providers/youtube.py`/
+    `spotify.py`) -- `ProviderUnavailable`/`TrackNotFound` are the only
+    non-`Track` outcomes, both converted to a clear 422 here, never a
+    silent fake track.
+    """
     try:
-        return await resolve(url_or_query, provider_key)
+        return await resolve(url_or_query, provider)
     except ProviderUnavailable as exc:
-        raise unprocessable(str(exc)) from exc
-    except ValueError as exc:
-        raise bad_request(str(exc)) from exc
+        raise unprocessable(f"{exc.provider} provider is not available right now") from exc
+    except TrackNotFound as exc:
+        raise unprocessable(f"No track found for {exc.query!r}") from exc
 
 
 async def _get_or_create_track_id(async_dal: Any, dal: Any, *, tenant_id: int, track: Track) -> int:

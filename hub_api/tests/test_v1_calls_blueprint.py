@@ -66,6 +66,14 @@ def client(app: Quart) -> Any:
     return app.test_client()
 
 
+@pytest.fixture(autouse=True)
+def _feature_enabled_default_on(monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
+    """Default the `streaming.rtc` two-gate Feature flag ON for every test in this file."""
+    stub = AsyncMock(return_value=True)
+    monkeypatch.setattr(calls_module, "feature_enabled", stub)
+    return stub
+
+
 @pytest.fixture
 def proxy_stub(monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
     """Replace the module-level `_proxy_client.request` -- default: empty-body success relay."""

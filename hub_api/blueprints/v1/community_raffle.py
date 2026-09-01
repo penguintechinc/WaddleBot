@@ -15,6 +15,7 @@ from __future__ import annotations
 from dataclasses import asdict
 
 from flask_core.authz import require_scope
+from flask_core.feature_flags import feature_enabled
 from flask_core.tenancy import get_tenant_context, tenant_middleware
 from quart import Blueprint, current_app, request
 
@@ -29,6 +30,10 @@ from services.community_raffle import (
 )
 
 raffle_bp = Blueprint("v1_community_raffle", __name__, url_prefix="/api/v1/admin")
+
+#: Two-gate Feature flag -- `libs/community_module/features.py`'s
+#: `community.raffles` Feature contract, Professional tier.
+FEATURE_COMMUNITY_RAFFLES = "waddles.community.raffles"
 
 _INVALID_EVENT_TYPE_MESSAGE = (
     f"Invalid event type. Must be one of: {', '.join(sorted(VALID_EVENT_TYPES))}"
@@ -46,6 +51,13 @@ def _tenant_ok(community_id: int) -> bool:
 @require_scope("community.raffle:read")  # type: ignore[untyped-decorator]
 async def list_route(community_id: int) -> tuple[dict[str, object], int]:
     """`GET /api/v1/admin/<id>/raffle-customization`."""
+    ctx = get_tenant_context(request)
+    assert ctx is not None  # nosec B101
+    if not await feature_enabled(FEATURE_COMMUNITY_RAFFLES, tenant=ctx.tenant_slug):
+        return {
+            "success": False,
+            "error": {"message": "Community raffles require a Professional plan or higher"},
+        }, 402
     if not _tenant_ok(community_id):
         return {"success": False, "error": {"message": "Community not found"}}, 404
     customizations = get_customizations(current_app.config["dal"], community_id)

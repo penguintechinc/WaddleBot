@@ -58,3 +58,12 @@ def conflict(message: str = "Conflict") -> ApiError:
 def unprocessable(message: str = "Unprocessable") -> ApiError:
     """422 -- request is well-formed but semantically rejected (policy/provider state)."""
     return ApiError(message, 422, "UNPROCESSABLE")
+
+
+def payment_required(message: str = "This feature requires a higher plan") -> ApiError:
+    """402 -- the two-gate `feature_enabled(...)` check denied the request.
+
+    Flag OFF or below the Feature contract's `min_tier` -- see
+    `flask_core.feature_flags`.
+    """
+    return ApiError(message, 402, "FEATURE_NOT_ENABLED")

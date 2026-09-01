@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from flask_core.api_utils import auth_required
 from flask_core.authz import require_scope
+from flask_core.feature_flags import feature_enabled
 from flask_core.tenancy import get_tenant_context, tenant_middleware
 from quart import Blueprint, current_app, request
 
@@ -56,6 +57,17 @@ interaction_internal_bp = Blueprint(
     "v1_community_interaction_internal", __name__, url_prefix="/api/v1/internal"
 )
 
+#: Two-gate Feature flags -- `libs/community_module/features.py`. Channel/
+#: role/permission-override CRUD (this file's "Admin: hub channels"/"Admin:
+#: roles"/"Admin: permission overrides" sections) is `community.interactions`;
+#: forum read/post/reply (this file's "Member: channels + forum" section)
+#: is the separate `community.forums` capability -- both free tier, both
+#: served by this one blueprint per the migration doc's own note that
+#: `interactionController.js` covers "channel CRUD... forum read/post/
+#: reply... roles" as one Node controller.
+FEATURE_COMMUNITY_INTERACTIONS = "waddles.community.interactions"
+FEATURE_COMMUNITY_FORUMS = "waddles.community.forums"
+
 
 def _tenant_ok(community_id: int) -> bool:
     ctx = get_tenant_context(request)
@@ -71,6 +83,10 @@ def _tenant_ok(community_id: int) -> bool:
 @require_scope("community.interaction:read")  # type: ignore[untyped-decorator]
 async def admin_list_channels(community_id: int) -> tuple[dict[str, object], int]:
     """`GET /api/v1/admin/<id>/interaction/channels`."""
+    ctx = get_tenant_context(request)
+    assert ctx is not None  # nosec B101
+    if not await feature_enabled(FEATURE_COMMUNITY_INTERACTIONS, tenant=ctx.tenant_slug):
+        return api_error("Community interactions are not enabled for this plan", 402)
     if not _tenant_ok(community_id):
         return api_error("Community not found", status_code=404)
     channels = get_hub_channels(current_app.config["dal"], community_id)
@@ -306,6 +322,10 @@ async def member_create_channel(community_id: int) -> tuple[dict[str, object], i
 @require_scope("community.interaction:read")  # type: ignore[untyped-decorator]
 async def member_forum_posts(community_id: int, channel_id: int) -> tuple[dict[str, object], int]:
     """`GET /api/v1/community/<id>/interact/forum/<channelId>/posts`."""
+    ctx = get_tenant_context(request)
+    assert ctx is not None  # nosec B101
+    if not await feature_enabled(FEATURE_COMMUNITY_FORUMS, tenant=ctx.tenant_slug):
+        return api_error("Community forums are not enabled for this plan", 402)
     if not _tenant_ok(community_id):
         return api_error("Community not found", status_code=404)
     page = max(1, int(request.args.get("page", "1") or 1))

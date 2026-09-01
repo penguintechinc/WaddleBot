@@ -60,6 +60,14 @@ convention = "google"
 # always non-None on the success path), N815 is the camelCase DTO wire
 # contract pinned to frontend/src/services/api.js's tenantApi.
 "blueprints/v1/tenant.py" = ["S101", "N815"]
+# Support/access-token port group -- same `_tenant_ok()` postcondition
+# assert (`get_tenant_context()` always non-None after `tenant_middleware`
+# has already run) as `blueprints/v1/community_*.py` above. No N815: this
+# group's wire contract is snake_case (mirrors Node's raw Postgres row
+# columns verbatim), not camelCase -- see `blueprints/v1/access_token.py`'s
+# module docstring.
+"blueprints/v1/support.py" = ["S101"]
+"blueprints/v1/access_token.py" = ["S101"]
 "services/profile_service.py" = ["S101"]
 # M7 Streaming group (overlay/calls) -- same postcondition-assert rationale
 # as blueprints/v1/auth.py above (`get_tenant_context(request)` is always
@@ -75,9 +83,14 @@ convention = "google"
 "services/overlay_service.py" = ["N815"]
 # M7 Streaming group (music/stream/streaming) -- same camelCase-DTO
 # rationale as blueprints/v1/auth.py above; DTO field names are wire
-# contracts pinned to frontend/src/services/api.js.
-"blueprints/v1/music.py" = ["N815"]
-"blueprints/v1/stream.py" = ["N815"]
+# contracts pinned to frontend/src/services/api.js. S101 added to music.py/
+# stream.py/streaming.py (SCCEMBS P4 feature-flag PR) for the same
+# tenant_middleware postcondition assert (`get_tenant_context` always
+# non-None on the success path) the two-gate `feature_enabled(...)` guard
+# needs `ctx.tenant_slug` from.
+"blueprints/v1/music.py" = ["N815", "S101"]
+"blueprints/v1/stream.py" = ["N815", "S101"]
+"blueprints/v1/streaming.py" = ["S101"]
 "services/music_service.py" = ["N815"]
 "services/stream_service.py" = ["N815"]
 # Privacy/Compliance group (GDPR DSAR + cookie consent) -- cookie_consent.py's
@@ -110,11 +123,72 @@ convention = "google"
 # "blueprints/v1/community_*.py" glob above.
 "blueprints/v1/community_music_queue.py" = ["N815"]
 "services/community_music_queue_service.py" = ["N815"]
-# `ProviderUnavailable` is the pinned exception name in the provider
-# contract every Music Station provider integration (YouTube/Spotify/
-# SoundCloud) implements against -- N818 wants an `Error` suffix, but
-# renaming would break that shared contract's name.
-"services/music_providers/__init__.py" = ["N818"]
+# Analytics module port (M9) -- same tenant_middleware postcondition
+# assert as blueprints/v2/platform.py above (`get_tenant_context` always
+# non-None on the success path for Scenario 2/4 routes).
+"blueprints/v1/analytics.py" = ["S101"]
+# Marketplace-catalog port group: `CatalogEntry`/`ModuleEntry`/`ModuleDetail`/
+# `ModuleSubscription`/etc DTO fields are deliberately camelCase to byte-match
+# `catalogService.js`'s `formatCatalogEntry`/`moduleService.js`'s `formatModule`
+# JSON shape (`sourceId`, `displayName`, `avgRating`, `communityLogo`, ...) --
+# same rationale as `blueprints/v1/auth.py`'s own N815 ignore above.
+"services/marketplace_catalog_service.py" = ["N815"]
+# Marketplace-vendor port: request/query dict keys are camelCase to
+# byte-match `admin/hub_module/frontend/src/services/api.js`'s pinned
+# `vendorApi`/`marketplaceAdminApi` JSON contract -- this group returns
+# plain dicts (not quart-schema DTOs, matching the Community/Bot module
+# precedent, not M1's), so the camelCase keys are JSON string keys, not
+# Python identifiers -- N815 does not fire on them. Nothing group-
+# specific to ignore here beyond the shared E711/E712 pydal idiom
+# (inline `# noqa` at each call site, matching every other service
+# module's own convention -- see `services/auth_service.py`/
+# `services/community_activity.py`).
+# M4 Marketplace Billing group (subscriptions/payments/premium/discount
+# codes) -- request/response DTOs are wire contracts pinned to
+# `frontend/src/services/api.js` (`communityId`, `discountType`,
+# `successUrl`, ...), camelCase deliberate per the same rationale as
+# `blueprints/v1/auth.py` above. S101 covers this group's
+# `_require_community_admin`/`cancel_premium_subscription` postcondition
+# asserts (tenant_middleware/just-updated-row invariants, never a runtime
+# auth decision -- see those call sites' own comments).
+"blueprints/v1/marketplace_billing.py" = ["N815", "S101"]
+"services/marketplace_billing_service.py" = ["N815", "S101"]
+# App Bundle 3-tier lifecycle group (marketplace_lifecycle) -- v1 request/
+# response DTOs are camelCase (appId, configDefaults, isDefault, ...), same
+# wire-contract rationale as the M1 entries above; `_tenant_id()`/
+# `get_resolved_bundles()`/`activate_bundle()` repeat the standard
+# tenant_middleware postcondition assert (`ctx is not None`) every other
+# port group's own blueprint uses (see blueprints/v2/platform.py's own
+# per-file-ignore above).
+"blueprints/v1/marketplace_lifecycle.py" = ["S101", "N815"]
+# Distribution API (svc-ingest/svc-process stage-runner poll endpoint) --
+# `DistributionBundleDTO`'s appId/communityId are deliberately camelCase to
+# match this repo's established v1 DTO convention (see the M1/M3/M7 entries
+# above), and `list_distribution_bundles` repeats the same
+# `assert ctx is not None` tenant_middleware postcondition as
+# blueprints/v2/platform.py.
+"blueprints/v1/distribution.py" = ["N815", "S101"]
+# Music-station provider resolvers -- `ProviderUnavailable`/`TrackNotFound`
+# are the literal exception names specified by the resolve()/search()
+# contract these modules implement (not a naming-convention slip; adding
+# "Error" would break every caller's `except ProviderUnavailable:`).
+# S105 on `_TOKEN_URL`/`_TOKEN_FILE` false-positives on the substring
+# "token" -- both are a public OAuth token-endpoint URL and a filesystem
+# path, never a credential value.
+"services/music_providers/errors.py" = ["N818"]
+"services/music_providers/spotify.py" = ["S105"]
+"services/music_providers/youtube.py" = ["S105"]
+# Metered token billing (marketplace module, migration 076) -- credit/
+# debit routes assert `result.balance_after is not None and
+# result.transaction_id is not None` after `result.ok` is already True
+# (`token_billing_service.TokenLedgerResult`'s own contract: both fields
+# are only `None` on a blocked/`ok=False` result) -- a postcondition
+# assert, same rationale as blueprints/v2/platform.py's `ctx is not None`
+# above, not a security control an `-O` strip could bypass (worst case is
+# an AttributeError -> 500, never a ledger bypass -- the real oversell
+# guard is the WHERE-guarded UPDATE in token_billing_service.py, not this
+# assert).
+"blueprints/v1/token_billing.py" = ["S101"]
 
 [tool.mypy]
 python_version = "3.13"

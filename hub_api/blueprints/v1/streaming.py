@@ -20,15 +20,21 @@ from __future__ import annotations
 from typing import cast
 
 from flask_core.api_utils import error_response
-from flask_core.tenancy import tenant_middleware
+from flask_core.feature_flags import feature_enabled
+from flask_core.tenancy import get_tenant_context, tenant_middleware
 from quart import Blueprint, current_app, request
 
 from services.community_authz import authorize_community
-from services.errors import ApiError, bad_request
+from services.errors import ApiError, bad_request, payment_required
 from services.streaming_proxy_service import VideoProxyClient, validate_destination_input
 from services.url_guard import validate_outbound_url
 
 streaming_bp = Blueprint("v1_streaming", __name__, url_prefix="/api/v1/admin")
+
+#: Two-gate Feature flag -- `libs/streaming_module/features.py`'s
+#: `streaming.broadcast` Feature contract, Professional tier (forward/
+#: record/transcode destination management).
+FEATURE_STREAMING_BROADCAST = "waddles.streaming.broadcast"
 
 _client = VideoProxyClient()
 
@@ -51,6 +57,10 @@ async def get_stream_config(community_id: int) -> tuple[dict[str, object], int]:
     """Get stream configuration for a community."""
     try:
         await _authorize(community_id)
+        ctx = get_tenant_context(request)
+        assert ctx is not None  # nosec B101 -- tenant_middleware guarantees this
+        if not await feature_enabled(FEATURE_STREAMING_BROADCAST, tenant=ctx.tenant_slug):
+            raise payment_required("Broadcast forwarding requires a Professional plan or higher")
         config = await _client.get_config(community_id)
     except ApiError as exc:
         return _err(exc)

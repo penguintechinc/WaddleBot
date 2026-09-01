@@ -1,132 +1,114 @@
-"""
-svc-presentation -- Quart application entrypoint.
+"""svc-presentation -- Quart application factory + hypercorn entry point.
 
-SCAFFOLD ONLY. The 8th container / 4th stage-runner
-(docs/plans/2026-08-31-music-station-design.md §8): renders, per community,
-(a) core overlays (full_screen/media/crawler), (b) the Music Station, and
-(c) each activated bundle's own `presentation` component (HTML/JS overlay).
-Follows the same poll+reconcile distribution model as the other three
-stage-runners (docs/plans/2026-08-31-app-bundle-sdk-design.md §6) and
-supersedes/absorbs core/browser_source_core_module's per-community
-browser-source role -- that module coexists until cutover, not touched here.
+The 8th container / 4th stage-runner (`docs/plans/2026-08-31-music-station-
+design.md` §8): serves per-community OBS browser-source overlay surfaces
+(`full_screen`/`media`/`crawler`), the Music Station player, and the
+push+SSE live-update channel every surface shares. Follows the same
+create_app()/blueprint-auto-discovery shape `hub_api/app.py` established
+for this monorepo's Quart services.
 
-Real rendering, hub-api polling, and read-replica routing reads are NOT
-implemented -- see the three TODO-marked stub functions below.
+Real Quart serving, real live push (SSE + Valkey pub/sub relay,
+`services/presentation_hub.py`), real HTML/JS that renders -- what remains
+genuinely open (not stubbed, explicitly documented): hub-api poll+reconcile
+for activated bundles' own `presentation` components, per-community
+overlay-key auth on the render routes, and read-replica routing for the
+`overlay_surfaces`/`presentation_config` reads (this service's own primary
+DB connection is used for both -- see `config.py`; it is the sole writer of
+these two tables today, so a replica split has no correctness benefit yet).
 """
+
 from __future__ import annotations
 
-import html
-import re
+import asyncio
 
-from flask_core import create_health_blueprint, setup_aaa_logging
-from quart import Blueprint, Quart
+from flask_core import create_health_blueprint, init_database, setup_aaa_logging
+from quart import Quart
 
+from blueprints import register_blueprints
 from config import Config
-
-app = Quart(__name__)
-
-# /health, /healthz, /metrics -- flask_core standard blueprint, same as
-# every other pipeline-stage container. k8s liveness/readiness probes
-# (k8s/helm/waddlebot/templates/svc-presentation.yaml) point at /health.
-health_bp = create_health_blueprint(Config.MODULE_NAME, Config.MODULE_VERSION)
-app.register_blueprint(health_bp)
-
-logger = setup_aaa_logging(Config.MODULE_NAME, Config.MODULE_VERSION)
-
-overlay_bp = Blueprint('overlay', __name__, url_prefix='/overlay')
-
-# Loose slug validation for path params that get reflected into the
-# placeholder HTML below -- security.md Input Validation (server-side
-# validation on client input) applies even to a stub response.
-_SLUG_RE = re.compile(r'^[a-zA-Z0-9_-]{1,64}$')
+from services.presentation_hub import PresentationHub
+from services.queue_reader import MusicQueueReader
+from services.schema import bind_presentation_tables
 
 
-async def _poll_installed_presentation_components() -> None:
-    """
-    TODO(svc-presentation): poll hub-api for the installed bundle set
-    scoped to the `presentation` stage and reconcile local overlay/asset
-    code against it -- same poll+reconcile model as svc-ingest/process/
-    action (app-bundle-sdk-design.md §6.2).
+def create_app(config: Config | None = None) -> Quart:
+    """Build the svc-presentation Quart application."""
+    cfg = config or Config.from_env()
+    app = Quart(__name__)
+    app.config["APP_CONFIG"] = cfg
 
-    Target: ``GET {Config.HUB_API_URL}/api/v1/apps/installed?stage=presentation``
-    on an interval of ``Config.HUB_API_POLL_INTERVAL_SECONDS``.
-    ``KNOWN_SURFACES`` (libs/flask_core/flask_core/app_manifest.py, today
-    ``{ingest, process, action}``) needs a `presentation` entry first --
-    that's follow-up work on the bundle SDK spec, not this scaffold.
+    logger = setup_aaa_logging(cfg.module_name, cfg.module_version, log_level=cfg.log_level)
+    app.config["logger"] = logger
 
-    See: docs/plans/2026-08-31-app-bundle-sdk-design.md §6.2
-         docs/plans/2026-08-31-music-station-design.md §8.1
-    """
-    raise NotImplementedError(
-        "svc-presentation: hub-api poll+reconcile not implemented (scaffold)"
-    )
+    app.register_blueprint(create_health_blueprint(cfg.module_name, cfg.module_version))
+    register_blueprints(app)
 
+    @app.before_serving
+    async def startup() -> None:
+        """Initialize the DAL, bind this service's own tables, connect Valkey."""
+        logger.system(
+            "Starting svc-presentation", action="startup", extra={"port": cfg.module_port}
+        )
 
-async def _read_community_activations(community_id: str) -> None:
-    """
-    TODO(svc-presentation): read per-community activation/routing -- which
-    core overlays are enabled, Music Station policy, which activated
-    bundles declare a `presentation` component -- from the READ REPLICA,
-    never the primary hub-api holds. Read-only DB account per backend.md's
-    Database Tier Architecture.
+        async_dal = init_database(
+            cfg.database_url,
+            pool_size=cfg.db_pool_size,
+            read_replica_uri=cfg.database_read_replica_url,
+        )
+        dal = async_dal.dal
+        bind_presentation_tables(dal, migrate=cfg.db_migrate)
+        # `lazy_tables=True` (AsyncDAL's own default) defers each table's
+        # actual `CREATE TABLE` until first ORM access -- left lazy, the
+        # first access could happen on an `async_dal.*_async()` worker
+        # thread mid-request, racing its own `CREATE TABLE` against this
+        # thread's still-open sqlite file handle ("database is locked" --
+        # the exact gotcha `hub_api/tests/conftest.py`'s `auth_db` fixture
+        # documents). Touching every table once here, still on this
+        # thread, forces that DDL to run before any worker thread exists.
+        for table_name in dal.tables:
+            dal(dal[table_name]).count()
+        app.config["async_dal"] = async_dal
+        app.config["dal"] = dal
 
-    See: docs/plans/2026-08-31-app-bundle-sdk-design.md §6.3
-    """
-    raise NotImplementedError(
-        "svc-presentation: read-replica routing read not implemented (scaffold)"
-    )
+        hub = PresentationHub(valkey_url=cfg.valkey_url)
+        await hub.start()
+        app.config["PRESENTATION_HUB"] = hub
 
+        queue_reader = MusicQueueReader(
+            valkey_url=cfg.valkey_url, namespace=cfg.music_queue_namespace
+        )
+        await queue_reader.start()
+        app.config["MUSIC_QUEUE_READER"] = queue_reader
 
-async def _render_surface(community_id: str, surface: str) -> str:
-    """
-    TODO(svc-presentation): render the requested surface for real -- a core
-    overlay (full_screen/media/crawler), the Music Station player, or an
-    activated bundle's own presentation component (HTML/JS asset + a live
-    queue-state channel, music-station-design.md §8.4) -- using the results
-    of `_poll_installed_presentation_components` and
-    `_read_community_activations` above. Also needs the per-community
-    overlay-token auth model (docs/browser_source_core_module/API.md
-    "Overlay Key Authentication", extended per app-bundle-sdk-design.md
-    §8.3) -- not wired in this scaffold; this route is currently open.
+        logger.system("svc-presentation started", action="startup", result="SUCCESS")
 
-    Returns a placeholder page so the route is exercisable end-to-end
-    before the real renderer exists.
-    """
-    safe_community = html.escape(community_id)
-    safe_surface = html.escape(surface)
-    return (
-        "<!DOCTYPE html><html><head><title>svc-presentation stub</title></head>"
-        "<body><h1>svc-presentation placeholder</h1>"
-        f"<p>community={safe_community} surface={safe_surface}</p>"
-        "<p>Real rendering not implemented yet -- see _render_surface() TODO "
-        "in core/svc_presentation/app.py.</p>"
-        "</body></html>"
-    )
+    @app.after_serving
+    async def shutdown() -> None:
+        """Close the PresentationHub, queue reader, and DAL connection pool."""
+        hub = app.config.get("PRESENTATION_HUB")
+        if hub is not None:
+            await hub.stop()
+        queue_reader = app.config.get("MUSIC_QUEUE_READER")
+        if queue_reader is not None:
+            await queue_reader.stop()
+        async_dal = app.config.get("async_dal")
+        if async_dal is not None:
+            try:
+                await async_dal.close_async()
+            except Exception as exc:  # noqa: BLE001 - shutdown must not raise
+                logger.warning(f"Error closing DAL on shutdown: {exc}")
+        logger.system("svc-presentation shutdown complete", action="shutdown", result="SUCCESS")
 
-
-@overlay_bp.route('/<community>/<surface>')
-async def overlay(community: str, surface: str):
-    """
-    STUB per-community browser-source route. OBS points a browser source at
-    this URL per community + surface (e.g. `full_screen`, `media`,
-    `crawler`, `music_station`, or a bundle's own surface name). Returns a
-    placeholder page -- see `_render_surface` for the real-rendering TODO.
-    """
-    if not (_SLUG_RE.match(community) and _SLUG_RE.match(surface)):
-        return "invalid community or surface", 400
-    body = await _render_surface(community, surface)
-    return body, 200, {"Content-Type": "text/html; charset=utf-8"}
+    return app
 
 
-app.register_blueprint(overlay_bp)
+app = create_app()
 
 
 if __name__ == "__main__":  # pragma: no cover - process entrypoint, not exercised by unit tests
-    import asyncio
-
     import hypercorn.asyncio
     from hypercorn.config import Config as HyperConfig
 
     hyper_config = HyperConfig()
-    hyper_config.bind = [f"0.0.0.0:{Config.MODULE_PORT}"]
+    hyper_config.bind = [f"0.0.0.0:{app.config['APP_CONFIG'].module_port}"]
     asyncio.run(hypercorn.asyncio.serve(app, hyper_config))

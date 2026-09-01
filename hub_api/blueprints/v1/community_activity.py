@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from flask_core.api_utils import auth_required
 from flask_core.authz import require_scope
+from flask_core.feature_flags import feature_enabled
 from flask_core.tenancy import get_tenant_context, tenant_middleware
 from quart import Blueprint, current_app, request
 from quart_schema import validate_response
@@ -52,6 +53,10 @@ activity_internal_bp = Blueprint(
     "v1_community_activity_internal", __name__, url_prefix="/api/v1/internal/activity"
 )
 
+#: Two-gate Feature flag -- `libs/community_module/features.py`'s
+#: `community.activity` Feature contract, free tier.
+FEATURE_COMMUNITY_ACTIVITY = "waddles.community.activity"
+
 
 def _int_arg(name: str, default: int) -> int:
     try:
@@ -75,6 +80,8 @@ async def watch_time_leaderboard(
     """`GET /api/v1/community/<id>/leaderboard/watch-time`."""
     ctx = get_tenant_context(request)
     assert ctx is not None  # nosec B101
+    if not await feature_enabled(FEATURE_COMMUNITY_ACTIVITY, tenant=ctx.tenant_slug):
+        return api_error("Community activity tracking is not enabled for this plan", 402)
     dal = current_app.config["dal"]
     if not community_in_tenant(dal, community_id, ctx):
         return api_error("Community not found", status_code=404)

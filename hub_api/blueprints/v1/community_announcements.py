@@ -18,6 +18,7 @@ from typing import Any
 
 from flask_core.api_utils import auth_required
 from flask_core.authz import require_scope
+from flask_core.feature_flags import feature_enabled
 from flask_core.tenancy import get_tenant_context, tenant_middleware
 from quart import Blueprint, current_app, request
 from quart_schema import validate_response
@@ -42,6 +43,10 @@ from services.community_common import api_error, community_in_tenant, get_curren
 
 announcements_bp = Blueprint("v1_community_announcements", __name__, url_prefix="/api/v1/admin")
 
+#: Two-gate Feature flag -- `libs/community_module/features.py`'s
+#: `community.announcements` Feature contract, free tier.
+FEATURE_COMMUNITY_ANNOUNCEMENTS = "waddles.community.announcements"
+
 
 def _tenant_ok(community_id: int) -> bool:
     ctx = get_tenant_context(request)
@@ -55,6 +60,10 @@ def _tenant_ok(community_id: int) -> bool:
 @validate_response(AnnouncementListResponse)
 async def list_route(community_id: int) -> AnnouncementListResponse | tuple[dict[str, object], int]:
     """`GET /api/v1/admin/<id>/announcements`."""
+    ctx = get_tenant_context(request)
+    assert ctx is not None  # nosec B101
+    if not await feature_enabled(FEATURE_COMMUNITY_ANNOUNCEMENTS, tenant=ctx.tenant_slug):
+        return api_error("Community announcements are not enabled for this plan", 402)
     if not _tenant_ok(community_id):
         return api_error("Community not found", status_code=404)
     page = max(1, int(request.args.get("page", "1") or 1))

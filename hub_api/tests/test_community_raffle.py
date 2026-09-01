@@ -5,6 +5,7 @@ from __future__ import annotations
 import json as json_module
 from io import BytesIO
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 from quart import Quart
@@ -27,6 +28,14 @@ def app(community_db: Any) -> Quart:
 @pytest.fixture
 def client(app: Quart) -> Any:
     return app.test_client()
+
+
+@pytest.fixture(autouse=True)
+def _feature_enabled_default_on(monkeypatch: pytest.MonkeyPatch) -> Any:
+    """Default the `community.raffles` two-gate Feature flag ON for every test in this file."""
+    import blueprints.v1.community_raffle as raffle_module
+
+    monkeypatch.setattr(raffle_module, "feature_enabled", AsyncMock(return_value=True))
 
 
 async def _put_json(

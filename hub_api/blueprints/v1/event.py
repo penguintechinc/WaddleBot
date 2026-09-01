@@ -58,10 +58,21 @@ from typing import Any
 from flask_core.api_utils import error_response
 from flask_core.auth import verify_jwt_token
 from flask_core.authz import require_scope
-from flask_core.tenancy import tenant_middleware
+from flask_core.feature_flags import feature_enabled
+from flask_core.tenancy import get_tenant_context, tenant_middleware
 from quart import Blueprint, Response, request
 
 from services.event_calendar_proxy import EventCalendarProxyClient, UserContext
+
+#: Two-gate feature flags (license tier AND PostHog) for the Event module's
+#: two capabilities -- `libs/event_module/features.py`'s
+#: `event.calendar`/`event.ticketing` Feature contracts. `calendarController.
+#: js`/`calendarAdmin.js` handlers (event CRUD, availability, booking,
+#: RSVPs) gate on `FEATURE_EVENT_CALENDAR`; `ticketController.js` handlers
+#: (ticket types, tickets, check-in, attendance, ticketing config) gate on
+#: `FEATURE_EVENT_TICKETING` -- see migration plan SS2's controller table.
+FEATURE_EVENT_CALENDAR = "waddles.event.calendar"
+FEATURE_EVENT_TICKETING = "waddles.event.ticketing"
 
 #: Any authenticated caller may read/write their own calendar data --
 #: Node's `requireAuth` checks only "is logged in", no per-action role.
@@ -111,6 +122,11 @@ class ProxyRoute:
     #: this only for these two, not uniformly.
     attach_client_meta: bool = False
     csv_capable: bool = False
+    #: Two-gate Feature flag this route is gated by (`FEATURE_EVENT_CALENDAR`
+    #: or `FEATURE_EVENT_TICKETING`). `None` = ungated (the public,
+    #: `scope=None` booking routes -- no tenant context to evaluate a gate
+    #: against; see `_make_handler`).
+    feature_flag: str | None = FEATURE_EVENT_CALENDAR
 
 
 # calendarController.js -- /api/v1/calendar/* (user-facing)
@@ -150,11 +166,15 @@ _CALENDAR_ROUTES: tuple[ProxyRoute, ...] = (
                "/api/v1/calendar/booking-pages/{id}", SCOPE_WRITE, has_body=True),
     ProxyRoute("cal_delete_booking_page", "/booking-pages/<id>", "DELETE",
                "/api/v1/calendar/booking-pages/{id}", SCOPE_WRITE),
-    # Public booking -- no auth decorator, matches Node's `optionalAuth`
+    # Public booking -- no auth decorator, matches Node's `optionalAuth`.
+    # feature_flag=None: no tenant context (tenant_middleware never runs
+    # for a scope=None route) to evaluate a gate against.
     ProxyRoute("cal_booking_slots", "/book/<slug>/slots", "GET",
-               "/api/v1/calendar/book/{slug}/slots", None, query_params=("start", "end")),
+               "/api/v1/calendar/book/{slug}/slots", None, query_params=("start", "end"),
+               feature_flag=None),
     ProxyRoute("cal_create_booking", "/book/<slug>", "POST",
-               "/api/v1/calendar/book/{slug}", None, status_code=201, has_body=True),
+               "/api/v1/calendar/book/{slug}", None, status_code=201, has_body=True,
+               feature_flag=None),
     # User bookings
     ProxyRoute("cal_my_bookings", "/my-bookings", "GET",
                "/api/v1/calendar/my-bookings", SCOPE_READ,
@@ -211,64 +231,67 @@ _CALENDAR_ADMIN_ROUTES: tuple[ProxyRoute, ...] = (
                "/api/v1/calendar/{community_id}/events/{event_id}/attendees", SCOPE_ADMIN),
     ProxyRoute("adm_rsvp_counts", "/<community_id>/calendar/events/<event_id>/rsvp-counts", "GET",
                "/api/v1/calendar/{community_id}/events/{event_id}/rsvp-counts", SCOPE_READ),
-    # Ticket types
+    # Ticket types -- ticketController.js -> FEATURE_EVENT_TICKETING
     ProxyRoute("adm_list_ticket_types",
                "/<community_id>/calendar/events/<event_id>/ticket-types", "GET",
-               "/api/v1/calendar/{community_id}/events/{event_id}/ticket-types", SCOPE_ADMIN),
+               "/api/v1/calendar/{community_id}/events/{event_id}/ticket-types", SCOPE_ADMIN,
+               feature_flag=FEATURE_EVENT_TICKETING),
     ProxyRoute("adm_create_ticket_type",
                "/<community_id>/calendar/events/<event_id>/ticket-types", "POST",
                "/api/v1/calendar/{community_id}/events/{event_id}/ticket-types", SCOPE_ADMIN,
-               status_code=201, has_body=True),
+               status_code=201, has_body=True, feature_flag=FEATURE_EVENT_TICKETING),
     ProxyRoute("adm_update_ticket_type",
                "/<community_id>/calendar/events/<event_id>/ticket-types/<type_id>", "PUT",
                "/api/v1/calendar/{community_id}/events/{event_id}/ticket-types/{type_id}",
-               SCOPE_ADMIN, has_body=True),
+               SCOPE_ADMIN, has_body=True, feature_flag=FEATURE_EVENT_TICKETING),
     ProxyRoute("adm_delete_ticket_type",
                "/<community_id>/calendar/events/<event_id>/ticket-types/<type_id>", "DELETE",
                "/api/v1/calendar/{community_id}/events/{event_id}/ticket-types/{type_id}",
-               SCOPE_ADMIN),
-    # Tickets
+               SCOPE_ADMIN, feature_flag=FEATURE_EVENT_TICKETING),
+    # Tickets -- ticketController.js -> FEATURE_EVENT_TICKETING
     ProxyRoute("adm_list_tickets", "/<community_id>/calendar/events/<event_id>/tickets", "GET",
                "/api/v1/calendar/{community_id}/events/{event_id}/tickets", SCOPE_ADMIN,
                query_params=("status", "is_checked_in", "ticket_type_id", "search",
-                             "limit", "offset")),
+                             "limit", "offset"), feature_flag=FEATURE_EVENT_TICKETING),
     ProxyRoute("adm_create_ticket", "/<community_id>/calendar/events/<event_id>/tickets", "POST",
                "/api/v1/calendar/{community_id}/events/{event_id}/tickets", SCOPE_ADMIN,
-               status_code=201, has_body=True),
+               status_code=201, has_body=True, feature_flag=FEATURE_EVENT_TICKETING),
     ProxyRoute("adm_get_ticket",
                "/<community_id>/calendar/events/<event_id>/tickets/<ticket_id>", "GET",
                "/api/v1/calendar/{community_id}/events/{event_id}/tickets/{ticket_id}",
-               SCOPE_ADMIN),
+               SCOPE_ADMIN, feature_flag=FEATURE_EVENT_TICKETING),
     ProxyRoute("adm_cancel_ticket",
                "/<community_id>/calendar/events/<event_id>/tickets/<ticket_id>/cancel", "POST",
                "/api/v1/calendar/{community_id}/events/{event_id}/tickets/{ticket_id}/cancel",
-               SCOPE_ADMIN, has_body=True),
+               SCOPE_ADMIN, has_body=True, feature_flag=FEATURE_EVENT_TICKETING),
     ProxyRoute("adm_transfer_ticket",
                "/<community_id>/calendar/events/<event_id>/tickets/<ticket_id>/transfer", "POST",
                "/api/v1/calendar/{community_id}/events/{event_id}/tickets/{ticket_id}/transfer",
-               SCOPE_ADMIN, has_body=True),
-    # Check-in
+               SCOPE_ADMIN, has_body=True, feature_flag=FEATURE_EVENT_TICKETING),
+    # Check-in -- ticketController.js -> FEATURE_EVENT_TICKETING
     ProxyRoute("adm_verify_ticket", "/calendar/verify-ticket", "POST",
                "/api/v1/calendar/verify-ticket", SCOPE_WRITE,
-               has_body=True, attach_client_meta=True),
+               has_body=True, attach_client_meta=True, feature_flag=FEATURE_EVENT_TICKETING),
     ProxyRoute("adm_check_in", "/<community_id>/calendar/events/<event_id>/check-in", "POST",
                "/api/v1/calendar/{community_id}/events/{event_id}/check-in", SCOPE_ADMIN,
-               has_body=True, attach_client_meta=True),
+               has_body=True, attach_client_meta=True, feature_flag=FEATURE_EVENT_TICKETING),
     ProxyRoute("adm_undo_check_in",
                "/<community_id>/calendar/events/<event_id>/tickets/<ticket_id>/undo-check-in",
                "POST",
                "/api/v1/calendar/{community_id}/events/{event_id}/tickets/{ticket_id}/undo-check-in",
-               SCOPE_ADMIN, has_body=True),
-    # Attendance & reporting
+               SCOPE_ADMIN, has_body=True, feature_flag=FEATURE_EVENT_TICKETING),
+    # Attendance & reporting -- ticketController.js -> FEATURE_EVENT_TICKETING
     ProxyRoute("adm_attendance_stats", "/<community_id>/calendar/events/<event_id>/attendance",
-               "GET", "/api/v1/calendar/{community_id}/events/{event_id}/attendance", SCOPE_ADMIN),
+               "GET", "/api/v1/calendar/{community_id}/events/{event_id}/attendance", SCOPE_ADMIN,
+               feature_flag=FEATURE_EVENT_TICKETING),
     ProxyRoute("adm_check_in_log", "/<community_id>/calendar/events/<event_id>/check-in-log",
                "GET", "/api/v1/calendar/{community_id}/events/{event_id}/check-in-log", SCOPE_ADMIN,
-               query_params=("limit", "offset", "success_only")),
+               query_params=("limit", "offset", "success_only"),
+               feature_flag=FEATURE_EVENT_TICKETING),
     ProxyRoute("adm_export_attendance",
                "/<community_id>/calendar/events/<event_id>/attendance/export", "GET",
                "/api/v1/calendar/{community_id}/events/{event_id}/attendance/export", SCOPE_ADMIN,
-               query_params=("format",), csv_capable=True),
+               query_params=("format",), csv_capable=True, feature_flag=FEATURE_EVENT_TICKETING),
     # Event admins
     ProxyRoute("adm_list_event_admins", "/<community_id>/calendar/events/<event_id>/admins",
                "GET", "/api/v1/calendar/{community_id}/events/{event_id}/admins", SCOPE_ADMIN),
@@ -286,14 +309,15 @@ _CALENDAR_ADMIN_ROUTES: tuple[ProxyRoute, ...] = (
     ProxyRoute("adm_my_permissions", "/<community_id>/calendar/events/<event_id>/my-permissions",
                "GET", "/api/v1/calendar/{community_id}/events/{event_id}/my-permissions",
                SCOPE_READ),
-    # Ticketing configuration
+    # Ticketing configuration -- ticketController.js -> FEATURE_EVENT_TICKETING
     ProxyRoute("adm_enable_ticketing",
                "/<community_id>/calendar/events/<event_id>/ticketing/enable", "POST",
                "/api/v1/calendar/{community_id}/events/{event_id}/ticketing/enable", SCOPE_ADMIN,
-               has_body=True),
+               has_body=True, feature_flag=FEATURE_EVENT_TICKETING),
     ProxyRoute("adm_disable_ticketing",
                "/<community_id>/calendar/events/<event_id>/ticketing/disable", "POST",
-               "/api/v1/calendar/{community_id}/events/{event_id}/ticketing/disable", SCOPE_ADMIN),
+               "/api/v1/calendar/{community_id}/events/{event_id}/ticketing/disable", SCOPE_ADMIN,
+               feature_flag=FEATURE_EVENT_TICKETING),
 )
 
 
@@ -344,6 +368,14 @@ def _make_handler(route: ProxyRoute) -> Callable[..., Any]:
     """Build one Quart view function from a `ProxyRoute` row."""
 
     async def handler(**path_args: str) -> Any:
+        if route.feature_flag is not None:
+            ctx = get_tenant_context(request)
+            if ctx is None or not await feature_enabled(route.feature_flag, tenant=ctx.tenant_slug):
+                return error_response(
+                    "This Event feature requires a higher plan or is not yet enabled",
+                    status_code=402,
+                    error_code="FEATURE_NOT_ENABLED",
+                )
         user_context = _build_user_context(request)
         query = _select_query(request, route.query_params)
         body: dict[str, Any] | None = await _read_body(request) if route.has_body else None

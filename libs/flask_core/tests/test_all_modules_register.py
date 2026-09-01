@@ -2,37 +2,44 @@
 Cross-module Feature-registration coherence gate
 ====================================================
 
-v3.0.0 MVP gate: registers all five Modules' Feature contracts (Bot,
-Social, Marketing, Customer, Core/Platform -- ``bot_module``,
+v3.0.0 MVP gate, grown under SCCEMBS P4
+(docs/plans/2026-08-31-v3-sccembs-program-plan.md SS9): registers all
+EIGHT Modules' Feature contracts (Bot, Social, Marketing, Customer,
+Core/Platform, Community, Event, Streaming -- ``bot_module``,
 ``social_module``, ``marketing_module``, ``customer_module``,
-``core_platform_module``, each mirroring :mod:`bot_module.features`'s
-shape one-for-one) against a single, fresh, shared
+``core_platform_module``, ``community_module``, ``event_module``,
+``streaming_module``, each mirroring :mod:`bot_module.features`'s shape
+one-for-one) against a single, fresh, shared
 :class:`~flask_core.feature_registry.FeatureRegistry` /
 :class:`~flask_core.app_registry.AppRegistry` pair -- never the process
-singletons -- and asserts the whole catalog (35 Feature contracts: bot 4 +
-social 9 + marketing 3 + customer 5 + core_platform 14) is internally
-coherent: no id/app_id collisions across Modules, every contract's flag and
-tier/module are well-formed, and every default App's permissions stay
-inside its own Feature's granted scopes. Per-module suites
-(``test_bot_features.py``, ``libs/social_module/tests/
-test_social_features.py``, etc.) already cover each Module in isolation;
-this file is the one place that proves they compose without collision when
-loaded together, the way a real process startup would.
+singletons -- and asserts the whole catalog (53 Feature contracts: bot 4 +
+social 9 + marketing 3 + customer 5 + core_platform 14 + community 11 +
+event 2 + streaming 5) is internally coherent: no id/app_id collisions
+across Modules, every contract's flag and tier/module are well-formed, and
+every default App's permissions stay inside its own Feature's granted
+scopes. Per-module suites (``test_bot_features.py``, ``libs/social_module/
+tests/test_social_features.py``, ``libs/community_module/tests/
+test_community_features.py``, etc.) already cover each Module in
+isolation; this file is the one place that proves they compose without
+collision when loaded together, the way a real process startup would.
 
-Fail-on-purpose proof: ``test_total_registered_feature_count_is_35`` was
+Fail-on-purpose proof: ``test_total_registered_feature_count_is_53`` was
 verified to catch a regression by temporarily asserting ``== 99`` instead
-of ``== 35`` and confirming the test fails with the true count reported,
+of ``== 53`` and confirming the test fails with the true count reported,
 then reverting.
 """
 
 from __future__ import annotations
 
 import bot_module.features as bot_features
+import community_module.features as community_features
 import core_platform_module.features as core_platform_features
 import customer_module.features as customer_features
+import event_module.features as event_features
 import marketing_module.features as marketing_features
 import pytest
 import social_module.features as social_features
+import streaming_module.features as streaming_features
 from flask_core.app_manifest import KNOWN_MODULES
 from flask_core.app_registry import AppRegistry
 from flask_core.feature_registry import FeatureRegistry
@@ -41,14 +48,18 @@ KNOWN_TIERS = frozenset({"free", "professional", "enterprise"})
 
 # (module label, features submodule) -- registration order mirrors the
 # order each Module's PR landed in (see docs/plans/2026-08-26-v3-scbm-apps-
-# design.md migration phase P1 onward): bot, social, marketing, customer,
-# core_platform.
+# design.md migration phase P1 onward, then docs/plans/2026-08-31-v3-
+# sccembs-program-plan.md SS9 P4): bot, social, marketing, customer,
+# core_platform, then the three P4 additions (community, event, streaming).
 MODULES = (
     ("bot", bot_features),
     ("social", social_features),
     ("marketing", marketing_features),
     ("customer", customer_features),
     ("core_platform", core_platform_features),
+    ("community", community_features),
+    ("event", event_features),
+    ("streaming", streaming_features),
 )
 
 EXPECTED_COUNTS = {
@@ -57,8 +68,11 @@ EXPECTED_COUNTS = {
     "marketing": 3,
     "customer": 5,
     "core_platform": 14,
+    "community": 11,
+    "event": 2,
+    "streaming": 5,
 }
-TOTAL_EXPECTED = 35
+TOTAL_EXPECTED = 53
 assert sum(EXPECTED_COUNTS.values()) == TOTAL_EXPECTED  # keep the two constants honest
 
 
@@ -91,7 +105,7 @@ def _register_everything(
 
 
 class TestAllModulesRegisterCoherently:
-    def test_total_registered_feature_count_is_35(
+    def test_total_registered_feature_count_is_53(
         self, registries: tuple[FeatureRegistry, AppRegistry], capsys: pytest.CaptureFixture[str]
     ) -> None:
         feature_registry, app_registry = registries

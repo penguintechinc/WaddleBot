@@ -184,6 +184,18 @@ async def require_community_admin(
     above (M2's narrower, still-in-use contract), this entry point also
     ports Node's tenant-admin and platform-admin bypasses -- see this
     module's own top-of-file docstring for why the two coexist.
+
+    SECURITY: the tenant-admin bypass additionally cross-checks that
+    `community_id` actually belongs to `ctx.tenant_id` via
+    `_community_belongs_to_tenant()` -- a `tenant_admins` row only proves
+    the caller administers their own tenant, never that the *target*
+    `community_id` in the URL also belongs to it. Without this check a
+    tenant-A admin passing a tenant-B `community_id` would pass the bypass
+    (cross-tenant IDOR). A cross-tenant match falls through to the
+    platform-admin check and then the real per-community role lookup below
+    -- same "not authorized for this community" `forbidden()` either path
+    produces, never a distinct error that would leak the community exists
+    under another tenant.
     """
     bind_community_authz_tables(dal)
 
@@ -200,7 +212,9 @@ async def require_community_admin(
                 & (dal.tenant_admins.user_id == user_id)
             )
         )
-        if ta_rows:
+        if ta_rows and await _community_belongs_to_tenant(
+            async_dal, dal, community_id=community_id, tenant_id=ctx.tenant_id
+        ):
             return
 
     if "platform-admin" in _jwt_roles(request):
@@ -270,6 +284,26 @@ async def _is_tenant_admin(async_dal: Any, dal: Any, *, user_id: int, tenant_id:
     return bool(rows)
 
 
+async def _community_belongs_to_tenant(
+    async_dal: Any, dal: Any, *, community_id: int, tenant_id: int
+) -> bool:
+    """True if `community_id` exists and belongs to `tenant_id`.
+
+    Shared IDOR guard for every tenant-scoped bypass in this module (the
+    tenant-admin bypass in both `require_community_admin` above and
+    `resolve_community_membership_scoped` below) -- a `tenant_admins` row
+    proves the caller administers `tenant_id`, never that the *target*
+    `community_id` from the request also belongs to that tenant. Without
+    this check a tenant-A admin passing a tenant-B `community_id` would
+    pass the bypass and act cross-tenant (security hotfix: cross-tenant
+    IDOR via the tenant-admin bypass).
+    """
+    rows = await async_dal.select_async(
+        dal((dal.communities.id == community_id) & (dal.communities.tenant_id == tenant_id))
+    )
+    return bool(rows)
+
+
 async def resolve_community_membership_scoped(
     async_dal: Any,
     dal: Any,
@@ -296,20 +330,23 @@ async def resolve_community_membership_scoped(
             role="super-admin", scopes=frozenset(), is_admin=True, bypass=True
         )
 
-    if await _is_tenant_admin(async_dal, dal, user_id=user_id, tenant_id=tenant_id):
-        return CommunityMembership(
-            role="tenant-admin", scopes=frozenset(), is_admin=True, bypass=True
-        )
-
-    community_rows = await async_dal.select_async(
-        dal((dal.communities.id == community_id) & (dal.communities.tenant_id == tenant_id))
-    )
-    if not community_rows:
+    if not await _community_belongs_to_tenant(
+        async_dal, dal, community_id=community_id, tenant_id=tenant_id
+    ):
         # Either the community doesn't exist, or it belongs to a different
         # tenant than the caller's JWT -- both collapse to the same "not a
         # member" outcome Node's own DB-not-found path produces, never
         # leaking whether the community exists under another tenant.
+        # SECURITY: this check must run BEFORE the tenant-admin bypass
+        # below, not just before the membership lookup -- a `tenant_admins`
+        # row only proves the caller administers their own tenant, never
+        # that this `community_id` belongs to it (cross-tenant IDOR fix).
         return None
+
+    if await _is_tenant_admin(async_dal, dal, user_id=user_id, tenant_id=tenant_id):
+        return CommunityMembership(
+            role="tenant-admin", scopes=frozenset(), is_admin=True, bypass=True
+        )
 
     rows = await async_dal.select_async(
         dal(

@@ -1,165 +1,75 @@
-"""Provider resolution contract for the Music Station queue.
+"""Provider-agnostic resolve()/search() contract for real YouTube/Spotify music resolvers.
 
-`resolve(url_or_query, provider)` normalizes a caller-supplied URL/search
-query into a single `Track` (`services/music_providers/track.py`). Each
-external provider gets its own submodule (`services/music_providers/
-youtube.py`, `.../spotify.py`, `.../soundcloud.py`) exposing `async def
-resolve(url_or_query: str) -> Track`, dynamically imported here so the
-Music Station queue never hard-depends on a specific provider integration
-landing first -- an unbuilt/unconfigured provider degrades to a real
-`ProviderUnavailable` (converted to a 422 by `blueprints/v1/
-community_music_queue.py`), not an ImportError crash or a stub return.
-
-The `"direct"` pseudo-provider is fully implemented in this module --
-parses a direct media URL (e.g. a self-hosted/CDN `.mp3`/`.ogg` link)
-into a `Track` without any external API call, and is always available
-regardless of which streaming-provider integrations exist yet.
-`detect_provider()` below auto-classifies a caller-supplied URL when the
-caller doesn't name a provider explicitly.
+This is the seam the music-station queue (`services/music_service.py` and
+friends) calls through -- callers never import `youtube`/`spotify` directly.
+`resolve()` auto-detects the provider from a URL (youtube.com/youtu.be ->
+youtube, open.spotify.com -> spotify) and falls back to the explicit
+`provider` argument for bare search text (e.g. a chat `!songrequest` query
+with no URL). Every resolver call is real network I/O against the live
+YouTube Data API v3 / Spotify Web API -- there is no stub/fake path; the
+only non-network outcome is `ProviderUnavailable` when that provider's
+credentials are absent or unusable, which callers are expected to catch and
+degrade on (e.g. "Spotify isn't configured for this community" instead of a
+500).
 """
 
 from __future__ import annotations
 
-import importlib
-from pathlib import PurePosixPath
-from urllib.parse import unquote, urlparse
+from urllib.parse import urlparse
 
+from services.music_providers import spotify, youtube
+from services.music_providers.errors import ProviderUnavailable, TrackNotFound
 from services.music_providers.track import Track
 
-#: Every provider `resolve()` is allowed to dispatch to, beyond the
-#: locally-implemented "direct" pseudo-provider. Each maps to a sibling
-#: submodule of this package that may or may not exist yet.
-_PROVIDER_MODULES: dict[str, str] = {
-    "youtube": "services.music_providers.youtube",
-    "spotify": "services.music_providers.spotify",
-    "soundcloud": "services.music_providers.soundcloud",
-}
+__all__ = ["ProviderUnavailable", "Track", "TrackNotFound", "resolve", "search"]
 
-#: File extensions this module's local fallback resolver treats as a
-#: directly-playable media URL (no external API/OAuth needed).
-_DIRECT_MEDIA_EXTENSIONS: frozenset[str] = frozenset(
-    {".mp3", ".ogg", ".oga", ".wav", ".m4a", ".flac", ".webm", ".opus", ".aac"}
-)
+_KNOWN_PROVIDERS = frozenset({"youtube", "spotify"})
 
 
-class ProviderUnavailable(Exception):
-    """A named provider integration is not usable right now.
+def _detect_provider(url_or_query: str) -> str | None:
+    """Sniff a provider from a URL's host; returns None for bare search text."""
+    parsed = urlparse(url_or_query)
+    host = (parsed.netloc or "").lower()
+    if not host and "://" not in url_or_query:
+        # No scheme (e.g. "youtu.be/xyz" pasted without "https://") --
+        # urlparse can't find a netloc without one; re-parse as
+        # scheme-relative so the same host logic below still applies.
+        parsed = urlparse(f"//{url_or_query}")
+        host = (parsed.netloc or "").lower()
 
-    Raised when the provider's submodule isn't installed yet (sibling
-    integration not landed), when it raises its own configuration error
-    (e.g. missing OAuth credentials), or when it fails to resolve the
-    given input. `blueprints/v1/community_music_queue.py` catches this
-    and returns a 422 -- a real, actionable rejection, never a silent
-    fake `Track`.
-    """
-
-
-def _split_title_artist(stem: str) -> tuple[str, str]:
-    """Best-effort `"Artist - Title"` filename convention split.
-
-    Falls back to `(stem, "Unknown Artist")` when the filename doesn't
-    follow that convention -- a real, documented limitation of resolving
-    a track from a bare media URL with no ID3/metadata fetch, not a fake
-    placeholder pretending to be real data.
-    """
-    for sep in (" - ", "_-_", "-"):
-        if sep in stem:
-            left, _, right = stem.partition(sep)
-            left, right = left.strip().replace("_", " "), right.strip().replace("_", " ")
-            if left and right:
-                return right, left
-    cleaned = stem.strip().replace("_", " ") or "Unknown Track"
-    return cleaned, "Unknown Artist"
-
-
-def _parse_direct_media_url(url: str) -> Track:
-    """Parse a direct media URL into a `Track` -- no network call, no external API.
-
-    Real, working fallback resolver: validates scheme/host/extension and
-    derives `title`/`artist` from the filename. `duration_ms` is `0`
-    (genuinely unknown without downloading and parsing the file's own
-    metadata) rather than a fabricated value.
-    """
-    parsed = urlparse(url)
-    if parsed.scheme not in ("http", "https") or not parsed.hostname:
-        raise ValueError(f"Not a valid http(s) media URL: {url!r}")
-
-    path = PurePosixPath(unquote(parsed.path))
-    suffix = path.suffix.lower()
-    if suffix not in _DIRECT_MEDIA_EXTENSIONS:
-        raise ValueError(
-            f"URL does not point at a supported direct media file "
-            f"({', '.join(sorted(_DIRECT_MEDIA_EXTENSIONS))}): {url!r}"
-        )
-
-    title, artist = _split_title_artist(path.stem)
-    return Track(
-        provider="direct",
-        external_id=url,
-        title=title,
-        artist=artist,
-        duration_ms=0,
-        artwork_url=None,
-        url=url,
-    )
-
-
-def detect_provider(url_or_query: str) -> str:
-    """Classify a caller-supplied URL/query into a provider key.
-
-    Used by the queue service when the caller doesn't name a provider
-    explicitly. Falls back to `"direct"` -- `resolve()` itself raises a
-    clear `ValueError` if that guess turns out wrong (not a supported
-    media extension), which the queue service converts to a 422.
-    """
-    lowered = url_or_query.strip().lower()
-    if "youtube.com" in lowered or "youtu.be" in lowered:
+    if host == "youtu.be" or host == "youtube.com" or host.endswith(".youtube.com"):
         return "youtube"
-    if "open.spotify.com" in lowered or lowered.startswith("spotify:"):
+    if host == "spotify.com" or host.endswith(".spotify.com"):
         return "spotify"
-    if "soundcloud.com" in lowered:
-        return "soundcloud"
-    return "direct"
+    return None
 
 
-async def resolve(url_or_query: str, provider: str) -> Track:
-    """Resolve `url_or_query` (a URL or search string) to a `Track` via `provider`.
+async def resolve(url_or_query: str, provider: str | None = None) -> Track:
+    """Resolve one URL or bare query to a single `Track`.
 
-    `provider == "direct"` is handled locally (see `_parse_direct_media_url`).
-    Any other known provider key is dispatched to its own submodule via a
-    dynamic import -- missing/unconfigured/failing providers raise
-    `ProviderUnavailable`, never a fabricated `Track`.
+    Provider is auto-detected from the URL host when possible; otherwise
+    the caller-supplied `provider` is used (required for bare search text).
+    Raises `ProviderUnavailable` if the resolved provider has no usable
+    credentials, `TrackNotFound` if the provider found nothing.
     """
-    cleaned = url_or_query.strip()
-    if not cleaned:
-        raise ValueError("url_or_query is required")
+    resolved_provider = _detect_provider(url_or_query) or provider
+    if resolved_provider is None or resolved_provider not in _KNOWN_PROVIDERS:
+        raise TrackNotFound(url_or_query)
 
-    provider_key = provider.strip().lower()
-    if provider_key == "direct":
-        return _parse_direct_media_url(cleaned)
+    if resolved_provider == "youtube":
+        return await youtube.resolve(url_or_query)
+    return await spotify.resolve(url_or_query)
 
-    module_path = _PROVIDER_MODULES.get(provider_key)
-    if module_path is None:
-        raise ProviderUnavailable(f"Unsupported provider: {provider!r}")
 
-    try:
-        module = importlib.import_module(module_path)
-    except ImportError as exc:
-        raise ProviderUnavailable(
-            f"{provider_key} provider is not available (integration not installed)"
-        ) from exc
+async def search(query: str, provider: str) -> list[Track]:
+    """Search a specific provider for `query`, returning every match found.
 
-    resolver = getattr(module, "resolve", None)
-    if resolver is None:
-        raise ProviderUnavailable(f"{provider_key} provider module has no resolve()")
+    Raises `ProviderUnavailable` if `provider` has no usable credentials,
+    `TrackNotFound` if the search returns zero results.
+    """
+    if provider not in _KNOWN_PROVIDERS:
+        raise TrackNotFound(query)
 
-    try:
-        track = await resolver(cleaned)
-    except ProviderUnavailable:
-        raise
-    except Exception as exc:  # noqa: BLE001 - any provider-side failure -> 422, never a 500
-        raise ProviderUnavailable(f"{provider_key} could not resolve {cleaned!r}: {exc}") from exc
-
-    if not isinstance(track, Track):
-        raise ProviderUnavailable(f"{provider_key} provider returned an invalid track shape")
-    return track
+    if provider == "youtube":
+        return await youtube.search(query)
+    return await spotify.search(query)

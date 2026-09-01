@@ -1,13 +1,8 @@
-"""Normalized track representation shared by every Music Station provider integration.
+"""Normalized cross-provider Track -- the shared shape every music provider resolves into.
 
-`Track` is the single wire-and-storage shape every provider resolver
-(`services/music_providers/__init__.py::resolve()` and its YouTube/
-Spotify/SoundCloud implementations) returns -- the Music Station queue,
-`music_tracks` cache table, and moderation log all key off these exact
-fields, never a provider-specific shape. Kept byte-identical across the
-Music Station port group's parallel worktrees so the queue/moderation
-side and the provider-integration side merge without a field-shape
-conflict.
+Kept byte-identical to the sibling music-station agent's own `Track` (same
+module built independently against the same spec) so the two land in the
+same queue without a translation layer between them.
 """
 
 from __future__ import annotations
@@ -17,9 +12,15 @@ from dataclasses import dataclass
 
 @dataclass(slots=True)
 class Track:
-    """One resolved, playable track -- provider-agnostic."""
+    """A single playable unit, normalized across music providers.
 
-    provider: str  # "youtube"|"spotify"|"soundcloud"
+    `provider` is the resolver's own name (`"youtube"`/`"spotify"`),
+    `external_id` is that provider's native id (YouTube video id, Spotify
+    track id), and `url` is the canonical link back to the track on that
+    provider.
+    """
+
+    provider: str
     external_id: str
     title: str
     artist: str
