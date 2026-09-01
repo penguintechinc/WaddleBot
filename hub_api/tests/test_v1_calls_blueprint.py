@@ -1,7 +1,7 @@
 """`blueprints/v1/calls.py` -- the M7 calls group (Streaming module).
 
 Standalone Quart app registering both `calls_admin_bp` and
-`member_voice_bp` against the `streaming_db` fixture (`tests/conftest.py`)
+`member_voice_bp` against the `overlay_db` fixture (`tests/conftest.py`)
 -- real JWTs, real pydal membership rows, `CallsProxyClient.request`
 mocked (no real network I/O), matching `test_event_blueprint.py`'s own
 `proxy_stub` pattern.
@@ -51,13 +51,13 @@ from tests.conftest import (
 
 
 @pytest.fixture
-def app(streaming_db: Any) -> Quart:
+def app(overlay_db: Any) -> Quart:
     quart_app = Quart(__name__)
     QuartSchema(quart_app)
     quart_app.register_blueprint(calls_admin_bp)
     quart_app.register_blueprint(member_voice_bp)
-    quart_app.config["dal"] = streaming_db.dal
-    quart_app.config["async_dal"] = streaming_db
+    quart_app.config["dal"] = overlay_db.dal
+    quart_app.config["async_dal"] = overlay_db
     return quart_app
 
 
@@ -74,21 +74,21 @@ def proxy_stub(monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
     return stub
 
 
-def _owner(streaming_db: Any, *, scope: str) -> tuple[dict[str, str], int]:
-    community_id = seed_community(streaming_db)
+def _owner(overlay_db: Any, *, scope: str) -> tuple[dict[str, str], int]:
+    community_id = seed_community(overlay_db)
     user_id = 701
     seed_membership(
-        streaming_db, community_id=community_id, user_id=user_id, role="community-owner"
+        overlay_db, community_id=community_id, user_id=user_id, role="community-owner"
     )
     token = make_user_token(user_id=user_id, scope=scope)
     return {"Authorization": f"Bearer {token}"}, community_id
 
 
-def _plain_member(streaming_db: Any, *, scope: str) -> tuple[dict[str, str], int]:
-    community_id = seed_community(streaming_db)
+def _plain_member(overlay_db: Any, *, scope: str) -> tuple[dict[str, str], int]:
+    community_id = seed_community(overlay_db)
     user_id = 702
     seed_membership(
-        streaming_db, community_id=community_id, user_id=user_id, role="community-member"
+        overlay_db, community_id=community_id, user_id=user_id, role="community-member"
     )
     token = make_user_token(user_id=user_id, scope=scope)
     return {"Authorization": f"Bearer {token}"}, community_id
@@ -134,14 +134,14 @@ class TestAdminRouteAuth:
     async def test_admin_route_non_admin_member_is_403(
         self,
         client: Any,
-        streaming_db: Any,
+        overlay_db: Any,
         proxy_stub: AsyncMock,
         method: str,
         path_fn: Any,
         body: dict[str, Any] | None,
     ) -> None:
         """A real, active membership with role='community-member' is still not an admin."""
-        headers, community_id = _plain_member(streaming_db, scope=SCOPE_ADMIN)
+        headers, community_id = _plain_member(overlay_db, scope=SCOPE_ADMIN)
         response = await client.open(
             path_fn(community_id), method=method, headers=headers, json=body
         )
@@ -152,13 +152,13 @@ class TestAdminRouteAuth:
     async def test_admin_route_non_member_is_403(
         self,
         client: Any,
-        streaming_db: Any,
+        overlay_db: Any,
         proxy_stub: AsyncMock,
         method: str,
         path_fn: Any,
         body: dict[str, Any] | None,
     ) -> None:
-        community_id = seed_community(streaming_db)
+        community_id = seed_community(overlay_db)
         token = make_user_token(user_id=999, scope=SCOPE_ADMIN)
         response = await client.open(
             path_fn(community_id),
@@ -172,9 +172,9 @@ class TestAdminRouteAuth:
 
 class TestAdminRouteReshaping:
     async def test_get_call_rooms_relays_rooms(
-        self, client: Any, streaming_db: Any, proxy_stub: AsyncMock
+        self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
-        headers, community_id = _owner(streaming_db, scope=SCOPE_ADMIN)
+        headers, community_id = _owner(overlay_db, scope=SCOPE_ADMIN)
         proxy_stub.return_value = ProxyResult(
             ok=True, status_code=200, body={"rooms": [{"room_name": "room1"}]}
         )
@@ -184,18 +184,18 @@ class TestAdminRouteReshaping:
         assert body == {"success": True, "rooms": [{"room_name": "room1"}]}
 
     async def test_get_call_rooms_downstream_404_is_empty_list(
-        self, client: Any, streaming_db: Any, proxy_stub: AsyncMock
+        self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
-        headers, community_id = _owner(streaming_db, scope=SCOPE_ADMIN)
+        headers, community_id = _owner(overlay_db, scope=SCOPE_ADMIN)
         proxy_stub.return_value = ProxyResult(ok=False, status_code=404, body=None)
         response = await client.get(f"/api/v1/admin/{community_id}/calls/rooms", headers=headers)
         assert response.status_code == 200
         assert (await response.get_json())["rooms"] == []
 
     async def test_get_call_rooms_downstream_error_is_masked_500(
-        self, client: Any, streaming_db: Any, proxy_stub: AsyncMock
+        self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
-        headers, community_id = _owner(streaming_db, scope=SCOPE_ADMIN)
+        headers, community_id = _owner(overlay_db, scope=SCOPE_ADMIN)
         proxy_stub.return_value = ProxyResult(
             ok=False, status_code=503, body={"error": "downstream unavailable"}
         )
@@ -205,9 +205,9 @@ class TestAdminRouteReshaping:
         assert body == {"success": False, "error": "downstream unavailable"}
 
     async def test_create_call_room_defaults_max_participants(
-        self, client: Any, streaming_db: Any, proxy_stub: AsyncMock
+        self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
-        headers, community_id = _owner(streaming_db, scope=SCOPE_ADMIN)
+        headers, community_id = _owner(overlay_db, scope=SCOPE_ADMIN)
         proxy_stub.return_value = ProxyResult(ok=True, status_code=200, body={"room_name": "room1"})
         response = await client.post(
             f"/api/v1/admin/{community_id}/calls/rooms",
@@ -220,9 +220,9 @@ class TestAdminRouteReshaping:
         assert sent_json["community_id"] == community_id
 
     async def test_create_call_room_downstream_error(
-        self, client: Any, streaming_db: Any, proxy_stub: AsyncMock
+        self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
-        headers, community_id = _owner(streaming_db, scope=SCOPE_ADMIN)
+        headers, community_id = _owner(overlay_db, scope=SCOPE_ADMIN)
         proxy_stub.return_value = ProxyResult(
             ok=False, status_code=409, body={"error": "room already exists"}
         )
@@ -235,9 +235,9 @@ class TestAdminRouteReshaping:
         assert (await response.get_json())["error"] == "room already exists"
 
     async def test_get_call_participants_downstream_404_is_empty_list(
-        self, client: Any, streaming_db: Any, proxy_stub: AsyncMock
+        self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
-        headers, community_id = _owner(streaming_db, scope=SCOPE_ADMIN)
+        headers, community_id = _owner(overlay_db, scope=SCOPE_ADMIN)
         proxy_stub.return_value = ProxyResult(ok=False, status_code=404, body=None)
         response = await client.get(
             f"/api/v1/admin/{community_id}/calls/rooms/room1/participants", headers=headers
@@ -246,9 +246,9 @@ class TestAdminRouteReshaping:
         assert (await response.get_json())["participants"] == []
 
     async def test_delete_call_room_message(
-        self, client: Any, streaming_db: Any, proxy_stub: AsyncMock
+        self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
-        headers, community_id = _owner(streaming_db, scope=SCOPE_ADMIN)
+        headers, community_id = _owner(overlay_db, scope=SCOPE_ADMIN)
         response = await client.delete(
             f"/api/v1/admin/{community_id}/calls/rooms/room1", headers=headers
         )
@@ -256,9 +256,9 @@ class TestAdminRouteReshaping:
         assert (await response.get_json())["message"] == "Room deleted"
 
     async def test_get_raised_hands_downstream_404_is_empty_list(
-        self, client: Any, streaming_db: Any, proxy_stub: AsyncMock
+        self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
-        headers, community_id = _owner(streaming_db, scope=SCOPE_ADMIN)
+        headers, community_id = _owner(overlay_db, scope=SCOPE_ADMIN)
         proxy_stub.return_value = ProxyResult(ok=False, status_code=404, body=None)
         response = await client.get(
             f"/api/v1/admin/{community_id}/calls/rooms/room1/raised-hands", headers=headers
@@ -281,14 +281,14 @@ class TestMemberVoiceRoutes:
     async def test_member_route_non_member_is_403(
         self,
         client: Any,
-        streaming_db: Any,
+        overlay_db: Any,
         proxy_stub: AsyncMock,
         method: str,
         path_fn: Any,
         body: dict[str, Any] | None,
     ) -> None:
         """Authenticated, correct scope, but NO membership row -- the join-token takeover fix."""
-        community_id = seed_community(streaming_db)
+        community_id = seed_community(overlay_db)
         token = make_user_token(user_id=888, scope=f"{SCOPE_READ} {SCOPE_WRITE}")
         response = await client.open(
             path_fn(community_id),
@@ -300,10 +300,10 @@ class TestMemberVoiceRoutes:
         proxy_stub.assert_not_awaited()
 
     async def test_join_voice_room_plain_member_succeeds(
-        self, client: Any, streaming_db: Any, proxy_stub: AsyncMock
+        self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
         """A plain 'community-member' (not owner/admin) CAN join -- membership is enough."""
-        headers, community_id = _plain_member(streaming_db, scope=SCOPE_WRITE)
+        headers, community_id = _plain_member(overlay_db, scope=SCOPE_WRITE)
         proxy_stub.return_value = ProxyResult(
             ok=True, status_code=200, body={"token": "lk-token", "url": "wss://livekit.example"}
         )
@@ -315,16 +315,16 @@ class TestMemberVoiceRoutes:
         assert body == {"success": True, "token": "lk-token", "url": "wss://livekit.example"}
 
     async def test_join_voice_room_uses_jwt_user_id_not_request_body(
-        self, client: Any, streaming_db: Any, proxy_stub: AsyncMock
+        self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
         """The downstream `user_id` comes from the verified JWT `sub`, never a client-supplied one.
 
         A malicious body claiming a different `user_id` is simply ignored
         -- `join_voice_room` never reads `request.get_json()` at all.
         """
-        community_id = seed_community(streaming_db)
+        community_id = seed_community(overlay_db)
         seed_membership(
-            streaming_db, community_id=community_id, user_id=42, role="community-member"
+            overlay_db, community_id=community_id, user_id=42, role="community-member"
         )
         token = make_user_token(user_id=42, scope=SCOPE_WRITE)
         proxy_stub.return_value = ProxyResult(ok=True, status_code=200, body={"token": "t"})
@@ -340,9 +340,9 @@ class TestMemberVoiceRoutes:
 
 class TestSuperAdminBypass:
     async def test_admin_route_super_admin_bypasses_membership(
-        self, client: Any, streaming_db: Any, proxy_stub: AsyncMock
+        self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
-        community_id = seed_community(streaming_db)  # no membership row at all
+        community_id = seed_community(overlay_db)  # no membership row at all
         token = make_super_admin_token(user_id=1, scope=SCOPE_ADMIN)
         response = await client.get(
             f"/api/v1/admin/{community_id}/calls/rooms",
@@ -351,9 +351,9 @@ class TestSuperAdminBypass:
         assert response.status_code == 200
 
     async def test_member_route_super_admin_bypasses_membership(
-        self, client: Any, streaming_db: Any, proxy_stub: AsyncMock
+        self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
-        community_id = seed_community(streaming_db)  # no membership row at all
+        community_id = seed_community(overlay_db)  # no membership row at all
         token = make_super_admin_token(user_id=1, scope=SCOPE_READ)
         response = await client.get(
             f"/api/v1/community/{community_id}/interact/voice/rooms",
@@ -370,9 +370,9 @@ class TestAdminRouteSuccessPaths:
     """
 
     async def test_get_call_room(
-        self, client: Any, streaming_db: Any, proxy_stub: AsyncMock
+        self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
-        headers, community_id = _owner(streaming_db, scope=SCOPE_ADMIN)
+        headers, community_id = _owner(overlay_db, scope=SCOPE_ADMIN)
         proxy_stub.return_value = ProxyResult(
             ok=True, status_code=200, body={"room_name": "room1", "is_locked": False}
         )
@@ -387,9 +387,9 @@ class TestAdminRouteSuccessPaths:
         }
 
     async def test_get_call_room_downstream_error(
-        self, client: Any, streaming_db: Any, proxy_stub: AsyncMock
+        self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
-        headers, community_id = _owner(streaming_db, scope=SCOPE_ADMIN)
+        headers, community_id = _owner(overlay_db, scope=SCOPE_ADMIN)
         proxy_stub.return_value = ProxyResult(ok=False, status_code=404, body=None)
         response = await client.get(
             f"/api/v1/admin/{community_id}/calls/rooms/room1", headers=headers
@@ -398,9 +398,9 @@ class TestAdminRouteSuccessPaths:
         assert (await response.get_json())["success"] is False
 
     async def test_delete_call_room_downstream_error(
-        self, client: Any, streaming_db: Any, proxy_stub: AsyncMock
+        self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
-        headers, community_id = _owner(streaming_db, scope=SCOPE_ADMIN)
+        headers, community_id = _owner(overlay_db, scope=SCOPE_ADMIN)
         proxy_stub.return_value = ProxyResult(ok=False, status_code=404, body=None)
         response = await client.delete(
             f"/api/v1/admin/{community_id}/calls/rooms/room1", headers=headers
@@ -408,9 +408,9 @@ class TestAdminRouteSuccessPaths:
         assert response.status_code == 404
 
     async def test_lock_call_room(
-        self, client: Any, streaming_db: Any, proxy_stub: AsyncMock
+        self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
-        headers, community_id = _owner(streaming_db, scope=SCOPE_ADMIN)
+        headers, community_id = _owner(overlay_db, scope=SCOPE_ADMIN)
         response = await client.post(
             f"/api/v1/admin/{community_id}/calls/rooms/room1/lock", headers=headers
         )
@@ -418,9 +418,9 @@ class TestAdminRouteSuccessPaths:
         assert (await response.get_json())["message"] == "Room locked"
 
     async def test_lock_call_room_downstream_error(
-        self, client: Any, streaming_db: Any, proxy_stub: AsyncMock
+        self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
-        headers, community_id = _owner(streaming_db, scope=SCOPE_ADMIN)
+        headers, community_id = _owner(overlay_db, scope=SCOPE_ADMIN)
         proxy_stub.return_value = ProxyResult(ok=False, status_code=500, body=None)
         response = await client.post(
             f"/api/v1/admin/{community_id}/calls/rooms/room1/lock", headers=headers
@@ -428,9 +428,9 @@ class TestAdminRouteSuccessPaths:
         assert response.status_code == 500
 
     async def test_unlock_call_room(
-        self, client: Any, streaming_db: Any, proxy_stub: AsyncMock
+        self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
-        headers, community_id = _owner(streaming_db, scope=SCOPE_ADMIN)
+        headers, community_id = _owner(overlay_db, scope=SCOPE_ADMIN)
         response = await client.post(
             f"/api/v1/admin/{community_id}/calls/rooms/room1/unlock", headers=headers
         )
@@ -438,9 +438,9 @@ class TestAdminRouteSuccessPaths:
         assert (await response.get_json())["message"] == "Room unlocked"
 
     async def test_unlock_call_room_downstream_error(
-        self, client: Any, streaming_db: Any, proxy_stub: AsyncMock
+        self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
-        headers, community_id = _owner(streaming_db, scope=SCOPE_ADMIN)
+        headers, community_id = _owner(overlay_db, scope=SCOPE_ADMIN)
         proxy_stub.return_value = ProxyResult(ok=False, status_code=500, body=None)
         response = await client.post(
             f"/api/v1/admin/{community_id}/calls/rooms/room1/unlock", headers=headers
@@ -448,9 +448,9 @@ class TestAdminRouteSuccessPaths:
         assert response.status_code == 500
 
     async def test_get_call_participants(
-        self, client: Any, streaming_db: Any, proxy_stub: AsyncMock
+        self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
-        headers, community_id = _owner(streaming_db, scope=SCOPE_ADMIN)
+        headers, community_id = _owner(overlay_db, scope=SCOPE_ADMIN)
         proxy_stub.return_value = ProxyResult(
             ok=True, status_code=200, body={"participants": [{"identity": "u1"}]}
         )
@@ -461,9 +461,9 @@ class TestAdminRouteSuccessPaths:
         assert (await response.get_json())["participants"] == [{"identity": "u1"}]
 
     async def test_get_call_participants_downstream_error(
-        self, client: Any, streaming_db: Any, proxy_stub: AsyncMock
+        self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
-        headers, community_id = _owner(streaming_db, scope=SCOPE_ADMIN)
+        headers, community_id = _owner(overlay_db, scope=SCOPE_ADMIN)
         proxy_stub.return_value = ProxyResult(ok=False, status_code=500, body=None)
         response = await client.get(
             f"/api/v1/admin/{community_id}/calls/rooms/room1/participants", headers=headers
@@ -471,9 +471,9 @@ class TestAdminRouteSuccessPaths:
         assert response.status_code == 500
 
     async def test_kick_call_participant(
-        self, client: Any, streaming_db: Any, proxy_stub: AsyncMock
+        self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
-        headers, community_id = _owner(streaming_db, scope=SCOPE_ADMIN)
+        headers, community_id = _owner(overlay_db, scope=SCOPE_ADMIN)
         response = await client.post(
             f"/api/v1/admin/{community_id}/calls/rooms/room1/kick",
             headers=headers,
@@ -484,9 +484,9 @@ class TestAdminRouteSuccessPaths:
         assert proxy_stub.await_args.kwargs["json_body"]["identity"] == "u1"
 
     async def test_kick_call_participant_downstream_error(
-        self, client: Any, streaming_db: Any, proxy_stub: AsyncMock
+        self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
-        headers, community_id = _owner(streaming_db, scope=SCOPE_ADMIN)
+        headers, community_id = _owner(overlay_db, scope=SCOPE_ADMIN)
         proxy_stub.return_value = ProxyResult(ok=False, status_code=500, body=None)
         response = await client.post(
             f"/api/v1/admin/{community_id}/calls/rooms/room1/kick",
@@ -496,9 +496,9 @@ class TestAdminRouteSuccessPaths:
         assert response.status_code == 500
 
     async def test_mute_all_call_participants(
-        self, client: Any, streaming_db: Any, proxy_stub: AsyncMock
+        self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
-        headers, community_id = _owner(streaming_db, scope=SCOPE_ADMIN)
+        headers, community_id = _owner(overlay_db, scope=SCOPE_ADMIN)
         response = await client.post(
             f"/api/v1/admin/{community_id}/calls/rooms/room1/mute-all", headers=headers
         )
@@ -506,9 +506,9 @@ class TestAdminRouteSuccessPaths:
         assert (await response.get_json())["message"] == "All participants muted"
 
     async def test_mute_all_call_participants_downstream_error(
-        self, client: Any, streaming_db: Any, proxy_stub: AsyncMock
+        self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
-        headers, community_id = _owner(streaming_db, scope=SCOPE_ADMIN)
+        headers, community_id = _owner(overlay_db, scope=SCOPE_ADMIN)
         proxy_stub.return_value = ProxyResult(ok=False, status_code=500, body=None)
         response = await client.post(
             f"/api/v1/admin/{community_id}/calls/rooms/room1/mute-all", headers=headers
@@ -516,9 +516,9 @@ class TestAdminRouteSuccessPaths:
         assert response.status_code == 500
 
     async def test_get_raised_hands(
-        self, client: Any, streaming_db: Any, proxy_stub: AsyncMock
+        self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
-        headers, community_id = _owner(streaming_db, scope=SCOPE_ADMIN)
+        headers, community_id = _owner(overlay_db, scope=SCOPE_ADMIN)
         proxy_stub.return_value = ProxyResult(
             ok=True, status_code=200, body={"raised_hands": [{"user_id": "u1"}]}
         )
@@ -529,9 +529,9 @@ class TestAdminRouteSuccessPaths:
         assert (await response.get_json())["raised_hands"] == [{"user_id": "u1"}]
 
     async def test_get_raised_hands_downstream_error(
-        self, client: Any, streaming_db: Any, proxy_stub: AsyncMock
+        self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
-        headers, community_id = _owner(streaming_db, scope=SCOPE_ADMIN)
+        headers, community_id = _owner(overlay_db, scope=SCOPE_ADMIN)
         proxy_stub.return_value = ProxyResult(ok=False, status_code=500, body=None)
         response = await client.get(
             f"/api/v1/admin/{community_id}/calls/rooms/room1/raised-hands", headers=headers
@@ -539,9 +539,9 @@ class TestAdminRouteSuccessPaths:
         assert response.status_code == 500
 
     async def test_acknowledge_hand(
-        self, client: Any, streaming_db: Any, proxy_stub: AsyncMock
+        self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
-        headers, community_id = _owner(streaming_db, scope=SCOPE_ADMIN)
+        headers, community_id = _owner(overlay_db, scope=SCOPE_ADMIN)
         response = await client.post(
             f"/api/v1/admin/{community_id}/calls/rooms/room1/acknowledge-hand",
             headers=headers,
@@ -551,9 +551,9 @@ class TestAdminRouteSuccessPaths:
         assert (await response.get_json())["message"] == "Hand acknowledged"
 
     async def test_acknowledge_hand_downstream_error(
-        self, client: Any, streaming_db: Any, proxy_stub: AsyncMock
+        self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
-        headers, community_id = _owner(streaming_db, scope=SCOPE_ADMIN)
+        headers, community_id = _owner(overlay_db, scope=SCOPE_ADMIN)
         proxy_stub.return_value = ProxyResult(ok=False, status_code=500, body=None)
         response = await client.post(
             f"/api/v1/admin/{community_id}/calls/rooms/room1/acknowledge-hand",
@@ -565,9 +565,9 @@ class TestAdminRouteSuccessPaths:
 
 class TestMemberRouteSuccessPaths:
     async def test_list_voice_rooms(
-        self, client: Any, streaming_db: Any, proxy_stub: AsyncMock
+        self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
-        headers, community_id = _plain_member(streaming_db, scope=SCOPE_READ)
+        headers, community_id = _plain_member(overlay_db, scope=SCOPE_READ)
         proxy_stub.return_value = ProxyResult(
             ok=True, status_code=200, body={"rooms": [{"room_name": "room1"}]}
         )
@@ -578,9 +578,9 @@ class TestMemberRouteSuccessPaths:
         assert (await response.get_json())["rooms"] == [{"room_name": "room1"}]
 
     async def test_create_ad_hoc_voice_room(
-        self, client: Any, streaming_db: Any, proxy_stub: AsyncMock
+        self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
-        headers, community_id = _plain_member(streaming_db, scope=SCOPE_WRITE)
+        headers, community_id = _plain_member(overlay_db, scope=SCOPE_WRITE)
         proxy_stub.return_value = ProxyResult(ok=True, status_code=200, body={"room_name": "room1"})
         response = await client.post(
             f"/api/v1/community/{community_id}/interact/voice/rooms",
@@ -590,9 +590,9 @@ class TestMemberRouteSuccessPaths:
         assert response.status_code == 201
 
     async def test_join_voice_room_downstream_error(
-        self, client: Any, streaming_db: Any, proxy_stub: AsyncMock
+        self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
-        headers, community_id = _plain_member(streaming_db, scope=SCOPE_WRITE)
+        headers, community_id = _plain_member(overlay_db, scope=SCOPE_WRITE)
         proxy_stub.return_value = ProxyResult(ok=False, status_code=409, body=None)
         response = await client.post(
             f"/api/v1/community/{community_id}/interact/voice/rooms/room1/join", headers=headers
@@ -600,9 +600,9 @@ class TestMemberRouteSuccessPaths:
         assert response.status_code == 409
 
     async def test_leave_voice_room(
-        self, client: Any, streaming_db: Any, proxy_stub: AsyncMock
+        self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
-        headers, community_id = _plain_member(streaming_db, scope=SCOPE_WRITE)
+        headers, community_id = _plain_member(overlay_db, scope=SCOPE_WRITE)
         response = await client.post(
             f"/api/v1/community/{community_id}/interact/voice/rooms/room1/leave", headers=headers
         )
@@ -610,9 +610,9 @@ class TestMemberRouteSuccessPaths:
         assert (await response.get_json())["message"] == "Left room"
 
     async def test_leave_voice_room_downstream_error(
-        self, client: Any, streaming_db: Any, proxy_stub: AsyncMock
+        self, client: Any, overlay_db: Any, proxy_stub: AsyncMock
     ) -> None:
-        headers, community_id = _plain_member(streaming_db, scope=SCOPE_WRITE)
+        headers, community_id = _plain_member(overlay_db, scope=SCOPE_WRITE)
         proxy_stub.return_value = ProxyResult(ok=False, status_code=500, body=None)
         response = await client.post(
             f"/api/v1/community/{community_id}/interact/voice/rooms/room1/leave", headers=headers

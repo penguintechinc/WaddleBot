@@ -19,6 +19,22 @@ convention = "google"
 # (get_tenant_context always non-None on the success path) -- a defensive
 # invariant note, not a security assert-in-prod-strips-it concern.
 "blueprints/v2/platform.py" = ["S101"]
+# Community-module port (M6, docs/plans/2026-08-31-hubapi-node-to-quart-
+# migration.md): every blueprint's `_tenant_ok()`/inline helper repeats
+# platform.py's same `assert ctx is not None` postcondition after
+# `get_tenant_context()` -- the pattern every ported controller group
+# was documented to repeat (see platform.py's own per-file-ignore above).
+"blueprints/v1/community_*.py" = ["S101"]
+# Bot module (M5): DTO/service-dataclass field names are deliberately
+# camelCase to byte-match admin/hub_module/frontend/src/services/api.js's
+# frozen /api/v1 JSON contract (soEnabled, platformUsername, createdAt,
+# etc.) -- N815 flags every one of them; renaming would break the
+# strangler-fig contract these blueprints exist to preserve. S101 covers
+# the same tenant_middleware postcondition assert as platform.py above,
+# repeated once per handler.
+"blueprints/v1/bot.py" = ["N815", "S101"]
+"services/bot_shoutout.py" = ["N815"]
+"services/bot_ai_knowledge.py" = ["N815"]
 # M1 Core Identity/Auth group -- postcondition asserts, same rationale as
 # blueprints/v2/platform.py above (register()/get_my_profile() always
 # return a populated result on this code path; worst case under -O is an
@@ -33,6 +49,17 @@ convention = "google"
 "blueprints/v1/passkey.py" = ["N815"]
 "blueprints/v1/profile.py" = ["N815"]
 "blueprints/v1/user_management.py" = ["N815"]
+# M3 Platform-admin group -- same rationale as the M1 entries above:
+# camelCase DTO fields are wire-contract-pinned to api.js, and
+# tenant_middleware postcondition asserts (`ctx is not None`) mirror
+# blueprints/v2/platform.py's own precedent.
+"blueprints/v1/admin.py" = ["S101", "N815"]
+"blueprints/v1/superadmin.py" = ["N815"]
+# M2 Core Tenant group -- same rationale as blueprints/v1/auth.py above:
+# S101 is a tenant_middleware postcondition assert (get_tenant_context
+# always non-None on the success path), N815 is the camelCase DTO wire
+# contract pinned to frontend/src/services/api.js's tenantApi.
+"blueprints/v1/tenant.py" = ["S101", "N815"]
 "services/profile_service.py" = ["S101"]
 # M7 Streaming group (overlay/calls) -- same postcondition-assert rationale
 # as blueprints/v1/auth.py above (`get_tenant_context(request)` is always
@@ -46,6 +73,36 @@ convention = "google"
 "blueprints/v1/overlay.py" = ["S101", "N815"]
 "blueprints/v1/calls.py" = ["S101"]
 "services/overlay_service.py" = ["N815"]
+# M7 Streaming group (music/stream/streaming) -- same camelCase-DTO
+# rationale as blueprints/v1/auth.py above; DTO field names are wire
+# contracts pinned to frontend/src/services/api.js.
+"blueprints/v1/music.py" = ["N815"]
+"blueprints/v1/stream.py" = ["N815"]
+"services/music_service.py" = ["N815"]
+"services/stream_service.py" = ["N815"]
+# Privacy/Compliance group (GDPR DSAR + cookie consent) -- cookie_consent.py's
+# request/response DTOs are wire contracts pinned to `frontend/src/contexts/
+# CookieConsentContext.jsx` (consentId, userId, consentMethod, ...), same
+# camelCase-is-deliberate rationale as blueprints/v1/auth.py above.
+# data_privacy.py has no camelCase DTOs (its own contract -- already_deleted,
+# exported_at, subject_id -- is snake_case) so needs no ignore.
+"blueprints/v1/cookie_consent.py" = ["N815"]
+# M3 Platform-admin/Public group -- v1 response/request DTOs are wire
+# contracts pinned to `frontend/src/services/api.js` (platformApi/
+# superAdminApi/publicApi), same rationale as the M1 blueprints above:
+# camelCase field names are deliberate, not a convention slip.
+"blueprints/v1/platform.py" = ["N815"]
+"blueprints/v1/platform_config.py" = ["N815"]
+"blueprints/v1/public.py" = ["N815"]
+# M2 Core Tenancy-Misc group (communityProfileController.js /
+# joinRequestController.js) -- same N815 rationale as the M1 entries
+# above (`avatarUrl`/`socialLinks`/etc are wire-contract field names, not
+# a naming-convention slip). `community_authz.py`/`community_profile_
+# service.py` use `_get_active_community`'s own postcondition assert.
+"blueprints/v1/community_profile.py" = ["N815"]
+"blueprints/v1/join_request.py" = ["N815"]
+"services/community_profile_service.py" = ["S101"]
+"services/join_request_service.py" = ["N815"]
 
 [tool.mypy]
 python_version = "3.13"
