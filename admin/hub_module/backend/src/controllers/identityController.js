@@ -226,6 +226,11 @@ export async function identityLinkCallback(req, res, next) {
   try {
     const { platform } = req.params;
     const { code, state } = req.query;
+    const validPlatforms = ['discord', 'twitch', 'slack'];
+
+    if (!validPlatforms.includes(platform)) {
+      return res.redirect(`${config.cors.origin}/settings/identities?error=invalid_platform`);
+    }
 
     if (!code || !state) {
       return res.redirect(`${config.cors.origin}/settings/identities?error=missing_params`);

@@ -514,6 +514,11 @@ export async function oauthCallback(req, res, next) {
   try {
     const { platform } = req.params;
     const { code, state, error: oauthError } = req.query;
+    const validPlatforms = ['discord', 'twitch', 'slack', 'youtube', 'kick'];
+
+    if (!validPlatforms.includes(platform)) {
+      return next(errors.badRequest('Invalid platform'));
+    }
 
     if (oauthError) {
       logger.auth('OAuth error from provider', { platform, error: oauthError });
@@ -713,6 +718,11 @@ export async function oauthLinkCallback(req, res, next) {
   try {
     const { platform } = req.params;
     const { code, state, error: oauthError } = req.query;
+    const validPlatforms = ['discord', 'twitch', 'slack', 'youtube', 'kick'];
+
+    if (!validPlatforms.includes(platform)) {
+      return next(errors.badRequest('Invalid platform'));
+    }
 
     if (oauthError) {
       return res.redirect(`${config.cors.origin}/dashboard/settings?error=link_denied`);

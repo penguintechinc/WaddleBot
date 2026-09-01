@@ -14,6 +14,7 @@ import * as aiChatterController from '../controllers/aiChatterController.js';
 import PlatformConfigController from '../controllers/platformConfigController.js';
 import { requireAuth, requireCommunityAdmin } from '../middleware/auth.js';
 import { validators, validateRequest } from '../middleware/validation.js';
+import { isAllowedProxyPath } from '../utils/proxyAllowlist.js';
 import workflowRoutes from './workflow.js';
 
 const router = Router();
@@ -305,8 +306,11 @@ router.put('/:communityId/suspected-bots/:botId/review',
 // Analytics proxy routes
 router.get('/:communityId/analytics/*', requireCommunityAdmin, async (req, res) => {
   try {
-    const httpClient = (await import('axios')).default;
     const analyticsPath = req.params[0];
+    if (!isAllowedProxyPath('analytics', 'GET', analyticsPath)) {
+      return res.status(403).json({ error: 'Requested analytics path is not permitted' });
+    }
+    const httpClient = (await import('axios')).default;
     const response = await httpClient.get(
       `http://analytics-core:8040/api/v1/analytics/${req.params.communityId}/${analyticsPath}`,
       {
@@ -337,8 +341,11 @@ function isServiceUnavailable(error) {
 // Security proxy routes
 router.get('/:communityId/security/*', requireCommunityAdmin, async (req, res) => {
   try {
-    const httpClient = (await import('axios')).default;
     const securityPath = req.params[0];
+    if (!isAllowedProxyPath('security', 'GET', securityPath)) {
+      return res.status(403).json({ error: 'Requested security path is not permitted' });
+    }
+    const httpClient = (await import('axios')).default;
     const response = await httpClient.get(
       `http://security-core:8041/api/v1/security/${req.params.communityId}/${securityPath}`,
       {
@@ -363,8 +370,11 @@ router.get('/:communityId/security/*', requireCommunityAdmin, async (req, res) =
 
 router.put('/:communityId/security/*', requireCommunityAdmin, async (req, res) => {
   try {
-    const httpClient = (await import('axios')).default;
     const securityPath = req.params[0];
+    if (!isAllowedProxyPath('security', 'PUT', securityPath)) {
+      return res.status(403).json({ error: 'Requested security path is not permitted' });
+    }
+    const httpClient = (await import('axios')).default;
     const response = await httpClient.put(
       `http://security-core:8041/api/v1/security/${req.params.communityId}/${securityPath}`,
       req.body,
@@ -390,8 +400,11 @@ router.put('/:communityId/security/*', requireCommunityAdmin, async (req, res) =
 
 router.post('/:communityId/security/*', requireCommunityAdmin, async (req, res) => {
   try {
-    const httpClient = (await import('axios')).default;
     const securityPath = req.params[0];
+    if (!isAllowedProxyPath('security', 'POST', securityPath)) {
+      return res.status(403).json({ error: 'Requested security path is not permitted' });
+    }
+    const httpClient = (await import('axios')).default;
     const response = await httpClient.post(
       `http://security-core:8041/api/v1/security/${req.params.communityId}/${securityPath}`,
       req.body,
@@ -417,8 +430,11 @@ router.post('/:communityId/security/*', requireCommunityAdmin, async (req, res) 
 
 router.delete('/:communityId/security/*', requireCommunityAdmin, async (req, res) => {
   try {
-    const httpClient = (await import('axios')).default;
     const securityPath = req.params[0];
+    if (!isAllowedProxyPath('security', 'DELETE', securityPath)) {
+      return res.status(403).json({ error: 'Requested security path is not permitted' });
+    }
+    const httpClient = (await import('axios')).default;
     const response = await httpClient.delete(
       `http://security-core:8041/api/v1/security/${req.params.communityId}/${securityPath}`,
       {

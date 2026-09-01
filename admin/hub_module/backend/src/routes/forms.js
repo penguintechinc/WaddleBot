@@ -26,6 +26,8 @@ router.get(
 router.get(
   '/:communityId/forms/:formId',
   requireCommunityAdmin,
+  validators.id('formId'),
+  validateRequest,
   formsController.getForm
 );
 
@@ -49,6 +51,8 @@ router.post(
 router.delete(
   '/:communityId/forms/:formId',
   requireCommunityAdmin,
+  validators.id('formId'),
+  validateRequest,
   formsController.deleteForm
 );
 
@@ -60,6 +64,8 @@ router.delete(
 router.get(
   '/:communityId/forms/:formId/submissions',
   requireCommunityAdmin,
+  validators.id('formId'),
+  validateRequest,
   formsController.getFormSubmissions
 );
 
