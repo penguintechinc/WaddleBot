@@ -34,6 +34,13 @@ convention = "google"
 "blueprints/v1/profile.py" = ["N815"]
 "blueprints/v1/user_management.py" = ["N815"]
 "services/profile_service.py" = ["S101"]
+# M3 Platform-admin/Public group -- v1 response/request DTOs are wire
+# contracts pinned to `frontend/src/services/api.js` (platformApi/
+# superAdminApi/publicApi), same rationale as the M1 blueprints above:
+# camelCase field names are deliberate, not a convention slip.
+"blueprints/v1/platform.py" = ["N815"]
+"blueprints/v1/platform_config.py" = ["N815"]
+"blueprints/v1/public.py" = ["N815"]
 
 [tool.mypy]
 python_version = "3.13"
