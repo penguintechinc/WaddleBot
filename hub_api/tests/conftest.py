@@ -24,7 +24,17 @@ from flask_core.auth import create_jwt_token
 from flask_core.database import AsyncDAL
 from pydal import DAL, Field
 
-from services.schema import bind_auth_tables, bind_streaming_tables
+from services.schema import (
+    bind_admin_tables,
+    bind_auth_tables,
+    bind_community_authz_tables,
+    bind_github_sync_tables,
+    bind_platform_tables,
+    bind_privacy_tables,
+    bind_streaming_tables,
+    bind_superadmin_tenant_fields,
+    bind_tenant_tables,
+)
 
 #: Matches flask_core.tenancy/authz's own os.getenv("SECRET_KEY", ...) fallback.
 SECRET_KEY = "change-me-in-production"
@@ -132,10 +142,188 @@ def streaming_db(tmp_path: Any) -> Any:
     dal.close()
 
 
-def make_token(*, scope: str = "", tenant: str = TENANT_SLUG) -> str:
-    """Mint a JWT via the real `flask_core.auth.create_jwt_token` -- no hand-rolled JWTs."""
+@pytest.fixture
+def automation_db(tmp_path: Any) -> Any:
+    """File-backed `AsyncDAL` for the M-automation port group (workflow + github_sync).
+
+    Same file-backed-sqlite/`pool_size=1`/lazy-table-touch rationale as
+    `auth_db` above -- see that fixture's own docstring for the full
+    gotcha writeup. Extends `bind_auth_tables()` with
+    `bind_community_authz_tables()` (`community_roles`, for
+    `services.community_authz.require_community_admin()`) and
+    `bind_github_sync_tables()` (`github_repo_connections` and friends).
+    """
+    async_dal = AsyncDAL(f"sqlite://{tmp_path / 'automation_test.db'}", pool_size=1)
+    dal = async_dal.dal
+    dal.define_table(
+        "tenants",
+        Field("slug", unique=True),
+        Field("display_name"),
+        Field("logo_url"),
+        Field("is_global", "boolean", default=False),
+        Field("is_active", "boolean", default=True),
+        Field("config", "json"),
+    )
+    bind_auth_tables(dal, migrate=True)
+    bind_community_authz_tables(dal, migrate=True)
+    bind_github_sync_tables(dal, migrate=True)
+    dal.tenants.insert(slug=TENANT_SLUG, display_name="Acme Corp", is_active=True)
+    dal.commit()
+    for table_name in dal.tables:
+        dal(dal[table_name]).count()
+    yield async_dal
+    dal.close()
+
+
+@pytest.fixture
+def privacy_db(tmp_path: Any) -> Any:
+    """`auth_db`'s tables PLUS the Privacy/Compliance group's own.
+
+    See `services.schema.bind_privacy_tables`.
+
+    Same file-backed-sqlite/`pool_size=1`/eager-table-touch rationale as
+    `auth_db` -- see that fixture's own docstring for the full gotcha
+    writeup. A separate fixture (not a mutation of `auth_db`) per `hub_api/
+    PORTING.md`'s Test pattern: additive-only, never edit another group's
+    fixture in place.
+    """
+    async_dal = AsyncDAL(f"sqlite://{tmp_path / 'privacy_test.db'}", pool_size=1)
+    dal = async_dal.dal
+    dal.define_table(
+        "tenants",
+        Field("slug", unique=True),
+        Field("display_name"),
+        Field("logo_url"),
+        Field("is_global", "boolean", default=False),
+        Field("is_active", "boolean", default=True),
+        Field("config", "json"),
+    )
+    bind_auth_tables(dal, migrate=True)
+    bind_privacy_tables(dal, migrate=True)
+    dal.tenants.insert(slug=TENANT_SLUG, display_name="Acme Corp", is_active=True)
+    dal.commit()
+    for table_name in dal.tables:
+        dal(dal[table_name]).count()
+    yield async_dal
+    dal.close()
+
+
+@pytest.fixture
+def platform_db(tmp_path: Any) -> Any:
+    """File-backed `AsyncDAL` for the M3 Platform-admin/Public group.
+
+    Same `tmp_path`-backed-sqlite-file / `pool_size=1` / touch-every-table
+    rationale as `auth_db` above (see its own docstring) -- additive, new
+    fixture rather than editing `auth_db` in place (`hub_api/PORTING.md`'s
+    Test pattern: "add your own `bind_<group>_tables()` call ... never
+    edit the M1 group's own fixture logic"). `bind_platform_tables()`
+    calls `bind_auth_tables()` itself, so this fixture alone covers every
+    table this group's blueprints query.
+    """
+    async_dal = AsyncDAL(f"sqlite://{tmp_path / 'platform_test.db'}", pool_size=1)
+    dal = async_dal.dal
+    dal.define_table(
+        "tenants",
+        Field("slug", unique=True),
+        Field("display_name"),
+        Field("logo_url"),
+        Field("is_global", "boolean", default=False),
+        Field("is_active", "boolean", default=True),
+        Field("config", "json"),
+    )
+    bind_platform_tables(dal, migrate=True)
+    dal.tenants.insert(slug=TENANT_SLUG, display_name="Acme Corp", is_active=True)
+    dal.commit()
+    for table_name in dal.tables:
+        dal(dal[table_name]).count()
+    yield async_dal
+    dal.close()
+
+
+@pytest.fixture
+def admin_db(tmp_path: Any) -> Any:
+    """File-backed `AsyncDAL` for the M3 Platform-admin group (admin/superadmin blueprints).
+
+    Extends `auth_db`'s exact pattern (file-backed sqlite -- see that
+    fixture's own docstring for the connection-scoping/`pool_size=1`
+    rationale) with `bind_admin_tables()` + `bind_superadmin_tenant_fields()`,
+    additive per `hub_api/PORTING.md`'s test-pattern guidance rather than
+    editing `auth_db` in place.
+    """
+    async_dal = AsyncDAL(f"sqlite://{tmp_path / 'admin_test.db'}", pool_size=1)
+    dal = async_dal.dal
+    dal.define_table(
+        "tenants",
+        Field("slug", unique=True),
+        Field("display_name"),
+        Field("logo_url"),
+        Field("is_global", "boolean", default=False),
+        Field("is_active", "boolean", default=True),
+        Field("config", "json"),
+    )
+    bind_auth_tables(dal, migrate=True)
+    bind_admin_tables(dal, migrate=True)
+    bind_superadmin_tenant_fields(dal, migrate=True)
+    dal.tenants.insert(slug=TENANT_SLUG, display_name="Acme Corp", is_active=True)
+    dal.commit()
+    # See auth_db's own comment above -- forces lazy CREATE TABLE DDL to
+    # run on the main thread before any async_dal worker thread exists.
+    for table_name in dal.tables:
+        dal(dal[table_name]).count()
+    yield async_dal
+    dal.close()
+
+
+@pytest.fixture
+def tenant_admin_db(tmp_path: Any) -> Any:
+    """File-backed `AsyncDAL` with every table the M2 Core Tenant group queries.
+
+    Additive, independent of `auth_db` (own `tmp_path` sqlite file, own
+    `AsyncDAL`) -- per `hub_api/PORTING.md`'s Test pattern section, a
+    group needing tables `bind_auth_tables()` doesn't cover gets its own
+    fixture rather than editing `auth_db` in place. Defines a narrow
+    `tenants` table first (mirrors `auth_db`'s own bootstrap step -- in
+    production this is `app.py::_bind_reference_tables`, off-limits to
+    this port task), then calls the REAL `bind_auth_tables`/
+    `bind_tenant_tables` -- the same functions `blueprints/v1/tenant.py`'s
+    `_dal()` calls in production -- so this fixture exercises the actual
+    binding code path (including `bind_tenant_tables`'s `redefine=True`
+    extension of `tenants`/`communities`) rather than a hand-duplicated
+    field list that could drift from it.
+    """
+    async_dal = AsyncDAL(f"sqlite://{tmp_path / 'tenant_test.db'}", pool_size=1)
+    dal = async_dal.dal
+    dal.define_table(
+        "tenants",
+        Field("slug", unique=True),
+        Field("display_name"),
+        Field("logo_url"),
+        Field("is_global", "boolean", default=False),
+        Field("is_active", "boolean", default=True),
+        Field("config", "json"),
+    )
+    bind_auth_tables(dal, migrate=True)
+    bind_tenant_tables(dal, migrate=True)
+    dal.tenants.insert(slug=TENANT_SLUG, display_name="Acme Corp", is_active=True)
+    dal.commit()
+    # See auth_db's own comment above -- forces lazy CREATE TABLE DDL to
+    # run on the main thread before any async_dal worker thread exists.
+    for table_name in dal.tables:
+        dal(dal[table_name]).count()
+    yield async_dal
+    dal.close()
+
+
+def make_token(*, scope: str = "", tenant: str = TENANT_SLUG, user_id: str = "u1") -> str:
+    """Mint a JWT via the real `flask_core.auth.create_jwt_token` -- no hand-rolled JWTs.
+
+    `user_id` defaults to the non-numeric `"u1"` (existing platform tests'
+    expectation); Community-module tests exercising `auth_required` +
+    `int(get_current_user(request)["user_id"])` pass a numeric string
+    (e.g. `user_id="1"`) instead.
+    """
     return create_jwt_token(
-        user_id="u1",
+        user_id=user_id,
         username="alice",
         email="alice@example.com",
         roles=["viewer"],
@@ -183,10 +371,62 @@ def make_user_token_with_roles(
 def auth_headers():
     """Factory fixture: `auth_headers(scope="platform:read")` -> Authorization header dict."""
 
-    def _make(*, scope: str = "", tenant: str = TENANT_SLUG) -> dict[str, str]:
-        return {"Authorization": f"Bearer {make_token(scope=scope, tenant=tenant)}"}
+    def _make(*, scope: str = "", tenant: str = TENANT_SLUG, user_id: str = "u1") -> dict[str, str]:
+        return {
+            "Authorization": f"Bearer {make_token(scope=scope, tenant=tenant, user_id=user_id)}"
+        }
 
     return _make
+
+
+#: Matches `services/community_common.py::is_valid_service_key`'s `SERVICE_API_KEY` lookup.
+SERVICE_API_KEY = "test-service-key"
+
+
+@pytest.fixture
+def community_db(tenant_db: Any, monkeypatch: Any) -> Any:
+    """`tenant_db` + every Community-module (M6) table (`migrate=True`) + one seeded community.
+
+    `ensure_community_tables(dal, migrate=True)` reuses the exact same
+    field definitions production binds with `migrate=False` (see
+    `community_common.py`'s docstring) -- one schema definition, not a
+    second one drifting in test fixtures. Also sets `SERVICE_API_KEY` for
+    the internal (X-Service-Key) endpoint tests.
+    """
+    from services.community_common import ensure_community_tables
+    from services.community_relay import _ensure_relay_tables
+
+    monkeypatch.setenv("SERVICE_API_KEY", SERVICE_API_KEY)
+
+    dal = tenant_db
+    ensure_community_tables(dal, migrate=True)
+    _ensure_relay_tables(dal, migrate=True)
+
+    # `hub_user_identities` is a Core/Identity table (000_create_base_schema.sql),
+    # not owned by the Community-module port -- `_find_hub_user_id` (community_
+    # activity.py) queries it via raw `executesql`, which needs no pydal
+    # `define_table` in production (the physical table already exists via
+    # Core's own migration) but does need one here so sqlite:memory has a
+    # real backing table to query against.
+    if "hub_user_identities" not in dal.tables:
+        dal.define_table(
+            "hub_user_identities",
+            dal.Field("hub_user_id", "integer"),
+            dal.Field("platform", "string"),
+            dal.Field("platform_user_id", "string"),
+            migrate=True,
+        )
+
+    tenant_row = dal(dal.tenants.slug == TENANT_SLUG).select().first()
+    community_id = dal.communities.insert(name="test-community", tenant_id=tenant_row.id)
+    dal.commit()
+    return dal, community_id
+
+
+@pytest.fixture
+def service_key_headers() -> dict[str, str]:
+    """`X-Service-Key` header matching `community_db`'s `SERVICE_API_KEY`."""
+    return {"X-Service-Key": SERVICE_API_KEY}
 
 
 @pytest.fixture

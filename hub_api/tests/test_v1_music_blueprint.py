@@ -7,15 +7,16 @@ authz chain itself (mirrors `tests/test_v1_auth_blueprint.py`'s own
 pattern).
 
 Fail-first proof (executed, not narrated): temporarily changed
-`services.community_authz.require_community_admin` to always return the
-resolved membership without the `is_admin`/`bypass` check (i.e. any
+`services.community_authz.require_community_admin_scoped` to always return
+the resolved membership without the `is_admin`/`bypass` check (i.e. any
 active member, not just admin/moderator, treated as authorized) --
 `test_member_without_admin_scope_is_403` went red (200 instead of 403,
 an authz bypass letting a plain member update another community's music
 settings); reverted, green again. Separately, temporarily removed the
-tenant-ownership check in `services.community_authz.resolve_membership`
-(the `community_rows` lookup) -- `test_community_in_different_tenant_is_403`
-went red (200 instead of 403, a cross-tenant IDOR); reverted, green again.
+tenant-ownership check in `services.community_authz.
+resolve_community_membership_scoped` (the `community_rows` lookup) --
+`test_community_in_different_tenant_is_403` went red (200 instead of 403,
+a cross-tenant IDOR); reverted, green again.
 """
 
 from __future__ import annotations
