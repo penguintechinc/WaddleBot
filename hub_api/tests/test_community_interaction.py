@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json as json_module
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 from quart import Quart
@@ -40,6 +41,20 @@ def app(community_db: Any) -> Quart:
 @pytest.fixture
 def client(app: Quart) -> Any:
     return app.test_client()
+
+
+@pytest.fixture(autouse=True)
+def _feature_enabled_default_on(monkeypatch: pytest.MonkeyPatch) -> Any:
+    """Default the `community.interactions`/`community.forums` Feature flags ON for this file.
+
+    `admin_list_channels` gates on `FEATURE_COMMUNITY_INTERACTIONS`;
+    `member_forum_posts` gates on the separate `FEATURE_COMMUNITY_FORUMS`
+    (this PR) -- see `test_community_features_gate.py` for the dedicated
+    per-flag OFF-blocks-handler proof.
+    """
+    import blueprints.v1.community_interaction as interaction_module
+
+    monkeypatch.setattr(interaction_module, "feature_enabled", AsyncMock(return_value=True))
 
 
 async def _post_json(

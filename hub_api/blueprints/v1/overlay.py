@@ -35,6 +35,7 @@ from dataclasses import dataclass
 from typing import Any, cast
 
 from flask_core.authz import require_scope
+from flask_core.feature_flags import feature_enabled
 from flask_core.tenancy import get_tenant_context, tenant_middleware
 from quart import Blueprint, current_app, request
 from quart_schema import validate_request
@@ -43,12 +44,16 @@ from config import HubAPIConfig
 from services import community_access, overlay_service
 from services.current_user import get_current_user_id
 from services.dto_response import jsonify_dto
-from services.errors import ApiError, bad_request
+from services.errors import ApiError, bad_request, payment_required
 from services.overlay_service import OverlayRecord, OverlayStats
 
 overlay_bp = Blueprint("v1_overlay", __name__, url_prefix="/api/v1/admin")
 
 SCOPE_ADMIN = "streaming.overlay:admin"
+
+#: Two-gate Feature flag -- `libs/streaming_module/features.py`'s
+#: `streaming.overlays` Feature contract, free tier.
+FEATURE_STREAMING_OVERLAYS = "waddles.streaming.overlays"
 
 
 def _cfg() -> HubAPIConfig:
@@ -120,6 +125,10 @@ async def get_overlay(community_id: int) -> Any:
     """Get or create the overlay token for `community_id`."""
     try:
         await _require_admin(community_id)
+        ctx = get_tenant_context(request)
+        assert ctx is not None  # nosec B101 -- tenant_middleware guarantees this
+        if not await feature_enabled(FEATURE_STREAMING_OVERLAYS, tenant=ctx.tenant_slug):
+            raise payment_required("Browser-source overlays are not enabled for this plan")
         async_dal, dal = _dal()
         record = await overlay_service.get_or_create_overlay(
             async_dal, dal, _cfg(), community_id=community_id

@@ -83,9 +83,14 @@ convention = "google"
 "services/overlay_service.py" = ["N815"]
 # M7 Streaming group (music/stream/streaming) -- same camelCase-DTO
 # rationale as blueprints/v1/auth.py above; DTO field names are wire
-# contracts pinned to frontend/src/services/api.js.
-"blueprints/v1/music.py" = ["N815"]
-"blueprints/v1/stream.py" = ["N815"]
+# contracts pinned to frontend/src/services/api.js. S101 added to music.py/
+# stream.py/streaming.py (SCCEMBS P4 feature-flag PR) for the same
+# tenant_middleware postcondition assert (`get_tenant_context` always
+# non-None on the success path) the two-gate `feature_enabled(...)` guard
+# needs `ctx.tenant_slug` from.
+"blueprints/v1/music.py" = ["N815", "S101"]
+"blueprints/v1/stream.py" = ["N815", "S101"]
+"blueprints/v1/streaming.py" = ["S101"]
 "services/music_service.py" = ["N815"]
 "services/stream_service.py" = ["N815"]
 # Privacy/Compliance group (GDPR DSAR + cookie consent) -- cookie_consent.py's

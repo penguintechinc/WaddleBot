@@ -53,3 +53,12 @@ def not_found(message: str = "Not found") -> ApiError:
 def conflict(message: str = "Conflict") -> ApiError:
     """409 -- e.g. duplicate email."""
     return ApiError(message, 409, "CONFLICT")
+
+
+def payment_required(message: str = "This feature requires a higher plan") -> ApiError:
+    """402 -- the two-gate `feature_enabled(...)` check denied the request.
+
+    Flag OFF or below the Feature contract's `min_tier` -- see
+    `flask_core.feature_flags`.
+    """
+    return ApiError(message, 402, "FEATURE_NOT_ENABLED")

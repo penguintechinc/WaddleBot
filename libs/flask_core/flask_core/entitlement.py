@@ -34,7 +34,7 @@ import os
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Mapping, Optional, Protocol
+from typing import Literal, Mapping, Optional, Protocol
 
 logger = logging.getLogger(__name__)
 
@@ -68,16 +68,42 @@ except ImportError:  # pragma: no cover - only fires with a broken install
 # "waddles.penguintech.cloud.attacker.com" cannot match "*.penguintech.cloud"
 # the way a naive substring or unanchored `.endswith` check might be coaxed
 # into via a crafted Host header.
+#
+# BYPASS DEPTH (program plan 2026-08-31-v3-sccembs-program-plan.md §3.3):
+# a bypass hostname is not a flat yes/no -- it resolves to a DEPTH, because
+# the two host classes exist for different reasons. `waddles*.penguintech.
+# cloud` (+ the bare `penguincloud.io`/`penguintech.cloud` apex domains) are
+# PenguinTech's own pre-prod SaaS environments (alpha/beta/gamma) -- every
+# tier, including Enterprise-only per-COMMUNITY features, must be
+# exercisable there so the feature can actually be demoed/tested pre-prod.
+# `*.waddles.app` is the PRODUCT's own prod domain -- a customer's own
+# deployment -- where only the GLOBAL/tenant-wide gate is free; individual
+# communities still pay for community-scoped entitlement. Collapsing both
+# classes into one boolean (the pre-fix shape) let a `*.waddles.app` host
+# bypass community-tier entitlement it was never meant to -- see
+# `resolve_bypass_depth`/`_evaluate` below for where the distinction is
+# actually enforced (on whether `community` is None).
 # ---------------------------------------------------------------------------
-_BYPASS_HOSTNAME_PATTERNS: frozenset[str] = frozenset(
+_GLOBAL_COMMUNITY_BYPASS_HOSTNAME_PATTERNS: frozenset[str] = frozenset(
     {
         "penguincloud.io",
         "*.penguincloud.io",
         "penguintech.cloud",
         "*.penguintech.cloud",
+    }
+)
+
+_GLOBAL_ONLY_BYPASS_HOSTNAME_PATTERNS: frozenset[str] = frozenset(
+    {
         "waddles.app",
         "*.waddles.app",
     }
+)
+
+# Kept for any external caller/test that only needs the full bypass set
+# (e.g. documentation, `is_bypass_domain`'s own implementation below).
+_BYPASS_HOSTNAME_PATTERNS: frozenset[str] = (
+    _GLOBAL_COMMUNITY_BYPASS_HOSTNAME_PATTERNS | _GLOBAL_ONLY_BYPASS_HOSTNAME_PATTERNS
 )
 
 # Tier ordering. penguin_licensing's LicenseClient reports "community" for
@@ -104,19 +130,52 @@ def _tier_level(tier: str) -> int:
     return _TIER_LEVELS.get(_normalize_tier(tier), 0)
 
 
-def is_bypass_domain(hostname: Optional[str]) -> bool:
-    """
-    True if `hostname` is a hardcoded license-bypass domain.
+BypassDepth = Literal["none", "global", "global_community"]
 
-    Matches the FULL hostname against the pattern set via `fnmatch` -- never
-    a substring/`.endswith` check, which a crafted Host header could defeat
-    with a lookalike suffix. Only the LICENSE gate is skipped for a bypass
-    domain; the PostHog flag gate always still runs.
+
+def resolve_bypass_depth(hostname: Optional[str]) -> BypassDepth:
+    """
+    Resolve `hostname` to its license-bypass DEPTH -- `"none"`, `"global"`,
+    or `"global_community"`. Takes the hostname as an explicit argument
+    (never ambient config) so every call site, including tests, is
+    deterministic and denial cases are directly testable.
+
+    Matches the FULL hostname against each pattern set via `fnmatch` --
+    never a substring/`.endswith` check, which a crafted Host header could
+    defeat with a lookalike suffix (`waddles.penguintech.cloud.attacker.com`
+    must NOT match `*.penguintech.cloud`).
+
+    `"global_community"` (PenguinTech's own pre-prod SaaS hosts) bypasses
+    the license gate for both tenant-wide AND per-community checks.
+    `"global"` (the product's own prod domain, `*.waddles.app`) bypasses
+    only tenant-wide checks -- a per-community check (`community is not
+    None`) on a `"global"`-depth host must still hit the real license gate.
+    See `_evaluate` for where that distinction is enforced.
     """
     if not hostname:
-        return False
+        return "none"
     host = hostname.split(":", 1)[0].strip().lower()
-    return any(fnmatch.fnmatchcase(host, pattern) for pattern in _BYPASS_HOSTNAME_PATTERNS)
+    if any(
+        fnmatch.fnmatchcase(host, pattern) for pattern in _GLOBAL_COMMUNITY_BYPASS_HOSTNAME_PATTERNS
+    ):
+        return "global_community"
+    if any(fnmatch.fnmatchcase(host, pattern) for pattern in _GLOBAL_ONLY_BYPASS_HOSTNAME_PATTERNS):
+        return "global"
+    return "none"
+
+
+def is_bypass_domain(hostname: Optional[str]) -> bool:
+    """
+    True if `hostname` is a hardcoded license-bypass domain, at ANY depth.
+
+    Kept for callers that only need the yes/no answer (e.g. `_evaluate`'s
+    depth-aware branch below still calls this indirectly via
+    `resolve_bypass_depth`). Only the LICENSE gate is ever skipped for a
+    bypass domain; the PostHog flag gate always still runs. Use
+    `resolve_bypass_depth` directly when the DEPTH (global vs
+    global+community) matters, not just presence.
+    """
+    return resolve_bypass_depth(hostname) != "none"
 
 
 # ---------------------------------------------------------------------------
@@ -316,7 +375,19 @@ class EntitlementClient:
 
         flag_result = await self._check_flag(flag_key, tenant, community)
 
-        bypassed = is_bypass_domain(request_host)
+        # BYPASS DEPTH (see resolve_bypass_depth's docstring): "global_community"
+        # bypasses regardless of scope; "global" bypasses only a tenant-wide
+        # check (community is None) -- a per-community check on a "global"-depth
+        # host must still hit the real license gate, closing the gap where a
+        # product-prod host (*.waddles.app) could bypass community-tier
+        # entitlement it was never meant to.
+        depth = resolve_bypass_depth(request_host)
+        if depth == "global_community":
+            bypassed = True
+        elif depth == "global":
+            bypassed = community is None
+        else:
+            bypassed = False
         license_result: Optional[bool] = True if bypassed else await self._check_license(flag_key)
 
         if flag_result is None or license_result is None:

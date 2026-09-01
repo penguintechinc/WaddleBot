@@ -21,11 +21,13 @@ confirmed 401 from `tenant_middleware` before any handler code runs.
 from __future__ import annotations
 
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 from quart import Quart
 from quart_schema import QuartSchema
 
+import blueprints.v1.overlay as overlay_module
 from blueprints.v1.overlay import SCOPE_ADMIN, overlay_bp
 from config import HubAPIConfig
 from tests.conftest import (
@@ -76,6 +78,14 @@ def app(overlay_db: Any) -> Quart:
 @pytest.fixture
 def client(app: Quart) -> Any:
     return app.test_client()
+
+
+@pytest.fixture(autouse=True)
+def _feature_enabled_default_on(monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
+    """Default the `streaming.overlays` two-gate Feature flag ON for every test in this file."""
+    stub = AsyncMock(return_value=True)
+    monkeypatch.setattr(overlay_module, "feature_enabled", stub)
+    return stub
 
 
 def _owner_headers(

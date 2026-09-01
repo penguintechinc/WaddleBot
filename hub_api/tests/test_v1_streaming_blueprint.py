@@ -71,6 +71,14 @@ def client(app: Quart) -> Any:
     return app.test_client()
 
 
+@pytest.fixture(autouse=True)
+def _feature_enabled_default_on(monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
+    """Default the `streaming.broadcast` two-gate Feature flag ON for every test in this file."""
+    stub = AsyncMock(return_value=True)
+    monkeypatch.setattr(streaming_module, "feature_enabled", stub)
+    return stub
+
+
 def _tenant_id(db: Any) -> int:
     row = db.dal(db.dal.tenants.slug == TENANT_SLUG).select().first()
     return int(row.id)

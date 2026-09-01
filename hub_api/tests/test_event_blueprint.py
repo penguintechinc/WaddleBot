@@ -184,6 +184,26 @@ def proxy_stub(monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
     return stub
 
 
+@pytest.fixture(autouse=True)
+def _feature_enabled_default_on(monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
+    """Default the two-gate Event Feature flags ON for every test in this file.
+
+    `blueprints/v1/event.py`'s `_make_handler` gates every non-public route
+    on `feature_enabled(route.feature_flag, ...)` (this PR -- see
+    `TestFeatureGate` below for the dedicated OFF/tier-denial proof). Every
+    OTHER test class here exercises routing/scope/body-forwarding behavior
+    unrelated to the flag gate, so this autouse fixture keeps them green by
+    defaulting the gate to always-pass -- same pattern
+    `test_v1_analytics_blueprint.py` uses per-test, applied file-wide here
+    since nearly every test in this file would otherwise need it.
+    """
+    import blueprints.v1.event as event_module
+
+    stub = AsyncMock(return_value=True)
+    monkeypatch.setattr(event_module, "feature_enabled", stub)
+    return stub
+
+
 class TestRouteTableCharacterization:
     """Data-driven proof over all 58 ported endpoints -- path/method/auth, not shape."""
 
@@ -457,3 +477,95 @@ class TestRouteTableIntegrity:
     def test_expected_scopes_oracle_covers_exactly_the_live_route_names(self) -> None:
         """A new/renamed route with no `_EXPECTED_SCOPES` entry fails loudly, not via KeyError."""
         assert set(_EXPECTED_SCOPES) == {r.name for r in ALL_ROUTES}
+
+
+class TestFeatureGate:
+    """The two-gate Feature guard added to `_make_handler` this PR.
+
+    `libs/event_module/features.py`'s `event.calendar`/`event.ticketing`
+    contracts. `_feature_enabled_default_on` (module-level autouse fixture
+    above) is overridden per-test here to prove the OFF/denied path, same
+    pattern `test_v1_analytics_blueprint.py` uses for its one existing
+    guard.
+    """
+
+    async def test_calendar_route_blocked_when_flag_off(
+        self, client: Any, auth_headers: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A calendar-capability route (below-min-tier OR flag OFF) never reaches the proxy."""
+        import blueprints.v1.event as event_module
+
+        monkeypatch.setattr(event_module, "feature_enabled", AsyncMock(return_value=False))
+        stub = AsyncMock(return_value=ProxyResult(ok=True, status_code=200, body={}))
+        monkeypatch.setattr(event_module._proxy_client, "request", stub)
+
+        response = await client.get(
+            "/api/v1/calendar/my-bookings", headers=auth_headers(scope=SCOPE_READ)
+        )
+
+        assert response.status_code == 402
+        stub.assert_not_awaited()
+
+    async def test_ticketing_route_blocked_when_flag_off(
+        self, client: Any, auth_headers: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A ticketing-capability route is independently gated -- also 402 when denied."""
+        import blueprints.v1.event as event_module
+
+        monkeypatch.setattr(event_module, "feature_enabled", AsyncMock(return_value=False))
+        stub = AsyncMock(return_value=ProxyResult(ok=True, status_code=200, body={}))
+        monkeypatch.setattr(event_module._proxy_client, "request", stub)
+
+        response = await client.get(
+            "/api/v1/admin/3/calendar/events/11/ticket-types",
+            headers=auth_headers(scope=SCOPE_ADMIN),
+        )
+
+        assert response.status_code == 402
+        stub.assert_not_awaited()
+
+    async def test_calendar_and_ticketing_routes_gate_on_distinct_flags(
+        self, client: Any, auth_headers: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Calendar routes check `.event.calendar`; ticket routes check `.event.ticketing`."""
+        import blueprints.v1.event as event_module
+
+        seen_flags: list[str] = []
+
+        async def _record(flag_key: str, **_kwargs: Any) -> bool:
+            seen_flags.append(flag_key)
+            return True
+
+        monkeypatch.setattr(event_module, "feature_enabled", _record)
+        monkeypatch.setattr(
+            event_module._proxy_client,
+            "request",
+            AsyncMock(return_value=ProxyResult(ok=True, status_code=200, body={})),
+        )
+
+        await client.get("/api/v1/calendar/my-bookings", headers=auth_headers(scope=SCOPE_READ))
+        await client.get(
+            "/api/v1/admin/3/calendar/events/11/ticket-types",
+            headers=auth_headers(scope=SCOPE_ADMIN),
+        )
+
+        assert seen_flags == ["waddles.event.calendar", "waddles.event.ticketing"]
+
+    async def test_public_booking_route_never_calls_feature_enabled(
+        self, client: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """`feature_flag=None` on the public booking routes -- no tenant context to gate against."""
+        import blueprints.v1.event as event_module
+
+        gate = AsyncMock(return_value=True)
+        monkeypatch.setattr(event_module, "feature_enabled", gate)
+        monkeypatch.setattr(
+            event_module._proxy_client,
+            "request",
+            AsyncMock(return_value=ProxyResult(ok=True, status_code=200, body={})),
+        )
+
+        response = await client.get("/api/v1/calendar/book/acme-standup/slots")
+
+        assert response.status_code == 200
+        gate.assert_not_awaited()

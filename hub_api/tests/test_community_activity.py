@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json as json_module
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 from quart import Quart
@@ -38,6 +39,19 @@ def app(community_db: Any) -> Quart:
 @pytest.fixture
 def client(app: Quart) -> Any:
     return app.test_client()
+
+
+@pytest.fixture(autouse=True)
+def _feature_enabled_default_on(monkeypatch: pytest.MonkeyPatch) -> Any:
+    """Default the `community.activity` two-gate Feature flag ON for every test in this file.
+
+    Only `watch_time_leaderboard` carries the guard (this PR's one worked
+    gate example for this blueprint) -- harmless no-op for the other
+    routes in this file that never call `feature_enabled`.
+    """
+    import blueprints.v1.community_activity as activity_module
+
+    monkeypatch.setattr(activity_module, "feature_enabled", AsyncMock(return_value=True))
 
 
 class TestMemberLeaderboards:

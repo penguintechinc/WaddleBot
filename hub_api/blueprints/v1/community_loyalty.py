@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import Any
 
 from flask_core.authz import require_scope
+from flask_core.feature_flags import feature_enabled
 from flask_core.tenancy import get_tenant_context, tenant_middleware
 from quart import Blueprint, current_app, request
 
@@ -25,6 +26,10 @@ from services.community_common import community_in_tenant
 from services.community_loyalty import DEFAULT_LOYALTY_CONFIG, LoyaltyProxyError
 
 loyalty_bp = Blueprint("v1_community_loyalty", __name__, url_prefix="/api/v1/admin")
+
+#: Two-gate Feature flag -- `libs/community_module/features.py`'s
+#: `community.loyalty` Feature contract, Professional tier.
+FEATURE_COMMUNITY_LOYALTY = "waddles.community.loyalty"
 
 
 def _tenant_ok(community_id: int) -> bool:
@@ -54,6 +59,13 @@ def _qs(**params: Any) -> str:
 @require_scope("community.loyalty:read")  # type: ignore[untyped-decorator]
 async def get_config(community_id: int) -> tuple[dict[str, Any], int]:
     """`GET /api/v1/admin/<id>/loyalty/config`."""
+    ctx = get_tenant_context(request)
+    assert ctx is not None  # nosec B101
+    if not await feature_enabled(FEATURE_COMMUNITY_LOYALTY, tenant=ctx.tenant_slug):
+        return {
+            "success": False,
+            "error": "Community loyalty requires a Professional plan or higher",
+        }, 402
     if not _tenant_ok(community_id):
         return {"success": False, "error": "Community not found"}, 404
     data = await loyalty_client.get_or_default(

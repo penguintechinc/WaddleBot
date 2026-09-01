@@ -23,15 +23,20 @@ from dataclasses import dataclass
 from typing import Any, cast
 
 from flask_core.api_utils import error_response
-from flask_core.tenancy import tenant_middleware
+from flask_core.feature_flags import feature_enabled
+from flask_core.tenancy import get_tenant_context, tenant_middleware
 from quart import Blueprint, current_app, request
 from quart_schema import validate_response
 
 from services import stream_service as svc
 from services.community_authz import authorize_community
-from services.errors import ApiError
+from services.errors import ApiError, payment_required
 from services.schema import bind_streaming_tables
 from services.stream_service import LiveStreamDTO, StreamDetailsDTO
+
+#: Two-gate Feature flag -- `libs/streaming_module/features.py`'s
+#: `streaming.stream` Feature contract, free tier.
+FEATURE_STREAMING_STREAM = "waddles.streaming.stream"
 
 
 def _dal() -> tuple[Any, Any]:
@@ -79,6 +84,10 @@ def _register(bp: Blueprint) -> None:
             await authorize_community(
                 request, async_dal, dal, community_id=community_id, admin=False
             )
+            ctx = get_tenant_context(request)
+            assert ctx is not None  # nosec B101 -- tenant_middleware guarantees this
+            if not await feature_enabled(FEATURE_STREAMING_STREAM, tenant=ctx.tenant_slug):
+                raise payment_required("Live streams are not enabled for this plan")
             streams = await svc.get_live_streams(async_dal, dal, community_id=community_id)
         except ApiError as exc:
             return _err(exc)

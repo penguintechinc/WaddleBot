@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 from quart import Quart
@@ -37,6 +38,20 @@ def app(community_db: Any) -> Quart:
 @pytest.fixture
 def client(app: Quart) -> Any:
     return app.test_client()
+
+
+@pytest.fixture(autouse=True)
+def _feature_enabled_default_on(monkeypatch: pytest.MonkeyPatch) -> Any:
+    """Default the `community.chat` two-gate Feature flag ON for every test in this file.
+
+    `chat_history` gates on `feature_enabled(FEATURE_COMMUNITY_CHAT, ...)`
+    (this PR) -- see `test_community_features_gate.py` for the dedicated
+    OFF-blocks-handler proof. Every other test here exercises scope/tenant/
+    proxy behavior unrelated to the flag gate.
+    """
+    import blueprints.v1.community_chat as chat_module
+
+    monkeypatch.setattr(chat_module, "feature_enabled", AsyncMock(return_value=True))
 
 
 class TestScopeEnforcement:

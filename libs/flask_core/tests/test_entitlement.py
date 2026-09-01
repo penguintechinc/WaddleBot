@@ -32,6 +32,7 @@ from flask_core.entitlement import (
     _CommunityOnlyLicenseGate,
     get_entitlement_client,
     is_bypass_domain,
+    resolve_bypass_depth,
 )
 from flask_core.feature_flags import feature_enabled
 
@@ -218,6 +219,89 @@ def test_is_bypass_domain_matches_full_hostname_only(
     hostname: Optional[str], expected: bool
 ) -> None:
     assert is_bypass_domain(hostname) is expected
+
+
+# ---------------------------------------------------------------------------
+# BYPASS DEPTH (program plan SS3.3 "the bypass-DEPTH gap"): a bypass
+# hostname is not flat yes/no -- it resolves to "none" / "global" /
+# "global_community". PenguinTech's own pre-prod SaaS hosts
+# (penguincloud.io / penguintech.cloud, incl. waddles*.penguintech.cloud
+# subdomains) get "global_community" (both tenant-wide AND per-community
+# checks bypass); the product's own prod domain (*.waddles.app) gets only
+# "global" (tenant-wide bypasses, per-community does NOT).
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    "hostname,expected_depth",
+    [
+        ("penguincloud.io", "global_community"),
+        ("waddles.penguincloud.io", "global_community"),
+        ("penguintech.cloud", "global_community"),
+        ("waddles.penguintech.cloud", "global_community"),
+        ("waddles-beta.penguintech.cloud", "global_community"),
+        ("waddles-gamma.penguintech.cloud", "global_community"),
+        ("waddles.app", "global"),
+        ("app.waddles.app", "global"),
+        ("us-app.waddles.app", "global"),
+        (None, "none"),
+        ("", "none"),
+        ("app.example.com", "none"),
+        # Lookalike/attacker-controlled suffix -- must not upgrade depth.
+        ("waddles.penguintech.cloud.attacker.com", "none"),
+        ("evil-waddles.app.attacker.com", "none"),
+        ("notwaddles.app", "none"),
+    ],
+)
+def test_resolve_bypass_depth(hostname: Optional[str], expected_depth: str) -> None:
+    assert resolve_bypass_depth(hostname) == expected_depth
+
+
+@pytest.mark.asyncio
+async def test_global_community_bypass_skips_license_for_community_scoped_check() -> None:
+    """`"global_community"` depth (pre-prod SaaS host) bypasses even a per-community check."""
+    client, _, license_gate = make_client(
+        flag_result=True, tier="free", tier_requirements={FLAG_KEY: "enterprise"}
+    )
+    result = await client.evaluate(
+        FLAG_KEY,
+        tenant=TENANT,
+        community=42,
+        request_host="waddles-beta.penguintech.cloud",
+    )
+    assert result is True
+    assert license_gate.calls == 0  # bypassed
+
+
+@pytest.mark.asyncio
+async def test_global_only_bypass_does_not_bypass_community_scoped_license() -> None:
+    """
+    THE GAP THIS CLOSES: `"global"` depth (product prod domain,
+    *.waddles.app) must NOT bypass a per-community (`community is not
+    None`) license check -- only a tenant-wide one. Flag is ON and would
+    otherwise pass, but the (fake) license tier is below what FLAG_KEY
+    requires, so the real license gate denying it must be honored.
+    """
+    client, _, license_gate = make_client(
+        flag_result=True, tier="free", tier_requirements={FLAG_KEY: "enterprise"}
+    )
+    result = await client.evaluate(
+        FLAG_KEY,
+        tenant=TENANT,
+        community=42,
+        request_host="app.waddles.app",
+    )
+    assert result is False
+    assert license_gate.calls == 1  # NOT bypassed -- the real gate ran and denied it
+
+
+@pytest.mark.asyncio
+async def test_global_only_bypass_still_bypasses_tenant_wide_license() -> None:
+    """`"global"` depth still bypasses a tenant-wide check (community=None) -- baseline preserved."""
+    client, _, license_gate = make_client(flag_result=True, tier=None)
+    result = await client.evaluate(
+        FLAG_KEY, tenant=TENANT, community=None, request_host="app.waddles.app"
+    )
+    assert result is True
+    assert license_gate.calls == 0  # bypassed -- community-scoped restriction doesn't apply here
 
 
 # ---------------------------------------------------------------------------
