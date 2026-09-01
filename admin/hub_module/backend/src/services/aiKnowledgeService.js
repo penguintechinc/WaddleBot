@@ -6,6 +6,8 @@
 import crypto from 'crypto';
 import { query, transaction } from '../config/database.js';
 import logger from '../utils/logger.js';
+import { htmlToText } from '../utils/htmlSanitizer.js';
+import { guardedFetch, SSRFError } from '../utils/urlGuard.js';
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
 const EMBED_MODEL = process.env.OLLAMA_EMBED_MODEL || 'nomic-embed-text';
@@ -124,7 +126,21 @@ async function fetchGitHubMarkdown(sourceUrl, branch, docsPath, token) {
   const pages = [];
 
   async function crawlDirectory(url) {
-    const res = await fetch(url, { headers });
+    // `url` is always an `api.github.com` URL here (either `contentsUrl`,
+    // built from a hardcoded host, or `item.url` from GitHub's own API
+    // response) -- `guardedFetch` is still applied for defense in depth
+    // (matches the Python port's "apply to EVERY fetch, including
+    // github" posture) and to re-validate any redirect hop.
+    let res;
+    try {
+      res = await guardedFetch(url, { headers });
+    } catch (err) {
+      if (err instanceof SSRFError) {
+        logger.warn({ url, err: err.message }, 'GitHub fetch blocked by SSRF guard');
+        return;
+      }
+      throw err;
+    }
     if (!res.ok) {
       logger.warn({ url, status: res.status }, 'GitHub API non-OK response during crawl');
       return;
@@ -148,7 +164,19 @@ async function fetchGitHubMarkdown(sourceUrl, branch, docsPath, token) {
       if (item.type === 'dir') {
         await crawlDirectory(item.url);
       } else if (item.type === 'file' && item.name.endsWith('.md')) {
-        const fileRes = await fetch(item.url, { headers });
+        let fileRes;
+        try {
+          fileRes = await guardedFetch(item.url, { headers });
+        } catch (err) {
+          if (err instanceof SSRFError) {
+            logger.warn(
+              { url: item.url, err: err.message },
+              'GitHub file fetch blocked by SSRF guard'
+            );
+            continue;
+          }
+          throw err;
+        }
         if (!fileRes.ok) continue;
         const fileData = await fileRes.json();
         const decoded = Buffer.from(fileData.content, 'base64').toString('utf8');
@@ -174,12 +202,22 @@ async function fetchGitHubMarkdown(sourceUrl, branch, docsPath, token) {
 async function fetchSitemapPages(baseUrl) {
   const sitemapUrl = baseUrl.replace(/\/$/, '') + '/sitemap.xml';
   const pages = [];
+  const crawlerHeaders = { 'User-Agent': 'WaddleBot/2.0 Knowledge Indexer' };
 
+  // `baseUrl` is fully user-supplied (`mkdocs`/`docusaurus`/`generic_url`
+  // source types) and the sitemap's `<loc>` entries are attacker-
+  // controlled content on that same user-supplied origin -- both the
+  // sitemap fetch and every per-page fetch go through `guardedFetch`
+  // (SSRF guard + redirect re-validation), not a bare `fetch()`.
   let sitemapRes;
   try {
-    sitemapRes = await fetch(sitemapUrl, { headers: { 'User-Agent': 'WaddleBot/2.0 Knowledge Indexer' } });
+    sitemapRes = await guardedFetch(sitemapUrl, { headers: crawlerHeaders });
   } catch (err) {
-    logger.warn({ sitemapUrl, err: err.message }, 'Could not fetch sitemap');
+    if (err instanceof SSRFError) {
+      logger.warn({ sitemapUrl, err: err.message }, 'Sitemap fetch blocked by SSRF guard');
+    } else {
+      logger.warn({ sitemapUrl, err: err.message }, 'Could not fetch sitemap');
+    }
     return pages;
   }
 
@@ -193,9 +231,7 @@ async function fetchSitemapPages(baseUrl) {
 
   for (const pageUrl of urlMatches) {
     try {
-      const res = await fetch(pageUrl, {
-        headers: { 'User-Agent': 'WaddleBot/2.0 Knowledge Indexer' },
-      });
+      const res = await guardedFetch(pageUrl, { headers: crawlerHeaders });
       if (!res.ok) continue;
 
       const html = await res.text();
@@ -211,19 +247,20 @@ async function fetchSitemapPages(baseUrl) {
 
       if (!mainMatch) continue;
 
-      // Strip HTML tags, collapse whitespace
-      const text = mainMatch[1]
-        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-        .replace(/<[^>]+>/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
+      // Strip HTML tags via a real parser-based sanitizer (not a regex
+      // tag filter -- see `htmlToText`'s docstring), then collapse
+      // whitespace.
+      const text = htmlToText(mainMatch[1]).replace(/\s+/g, ' ').trim();
 
       if (text.length > 100) {
         pages.push({ url: pageUrl, title, content: text });
       }
     } catch (err) {
-      logger.warn({ pageUrl, err: err.message }, 'Failed to fetch knowledge page');
+      if (err instanceof SSRFError) {
+        logger.warn({ pageUrl, err: err.message }, 'Page fetch blocked by SSRF guard');
+      } else {
+        logger.warn({ pageUrl, err: err.message }, 'Failed to fetch knowledge page');
+      }
     }
   }
 
