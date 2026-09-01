@@ -1,0 +1,116 @@
+# PenguinTech standard git hooks (devops.md "Git Hooks (Mandatory)").
+#
+# Install:  hooks are already registered (~2026-08-10) — this file was the
+#           missing piece; `pre-commit install` / `--hook-type pre-push` was
+#           already run, so .git/hooks/{pre-commit,pre-push} just needed a
+#           config to stop no-op'ing / hard-failing.
+# Run all:  pre-commit run --all-files
+#
+# Two stages:
+#   pre-commit (<30s, blocks commit) — secrets, changed-file linters,
+#     Dockerfile rootless check, GitHub Actions scan
+#   pre-push (heavier, blocks push) — SAST (bandit)
+#
+# The noisier, repo-wide linters (shellcheck: 4078 warnings/109 files,
+# hadolint: 120/69 files as of 2026-09-01) stay in `make lint`
+# (scripts/lint.sh), which ratchets them against .checks-baseline instead of
+# hard-failing on pre-existing debt. Duplicating them here as a blocking
+# per-commit hook would either reintroduce that debt as a new hard blocker
+# for unrelated commits, or need its own baseline mechanism this file
+# doesn't have — scripts/lint.sh already owns that job.
+#
+# Revs are pinned. Update deliberately via `pre-commit autoupdate`, never by
+# floating to a branch (critical-rules.md Dependency Pinning).
+default_install_hook_types: [pre-commit, pre-push]
+default_stages: [pre-commit]
+
+# Generated/vendored content — not source we lint or scan for hygiene.
+exclude: '(^|/)(\.worktrees|node_modules|docs/site)/'
+
+repos:
+  # ── Hygiene (structural checks only — see README below for why no
+  #    trailing-whitespace/end-of-file-fixer: a dry run touched 222
+  #    pre-existing files across docs/site, .idea, minified JS, etc.) ───────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+        # Helm templates use Go templating ({{ }}) — not valid YAML until
+        # rendered. Standard exclusion for any repo with Helm charts.
+        exclude: '^k8s/helm/'
+      - id: check-json
+        # Pre-existing 0-byte placeholder, unrelated to this chore — tracked
+        # separately, not a hygiene-hook fix.
+        exclude: '^sdk/metadata\.json$'
+      - id: check-executables-have-shebangs
+      - id: detect-private-key
+        # Fake PEM fixture (literal string "fake" as the body) used to build
+        # a stub X509Svid in tests — not a real key.
+        exclude: '^libs/flask_core/tests/test_workload_identity\.py$'
+
+  # ── Secrets (mandatory, every repo) ────────────────────────────────────
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+
+  # ── Python — ruff, scoped to the v3 rewrite modules that already carry a
+  #    [tool.ruff] config and are ruff-clean (0 findings as of 2026-09-01).
+  #    Legacy Python elsewhere in the repo lints via flake8 in
+  #    scripts/lint.sh (ratcheted) — not ruff-clean yet, out of scope here.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      - id: ruff
+        files: '^(hub_api|core/svc_presentation|core/svc_ingest|core/svc_process)/.*\.py$'
+        args: [--fix]
+      - id: ruff-format
+        files: '^(hub_api|core/svc_presentation|core/svc_ingest|core/svc_process)/.*\.py$'
+        # 15 pre-existing files never run through ruff-format (497/-250 line
+        # diff on --all-files, dominated by event.py) — out of scope for a
+        # root-config chore and too large to land alongside 5+ other agents'
+        # concurrent work tonight without collision risk. Enforced on every
+        # other file now; reformat these 15 in a dedicated follow-up chore.
+        exclude: '^hub_api/(blueprints/v1/(community_profile|event|platform)\.py|services/(oauth_service|schema|superadmin_service)\.py|tests/(test_community_announcements|test_community_auth_bypass|test_event_blueprint|test_v1_calls_blueprint|test_v1_marketplace_billing_blueprint|test_v1_overlay_blueprint|test_v1_platform_blueprint|test_v1_platform_config_blueprint|test_v1_public_blueprint)\.py)$'
+
+  # ── Dockerfiles — rootless enforcement (all 69 Dockerfiles already
+  #    comply as of 2026-09-01, so this runs unscoped). Style/best-practice
+  #    linting (hadolint) stays in scripts/lint.sh — see header note.
+  - repo: local
+    hooks:
+      - id: dockerfile-rootless
+        name: Dockerfile runs as non-root
+        entry: scripts/hooks/check-dockerfile-rootless.sh
+        language: script
+        files: '(^|/)Dockerfile[^/]*$'
+
+  # ── GitHub Actions workflow scan (devops.md pre-commit stage) ───────────
+  # zizmor --min-severity high. 5 of 35 workflow files carry pre-existing
+  # high findings (build-container.yml, ci-cd.yml, containers.yml,
+  # flutter-gazer.yml, version-release.yml) tracked by scripts/lint.sh's
+  # ratchet — excluded here so this hook is zero-tolerance on every other
+  # workflow file without hard-blocking unrelated commits on that debt.
+  - repo: local
+    hooks:
+      - id: zizmor
+        name: GitHub Actions workflow security (zizmor)
+        entry: zizmor --min-severity high
+        language: system
+        files: '^\.github/workflows/.*\.ya?ml$'
+        exclude: '^\.github/workflows/(build-container|ci-cd|containers|flutter-gazer|version-release)\.yml$'
+
+  # ── Security (pre-push — heavier, keeps commits fast) ────────────────────
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.8.0
+    hooks:
+      - id: bandit
+        stages: [pre-push]
+        # scripts/security-scan.sh already runs -lll -iii (HIGH/HIGH) across
+        # the whole repo via `make test-security`; this pre-push hook mirrors
+        # that severity floor but only against files actually being pushed.
+        args: [-lll, -iii, --quiet]

@@ -332,7 +332,7 @@ def _validate_submission(data: dict[str, Any]) -> list[str]:
         errors.append(f"Pricing model must be one of: {', '.join(sorted(_PRICING_MODELS))}")
     pricing_amount = data.get("pricingAmount")
     if (
-        not isinstance(pricing_amount, (int, float))
+        not isinstance(pricing_amount, int | float)
         or isinstance(pricing_amount, bool)
         or pricing_amount < 0
     ):
