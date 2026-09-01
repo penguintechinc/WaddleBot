@@ -23,6 +23,18 @@ conditions first) -- same "defensive, second independent decode" shape
 against a minimal request-like stand-in, mirroring how
 `tests/test_event_calendar_proxy.py` unit-tests `event_calendar_proxy.py`
 below the blueprint layer.
+
+Security hotfix (cross-tenant IDOR, tenant-admin bypass): both
+`require_community_admin`'s tenant-admin bypass AND
+`resolve_community_membership_scoped`'s own tenant-admin bypass used to
+grant access as soon as the caller administered *some* tenant, without
+confirming the *target* `community_id` actually belonged to it.
+`TestRequireCommunityAdminBypasses.
+test_tenant_admin_cannot_bypass_community_in_different_tenant` and
+`TestResolveCommunityMembershipScopedTenantAdminBypass` below cover the
+fix (`_community_belongs_to_tenant()`) for both call paths, plus a
+positive case each confirming a tenant-admin still authorizes a community
+IN their own tenant.
 """
 
 from __future__ import annotations
@@ -45,6 +57,8 @@ from services.community_authz import (
     _jwt_roles,
     _parse_claims_scopes,
     authorize_community,
+    require_community_admin_scoped,
+    resolve_community_membership_scoped,
 )
 from services.errors import ApiError
 from services.workflow_service import ProxyResult
@@ -231,18 +245,56 @@ class TestRequireCommunityAdminBypasses:
         assert response.status_code == 200
 
     async def test_tenant_admin_bypasses_community_membership(self, automation_db: Any) -> None:
+        """Positive case: tenant-admin authorizing a community IN their own tenant succeeds."""
         dal = automation_db.dal
         user_id = dal.hub_users.insert(username="tadmin", is_super_admin=False)
         tenant_row = dal(dal.tenants.slug == TENANT_SLUG).select().first()
         dal.tenant_admins.insert(tenant_id=tenant_row.id, user_id=user_id, role="tenant-admin")
+        community_id = dal.communities.insert(name="own-tenant-community", tenant_id=tenant_row.id)
         dal.commit()
         app = self._app(automation_db)
         client = app.test_client()
         response = await client.get(
-            f"/api/v1/admin/{COMMUNITY_ID}/workflows",
+            f"/api/v1/admin/{community_id}/workflows",
             headers={"Authorization": f"Bearer {self._token(user_id=str(user_id))}"},
         )
         assert response.status_code == 200
+
+    async def test_tenant_admin_cannot_bypass_community_in_different_tenant(
+        self, automation_db: Any
+    ) -> None:
+        # regression: cross-tenant IDOR (automated security review)
+        #
+        # A tenant-admin of "acme-corp" must NOT be able to use that
+        # bypass to reach a community owned by a different tenant --
+        # `require_community_admin`'s tenant-admin bypass previously
+        # returned as soon as a `tenant_admins` row for the CALLER's own
+        # tenant existed, without ever checking that the *target*
+        # `community_id` in the URL also belonged to that tenant.
+        #
+        # Fail-first proof (executed, not narrated): temporarily reverted
+        # `require_community_admin`'s tenant-admin bypass to `if ta_rows:
+        # return` (dropping the `_community_belongs_to_tenant()` cross-check)
+        # -- this test went red (200 instead of the expected 403), confirming
+        # it actually exercises the vulnerable branch. Reverted, green again.
+        dal = automation_db.dal
+        user_id = dal.hub_users.insert(username="tadmin", is_super_admin=False)
+        own_tenant_row = dal(dal.tenants.slug == TENANT_SLUG).select().first()
+        dal.tenant_admins.insert(
+            tenant_id=own_tenant_row.id, user_id=user_id, role="tenant-admin"
+        )
+        other_tenant_id = dal.tenants.insert(slug="other-tenant", is_active=True)
+        other_community_id = dal.communities.insert(
+            name="other-tenant-community", tenant_id=other_tenant_id
+        )
+        dal.commit()
+        app = self._app(automation_db)
+        client = app.test_client()
+        response = await client.get(
+            f"/api/v1/admin/{other_community_id}/workflows",
+            headers={"Authorization": f"Bearer {self._token(user_id=str(user_id))}"},
+        )
+        assert response.status_code == 403
 
     async def test_platform_admin_role_bypasses_community_membership(
         self, automation_db: Any
@@ -294,3 +346,93 @@ class TestRequireCommunityAdminBypasses:
             headers={"Authorization": f"Bearer {self._token(user_id=str(user_id))}"},
         )
         assert response.status_code == 403
+
+
+class TestResolveCommunityMembershipScopedTenantAdminBypass:
+    """`resolve_community_membership_scoped`'s tenant-admin bypass had the SAME cross-tenant
+
+    IDOR shape as `require_community_admin`'s (same security hotfix, same file): the
+    `_is_tenant_admin()` bypass check ran BEFORE the `communities.tenant_id` ownership
+    check, so it never actually benefited from that check despite this module's own
+    docstring claiming otherwise. Covered here directly (not via a blueprint) against
+    `automation_db`, which already binds `communities`/`tenant_admins`/`community_members`/
+    `community_roles`/`hub_users` -- no need for the M7 Streaming group's `streaming_db`
+    fixture just to exercise this function in isolation.
+    """
+
+    async def test_tenant_admin_bypass_within_own_tenant_is_admin(
+        self, automation_db: Any
+    ) -> None:
+        """Positive case: tenant-admin authorizing a community IN their own tenant succeeds."""
+        dal = automation_db.dal
+        user_id = dal.hub_users.insert(username="tadmin", is_super_admin=False)
+        tenant_row = dal(dal.tenants.slug == TENANT_SLUG).select().first()
+        dal.tenant_admins.insert(tenant_id=tenant_row.id, user_id=user_id, role="tenant-admin")
+        community_id = dal.communities.insert(name="own-tenant-community", tenant_id=tenant_row.id)
+        dal.commit()
+
+        membership = await resolve_community_membership_scoped(
+            automation_db,
+            dal,
+            community_id=community_id,
+            user_id=user_id,
+            tenant_id=tenant_row.id,
+            roles_claim=[],
+        )
+        assert membership is not None
+        assert membership.bypass is True
+        assert membership.is_admin is True
+
+        admin_membership = await require_community_admin_scoped(
+            automation_db,
+            dal,
+            community_id=community_id,
+            user_id=user_id,
+            tenant_id=tenant_row.id,
+            roles_claim=[],
+        )
+        assert admin_membership.is_admin is True
+
+    async def test_tenant_admin_bypass_cannot_reach_community_in_different_tenant(
+        self, automation_db: Any
+    ) -> None:
+        # regression: cross-tenant IDOR (automated security review)
+        #
+        # Fail-first proof (executed, not narrated): temporarily reverted
+        # `resolve_community_membership_scoped` to check `_is_tenant_admin()`
+        # BEFORE the `_community_belongs_to_tenant()` ownership check (the
+        # pre-fix ordering) -- this test went red (`membership is not None`
+        # / `is_admin=True` instead of the expected `None` / 403).
+        # Reverted, green again.
+        dal = automation_db.dal
+        user_id = dal.hub_users.insert(username="tadmin", is_super_admin=False)
+        own_tenant_row = dal(dal.tenants.slug == TENANT_SLUG).select().first()
+        dal.tenant_admins.insert(
+            tenant_id=own_tenant_row.id, user_id=user_id, role="tenant-admin"
+        )
+        other_tenant_id = dal.tenants.insert(slug="other-tenant", is_active=True)
+        other_community_id = dal.communities.insert(
+            name="other-tenant-community", tenant_id=other_tenant_id
+        )
+        dal.commit()
+
+        membership = await resolve_community_membership_scoped(
+            automation_db,
+            dal,
+            community_id=other_community_id,
+            user_id=user_id,
+            tenant_id=own_tenant_row.id,
+            roles_claim=[],
+        )
+        assert membership is None
+
+        with pytest.raises(ApiError) as exc_info:
+            await require_community_admin_scoped(
+                automation_db,
+                dal,
+                community_id=other_community_id,
+                user_id=user_id,
+                tenant_id=own_tenant_row.id,
+                roles_claim=[],
+            )
+        assert exc_info.value.status_code == 403
