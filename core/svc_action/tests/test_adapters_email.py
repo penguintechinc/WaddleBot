@@ -77,7 +77,10 @@ async def test_auth_failure_is_non_retryable(monkeypatch: pytest.MonkeyPatch) ->
 
 async def test_recipients_refused_is_non_retryable(monkeypatch: pytest.MonkeyPatch) -> None:
     async def _fake_send(message: EmailMessage, **kwargs: Any) -> tuple:
-        raise aiosmtplib.SMTPRecipientsRefused({"ops@example.com": (550, "no such user")})
+        # aiosmtplib>=5.x shape: list[SMTPRecipientRefused], not the 3.x
+        # dict[str, tuple[int, str]] -- see email.py's module docstring.
+        refused = aiosmtplib.SMTPRecipientRefused(550, "no such user", "ops@example.com")
+        raise aiosmtplib.SMTPRecipientsRefused([refused])
 
     monkeypatch.setattr(aiosmtplib, "send", _fake_send)
 

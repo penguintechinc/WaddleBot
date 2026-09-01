@@ -3,6 +3,18 @@
 `SMTP_*` env vars (config.py) provide the outbound relay; `to_addrs`/
 `subject_template`/`body_template` come from the bundle's `action_target`
 config, rendered against the envelope payload (services/templating.py).
+
+Pinned to aiosmtplib>=5.1.2 (requirements.in) -- 3.0.x/4.x carry
+PYSEC-2026-2338/CVE-2026-55558. Verified compatible across the 3.x->5.x
+jump for every call this module makes: `send()`'s `message`/`hostname`/
+`port`/`username`/`password`/`start_tls`/`timeout` keywords are unchanged,
+and every exception type caught below still exists under the same name.
+One real behavioral change: `SMTPRecipientsRefused` now wraps a
+`list[SMTPRecipientRefused]` (one entry per rejected address) instead of
+3.x's `dict[str, tuple[int, str]]` -- this module only catches-and-wraps
+the exception (never reads its internals), so the change is inert here;
+`tests/test_adapters_email.py` constructs the new shape to stay
+byte-honest with what a real 5.x send() failure actually raises.
 """
 
 from __future__ import annotations

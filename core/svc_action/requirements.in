@@ -22,7 +22,16 @@ httpx>=0.27.0,<0.28.0
 
 # SMTP (email adapter) -- genuinely new dependency, not previously pinned
 # anywhere in this repo; see this task's PR body for the one-line addition.
-aiosmtplib>=3.0.1,<4.0.0
+# >=5.1.2 mandatory: 3.0.x-4.x carry PYSEC-2026-2338/CVE-2026-55558, fixed in
+# 5.1.2. Verified API-compatible across the 3.x->5.x jump for this adapter's
+# usage: send()'s message/hostname/port/username/password/start_tls/timeout
+# kwargs are unchanged, and every exception type this adapter catches
+# (SMTPAuthenticationError/SMTPRecipientsRefused/SMTPConnectError/
+# SMTPServerDisconnected/SMTPTimeoutError/SMTPException) is still exported
+# with the same name -- see services/adapters/email.py's module docstring
+# for the one real behavioral change (SMTPRecipientsRefused now takes a
+# list[SMTPRecipientRefused], not a dict).
+aiosmtplib>=5.1.2,<6.0.0
 
 # Utilities
 python-dotenv>=1.0.0
