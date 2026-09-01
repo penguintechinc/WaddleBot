@@ -24,7 +24,7 @@ from flask_core.auth import create_jwt_token
 from flask_core.database import AsyncDAL
 from pydal import DAL, Field
 
-from services.schema import bind_auth_tables
+from services.schema import bind_auth_tables, bind_streaming_tables
 
 #: Matches flask_core.tenancy/authz's own os.getenv("SECRET_KEY", ...) fallback.
 SECRET_KEY = "change-me-in-production"
@@ -96,6 +96,42 @@ def auth_db(tmp_path: Any) -> Any:
     dal.close()
 
 
+@pytest.fixture
+def streaming_db(tmp_path: Any) -> Any:
+    """File-backed `AsyncDAL` for the M7 Streaming group (music/stream/streaming).
+
+    Additive fixture (`hub_api/PORTING.md`: "add your own bind_<group>_
+    tables() call to auth_db (or a new fixture) ... additive only, never
+    edit the M1 group's own fixture logic") -- extends `auth_db`'s exact
+    pattern with `services.schema.bind_streaming_tables()` on top of
+    `bind_auth_tables()`, since `services.community_authz` needs both M1's
+    `community_members`/`tenant_admins`/`communities` tables AND M7's own
+    `community_roles`/`coordination`/`community_servers`/music tables in
+    the same DAL instance.
+    """
+    async_dal = AsyncDAL(f"sqlite://{tmp_path / 'streaming_test.db'}", pool_size=1)
+    dal = async_dal.dal
+    dal.define_table(
+        "tenants",
+        Field("slug", unique=True),
+        Field("display_name"),
+        Field("logo_url"),
+        Field("is_global", "boolean", default=False),
+        Field("is_active", "boolean", default=True),
+        Field("config", "json"),
+    )
+    bind_auth_tables(dal, migrate=True)
+    bind_streaming_tables(dal, migrate=True)
+    dal.tenants.insert(slug=TENANT_SLUG, display_name="Acme Corp", is_active=True)
+    dal.commit()
+    # See auth_db's own docstring -- forces lazy-table DDL to run on the
+    # main thread before any AsyncDAL executor thread exists.
+    for table_name in dal.tables:
+        dal(dal[table_name]).count()
+    yield async_dal
+    dal.close()
+
+
 def make_token(*, scope: str = "", tenant: str = TENANT_SLUG) -> str:
     """Mint a JWT via the real `flask_core.auth.create_jwt_token` -- no hand-rolled JWTs."""
     return create_jwt_token(
@@ -116,6 +152,27 @@ def make_user_token(*, user_id: int, scope: str = "", tenant: str = TENANT_SLUG)
         username="alice",
         email="alice@example.com",
         roles=["viewer"],
+        secret_key=SECRET_KEY,
+        tenant=tenant,
+        scope=scope,
+    )
+
+
+def make_user_token_with_roles(
+    *, user_id: int, roles: list[str], scope: str = "", tenant: str = TENANT_SLUG
+) -> str:
+    """Like `make_user_token`, but with a caller-supplied `roles` claim.
+
+    Additive helper (new function, not an edit to `make_user_token`) --
+    needed by `services.community_authz`'s super-admin/platform-admin
+    bypass tests (`roles=["super_admin"]`), which the fixed
+    `roles=["viewer"]` in `make_user_token` can't express.
+    """
+    return create_jwt_token(
+        user_id=str(user_id),
+        username="alice",
+        email="alice@example.com",
+        roles=roles,
         secret_key=SECRET_KEY,
         tenant=tenant,
         scope=scope,

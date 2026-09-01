@@ -34,6 +34,13 @@ convention = "google"
 "blueprints/v1/profile.py" = ["N815"]
 "blueprints/v1/user_management.py" = ["N815"]
 "services/profile_service.py" = ["S101"]
+# M7 Streaming group (music/stream/streaming) -- same camelCase-DTO
+# rationale as blueprints/v1/auth.py above; DTO field names are wire
+# contracts pinned to frontend/src/services/api.js.
+"blueprints/v1/music.py" = ["N815"]
+"blueprints/v1/stream.py" = ["N815"]
+"services/music_service.py" = ["N815"]
+"services/stream_service.py" = ["N815"]
 
 [tool.mypy]
 python_version = "3.13"
