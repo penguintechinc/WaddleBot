@@ -377,6 +377,15 @@ services:
     depends_on:
       infra-postgres:
         condition: service_healthy
+      # READ_REPLICA_HOST points here unconditionally (below); without this,
+      # core-router races the replica's base-backup+WAL-replay (60-90s+,
+      # longer than the primary's own startup) and its AsyncDAL read_dal
+      # connection fails 5x and crash-loops on the very first boot. It does
+      # self-heal via restart:unless-stopped once the replica catches up,
+      # but that's a flaky-looking failed health check on every fresh
+      # deploy, not a real steady-state problem -- worth removing the race.
+      infra-postgres-replica:
+        condition: service_healthy
       infra-redis:
         condition: service_healthy
       db-migrations:
@@ -398,6 +407,14 @@ services:
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       PORT: 8060
+      # config/postgres/migrations/*.sql (run by db-migrations) owns the schema.
+      # Without this, index.js::initializeDatabase() unconditionally runs
+      # CREATE TABLE/INDEX IF NOT EXISTS against tables hub_admin doesn't
+      # OWN (034_module_db_accounts.sql grants privileges, not ownership) --
+      # e.g. `CREATE INDEX ... ON hub_chat_messages` 500s with
+      # "must be owner of table hub_chat_messages" and crash-loops the
+      # container before it ever binds its HTTP port.
+      SKIP_DB_INIT: "true"
       DATABASE_URL: postgresql://hub_admin:${DB_PASS_HUB_ADMIN:-hub_admin_dev_changeme}@infra-postgres:5432/waddlebot
       # Redis ACL: user=hub, prefix=hub:*, waddlebot:session:*, waddlebot:auth:*
       REDIS_URL: redis://hub:${REDIS_HUB_PASSWORD:-changeme}@infra-redis:6379/0
@@ -1119,7 +1136,11 @@ services:
     environment:
       MODULE_NAME: reputation
       MODULE_PORT: 8021
-      DATABASE_URL: postgresql://reputation:mod_reputation_dev_changeme@infra-postgres:5432/waddlebot
+      # mod_core_reputation (031_scoped_database_users.sql), not the legacy
+      # `reputation` role from config/postgres/init.sql -- only mod_core_reputation
+      # gets the SELECT/INSERT/UPDATE grants this service actually needs
+      # (031_scoped_database_users.sql + 080_add_reputation_tables.sql).
+      DATABASE_URL: postgresql://mod_core_reputation:${DB_PASS_CORE_REPUTATION:-mod_core_reputation_dev_changeme}@infra-postgres:5432/waddlebot
       SECRETS_BACKEND: kubernetes
       SECRETS_PATH: /secrets/db-passwords
       ROUTER_API_URL: http://core-router:8000
