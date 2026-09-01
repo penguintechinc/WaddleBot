@@ -34,7 +34,19 @@ from blueprints import register_blueprints
 # (X-Service-Key-only) endpoints, rejects an unauthenticated caller with
 # 401 (missing JWT for tenant routes, missing/invalid service key for
 # internal routes -- both surface as 401, so one assertion covers both).
-_EXEMPT_PATHS = {("POST", "/api/v1/auth/login")}
+#
+# `GET /public/communities/<id>/profile` (community_profile.py) is the
+# one Core-tenancy route that's ALSO deliberately pre-auth -- byte-faithful
+# port of Node's own `routes/public.js`, no `@tenant_middleware` by design
+# (see that handler's own docstring/comment). This app-fixture (no
+# `async_dal` in `app.config`, only `dal`) can't actually serve it, but
+# that's an artifact of this exhaustive sweep's minimal fixture, not a
+# missing auth check -- the per-group `test_v1_community_profile_
+# blueprint.py` covers this route's real (200) success path.
+_EXEMPT_PATHS = {
+    ("POST", "/api/v1/auth/login"),
+    ("GET", "/api/v1/public/communities/1/profile"),
+}
 
 
 @pytest.fixture

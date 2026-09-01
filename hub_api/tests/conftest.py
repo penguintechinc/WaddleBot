@@ -24,7 +24,12 @@ from flask_core.auth import create_jwt_token
 from flask_core.database import AsyncDAL
 from pydal import DAL, Field
 
-from services.schema import bind_auth_tables, bind_tenant_tables
+from services.schema import (
+    bind_admin_tables,
+    bind_auth_tables,
+    bind_superadmin_tenant_fields,
+    bind_tenant_tables,
+)
 
 #: Matches flask_core.tenancy/authz's own os.getenv("SECRET_KEY", ...) fallback.
 SECRET_KEY = "change-me-in-production"
@@ -90,6 +95,40 @@ def auth_db(tmp_path: Any) -> Any:
     # table once here, still on the main thread, forces that DDL to run
     # before any worker thread exists -- a test-only concern (production
     # Postgres has no such lazy-CREATE-races-a-thread failure mode).
+    for table_name in dal.tables:
+        dal(dal[table_name]).count()
+    yield async_dal
+    dal.close()
+
+
+@pytest.fixture
+def admin_db(tmp_path: Any) -> Any:
+    """File-backed `AsyncDAL` for the M3 Platform-admin group (admin/superadmin blueprints).
+
+    Extends `auth_db`'s exact pattern (file-backed sqlite -- see that
+    fixture's own docstring for the connection-scoping/`pool_size=1`
+    rationale) with `bind_admin_tables()` + `bind_superadmin_tenant_fields()`,
+    additive per `hub_api/PORTING.md`'s test-pattern guidance rather than
+    editing `auth_db` in place.
+    """
+    async_dal = AsyncDAL(f"sqlite://{tmp_path / 'admin_test.db'}", pool_size=1)
+    dal = async_dal.dal
+    dal.define_table(
+        "tenants",
+        Field("slug", unique=True),
+        Field("display_name"),
+        Field("logo_url"),
+        Field("is_global", "boolean", default=False),
+        Field("is_active", "boolean", default=True),
+        Field("config", "json"),
+    )
+    bind_auth_tables(dal, migrate=True)
+    bind_admin_tables(dal, migrate=True)
+    bind_superadmin_tenant_fields(dal, migrate=True)
+    dal.tenants.insert(slug=TENANT_SLUG, display_name="Acme Corp", is_active=True)
+    dal.commit()
+    # See auth_db's own comment above -- forces lazy CREATE TABLE DDL to
+    # run on the main thread before any async_dal worker thread exists.
     for table_name in dal.tables:
         dal(dal[table_name]).count()
     yield async_dal
