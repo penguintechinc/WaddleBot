@@ -30,11 +30,14 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from flask_core.app_manifest import parse_manifest
+from flask_core.app_registry import get_registry
 from quart import Quart
 from quart_schema import QuartSchema
 
 from blueprints.v1.marketplace_lifecycle import marketplace_lifecycle_bp
-from flask_core.app_registry import get_registry
+from services.errors import ApiError
+from services.marketplace_lifecycle_service import ensure_registered
 from tests.conftest import (
     LIFECYCLE_COMMUNITY_ID,
     LIFECYCLE_OTHER_COMMUNITY_ID,
@@ -125,7 +128,9 @@ async def _make_available(client: Any, app_id: str = APP_ID_A) -> Any:
     )
 
 
-async def _activate(client: Any, app_id: str = APP_ID_A, community_id: int = LIFECYCLE_COMMUNITY_ID) -> Any:
+async def _activate(
+    client: Any, app_id: str = APP_ID_A, community_id: int = LIFECYCLE_COMMUNITY_ID
+) -> Any:
     return await client.post(
         f"/api/v1/marketplace/community/{community_id}/bundles",
         headers=_community_admin_headers(),
@@ -342,6 +347,189 @@ class TestListingFiltersAndPagination:
         assert len(body["bundles"]) == 1
         assert body["pagination"] == {"page": 1, "limit": 1, "total": 2, "totalPages": 2}
 
+    async def test_list_installed_filters_by_feature_and_provider(self, client: Any) -> None:
+        await _install(client, APP_ID_A)
+        hit = await client.get(
+            "/api/v1/marketplace/bundles?feature=waddles.bot.shoutout&provider=builtin",
+            headers=_tenant_admin_headers(),
+        )
+        assert len((await hit.get_json())["bundles"]) == 1
+        miss = await client.get(
+            "/api/v1/marketplace/bundles?provider=thirdparty", headers=_tenant_admin_headers()
+        )
+        assert (await miss.get_json())["bundles"] == []
+
+    async def test_list_available_filters_by_module_and_feature(self, client: Any) -> None:
+        await _install(client)
+        await _make_available(client)
+        hit = await client.get(
+            f"/api/v1/marketplace/tenant/{TENANT_SLUG}/bundles?module=bot&feature=waddles.bot.shoutout",
+            headers=_tenant_admin_headers(),
+        )
+        assert len((await hit.get_json())["bundles"]) == 1
+        miss = await client.get(
+            f"/api/v1/marketplace/tenant/{TENANT_SLUG}/bundles?module=social",
+            headers=_tenant_admin_headers(),
+        )
+        assert (await miss.get_json())["bundles"] == []
+
+    async def test_list_available_wrong_tenant_slug_is_403(self, client: Any) -> None:
+        response = await client.get(
+            f"/api/v1/marketplace/tenant/{OTHER_TENANT_SLUG}/bundles",
+            headers=_tenant_admin_headers(tenant=TENANT_SLUG),
+        )
+        assert response.status_code == 403
+
+    async def test_list_activated_no_membership_is_403(self, client: Any) -> None:
+        token = make_user_token(user_id=999, scope="", tenant=TENANT_SLUG)
+        response = await client.get(
+            f"/api/v1/marketplace/community/{LIFECYCLE_COMMUNITY_ID}/bundles",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 403
+
+    async def test_list_activated_filters_by_module_and_feature(self, client: Any) -> None:
+        await _install(client)
+        await _make_available(client)
+        await _activate(client)
+        hit = await client.get(
+            f"/api/v1/marketplace/community/{LIFECYCLE_COMMUNITY_ID}/bundles"
+            "?module=bot&feature=waddles.bot.shoutout",
+            headers=_community_admin_headers(),
+        )
+        assert len((await hit.get_json())["bundles"]) == 1
+        miss = await client.get(
+            f"/api/v1/marketplace/community/{LIFECYCLE_COMMUNITY_ID}/bundles?module=social",
+            headers=_community_admin_headers(),
+        )
+        assert (await miss.get_json())["bundles"] == []
+
+
+class TestUpsertAndRegistryEdgeCases:
+    async def test_make_available_re_enable_after_disable_is_upsert(self, client: Any) -> None:
+        """Exercises `make_available()`'s UPDATE branch (row already exists, disabled)."""
+        await _install(client)
+        await _make_available(client)
+        await client.delete(
+            f"/api/v1/marketplace/tenant/{TENANT_SLUG}/bundles/{APP_ID_A}",
+            headers=_tenant_admin_headers(),
+        )
+        response = await _make_available(client)
+        assert response.status_code == 201
+
+        listing = await client.get(
+            f"/api/v1/marketplace/tenant/{TENANT_SLUG}/bundles", headers=_tenant_admin_headers()
+        )
+        body = await listing.get_json()
+        assert body["bundles"][0]["available"] is True
+
+    async def test_make_available_on_yanked_bundle_is_409(self, client: Any) -> None:
+        """`make_available()`'s own `status == 'active'` check (beyond the shared invariant)."""
+        await _install(client)
+        await client.delete(
+            f"/api/v1/marketplace/bundles/{APP_ID_A}", headers=_platform_admin_headers()
+        )
+        response = await _make_available(client)
+        assert response.status_code == 409
+
+    async def test_activate_re_enable_after_deactivate_is_upsert(self, client: Any) -> None:
+        """Exercises `activate_bundle()`'s UPDATE branch (row already exists, disabled)."""
+        await _install(client)
+        await _make_available(client)
+        await _activate(client)
+        await client.delete(
+            f"/api/v1/marketplace/community/{LIFECYCLE_COMMUNITY_ID}/bundles/{APP_ID_A}",
+            headers=_community_admin_headers(),
+        )
+        response = await _activate(client)
+        assert response.status_code == 201
+
+        listing = await client.get(
+            f"/api/v1/marketplace/community/{LIFECYCLE_COMMUNITY_ID}/bundles",
+            headers=_community_admin_headers(),
+        )
+        body = await listing.get_json()
+        assert body["bundles"][0]["enabled"] is True
+
+    async def test_install_conflicting_with_stale_registry_entry_is_409(self, client: Any) -> None:
+        """`install_bundle()`'s `RegistryError` branch: registered in-memory but no DB row yet.
+
+        Simulates two hub-api replicas racing to install the same bundle --
+        this process's own `AppRegistry` singleton already has `app_id`
+        (e.g. from a concurrent request that beat this one to
+        `reg.register()` but hasn't committed its DB row yet), so the DB-level
+        duplicate check (line ~137) passes, but the registry's own
+        duplicate-id guard still correctly rejects it.
+        """
+        get_registry().register(
+            parse_manifest(
+                {
+                    "app_id": APP_ID_A,
+                    "name": "Custom Shoutout",
+                    "version": "1.0.0",
+                    "feature": "waddles.bot.shoutout",
+                    "module": "bot",
+                    "provider": "builtin",
+                }
+            )
+        )
+        response = await _install(client, APP_ID_A)
+        assert response.status_code == 409
+
+    async def test_ensure_registered_self_heals_after_registry_clear(self, client: Any) -> None:
+        """`ensure_registered()`'s lazy DB-reconstruction path (simulates a hub-api restart).
+
+        `_clear_registry` clears the singleton between tests, but NOT
+        mid-test -- clearing it here, after install+make_available (both of
+        which already wrote real `app_catalog`/`app_tenant_availability`
+        rows), simulates the in-memory `AppRegistry` resetting on a real
+        restart while the DB rows persist. `activate_bundle()`'s
+        `ensure_registered()` call must still succeed by re-`parse_manifest`-ing
+        straight from the `app_catalog` row.
+        """
+        await _install(client)
+        await _make_available(client)
+        get_registry().clear()
+
+        response = await _activate(client)
+        assert response.status_code == 201
+
+
+class TestEnsureRegisteredDirect:
+    """Direct unit coverage of `ensure_registered()`'s 404 branch (unknown to registry AND DB)."""
+
+    async def test_unknown_app_id_raises_not_found(self, lifecycle_db: Any) -> None:
+        with pytest.raises(ApiError) as exc_info:
+            await ensure_registered(lifecycle_db.dal, "waddles.bot.shoutout.nope")
+        assert exc_info.value.status_code == 404
+
+
+class TestResolvedBundlesNoBinding:
+    async def test_resolved_skips_feature_with_no_enabled_binding(self, client: Any) -> None:
+        """`resolve_community_bundles()`'s `except Exception: continue` branch.
+
+        A0 is installed + made available then immediately made UNAVAILABLE
+        again (never activated) -- the only `app_tenant_availability` row
+        for its feature is `available=False`, so `resolve_apps` finds
+        nothing enabled and no default is registered for that feature,
+        raising `BindingError`; the resolved endpoint must skip it rather
+        than 500.
+        """
+        await _install(client)
+        await _make_available(client)
+        await client.delete(
+            f"/api/v1/marketplace/tenant/{TENANT_SLUG}/bundles/{APP_ID_A}",
+            headers=_tenant_admin_headers(),
+        )
+        response = await client.get(
+            f"/api/v1/marketplace/community/{LIFECYCLE_COMMUNITY_ID}/resolved",
+            headers=_community_admin_headers(),
+        )
+        assert response.status_code == 200
+        body = await response.get_json()
+        assert body["apps"] == []
+        assert body["conflicts"] == []
+
 
 class TestResolvedBundles:
     async def test_resolved_no_membership_is_403(self, client: Any) -> None:
@@ -395,7 +583,7 @@ class TestResolvedBundles:
 
 
 class TestCrossTenantIsolation:
-    """Confirms `LIFECYCLE_OTHER_TENANT_ID`/`LIFECYCLE_OTHER_COMMUNITY_ID` are genuinely isolated."""
+    """Confirms the `lifecycle_db` fixture's second tenant/community are genuinely isolated."""
 
     async def test_other_tenant_cannot_see_first_tenants_availability(self, client: Any) -> None:
         await _install(client)

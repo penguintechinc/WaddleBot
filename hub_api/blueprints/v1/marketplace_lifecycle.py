@@ -7,11 +7,17 @@ authorization tiers, narrowing global -> tenant -> community, matching
 `docs/plans/2026-08-31-app-bundle-sdk-design.md` Sec5.1's subset invariant
 `activated <= available <= installed`:
 
-| Tier | Action | Auth | Mount |
-|---|---|---|---|
-| Global (`app_catalog`) | install / uninstall | `require_scope("platform:admin")` | `/api/v1/marketplace/bundles` |
-| Tenant (`app_tenant_availability`) | make-available / make-unavailable | `require_scope("tenant:admin")` + `services.tenant_service.require_matching_tenant` | `/api/v1/marketplace/tenant/<tenant_slug>/bundles` |
-| Community (`app_activations`) | activate / deactivate | `services.community_authz.authorize_community(..., admin=True)` | `/api/v1/marketplace/community/<community_id>/bundles` |
+Three tiers (mount paths relative to this blueprint's `/api/v1/marketplace`
+prefix):
+
+- Global (`app_catalog`): install / uninstall, `require_scope
+  ("platform:admin")`, mounted at `/bundles`.
+- Tenant (`app_tenant_availability`): make/un-available, `require_scope
+  ("tenant:admin")` + `require_matching_tenant`, mounted at
+  `/tenant/<tenant_slug>/bundles`.
+- Community (`app_activations`): activate / deactivate,
+  `community_authz.authorize_community(..., admin=True)`, mounted at
+  `/community/<community_id>/bundles`.
 
 GET listings at each tier require only the tier's read-level auth (no
 elevated scope needed to browse): platform-catalog and tenant-availability
@@ -228,7 +234,7 @@ class ActivationDTO:
 
 @dataclass(slots=True, frozen=True)
 class ActivationListResponse:
-    """Response DTO for `GET /community/<community_id>/bundles` (activated-for-community listing)."""
+    """Response DTO for `GET /community/<community_id>/bundles` (activated-for-community)."""
 
     success: bool
     bundles: list[ActivationDTO]
@@ -364,7 +370,9 @@ async def list_bundles() -> BundleListResponse:
 @require_scope("platform:admin")  # type: ignore[untyped-decorator]
 @validate_request(InstallBundleRequest)
 @validate_response(MessageResponse, 201)
-async def install_bundle(data: InstallBundleRequest) -> tuple[MessageResponse | dict[str, object], int]:
+async def install_bundle(
+    data: InstallBundleRequest,
+) -> tuple[MessageResponse | dict[str, object], int]:
     """Install a bundle into the global catalog."""
     _, dal = _dal()
     try:
@@ -396,7 +404,9 @@ async def uninstall_bundle(app_id: str) -> MessageResponse | tuple[dict[str, obj
 @marketplace_lifecycle_bp.route("/tenant/<tenant_slug>/bundles", methods=["GET"])
 @tenant_middleware  # type: ignore[untyped-decorator]
 @validate_response(AvailabilityListResponse)
-async def list_available(tenant_slug: str) -> AvailabilityListResponse | tuple[dict[str, object], int]:
+async def list_available(
+    tenant_slug: str,
+) -> AvailabilityListResponse | tuple[dict[str, object], int]:
     """List bundles available to this tenant -- any authenticated member of that tenant."""
     async_dal, dal = _dal()
     page, limit = _page_limit()
@@ -433,7 +443,7 @@ async def list_available(tenant_slug: str) -> AvailabilityListResponse | tuple[d
 async def make_available(
     data: MakeAvailableRequest, tenant_slug: str
 ) -> tuple[MessageResponse | dict[str, object], int]:
-    """Make an installed bundle available to this tenant. 409 if not installed (superset invariant)."""
+    """Make an installed bundle available to this tenant. 409 if not installed (superset)."""
     async_dal, dal = _dal()
     try:
         tenant_id = _tenant_id(tenant_slug)
@@ -538,13 +548,15 @@ async def activate_bundle(
     return MessageResponse(success=True, message=f"Bundle {data.appId} activated"), 201
 
 
-@marketplace_lifecycle_bp.route("/community/<int:community_id>/bundles/<app_id>", methods=["DELETE"])
+@marketplace_lifecycle_bp.route(
+    "/community/<int:community_id>/bundles/<app_id>", methods=["DELETE"]
+)
 @tenant_middleware  # type: ignore[untyped-decorator]
 @validate_response(MessageResponse)
 async def deactivate_bundle(
     community_id: int, app_id: str
 ) -> MessageResponse | tuple[dict[str, object], int]:
-    """Deactivate a bundle for this community (soft-disable). Requires community-admin membership."""
+    """Deactivate a bundle for this community (soft-disable). Requires community-admin."""
     async_dal, dal = _dal()
     try:
         await authorize_community(request, async_dal, dal, community_id=community_id, admin=True)

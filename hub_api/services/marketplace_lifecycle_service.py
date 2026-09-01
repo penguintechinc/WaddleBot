@@ -209,9 +209,7 @@ async def list_installed(
     page = max(1, page)
     limit = min(100, max(1, limit))
     offset = (page - 1) * limit
-    rows = dal(query).select(
-        orderby=dal.app_catalog.app_id, limitby=(offset, offset + limit)
-    )
+    rows = dal(query).select(orderby=dal.app_catalog.app_id, limitby=(offset, offset + limit))
     total_pages = (total + limit - 1) // limit if total else 0
     return list(rows), total, total_pages
 
@@ -254,23 +252,33 @@ async def make_available(
         )
     )
     defaults = config_defaults if config_defaults is not None else {}
-    if existing:
-        await async_dal.update_async(
-            dal(
+    # `async with async_dal.transaction_async()` -- `insert_async`/`update_async`
+    # never call `.commit()` on their own (hub_api/PORTING.md Gotcha #2's
+    # third point); pydal's own THREAD_LOCAL connection pooling means the
+    # executor thread's uncommitted write is invisible to any OTHER
+    # thread's connection on the SAME `dal` object (a later sync `dal(...)`
+    # check, or even a later `async_dal.*_async()` call whose executor
+    # task happens to run on a different pool thread) until this commits.
+    async with async_dal.transaction_async():
+        if existing:
+            # `update_async` self-wraps (`self.dal(query)` internally,
+            # hub_api/PORTING.md Gotcha #1) -- a bare Query here, NOT
+            # `dal(...)` (a Set); double-wrapping raises pydal's own
+            # `RuntimeError: No table selected`.
+            await async_dal.update_async(
                 (dal.app_tenant_availability.tenant_id == tenant_id)
-                & (dal.app_tenant_availability.app_id == app_id)
-            ),
-            available=True,
-            config_defaults=defaults,
-        )
-    else:
-        await async_dal.insert_async(
-            dal.app_tenant_availability,
-            tenant_id=tenant_id,
-            app_id=app_id,
-            available=True,
-            config_defaults=defaults,
-        )
+                & (dal.app_tenant_availability.app_id == app_id),
+                available=True,
+                config_defaults=defaults,
+            )
+        else:
+            await async_dal.insert_async(
+                dal.app_tenant_availability,
+                tenant_id=tenant_id,
+                app_id=app_id,
+                available=True,
+                config_defaults=defaults,
+            )
     row = await async_dal.select_async(
         dal(
             (dal.app_tenant_availability.tenant_id == tenant_id)
@@ -281,20 +289,21 @@ async def make_available(
 
 
 async def make_unavailable(async_dal: Any, dal: Any, *, tenant_id: int, app_id: str) -> None:
-    """Soft-disable: set `app_tenant_availability.available = False`. Raises 404 if no such row."""
-    existing = dal(
-        (dal.app_tenant_availability.tenant_id == tenant_id)
-        & (dal.app_tenant_availability.app_id == app_id)
-    ).count()
+    """Soft-disable: set `app_tenant_availability.available = False`. Raises 404 if no such row.
+
+    Existence check goes through `async_dal.count_async` (not a sync
+    `dal(...).count()`) -- see `make_available()`'s own comment on why: a
+    prior `make_available()` write on a different pool worker thread may
+    still only be visible on `async_dal`'s own connection.
+    """
+    existing_query = (dal.app_tenant_availability.tenant_id == tenant_id) & (
+        dal.app_tenant_availability.app_id == app_id
+    )
+    existing = await async_dal.count_async(existing_query)
     if existing == 0:
         raise not_found(f"Bundle {app_id!r} is not available for this tenant")
-    await async_dal.update_async(
-        dal(
-            (dal.app_tenant_availability.tenant_id == tenant_id)
-            & (dal.app_tenant_availability.app_id == app_id)
-        ),
-        available=False,
-    )
+    async with async_dal.transaction_async():
+        await async_dal.update_async(existing_query, available=False)
 
 
 async def list_available(
@@ -318,7 +327,11 @@ async def list_available(
         query &= dal.app_catalog.feature == feature
     query &= dal.app_tenant_availability.app_id == dal.app_catalog.app_id
 
-    total = dal(query).count()
+    # async_dal.count_async, not sync dal(query).count() -- see
+    # make_unavailable()'s own comment: a just-committed write from a
+    # different pool worker thread needs the same async connection to be
+    # reliably visible immediately.
+    total = await async_dal.count_async(query)
     page = max(1, page)
     limit = min(100, max(1, limit))
     offset = (page - 1) * limit
@@ -388,26 +401,25 @@ async def activate_bundle(
         )
     )
     payload = config if config is not None else {}
-    if existing:
-        await async_dal.update_async(
-            dal(
+    async with async_dal.transaction_async():
+        if existing:
+            await async_dal.update_async(
                 (dal.app_activations.community_id == community_id)
-                & (dal.app_activations.app_id == app_id)
-            ),
-            enabled=True,
-            config=payload,
-            updated_at=datetime.now(UTC),
-        )
-    else:
-        await async_dal.insert_async(
-            dal.app_activations,
-            community_id=community_id,
-            tenant_id=tenant_id,
-            app_id=app_id,
-            enabled=True,
-            config=payload,
-            activated_by=activated_by,
-        )
+                & (dal.app_activations.app_id == app_id),
+                enabled=True,
+                config=payload,
+                updated_at=datetime.now(UTC),
+            )
+        else:
+            await async_dal.insert_async(
+                dal.app_activations,
+                community_id=community_id,
+                tenant_id=tenant_id,
+                app_id=app_id,
+                enabled=True,
+                config=payload,
+                activated_by=activated_by,
+            )
     row = await async_dal.select_async(
         dal(
             (dal.app_activations.community_id == community_id)
@@ -418,20 +430,19 @@ async def activate_bundle(
 
 
 async def deactivate_bundle(async_dal: Any, dal: Any, *, community_id: int, app_id: str) -> None:
-    """Soft-disable: set `app_activations.enabled = False`. Raises 404 if no such row."""
-    existing = dal(
-        (dal.app_activations.community_id == community_id) & (dal.app_activations.app_id == app_id)
-    ).count()
+    """Soft-disable: set `app_activations.enabled = False`. Raises 404 if no such row.
+
+    Same `async_dal.count_async`/`transaction_async` rationale as
+    `make_unavailable()`'s own comment.
+    """
+    existing_query = (dal.app_activations.community_id == community_id) & (
+        dal.app_activations.app_id == app_id
+    )
+    existing = await async_dal.count_async(existing_query)
     if existing == 0:
         raise not_found(f"Bundle {app_id!r} is not activated for this community")
-    await async_dal.update_async(
-        dal(
-            (dal.app_activations.community_id == community_id)
-            & (dal.app_activations.app_id == app_id)
-        ),
-        enabled=False,
-        updated_at=datetime.now(UTC),
-    )
+    async with async_dal.transaction_async():
+        await async_dal.update_async(existing_query, enabled=False, updated_at=datetime.now(UTC))
 
 
 async def list_activated(
@@ -455,7 +466,7 @@ async def list_activated(
         query &= dal.app_catalog.feature == feature
     query &= dal.app_activations.app_id == dal.app_catalog.app_id
 
-    total = dal(query).count()
+    total = await async_dal.count_async(query)
     page = max(1, page)
     limit = min(100, max(1, limit))
     offset = (page - 1) * limit
@@ -521,9 +532,13 @@ async def resolve_community_bundles(
     for feature in features:
         try:
             apps = await resolve_apps(
-                feature, tenant=str(tenant_id), community=community_id, installations=lookup, registry=reg
+                feature,
+                tenant=str(tenant_id),
+                community=community_id,
+                installations=lookup,
+                registry=reg,
             )
-        except Exception:  # noqa: BLE001 - no binding/default for this feature; skip, not fatal
+        except Exception:  # noqa: BLE001, S112 - no binding/default for this feature; skip
             continue
         for app in apps:
             if app.app_id in seen:
