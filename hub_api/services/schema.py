@@ -252,12 +252,14 @@ def bind_auth_tables(dal: Any, *, migrate: bool = False) -> None:
         # public/platform-admin query that lists communities MUST filter on
         # this (security.md Tenant Isolation); see services/public_service.
         # py's module docstring for the pre-auth resolution mechanism. Also
-        # relied on by the M7 Streaming group: `flask_core.tenancy.
+        # relied on by the M7 Streaming (music/stream/streaming) group AND
+        # the M7 Streaming (overlay/calls) group: `flask_core.tenancy.
         # tenant_scoped()`'s community_id-owning-table fallback path reads
         # `dal.communities.tenant_id` directly -- no group before M7 queried
         # a community_id-owning table through that helper, so this was the
         # first caller to actually need the column bound (not just present
-        # in Postgres).
+        # in Postgres). `services/community_access.py` (overlay/calls) is
+        # the second `tenant_scoped()` caller with the identical need.
         # `about_extended`, `social_links`, `website_url`,
         # `discord_invite_url`, `visibility` are a pre-existing schema gap:
         # `communityProfileController.js`'s own raw SQL reads/writes these
@@ -414,6 +416,67 @@ def bind_auth_tables(dal: Any, *, migrate: bool = False) -> None:
         "hub_settings",
         Field("setting_key", "string", length=100, notnull=True),
         Field("setting_value", "text"),
+        migrate=migrate,
+    )
+
+
+def bind_overlay_tables(dal: Any, *, migrate: bool = False) -> None:
+    """Define the M7 Streaming (overlay/calls) group's own tables.
+
+    Named `bind_overlay_tables` (not `bind_streaming_tables`) even though
+    this group is also nominally M7 Streaming -- the M7 music/stream/
+    streaming controller group (a separate, parallel port task) already
+    landed its own `bind_streaming_tables()` above for a disjoint table
+    set (`community_music_settings`, `coordination`, `community_servers`,
+    etc.); this group's own tables (`community_overlay_tokens`,
+    `overlay_access_log`) are unrelated, so this function keeps its own
+    name rather than colliding on identical text with incompatible bodies
+    (the same class of same-name-different-function collision
+    `services/community_authz.py`'s own `_scoped` suffix already
+    documents for the M-automation/M7-music groups).
+
+    Column provenance: `config/postgres/migrations/000_create_base_schema.sql`
+    ("community_overlay_tokens", "overlay_access_log").
+
+    Deliberately NOT wired into `app.py::_bind_reference_tables()` the way
+    `bind_auth_tables()` is -- this port's task scope explicitly forbids
+    editing `app.py`/`routers/*.py`/`blueprints/__init__.py` (the
+    collision-avoidance boundary for the parallel M1..M9 port wave, see
+    `hub_api/PORTING.md`'s own "single new module" extension point).
+    `services/overlay_service.py` calls this idempotently (matching the
+    `if "<table>" in dal.tables: return` guard below) at the top of every
+    entry point instead of relying on app startup -- safe under Quart's
+    single-threaded-per-request-coroutine model since `define_table()`
+    itself awaits nothing, so no two coroutines can interleave mid-call.
+    A future group that gets an `app.py` edit in scope should fold this
+    into `_bind_reference_tables()` the normal way and delete this note.
+    """
+    if "community_overlay_tokens" in dal.tables:
+        return
+
+    dal.define_table(
+        "community_overlay_tokens",
+        Field("community_id", "integer", notnull=True, unique=True),
+        Field("overlay_key", "string", length=64, notnull=True, unique=True),
+        Field("previous_key", "string", length=64),
+        Field("is_active", "boolean", default=True),
+        Field("theme_config", "json"),
+        Field("enabled_sources", "json"),
+        Field("last_accessed", "datetime"),
+        Field("access_count", "integer", default=0),
+        Field("created_at", "datetime"),
+        Field("updated_at", "datetime"),
+        Field("rotated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "overlay_access_log",
+        Field("community_id", "integer", notnull=True),
+        Field("overlay_key", "string", length=64),
+        Field("ip_address", "string", length=45),
+        Field("user_agent", "text"),
+        Field("accessed_at", "datetime"),
         migrate=migrate,
     )
 
