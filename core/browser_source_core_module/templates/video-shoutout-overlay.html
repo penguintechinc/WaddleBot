@@ -336,6 +336,20 @@
             setTimeout(() => location.reload(), 5000);
         };
 
+        // Allowlist http(s) only -- rejects javascript:/data:/vbscript: and any
+        // other scheme an attacker-controlled WebSocket payload could use to
+        // run script via the "play button" link's href.
+        // Regression: CodeQL js/xss + js/client-side-unvalidated-url-redirection (alerts #354, #349).
+        function isSafeUrl(url) {
+            if (!url) return false;
+            try {
+                const parsed = new URL(url, window.location.href);
+                return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+            } catch (e) {
+                return false;
+            }
+        }
+
         function showShoutout(data) {
             const overlay = document.getElementById('shoutoutOverlay');
             const platformLabel = document.getElementById('platformLabel');
@@ -373,7 +387,7 @@
 
             // Video info
             videoThumbnail.style.backgroundImage = `url(${data.thumbnail_url || ''})`;
-            playButton.href = data.video_url || '#';
+            playButton.href = isSafeUrl(data.video_url) ? data.video_url : '#';
             videoTitle.textContent = data.video_title || 'Recent Video';
 
             // User info

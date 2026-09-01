@@ -650,13 +650,26 @@
             }
 
             updateAlbumArt(data) {
-                if (data.album_art_url) {
+                if (data.album_art_url && this.isSafeMediaUrl(data.album_art_url)) {
                     this.albumArt.src = data.album_art_url;
                     this.albumArt.style.display = 'block';
                     this.albumPlaceholder.style.display = 'none';
                 } else {
                     this.albumArt.style.display = 'none';
                     this.albumPlaceholder.style.display = 'flex';
+                }
+            }
+
+            // Allowlist http(s) only -- rejects javascript:/data:/vbscript: and
+            // any other scheme an attacker-controlled WebSocket payload could
+            // use to run script via the album art <img src>.
+            // Regression: CodeQL js/xss + js/client-side-unvalidated-url-redirection (alerts #355, #350).
+            isSafeMediaUrl(url) {
+                try {
+                    const parsed = new URL(url, window.location.href);
+                    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+                } catch (e) {
+                    return false;
                 }
             }
 
