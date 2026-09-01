@@ -455,6 +455,137 @@ def bind_auth_tables(dal: Any, *, migrate: bool = False) -> None:
     )
 
 
+def bind_support_token_tables(dal: Any, *, migrate: bool = False) -> None:
+    """Define every table the Support-ticket + PAT/CAT-token port group queries.
+
+    Idempotent per-DAL-instance, same contract as `bind_auth_tables()` above.
+    Not wired into `app.py::_bind_reference_tables()` -- `app.py`/`routers/*.py`/
+    `blueprints/__init__.py` are frozen for the parallel port wave (see
+    `services/community_common.py::ensure_community_tables()`'s own docstring
+    for why). Callers (`services/support_service.py`, `services/
+    access_token_service.py`) call this idempotently at the top of every
+    service function instead, matching that same established pattern.
+
+    Does NOT bind `communities`/`hub_users` -- those are owned by
+    `bind_auth_tables()`/`ensure_community_tables()`; callers needing tenant
+    isolation (`community_in_tenant()`) must ensure one of those has already
+    run against the same `dal` (matches `services/community_*.py`'s own
+    established convention of calling `ensure_community_tables(dal)` first).
+
+    Column provenance: `support_ticket_categories`/`support_tickets`/
+    `support_ticket_comments` are created at Node runtime startup
+    (`admin/hub_module/backend/src/index.js`'s `initializeDatabase()`), not
+    by any numbered SQL migration -- ported here verbatim from that CREATE
+    TABLE block. `user_access_tokens`/`community_access_tokens` come from
+    `config/postgres/migrations/048_add_pat_cat_tables.sql`.
+
+    One more pre-existing gap, same category as `hub_api/PORTING.md`'s
+    Gotcha #4: `048_add_pat_cat_tables.sql` never creates a `permission_scopes`
+    table with `scope_key`/`display_name` columns -- the only migration that
+    creates `permission_scopes` at all (`011_add_scoped_tokens.sql`) defines
+    `scope_name` (not `scope_key`) and has no `display_name` column, yet
+    `tokenController.js`'s `createCAT()`/`listScopes()` query exactly
+    `scope_key`/`display_name` from it. This is a pre-existing runtime gap in
+    Node's own code today (its query would already fail against the real,
+    migrated schema), not introduced by this port. Bound here byte-faithful
+    to Node's query, not silently renamed to the migration's real column --
+    needs a migration to reconcile (`ALTER TABLE permission_scopes RENAME
+    COLUMN scope_name TO scope_key`, `ADD COLUMN display_name`), out of scope
+    for a "no schema changes" port PR.
+    """
+    if "support_ticket_categories" not in dal.tables:
+        dal.define_table(
+            "support_ticket_categories",
+            Field("community_id", "integer", notnull=True),
+            Field("name", "string", length=255, notnull=True),
+            Field("description", "text"),
+            Field("sort_order", "integer", default=0),
+            Field("is_active", "boolean", default=True),
+            Field("form_fields", "json"),
+            Field("created_at", "datetime"),
+            migrate=migrate,
+        )
+
+    if "support_tickets" not in dal.tables:
+        dal.define_table(
+            "support_tickets",
+            Field("community_id", "integer", notnull=True),
+            Field("category_id", "integer"),
+            Field("ticket_number", "string", length=20, notnull=True),
+            Field("subject", "string", length=500, notnull=True),
+            Field("description", "text"),
+            Field("status", "string", length=20, default="open"),
+            Field("priority", "string", length=20, default="medium"),
+            Field("reporter_user_id", "integer"),
+            Field("reporter_name", "string", length=255),
+            Field("reporter_email", "string", length=255),
+            Field("assignee_user_id", "integer"),
+            Field("custom_fields", "json"),
+            Field("resolved_at", "datetime"),
+            Field("created_at", "datetime"),
+            Field("updated_at", "datetime"),
+            migrate=migrate,
+        )
+
+    if "support_ticket_comments" not in dal.tables:
+        dal.define_table(
+            "support_ticket_comments",
+            Field("ticket_id", "integer", notnull=True),
+            Field("author_user_id", "integer"),
+            Field("author_name", "string", length=255),
+            Field("content", "text", notnull=True),
+            Field("is_internal", "boolean", default=False),
+            Field("created_at", "datetime"),
+            migrate=migrate,
+        )
+
+    if "user_access_tokens" not in dal.tables:
+        dal.define_table(
+            "user_access_tokens",
+            Field("user_id", "integer", notnull=True, unique=True),
+            Field("name", "string", length=100, notnull=True),
+            # SHA-256 hex of the plaintext token; plaintext is never stored.
+            Field("token_hash", "string", length=64, notnull=True, unique=True),
+            # NULL = inherit the user's full permissions; pydal has no native
+            # Postgres TEXT[] type -- "list:string" round-trips a Python list
+            # portably across Postgres/MySQL/sqlite (pydal's own abstraction).
+            Field("scope_ceiling", "list:string"),
+            Field("created_at", "datetime"),
+            Field("last_used_at", "datetime"),
+            Field("expires_at", "datetime"),
+            Field("is_revoked", "boolean", notnull=True, default=False),
+            migrate=migrate,
+        )
+
+    if "community_access_tokens" not in dal.tables:
+        dal.define_table(
+            "community_access_tokens",
+            Field("community_id", "integer", notnull=True),
+            Field("created_by_user_id", "integer"),
+            Field("name", "string", length=100, notnull=True),
+            Field("token_hash", "string", length=64, notnull=True, unique=True),
+            Field("scopes", "list:string", notnull=True),
+            Field("created_at", "datetime"),
+            Field("last_used_at", "datetime"),
+            Field("expires_at", "datetime"),
+            Field("is_revoked", "boolean", notnull=True, default=False),
+            migrate=migrate,
+        )
+
+    if "permission_scopes" not in dal.tables:
+        dal.define_table(
+            "permission_scopes",
+            # See this function's own docstring -- `scope_key`/`display_name`
+            # match Node's query, not `011_add_scoped_tokens.sql`'s real
+            # `scope_name` column (pre-existing schema-drift gap).
+            Field("scope_key", "string", length=100, notnull=True, unique=True),
+            Field("display_name", "string", length=255),
+            Field("description", "text"),
+            Field("category", "string", length=50),
+            migrate=migrate,
+        )
+
+
 def bind_overlay_tables(dal: Any, *, migrate: bool = False) -> None:
     """Define the M7 Streaming (overlay/calls) group's own tables.
 
