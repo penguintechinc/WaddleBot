@@ -34,7 +34,12 @@ boto3>=1.35.0,<2.0.0  # storage_service.py -- S3/MinIO avatar storage only, no l
 # client already shares rather than introducing a second httpx range.
 httpx>=0.27.0,<0.28.0
 # cryptography -- AES-256-GCM for server_status_configs.credential_enc
-#   (services/bot_crypto.py ports utils/encryption.js's exact wire format).
+#   (services/bot_crypto.py ports utils/encryption.js's exact wire format)
+#   AND for services/github_sync_service.py's token-at-rest encryption
+#   (M-automation port group, port of githubSyncService.js's Node `crypto`
+#   usage) -- was already a transitive dep via flask_core's pyopenssl
+#   requirement; pinned directly here now that hub-api's own code imports
+#   it, not just flask_core's.
 # 44.0.1 floor: PYSEC-2026-35/1284/2141/3553/3554, GHSA-537c-gmf6-5ccf --
 # pip-audit flagged 43.0.3 (`test-security`'s pip-audit gate) before this
 # floor was raised.
