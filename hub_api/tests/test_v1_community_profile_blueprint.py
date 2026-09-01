@@ -589,7 +589,7 @@ class TestServiceLayerValidation:
         async def _is_super_admin_true(async_dal: Any, dal: Any, *, user_id: int) -> bool:
             return True
 
-        monkeypatch.setattr("services.community_authz._is_super_admin", _is_super_admin_true)
+        monkeypatch.setattr("services.community_authz.is_super_admin", _is_super_admin_true)
 
         with pytest.raises(ApiError) as exc_info:
             await svc.upload_community_logo(
@@ -685,7 +685,7 @@ class TestServiceLayerValidation:
         async def _is_super_admin_true(async_dal: Any, dal: Any, *, user_id: int) -> bool:
             return True
 
-        monkeypatch.setattr("services.community_authz._is_super_admin", _is_super_admin_true)
+        monkeypatch.setattr("services.community_authz.is_super_admin", _is_super_admin_true)
 
         with pytest.raises(ApiError) as exc_info:
             await svc.delete_community_banner(auth_db, auth_db.dal, community_id=999999, user_id=1)

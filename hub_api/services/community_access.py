@@ -41,13 +41,12 @@ nor calls otherwise needs is out of scope for this port group.
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
-from flask_core.auth import verify_jwt_token
-from flask_core.tenancy import TenantContext, tenant_scoped
+from flask_core.tenancy import TenantContext
 from quart import Request
 
+from services.community_authz import community_belongs_to_tenant, is_super_admin
 from services.errors import forbidden
 
 #: `community_members.role` values Node's own controllers treat as
@@ -55,44 +54,26 @@ from services.errors import forbidden
 _ADMIN_ROLES = ("community-owner", "community-admin")
 
 
-def _is_super_admin(request: Request) -> bool:
-    """True if the caller's JWT `roles` claim names `super_admin`.
-
-    Independent re-decode -- same self-contained pattern
-    `services/current_user.py` and `blueprints/v1/event.py::
-    _build_user_context` already use, rather than reaching into
-    `tenant_middleware`'s request-local state. Super admins bypass BOTH
-    checks below entirely, matching Node's `requireCommunityAdmin`
-    bypass (security.md: "Admin tokens also tenant-scoped (except
-    super-admin)").
-    """
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        return False
-    secret_key = os.getenv("SECRET_KEY", "change-me-in-production")
-    payload = verify_jwt_token(auth_header[7:], secret_key)
-    if payload is None:
-        return False
-    return "super_admin" in (payload.get("roles") or [])
-
-
 async def _require_community_in_tenant(
     async_dal: Any, dal: Any, ctx: TenantContext, *, community_id: int
 ) -> None:
     """Raise 403 unless `community_id` resolves to a real row inside `ctx`'s tenant.
 
-    `tenant_scoped()` (`flask_core.tenancy`, the one ORM-layer
-    tenant-scoping primitive security.md mandates) constrains the lookup
-    via `communities.tenant_id` -- a same-numbered community belonging to
-    a DIFFERENT tenant can never match, closing the cross-tenant half of
-    the IDOR. 403, not 404: matches Node's `requireCommunityAdmin`
-    ("Community admin access required" for both "doesn't exist" and "not
-    a member"), and avoids confirming to an unauthorized caller that a
-    given community_id exists at all in another tenant.
+    Backed by `services.community_authz.community_belongs_to_tenant()` --
+    THE canonical tenant<->community cross-check (#226 IDOR-fix module,
+    see that function's own docstring) -- rather than this module's own,
+    now-removed `tenant_scoped()`-based reimplementation of the identical
+    "does `community_id` belong to `tenant_id`" query. Same outcome for
+    every `(community_id, tenant_id)` pair either query construction ever
+    produced -- pure dedup, not a behavior change. 403, not 404: matches
+    Node's `requireCommunityAdmin` ("Community admin access required" for
+    both "doesn't exist" and "not a member"), and avoids confirming to an
+    unauthorized caller that a given community_id exists at all in
+    another tenant.
     """
-    query = tenant_scoped(dal.communities.id == community_id, ctx)
-    rows = await async_dal.select_async(dal(query), dal.communities.id)
-    if not rows:
+    if not await community_belongs_to_tenant(
+        async_dal, dal, community_id=community_id, tenant_id=ctx.tenant_id
+    ):
         raise forbidden("Community admin access required")
 
 
@@ -110,8 +91,21 @@ async def require_community_admin(
     Port of Node's `requireCommunityAdmin` -- gates every overlay route
     and every admin-facing calls route (`blueprints/v1/overlay.py`,
     `blueprints/v1/calls.py`'s `calls_admin_bp`).
+
+    `request` is unused directly here (kept for call-site signature
+    stability with `require_community_member`'s counterpart and the three
+    existing callers) -- the super-admin bypass is now
+    `services.community_authz.is_super_admin()`, the DB-backed
+    `hub_users.is_super_admin` check, not a re-decode of this request's
+    JWT `roles` claim. `roles` is audit/display only per security.md
+    (never the source of an authz decision); this module's own bypass
+    previously decoded it directly, which was the one place in this file
+    that check leaked in -- `is_super_admin()` also removes an entirely
+    redundant second JWT decode, since every caller of this function
+    already ran `get_current_user_id(request)` (which decodes the same
+    token) to obtain `user_id` before calling here.
     """
-    if _is_super_admin(request):
+    if await is_super_admin(async_dal, dal, user_id=user_id):
         return
 
     await _require_community_in_tenant(async_dal, dal, ctx, community_id=community_id)
@@ -146,8 +140,11 @@ async def require_community_member(
     feature intent (member-facing voice, not an admin surface) while
     still refusing a caller with no membership in the target community
     at all.
+
+    `request` unused directly here for the same reason documented in
+    `require_community_admin` above -- see that docstring.
     """
-    if _is_super_admin(request):
+    if await is_super_admin(async_dal, dal, user_id=user_id):
         return
 
     await _require_community_in_tenant(async_dal, dal, ctx, community_id=community_id)

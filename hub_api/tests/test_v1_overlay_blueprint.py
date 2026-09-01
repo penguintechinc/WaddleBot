@@ -37,6 +37,7 @@ from tests.conftest import (
     make_user_token,
     seed_community,
     seed_membership,
+    seed_super_admin,
 )
 
 
@@ -161,6 +162,7 @@ class TestGetOverlay:
     ) -> None:
         """A super_admin JWT bypasses BOTH the tenant check and the membership check."""
         community_id = seed_community(overlay_db)  # no membership row for this user at all
+        seed_super_admin(overlay_db, user_id=1)
         token = make_super_admin_token(user_id=1, scope=SCOPE_ADMIN)
         response = await client.get(
             f"/api/v1/admin/{community_id}/overlay",

@@ -32,7 +32,7 @@ confirming the *target* `community_id` actually belonged to it.
 `TestRequireCommunityAdminBypasses.
 test_tenant_admin_cannot_bypass_community_in_different_tenant` and
 `TestResolveCommunityMembershipScopedTenantAdminBypass` below cover the
-fix (`_community_belongs_to_tenant()`) for both call paths, plus a
+fix (`community_belongs_to_tenant()`) for both call paths, plus a
 positive case each confirming a tenant-admin still authorizes a community
 IN their own tenant.
 """
@@ -57,6 +57,8 @@ from services.community_authz import (
     _jwt_roles,
     _parse_claims_scopes,
     authorize_community,
+    community_belongs_to_tenant,
+    is_super_admin,
     require_community_admin_scoped,
     resolve_community_membership_scoped,
 )
@@ -274,7 +276,7 @@ class TestRequireCommunityAdminBypasses:
         #
         # Fail-first proof (executed, not narrated): temporarily reverted
         # `require_community_admin`'s tenant-admin bypass to `if ta_rows:
-        # return` (dropping the `_community_belongs_to_tenant()` cross-check)
+        # return` (dropping the `community_belongs_to_tenant()` cross-check)
         # -- this test went red (200 instead of the expected 403), confirming
         # it actually exercises the vulnerable branch. Reverted, green again.
         dal = automation_db.dal
@@ -395,7 +397,7 @@ class TestResolveCommunityMembershipScopedTenantAdminBypass:
         #
         # Fail-first proof (executed, not narrated): temporarily reverted
         # `resolve_community_membership_scoped` to check `_is_tenant_admin()`
-        # BEFORE the `_community_belongs_to_tenant()` ownership check (the
+        # BEFORE the `community_belongs_to_tenant()` ownership check (the
         # pre-fix ordering) -- this test went red (`membership is not None`
         # / `is_admin=True` instead of the expected `None` / 403).
         # Reverted, green again.
@@ -429,3 +431,84 @@ class TestResolveCommunityMembershipScopedTenantAdminBypass:
                 roles_claim=[],
             )
         assert exc_info.value.status_code == 403
+
+
+class TestIsSuperAdmin:
+    """Direct unit coverage for `is_super_admin()` -- the consolidation target.
+
+    Promoted from `_is_super_admin` (module-private) to this public,
+    DB-backed shared primitive during the security-helper consolidation --
+    `services/community_access.py`'s `require_community_admin`/
+    `require_community_member` now call this instead of their own former
+    JWT-`roles`-claim reimplementation (removed; see `community_access.py`'s
+    own docstring). `test_super_admin_bypasses_community_membership` above
+    already covers the True path end-to-end through `require_community_admin`
+    -- these three close the direct-unit branches (True, DB-false, missing
+    row) that integration alone doesn't isolate.
+    """
+
+    async def test_true_for_flagged_user(self, automation_db: Any) -> None:
+        dal = automation_db.dal
+        user_id = dal.hub_users.insert(username="root", is_super_admin=True)
+        dal.commit()
+        assert await is_super_admin(automation_db, dal, user_id=user_id) is True
+
+    async def test_false_for_unflagged_user(self, automation_db: Any) -> None:
+        dal = automation_db.dal
+        user_id = dal.hub_users.insert(username="regular", is_super_admin=False)
+        dal.commit()
+        assert await is_super_admin(automation_db, dal, user_id=user_id) is False
+
+    async def test_false_for_missing_user_row(self, automation_db: Any) -> None:
+        """Fail closed: a `user_id` with no `hub_users` row at all is never a super admin."""
+        dal = automation_db.dal
+        assert await is_super_admin(automation_db, dal, user_id=999999) is False
+
+
+class TestCommunityBelongsToTenant:
+    """Direct unit coverage for `community_belongs_to_tenant()` -- the #226 IDOR-fix primitive.
+
+    Promoted from `_community_belongs_to_tenant` (module-private) to this
+    public, shared primitive -- `services/community_access.py`'s own tenant
+    pre-check (`_require_community_in_tenant`) now calls this instead of its
+    former separate `tenant_scoped()`-based reimplementation of the
+    identical check. `TestRequireCommunityAdminBypasses.
+    test_tenant_admin_cannot_bypass_community_in_different_tenant` above
+    already covers this through the full `require_community_admin` bypass
+    flow -- these close the direct-unit branches.
+    """
+
+    async def test_true_for_matching_tenant(self, automation_db: Any) -> None:
+        dal = automation_db.dal
+        tenant_row = dal(dal.tenants.slug == TENANT_SLUG).select().first()
+        community_id = dal.communities.insert(name="c1", tenant_id=tenant_row.id)
+        dal.commit()
+        assert (
+            await community_belongs_to_tenant(
+                automation_db, dal, community_id=community_id, tenant_id=tenant_row.id
+            )
+            is True
+        )
+
+    async def test_false_for_different_tenant(self, automation_db: Any) -> None:
+        dal = automation_db.dal
+        tenant_row = dal(dal.tenants.slug == TENANT_SLUG).select().first()
+        other_tenant_id = dal.tenants.insert(slug="different-tenant", is_active=True)
+        community_id = dal.communities.insert(name="c1", tenant_id=tenant_row.id)
+        dal.commit()
+        assert (
+            await community_belongs_to_tenant(
+                automation_db, dal, community_id=community_id, tenant_id=other_tenant_id
+            )
+            is False
+        )
+
+    async def test_false_for_nonexistent_community(self, automation_db: Any) -> None:
+        dal = automation_db.dal
+        tenant_row = dal(dal.tenants.slug == TENANT_SLUG).select().first()
+        assert (
+            await community_belongs_to_tenant(
+                automation_db, dal, community_id=999999, tenant_id=tenant_row.id
+            )
+            is False
+        )
