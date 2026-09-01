@@ -1,141 +1,112 @@
 # Waddles Documentation
 
-Welcome to the Waddles documentation! Waddles is a multi-platform chat bot system with a modular, microservices architecture designed for Discord, Twitch, and Slack communities.
+Waddles is a multi-platform community and bot platform for Twitch, Discord, Slack, YouTube, Kick,
+Teams, Mattermost, and Google Chat, built around an **App Bundle marketplace** on a fixed
+ingest → process → action → presentation pipeline.
 
 ## What is Waddles?
 
-Waddles is a comprehensive chat bot framework built for scalability and extensibility. The system consists of:
+The platform ships as **8 containers**: `svc-ingest`, `svc-process`, `svc-action`, `svc-core`,
+`svc-presentation`, `svc-streaming`, `hub-api`, and `hub-webui`. Behavior — commands, integrations,
+overlays — ships as **App Bundles**: versioned packages of per-stage scripts that a tenant installs,
+makes available, and a community activates. First-party functionality is built as bundles too;
+there is no separate "built-in" code path.
 
-- **Core Components**: Central API layer with routing, marketplace, and identity management
-- **Collector Modules**: Platform-specific modules that receive webhooks/chat from platforms
-- **Interaction Modules**: Modular functionality executed in containers or serverless functions
-- **Administration Tools**: Community management portal and admin interfaces
+Product capability is organized into 7 modules, **SCCEMBS**: Socials, Customers, Community, Event,
+Marketing, Bot, Streaming — each independently toggleable and tier-gated. See
+[Architecture](ARCHITECTURE.md) for the full container/module breakdown.
 
 ## Key Features
 
-### 🏗️ **Modular Architecture**
-- Microservices-based design with independent, scalable components
-- Docker containerization with Kubernetes orchestration
-- Horizontal scaling with dynamic server/channel assignment
+### Fixed pipeline, App Bundle extensibility
+- 8-container ingest → process → action → presentation pipeline, each stage independently scalable
+- App Bundles installed/available/activated through a 3-tier lifecycle (`installed ⊆ available ⊆ activated`, narrowing global → tenant → community)
+- Multiple bundles can run side by side for the same Feature — no single-winner override
 
-### 🌐 **Multi-Platform Support**
-- **Discord**: Native py-cord integration with slash commands and events
-- **Twitch**: EventSub webhooks with OAuth and Helix API integration
-- **Slack**: Event API with slash commands and Socket Mode support
+### Multi-Platform Support
+- **Twitch** — EventSub webhooks, IRC chat, OAuth
+- **Discord** — bot events, slash commands
+- **Slack** — Events API, slash commands
+- **YouTube Live** — live chat, SuperChat
+- **Kick** — webhook integration
+- **Microsoft Teams**, **Mattermost**, **Google Chat** — webhook/Events API integrations
 
-### ⚡ **High Performance**
-- Multi-threaded command processing with ThreadPoolExecutor
-- Redis caching and PostgreSQL with read replicas
-- Kong API Gateway for unified routing and rate limiting
-
-### 🔧 **Extensive Functionality**
-- AI-powered interactions with multiple provider support (Ollama, OpenAI, MCP)
-- Music integration (YouTube Music, Spotify) with OBS browser sources
-- Community management tools (inventory, calendar, memories, labels)
-- Cross-platform identity linking and verification
+### Hero features
+- **App Bundle marketplace** — vendor submissions, review, install lifecycle, discount codes
+- **Music Station** — per-community YouTube + Spotify queue with a live OBS overlay player
+- **Presentation & overlays** — `full_screen` / `media` / `crawler` surfaces for OBS browser sources
+- **Streaming proxy control plane** — record / forward / transcode / RTC
+- **Premium AI routing** — free-local → premium-metered-local → BYOK
+- **Metered token billing** — one ledger for streaming-transcode and premium-AI tokens
 
 ## Getting Started
 
-=== "Quick Start"
+```bash
+git clone https://github.com/penguintechinc/waddlebot.git
+cd waddlebot
+helm install waddlebot ./k8s/helm/waddlebot -n waddlebot --create-namespace \
+  -f k8s/helm/waddlebot/values-alpha.yaml
+```
 
-    1. **Clone the repository**
-       ```bash
-       git clone https://github.com/WaddleBot/WaddleBot.git
-       cd WaddleBot
-       ```
-
-    2. **Start with Docker Compose**
-       ```bash
-       docker-compose up -d
-       ```
-
-    3. **Configure your platforms**
-       - Set up your Discord, Twitch, or Slack applications
-       - Configure environment variables
-       - Deploy collector modules
-
-=== "Production Deployment"
-
-    For production deployments, see our [Deployment Guide](deployment-guide.md) which covers:
-    
-    - Kubernetes deployment
-    - Kong API Gateway configuration
-    - PostgreSQL with read replicas
-    - Redis cluster setup
-    - SSL/TLS termination
+Full deployment and first-run walkthrough: [Quick Start](QUICKSTART.md).
 
 ## Architecture Overview
 
-```mermaid
-graph TB
-    A[Discord/Twitch/Slack] --> B[Collector Modules]
-    B --> C[Kong API Gateway]
-    C --> D[Router Module]
-    D --> E[Interaction Modules]
-    D --> F[Database]
-    E --> G[Browser Sources]
-    E --> H[External APIs]
-    
-    subgraph "Core System"
-        D
-        I[Marketplace]
-        J[Identity Core]
-        K[Labels Core]
-    end
-    
-    subgraph "Storage"
-        F[PostgreSQL]
-        L[Redis]
-    end
 ```
+ inbound                                                              outbound
+   │                                                                     ▲
+   ▼        ┌───────────────┐    ┌───────────────┐    ┌───────────────┐ │
+ svc-ingest │ Valkey stream │ svc-process │ Valkey │  svc-action  │─────┘
+   │  ────▶ └───────────────┘  ────▶       ────▶   └──────┬────────┘
+   │                                                       │ overlay target
+   │                                                ┌──────▼─────────┐
+   │                                                │ svc-presentation │ overlays + Music Station
+   │                                                └──────────────────┘
+   │        ┌───────────────┐
+   └───────▶│ svc-streaming │ RTC + HLS/RTMP/AV1 record/forward/transcode
+            └───────────────┘
+
+  svc-core   identity · security · credentials · entitlement (gRPC, every stage depends on it)
+  hub-api    admin + tenancy + marketplace + billing + gRPC/REST/MCP (control plane)
+  hub-webui  React SPA + Express static-serve/proxy
+```
+
+Full detail, per-container table, and current build status: [Architecture](ARCHITECTURE.md).
 
 ## Core Components
 
 | Component | Description | Technology |
 |-----------|-------------|------------|
-| **Router Module** | High-performance command routing with caching | py4web, Python 3.12 |
-| **Marketplace** | Community module marketplace and management | py4web, PostgreSQL |
-| **Identity Core** | Cross-platform identity linking and verification | py4web Auth, Redis |
-| **Labels Core** | Multi-threaded label management for communities | Python, ThreadPoolExecutor |
-| **Portal Module** | Community management web interface | py4web, HTML/CSS |
-| **Browser Sources** | OBS integration with WebSocket updates | WebSocket, HTML/JS |
+| `svc-core` | Identity, security, credentials, entitlement | Python/Quart, gRPC |
+| `hub-api` | Admin, tenancy, marketplace, billing, AI routing, MCP | Python/Quart |
+| `hub-webui` | Community/admin web portal | React 18, Express |
+| `svc-presentation` | Overlays + Music Station for OBS browser sources | Python/Quart |
 
-## Why Choose Waddles?
+## Why Waddles?
 
-### ✅ **For Community Managers**
-- Unified management across Discord, Twitch, and Slack
-- Rich web portal for community administration
-- Comprehensive user identity and reputation system
+**For community managers**
+- Unified management across 8 chat/streaming platforms
+- Web portal for community administration, workflows, and moderation
+- App Bundle marketplace for optional capability, without redeploying the platform
 
-### ✅ **For Developers**
-- Modern Python stack with py4web framework
-- Extensive API for custom module development
-- Marketplace for sharing and monetizing modules
+**For developers**
+- Author an App Bundle against a documented per-stage contract instead of a monolith
+- Python/Quart across the pipeline; one Node container (`hub-webui`) only
+- OpenAPI-generated REST, gRPC, and MCP surfaces on `hub-api`
 
-### ✅ **For Streamers**
-- OBS browser source integration for overlays
-- Music integration with YouTube and Spotify
-- Automated shoutouts and community engagement
-
-### ❌ **Not Right For You If**
-- You need a simple, single-platform bot
-- You prefer hosted solutions over self-hosting
-- You don't need advanced community management features
+**For streamers**
+- OBS browser-source overlays and a live Music Station player
+- Loyalty, minigames, giveaways, and shoutouts as default App Bundles
 
 ## Quick Links
 
-- [**Getting Started Guide**](getting-started/quick-start.md) - Step-by-step setup instructions
-- [**API Documentation**](reference/api-reference.md) - Complete API reference
-- [**Deployment Guide**](getting-started/deployment-guide.md) - Production deployment instructions
-- [**Contributing**](getting-started/contributing.md) - How to contribute to the project
+- **[Quick Start](QUICKSTART.md)** — step-by-step deployment
+- **[Architecture](ARCHITECTURE.md)** — 8-container pipeline, App Bundle model, build status
+- **[App Bundle SDK](plans/2026-08-31-app-bundle-sdk-design.md)** — bundle authoring spec
+- **[Contributing](CONTRIBUTING.md)** — how to contribute
 
 ## Community & Support
 
-- **GitHub**: [WaddleBot/WaddleBot](https://github.com/WaddleBot/WaddleBot)
-- **Issues**: Report bugs and request features on GitHub
-- **Documentation**: This site for comprehensive guides and API docs
-
----
-
-!!! tip "Getting Help"
-    New to Waddles? Start with our [Quick Start Guide](getting-started/quick-start.md) for step-by-step setup instructions.
+- **GitHub**: [penguintechinc/waddlebot](https://github.com/penguintechinc/waddlebot)
+- **Issues**: report bugs and request features on GitHub
+- **Company**: [www.penguintech.io](https://www.penguintech.io)
