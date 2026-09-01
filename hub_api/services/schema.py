@@ -2456,21 +2456,27 @@ def bind_ai_routing_tables(dal: Any, *, migrate: bool = False) -> None:
     AES-256-GCM-encrypted-at-rest BYOK provider keys -- see
     `services/ai_routing/byok_crypto.py`, the same primitive/pattern
     `services/github_sync_service.py`'s token-at-rest encryption already
-    uses, never plaintext). `ai_token_balances`/`ai_token_transactions`
-    back `services/token_ledger.py`'s `debit_tokens()` -- a minimal, real
-    premium-AI-tokens ledger scoped to this PR. Table names are
+    uses, never plaintext).
+
+    `ai_token_balances`/`ai_token_transactions` were `services/token_
+    ledger.py`'s OWN minimal, parallel premium-AI-tokens ledger, kept
     deliberately distinct from the `community_token_balances`/
-    `token_transactions` names the parallel metered-token-billing spec
-    (`docs/plans/2026-08-31-metered-token-billing-design.md`) reserves
-    for the eventual multi-consumable ledger, so the two migrations never
-    collide -- that follow-on PR is expected to reconcile/union the two.
+    `token_transactions` names the metered-token-billing spec
+    (`docs/plans/2026-08-31-metered-token-billing-design.md`) reserved
+    for the eventual multi-consumable ledger -- exactly so the two
+    migrations wouldn't collide before that follow-on PR (#234) landed.
+    It has: `token_ledger.py` now delegates to `services/token_billing_
+    service.py`'s real, atomic ledger (migration 076) instead, so these
+    two tables are unused dead schema going forward -- left defined
+    (not dropped) rather than a destructive migration against any data
+    that may already exist in them.
 
     Called from `app.py::_bind_reference_tables()` (this PR's one
     additive line there) and lazily from `services/ai_routing/
-    config_service.py`/`services/token_ledger.py` themselves --
-    idempotent either way, same "safe to call from more than one place"
-    property every other `bind_*_tables()` in this module already relies
-    on (see `bind_community_authz_tables()`'s own docstring).
+    config_service.py` itself -- idempotent either way, same "safe to
+    call from more than one place" property every other `bind_*_tables()`
+    in this module already relies on (see `bind_community_authz_tables()`'s
+    own docstring).
     """
     if "ai_model_config" in dal.tables:
         return
