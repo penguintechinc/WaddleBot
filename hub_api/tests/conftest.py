@@ -24,7 +24,7 @@ from flask_core.auth import create_jwt_token
 from flask_core.database import AsyncDAL
 from pydal import DAL, Field
 
-from services.schema import bind_auth_tables
+from services.schema import bind_auth_tables, bind_tenant_tables
 
 #: Matches flask_core.tenancy/authz's own os.getenv("SECRET_KEY", ...) fallback.
 SECRET_KEY = "change-me-in-production"
@@ -90,6 +90,46 @@ def auth_db(tmp_path: Any) -> Any:
     # table once here, still on the main thread, forces that DDL to run
     # before any worker thread exists -- a test-only concern (production
     # Postgres has no such lazy-CREATE-races-a-thread failure mode).
+    for table_name in dal.tables:
+        dal(dal[table_name]).count()
+    yield async_dal
+    dal.close()
+
+
+@pytest.fixture
+def tenant_admin_db(tmp_path: Any) -> Any:
+    """File-backed `AsyncDAL` with every table the M2 Core Tenant group queries.
+
+    Additive, independent of `auth_db` (own `tmp_path` sqlite file, own
+    `AsyncDAL`) -- per `hub_api/PORTING.md`'s Test pattern section, a
+    group needing tables `bind_auth_tables()` doesn't cover gets its own
+    fixture rather than editing `auth_db` in place. Defines a narrow
+    `tenants` table first (mirrors `auth_db`'s own bootstrap step -- in
+    production this is `app.py::_bind_reference_tables`, off-limits to
+    this port task), then calls the REAL `bind_auth_tables`/
+    `bind_tenant_tables` -- the same functions `blueprints/v1/tenant.py`'s
+    `_dal()` calls in production -- so this fixture exercises the actual
+    binding code path (including `bind_tenant_tables`'s `redefine=True`
+    extension of `tenants`/`communities`) rather than a hand-duplicated
+    field list that could drift from it.
+    """
+    async_dal = AsyncDAL(f"sqlite://{tmp_path / 'tenant_test.db'}", pool_size=1)
+    dal = async_dal.dal
+    dal.define_table(
+        "tenants",
+        Field("slug", unique=True),
+        Field("display_name"),
+        Field("logo_url"),
+        Field("is_global", "boolean", default=False),
+        Field("is_active", "boolean", default=True),
+        Field("config", "json"),
+    )
+    bind_auth_tables(dal, migrate=True)
+    bind_tenant_tables(dal, migrate=True)
+    dal.tenants.insert(slug=TENANT_SLUG, display_name="Acme Corp", is_active=True)
+    dal.commit()
+    # See auth_db's own comment above -- forces lazy CREATE TABLE DDL to
+    # run on the main thread before any async_dal worker thread exists.
     for table_name in dal.tables:
         dal(dal[table_name]).count()
     yield async_dal

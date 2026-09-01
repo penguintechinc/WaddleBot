@@ -315,3 +315,107 @@ def bind_auth_tables(dal: Any, *, migrate: bool = False) -> None:
         Field("setting_value", "text"),
         migrate=migrate,
     )
+
+
+def bind_tenant_tables(dal: Any, *, migrate: bool = False) -> None:
+    """Extend `tenants`/`communities` + bind new tables for the M2 Core Tenant group.
+
+    This group's task explicitly scopes `app.py`/`routers/*.py`/
+    `blueprints/__init__.py` as never-edit (avoids a shared-file collision
+    point across the parallel M1..M9 port wave -- the same rationale
+    `app.py::_bind_reference_tables`'s own docstring gives for keeping
+    that function's diff small). That means this group can't follow
+    `hub_api/PORTING.md`'s literal "extend the ONE define_table("tenants",
+    ...) call already in app.py" instruction the way M1 did -- `tenants`
+    and `communities` are both already bound (by app.py's
+    `_bind_reference_tables` and this module's own `bind_auth_tables`,
+    respectively) by the time any request reaches a tenant-blueprint
+    route.
+
+    Instead, this function is called lazily (see `blueprints/v1/tenant.py`
+    ::_dal()`) and uses pydal's `redefine=True` to ADD fields to those two
+    already-bound `Table` objects, always paired with `migrate=migrate`
+    (production is always `False`) so this is a pure in-memory Field-list
+    update -- no DDL, same "schema owned by
+    config/postgres/migrations/*.sql, never by this process" invariant
+    `_bind_reference_tables` documents for `tenants` itself. Verified
+    empirically: `redefine=True` REPLACES a table's field list wholesale
+    (not merge-by-name), so both redefine calls below repeat every field
+    the table's original definition already had -- dropping one here would
+    silently break `flask_core.tenancy.resolve_tenant_context`'s
+    `row.is_active` access (`tenants`) or `auth_service.
+    add_user_to_global_community()`'s `dal.communities.name`/`.display_name`
+    access (`communities`) for every request served after this function's
+    first call. Safe under Quart's single-threaded event loop: `define_table`
+    has no `await` inside it, so no concurrent request can observe a
+    half-rebuilt `Table` object mid-call. Idempotent (`"tenant_settings" in
+    dal.tables` guard) -- cheap to call on every request via `_dal()`.
+
+    New columns, all real (not invented) per `config/postgres/migrations/
+    058_tenants_and_claims.sql` (`tenants.description`/`allowed_module_ids`/
+    `seat_limit`/`created_at`, `communities.tenant_id`) and `000_create_base_
+    schema.sql`/`008_add_community_types.sql` (`communities.is_public`/
+    `community_type`/`created_at`) -- `tenantController.js`'s `getTenant`/
+    `updateTenant`/`getTenantModules`/`getTenantCommunities` all read them.
+
+    `tenant_settings` (`058_tenants_and_claims.sql`) and `hub_modules`
+    (`000_create_base_schema.sql`) are new tables, owned outright by this
+    group -- bound the normal (non-redefine) way.
+    """
+    if "tenant_settings" in dal.tables:
+        return
+
+    dal.define_table(
+        "tenants",
+        Field("slug", "string", length=100),
+        Field("display_name", "string", length=255),
+        Field("logo_url", "text"),
+        Field("is_global", "boolean", default=False),
+        Field("is_active", "boolean", default=True),
+        Field("config", "json"),
+        Field("description", "text"),
+        Field("allowed_module_ids", "list:integer"),
+        Field("seat_limit", "integer"),
+        Field("created_at", "datetime"),
+        migrate=migrate,
+        redefine=True,
+    )
+
+    dal.define_table(
+        "communities",
+        Field("name", "string", length=255),
+        Field("display_name", "string", length=255),
+        Field("is_global", "boolean", default=False),
+        Field("is_active", "boolean", default=True),
+        Field("member_count", "integer", default=0),
+        Field("config", "json"),
+        Field("tenant_id", "integer"),
+        Field("is_public", "boolean", default=True),
+        Field("community_type", "string", length=50, default="creator"),
+        Field("created_at", "datetime"),
+        migrate=migrate,
+        redefine=True,
+    )
+
+    dal.define_table(
+        "tenant_settings",
+        Field("tenant_id", "integer", notnull=True),
+        Field("key", "string", length=100, notnull=True),
+        Field("value", "text"),
+        Field("created_at", "datetime"),
+        Field("updated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "hub_modules",
+        Field("name", "string", length=255),
+        Field("display_name", "string", length=255),
+        Field("description", "text"),
+        Field("category", "string", length=100),
+        Field("is_core", "boolean", default=False),
+        Field("is_published", "boolean", default=False),
+        Field("version", "string", length=50),
+        Field("created_at", "datetime"),
+        migrate=migrate,
+    )

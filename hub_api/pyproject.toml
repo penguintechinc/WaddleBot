@@ -49,6 +49,11 @@ convention = "google"
 "blueprints/v1/passkey.py" = ["N815"]
 "blueprints/v1/profile.py" = ["N815"]
 "blueprints/v1/user_management.py" = ["N815"]
+# M2 Core Tenant group -- same rationale as blueprints/v1/auth.py above:
+# S101 is a tenant_middleware postcondition assert (get_tenant_context
+# always non-None on the success path), N815 is the camelCase DTO wire
+# contract pinned to frontend/src/services/api.js's tenantApi.
+"blueprints/v1/tenant.py" = ["S101", "N815"]
 "services/profile_service.py" = ["S101"]
 # M2 Core Tenancy-Misc group (communityProfileController.js /
 # joinRequestController.js) -- same N815 rationale as the M1 entries
