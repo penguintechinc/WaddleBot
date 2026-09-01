@@ -30,6 +30,18 @@ spire:
   enabled: true
   environment: "alpha"
 
+# Alpha is where the local e2e Playwright suite runs (tests/k8s/alpha/07-page-load.sh).
+# Unlike beta (which already raises this 3x for the same reason), alpha inherited no
+# override at all and ran on the hardcoded 100 req/min production default -- too strict
+# for rapid SERIAL Playwright runs against a cold, cache-less cluster. Alpha-only,
+# env-var driven (admin/hub_module/backend/src/config/index.js); production/default
+# stays untouched at 100.
+modules:
+  hub:
+    env:
+      RATE_LIMIT_MAX_REQUESTS: "1000"    # ~10x default; local e2e test/dev only
+      RATE_LIMIT_WINDOW_MS: "60000"      # keep 60s window unchanged
+
 # PostHog stays OFF by default even in alpha (trimmed stack still budgets
 # ~4GB RAM — heavier than typical alpha footprint). To smoke-test the
 # in-cluster stack locally, layer on top of this file:
