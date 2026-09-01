@@ -1,0 +1,34 @@
+# svc-action -- ACTION stage-runner dependencies.
+# Versions mirror libs/flask_core/requirements.in where the same package is
+# already pinned there (transitively installed via `pip install
+# libs/flask_core` in the Dockerfile) -- listed explicitly here too since
+# svc-action imports them directly (quart/httpx/redis/pydal), not just
+# through flask_core's own internals.
+
+# Core Framework
+quart>=0.19.0
+hypercorn>=0.16.0
+
+# Database (flask_core.AsyncDAL wraps pydal directly)
+pydal>=20240906.1,<20250101
+psycopg2-binary>=2.9.9
+
+# Valkey/Redis (process -> action queue)
+redis>=5.0.1
+hiredis>=2.3.2
+
+# HTTP client (webhook/rest_api/overlay adapters, SSRF-guarded)
+httpx>=0.27.0,<0.28.0
+
+# SMTP (email adapter) -- genuinely new dependency, not previously pinned
+# anywhere in this repo; see this task's PR body for the one-line addition.
+aiosmtplib>=3.0.1,<4.0.0
+
+# Utilities
+python-dotenv>=1.0.0
+
+# Development
+pytest>=7.4.0
+pytest-asyncio>=0.23.0
+pytest-cov>=4.1.0
+fakeredis>=2.24.0
