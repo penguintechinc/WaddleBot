@@ -31,6 +31,7 @@ from quart_schema import QuartSchema
 
 from blueprints.v1.auth import auth_bp
 from config import HubAPIConfig
+from services import oauth_service
 from tests.conftest import TENANT_SLUG, make_user_token
 
 
@@ -330,3 +331,140 @@ class TestLegacyLinkOAuth:
         """Dead code under the unified session model -- see blueprints/v1/auth.py docstring."""
         response = await client.post("/api/v1/auth/link-oauth")
         assert response.status_code == 501
+
+
+def _patch_oauth_callback(monkeypatch: Any, token: str) -> None:
+    """Stub `oauth_service.oauth_callback` -- avoids real network calls to Discord."""
+
+    async def fake_oauth_callback(
+        async_dal: Any,
+        dal: Any,
+        cfg: Any,
+        *,
+        platform: str,
+        code: str,
+        state: str,
+        callback_base_url: str,
+    ) -> str:
+        return token
+
+    monkeypatch.setattr(oauth_service, "oauth_callback", fake_oauth_callback)
+
+
+class TestOAuthExchangeCodeHandoff:
+    """Security hotfix: `oauth_callback` must never put the session JWT in a redirect URL.
+
+    Query strings leak into proxy/access logs, browser history, and the
+    `Referer` header of any outbound request the callback landing page
+    happens to make -- see `blueprints/v1/auth.py::oauth_callback`'s
+    docstring and `hub_api/PORTING.md` Gotcha #8.
+
+    Fail-first proof (executed, not narrated): temporarily reverted
+    `oauth_callback`'s final line to its original
+    `redirect(f"{frontend_origin}/auth/callback?token={token}")` shape --
+    `test_callback_redirect_never_contains_the_jwt` went red (the raw JWT
+    appeared verbatim in the redirect's `Location` header); reverted,
+    green again.
+    """
+
+    async def test_provider_error_redirects_without_calling_the_service(
+        self, client: Any, monkeypatch: Any
+    ) -> None:
+        called = False
+
+        async def fail_if_called(*args: Any, **kwargs: Any) -> str:
+            nonlocal called
+            called = True
+            return "unreachable"
+
+        monkeypatch.setattr(oauth_service, "oauth_callback", fail_if_called)
+        response = await client.get(
+            "/api/v1/auth/oauth/discord/callback",
+            query_string={"error": "access_denied"},
+        )
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/login?error=oauth_denied")
+        assert not called
+
+    async def test_missing_code_or_state_redirects_to_login(self, client: Any) -> None:
+        response = await client.get("/api/v1/auth/oauth/discord/callback")
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/login?error=oauth_failed")
+
+    async def test_service_api_error_redirects_to_login_without_minting_a_code(
+        self, client: Any, monkeypatch: Any
+    ) -> None:
+        from services.errors import bad_request
+
+        async def fake_oauth_callback_raises(*args: Any, **kwargs: Any) -> str:
+            raise bad_request("Invalid or expired OAuth state")
+
+        monkeypatch.setattr(oauth_service, "oauth_callback", fake_oauth_callback_raises)
+        response = await client.get(
+            "/api/v1/auth/oauth/discord/callback",
+            query_string={"code": "platform-auth-code", "state": "s"},
+        )
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/login?error=oauth_failed")
+
+    async def test_callback_redirect_never_contains_the_jwt(
+        self, client: Any, monkeypatch: Any
+    ) -> None:
+        _patch_oauth_callback(monkeypatch, token="super-secret-session-jwt")
+        response = await client.get(
+            "/api/v1/auth/oauth/discord/callback",
+            query_string={"code": "platform-auth-code", "state": "s"},
+        )
+        assert response.status_code == 302
+        location = response.headers["Location"]
+        assert "token=" not in location
+        assert "super-secret-session-jwt" not in location
+        assert "code=" in location
+
+    async def test_callback_then_exchange_returns_the_real_jwt(
+        self, client: Any, monkeypatch: Any
+    ) -> None:
+        _patch_oauth_callback(monkeypatch, token="real-jwt-value")
+        callback_response = await client.get(
+            "/api/v1/auth/oauth/discord/callback",
+            query_string={"code": "platform-auth-code", "state": "s"},
+        )
+        code = callback_response.headers["Location"].split("code=")[1]
+
+        exchange_response = await client.post("/api/v1/auth/exchange", json={"code": code})
+        assert exchange_response.status_code == 200
+        body = await exchange_response.get_json()
+        assert body == {"success": True, "token": "real-jwt-value"}
+
+    async def test_exchange_code_is_single_use(self, client: Any, monkeypatch: Any) -> None:
+        _patch_oauth_callback(monkeypatch, token="one-time-jwt")
+        callback_response = await client.get(
+            "/api/v1/auth/oauth/discord/callback",
+            query_string={"code": "platform-auth-code", "state": "s"},
+        )
+        code = callback_response.headers["Location"].split("code=")[1]
+
+        first = await client.post("/api/v1/auth/exchange", json={"code": code})
+        assert first.status_code == 200
+
+        second = await client.post("/api/v1/auth/exchange", json={"code": code})
+        assert second.status_code == 400
+
+    async def test_unknown_exchange_code_is_rejected(self, client: Any) -> None:
+        response = await client.post("/api/v1/auth/exchange", json={"code": "never-issued-code"})
+        assert response.status_code == 400
+
+    async def test_expired_exchange_code_is_rejected(self, client: Any, auth_db: Any) -> None:
+        auth_db.dal.hub_oauth_exchange_codes.insert(
+            code="expired-exchange-code",
+            token="whatever-it-was",
+            platform="discord",
+            used=False,
+            expires_at=datetime.now(UTC) - timedelta(seconds=1),
+            created_at=datetime.now(UTC) - timedelta(minutes=2),
+        )
+        auth_db.dal.commit()
+        response = await client.post(
+            "/api/v1/auth/exchange", json={"code": "expired-exchange-code"}
+        )
+        assert response.status_code == 400

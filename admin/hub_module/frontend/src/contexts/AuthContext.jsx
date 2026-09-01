@@ -154,9 +154,15 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  const handleOAuthCallback = useCallback(async (token) => {
-    if (token) {
-      localStorage.setItem('token', token);
+  const handleOAuthCallback = useCallback(async (code) => {
+    if (!code) return;
+    // Exchange the short-lived, single-use code the OAuth callback redirect
+    // carried in the URL for the real session JWT, delivered over the
+    // response body instead of a query string (query strings leak into
+    // proxy/access logs, browser history, and the Referer header).
+    const response = await api.post('/api/v1/auth/exchange', { code });
+    if (response.data.success && response.data.token) {
+      localStorage.setItem('token', response.data.token);
       await fetchCurrentUser();
     }
   }, []);
