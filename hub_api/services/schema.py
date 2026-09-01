@@ -186,6 +186,17 @@ def bind_auth_tables(dal: Any, *, migrate: bool = False) -> None:
         "communities",
         Field("name", "string", length=255),
         Field("display_name", "string", length=255),
+        # `tenant_id` added by the M7 Streaming (overlay/calls) group --
+        # a real column since `058_tenants_and_claims.sql` ("1c. Add
+        # tenant_id to communities"), not previously bound because no
+        # prior group needed it. `flask_core.tenancy.tenant_scoped()`
+        # requires it to safely resolve "does community_id X belong to
+        # the caller's own tenant" at the ORM layer (security.md: tenant
+        # scoping never trusts a client-supplied path/body/query value
+        # alone) -- see `services/community_access.py`. Extending the
+        # ONE existing `communities` definition, never redefining it,
+        # per `hub_api/PORTING.md`'s Gotcha #4 precedent.
+        Field("tenant_id", "integer"),
         Field("is_global", "boolean", default=False),
         Field("is_active", "boolean", default=True),
         Field("member_count", "integer", default=0),
@@ -233,5 +244,54 @@ def bind_auth_tables(dal: Any, *, migrate: bool = False) -> None:
         "hub_settings",
         Field("setting_key", "string", length=100, notnull=True),
         Field("setting_value", "text"),
+        migrate=migrate,
+    )
+
+
+def bind_streaming_tables(dal: Any, *, migrate: bool = False) -> None:
+    """Define the M7 Streaming (overlay/calls) group's own tables.
+
+    Column provenance: `config/postgres/migrations/000_create_base_schema.sql`
+    ("community_overlay_tokens", "overlay_access_log").
+
+    Deliberately NOT wired into `app.py::_bind_reference_tables()` the way
+    `bind_auth_tables()` is -- this port's task scope explicitly forbids
+    editing `app.py`/`routers/*.py`/`blueprints/__init__.py` (the
+    collision-avoidance boundary for the parallel M1..M9 port wave, see
+    `hub_api/PORTING.md`'s own "single new module" extension point).
+    `services/overlay_service.py` calls this idempotently (matching the
+    `if "<table>" in dal.tables: return` guard below) at the top of every
+    entry point instead of relying on app startup -- safe under Quart's
+    single-threaded-per-request-coroutine model since `define_table()`
+    itself awaits nothing, so no two coroutines can interleave mid-call.
+    A future group that gets an `app.py` edit in scope should fold this
+    into `_bind_reference_tables()` the normal way and delete this note.
+    """
+    if "community_overlay_tokens" in dal.tables:
+        return
+
+    dal.define_table(
+        "community_overlay_tokens",
+        Field("community_id", "integer", notnull=True, unique=True),
+        Field("overlay_key", "string", length=64, notnull=True, unique=True),
+        Field("previous_key", "string", length=64),
+        Field("is_active", "boolean", default=True),
+        Field("theme_config", "json"),
+        Field("enabled_sources", "json"),
+        Field("last_accessed", "datetime"),
+        Field("access_count", "integer", default=0),
+        Field("created_at", "datetime"),
+        Field("updated_at", "datetime"),
+        Field("rotated_at", "datetime"),
+        migrate=migrate,
+    )
+
+    dal.define_table(
+        "overlay_access_log",
+        Field("community_id", "integer", notnull=True),
+        Field("overlay_key", "string", length=64),
+        Field("ip_address", "string", length=45),
+        Field("user_agent", "text"),
+        Field("accessed_at", "datetime"),
         migrate=migrate,
     )

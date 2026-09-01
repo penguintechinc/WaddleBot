@@ -110,6 +110,18 @@ class HubAPIConfig:
 
     log_level: str
 
+    # M7 Streaming group -- mirrors `overlayController.js`'s own
+    # `OVERLAY_BASE_URL` env var + default; the externally-reachable base
+    # the browser-source overlay URL is built against
+    # (`{overlay_base_url}/{overlay_key}`), never hub-api's own host.
+    # Defaulted (unlike every field above) so the three pre-existing test
+    # files that construct `HubAPIConfig(...)` explicitly, field-by-field,
+    # don't all need editing for a field their own blueprints never read --
+    # dataclass field-ordering requires a defaulted field to trail every
+    # non-defaulted one, hence its position here rather than grouped with
+    # `identity_callback_base_url`/`frontend_origin` above.
+    overlay_base_url: str = "https://overlay.waddlebot.io"
+
     @classmethod
     def from_env(cls) -> HubAPIConfig:
         """Build config from the process environment. Raises on an invalid DB_TYPE."""
@@ -154,5 +166,6 @@ class HubAPIConfig:
                 "IDENTITY_CALLBACK_BASE_URL", "http://localhost:8204"
             ),
             frontend_origin=os.getenv("FRONTEND_ORIGIN", "http://localhost:5173"),
+            overlay_base_url=os.getenv("OVERLAY_BASE_URL", "https://overlay.waddlebot.io"),
             log_level=os.getenv("LOG_LEVEL", "INFO"),
         )
