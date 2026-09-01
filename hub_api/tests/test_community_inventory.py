@@ -1,0 +1,609 @@
+"""`blueprints/v1/community_inventory.py` -- admin item CRUD + member checkout/checkin.
+
+Also proves the checkout/checkin bug fix documented in
+`services/community_inventory.py`'s module docstring: a real
+`inventory_checkouts` row is created on checkout (Node's equivalent
+never wrote one -- see that docstring for the parameter-order bug this
+port fixes instead of reproducing).
+"""
+
+from __future__ import annotations
+
+import json as json_module
+from typing import Any
+
+import pytest
+from quart import Quart
+from quart_schema import QuartSchema
+
+from blueprints.v1.community_inventory import inventory_bp
+from services import community_inventory as inventory_svc
+
+
+@pytest.fixture
+def app(community_db: Any) -> Quart:
+    dal, _ = community_db
+    quart_app = Quart(__name__)
+    QuartSchema(quart_app)
+    quart_app.register_blueprint(inventory_bp)
+    quart_app.config["dal"] = dal
+    return quart_app
+
+
+@pytest.fixture
+def client(app: Quart) -> Any:
+    return app.test_client()
+
+
+async def _post_json(
+    client: Any, path: str, headers: dict[str, str], payload: dict[str, Any]
+) -> Any:
+    return await client.post(
+        path,
+        headers={**headers, "Content-Type": "application/json"},
+        data=json_module.dumps(payload),
+    )
+
+
+class TestScopeAndTenant:
+    async def test_wrong_scope_is_403(
+        self, client: Any, auth_headers: Any, community_db: Any
+    ) -> None:
+        _, community_id = community_db
+        response = await client.get(
+            f"/api/v1/admin/{community_id}/inventory/items",
+            headers=auth_headers(scope="community.inventory:use"),
+        )
+        assert response.status_code == 403
+
+    async def test_unknown_community_is_404(self, client: Any, auth_headers: Any) -> None:
+        response = await client.get(
+            "/api/v1/admin/9999/inventory/items",
+            headers=auth_headers(scope="community.inventory:read"),
+        )
+        assert response.status_code == 404
+
+
+class TestUnknownCommunity404Sweep:
+    """One 404 case per remaining route -- coverage.py tracks the `_tenant_ok`.
+
+    check per-function, so each route needs its own hit (see the matching
+    sweep in `test_community_interaction.py`).
+    """
+
+    @pytest.mark.parametrize(
+        "method,path_suffix,scope",
+        [
+            ("POST", "inventory/items", "community.inventory:write"),
+            ("PUT", "inventory/items/1", "community.inventory:write"),
+            ("DELETE", "inventory/items/1", "community.inventory:write"),
+            ("POST", "inventory/items/1/stock/add", "community.inventory:write"),
+            ("POST", "inventory/items/1/stock/remove", "community.inventory:write"),
+            ("GET", "inventory/checkouts", "community.inventory:read"),
+            ("GET", "inventory/summary", "community.inventory:read"),
+            ("GET", "inventory/log", "community.inventory:read"),
+            ("GET", "inventory/available", "community.inventory:use"),
+            ("POST", "inventory/checkout", "community.inventory:use"),
+            ("POST", "inventory/checkin", "community.inventory:use"),
+            ("GET", "inventory/my-items", "community.inventory:use"),
+        ],
+    )
+    async def test_route_404s_on_unknown_community(
+        self, client: Any, auth_headers: Any, method: str, path_suffix: str, scope: str
+    ) -> None:
+        response = await client.open(
+            f"/api/v1/admin/9999/{path_suffix}",
+            method=method,
+            headers=auth_headers(scope=scope, user_id="1"),
+        )
+        assert response.status_code == 404
+
+
+class TestItemCrud:
+    async def test_create_item_requires_name(
+        self, client: Any, auth_headers: Any, community_db: Any
+    ) -> None:
+        _, community_id = community_db
+        response = await _post_json(
+            client,
+            f"/api/v1/admin/{community_id}/inventory/items",
+            auth_headers(scope="community.inventory:write"),
+            {"name": "", "quantity": 5},
+        )
+        assert response.status_code == 400
+
+    async def test_create_list_update_delete_item(
+        self, client: Any, auth_headers: Any, community_db: Any
+    ) -> None:
+        _, community_id = community_db
+        write_headers = auth_headers(scope="community.inventory:write")
+
+        create_resp = await _post_json(
+            client,
+            f"/api/v1/admin/{community_id}/inventory/items",
+            write_headers,
+            {"name": "Green Screen", "category": "gear", "quantity": 3},
+        )
+        assert create_resp.status_code == 201
+        item = (await create_resp.get_json())["item"]
+        assert item["quantity"] == 3
+        assert item["available_quantity"] == 3
+        item_id = item["id"]
+
+        list_resp = await client.get(
+            f"/api/v1/admin/{community_id}/inventory/items",
+            headers=auth_headers(scope="community.inventory:read"),
+        )
+        assert len((await list_resp.get_json())["items"]) == 1
+
+        update_resp = await client.put(
+            f"/api/v1/admin/{community_id}/inventory/items/{item_id}",
+            headers={**write_headers, "Content-Type": "application/json"},
+            data=json_module.dumps({"name": "Green Screen Mk2"}),
+        )
+        assert update_resp.status_code == 200
+        assert (await update_resp.get_json())["item"]["name"] == "Green Screen Mk2"
+
+        delete_resp = await client.delete(
+            f"/api/v1/admin/{community_id}/inventory/items/{item_id}", headers=write_headers
+        )
+        assert delete_resp.status_code == 200
+
+        after_delete = await client.get(
+            f"/api/v1/admin/{community_id}/inventory/items",
+            headers=auth_headers(scope="community.inventory:read"),
+        )
+        assert len((await after_delete.get_json())["items"]) == 0
+
+
+def _fake_stock_fn(
+    dal: Any,
+    fn_name: str,
+    item_id: int,
+    quantity: int,
+    user_id: int,
+    community_id: int,
+    note: str | None,
+) -> tuple[bool, str]:
+    """Stand-in for `_run_stock_fn`'s call to the real Postgres `*_inventory_stock` functions.
+
+    See `config/postgres/migrations/014_add_quartermaster_tables.sql` --
+    sqlite:memory has no stored-function support. Applies the same
+    available_quantity delta the real function would, so checkout/checkin's
+    surrounding logic (item lookup, checkout row lifecycle -- the actual
+    behavior this port fixes, per the module docstring) is still exercised
+    against a real row.
+    """
+    delta = -quantity if fn_name == "remove_inventory_stock" else quantity
+    item = dal.inventory_items[item_id]
+    dal(dal.inventory_items.id == item_id).update(
+        available_quantity=item.available_quantity + delta
+    )
+    dal.commit()
+    return True, "ok"
+
+
+class TestCheckoutCheckin:
+    async def test_checkout_creates_a_real_checkout_row(
+        self, client: Any, auth_headers: Any, community_db: Any, monkeypatch: Any
+    ) -> None:
+        """Regression coverage for the Node bug fixed during this port.
+
+        See `services/community_inventory.py`'s module docstring.
+        """
+        monkeypatch.setattr(inventory_svc, "_run_stock_fn", _fake_stock_fn)
+        dal, community_id = community_db
+        create_resp = await _post_json(
+            client,
+            f"/api/v1/admin/{community_id}/inventory/items",
+            auth_headers(scope="community.inventory:write"),
+            {"name": "Boom Mic", "quantity": 2},
+        )
+        item_id = (await create_resp.get_json())["item"]["id"]
+
+        checkout_resp = await _post_json(
+            client,
+            f"/api/v1/admin/{community_id}/inventory/checkout",
+            auth_headers(scope="community.inventory:use", user_id="1"),
+            {"item_id": item_id, "quantity": 1},
+        )
+        assert checkout_resp.status_code == 201
+        checkout = (await checkout_resp.get_json())["checkout"]
+        assert checkout["status"] == "active"
+        assert dal(dal.inventory_checkouts.id == checkout["id"]).count() == 1
+        assert dal.inventory_items[item_id].available_quantity == 1
+
+        my_items_resp = await client.get(
+            f"/api/v1/admin/{community_id}/inventory/my-items",
+            headers=auth_headers(scope="community.inventory:use", user_id="1"),
+        )
+        assert len((await my_items_resp.get_json())["checkouts"]) == 1
+
+        checkin_resp = await _post_json(
+            client,
+            f"/api/v1/admin/{community_id}/inventory/checkin",
+            auth_headers(scope="community.inventory:use", user_id="1"),
+            {"checkout_id": checkout["id"]},
+        )
+        assert checkin_resp.status_code == 200
+        assert (await checkin_resp.get_json())["checkout"]["status"] == "returned"
+        assert dal.inventory_items[item_id].available_quantity == 2
+
+    async def test_checkout_insufficient_quantity_is_409(
+        self, client: Any, auth_headers: Any, community_db: Any
+    ) -> None:
+        _, community_id = community_db
+        create_resp = await _post_json(
+            client,
+            f"/api/v1/admin/{community_id}/inventory/items",
+            auth_headers(scope="community.inventory:write"),
+            {"name": "Rare Lens", "quantity": 1},
+        )
+        item_id = (await create_resp.get_json())["item"]["id"]
+
+        response = await _post_json(
+            client,
+            f"/api/v1/admin/{community_id}/inventory/checkout",
+            auth_headers(scope="community.inventory:use", user_id="1"),
+            {"item_id": item_id, "quantity": 5},
+        )
+        assert response.status_code == 409
+
+    async def test_checkout_missing_item_id_is_400(
+        self, client: Any, auth_headers: Any, community_db: Any
+    ) -> None:
+        _, community_id = community_db
+        response = await _post_json(
+            client,
+            f"/api/v1/admin/{community_id}/inventory/checkout",
+            auth_headers(scope="community.inventory:use", user_id="1"),
+            {"quantity": 1},
+        )
+        assert response.status_code == 400
+
+    async def test_checkout_invalid_quantity_is_400(
+        self, client: Any, auth_headers: Any, community_db: Any
+    ) -> None:
+        _, community_id = community_db
+        response = await _post_json(
+            client,
+            f"/api/v1/admin/{community_id}/inventory/checkout",
+            auth_headers(scope="community.inventory:use", user_id="1"),
+            {"item_id": 1, "quantity": "not-a-number"},
+        )
+        assert response.status_code == 400
+
+    async def test_checkout_unknown_item_is_404(
+        self, client: Any, auth_headers: Any, community_db: Any
+    ) -> None:
+        _, community_id = community_db
+        response = await _post_json(
+            client,
+            f"/api/v1/admin/{community_id}/inventory/checkout",
+            auth_headers(scope="community.inventory:use", user_id="1"),
+            {"item_id": 9999, "quantity": 1},
+        )
+        assert response.status_code == 404
+
+    async def test_checkin_missing_checkout_id_is_400(
+        self, client: Any, auth_headers: Any, community_db: Any
+    ) -> None:
+        _, community_id = community_db
+        response = await _post_json(
+            client,
+            f"/api/v1/admin/{community_id}/inventory/checkin",
+            auth_headers(scope="community.inventory:use", user_id="1"),
+            {},
+        )
+        assert response.status_code == 400
+
+    async def test_checkin_unknown_checkout_is_404(
+        self, client: Any, auth_headers: Any, community_db: Any
+    ) -> None:
+        _, community_id = community_db
+        response = await _post_json(
+            client,
+            f"/api/v1/admin/{community_id}/inventory/checkin",
+            auth_headers(scope="community.inventory:use", user_id="1"),
+            {"checkout_id": 9999},
+        )
+        assert response.status_code == 404
+
+    async def test_checkin_with_partial_quantity_returned(
+        self, client: Any, auth_headers: Any, community_db: Any, monkeypatch: Any
+    ) -> None:
+        """Covers `checkin_item`'s `quantity_returned` branch (vs. the default.
+
+        full-quantity-return path already exercised above).
+        """
+        monkeypatch.setattr(inventory_svc, "_run_stock_fn", _fake_stock_fn)
+        dal, community_id = community_db
+        create_resp = await _post_json(
+            client,
+            f"/api/v1/admin/{community_id}/inventory/items",
+            auth_headers(scope="community.inventory:write"),
+            {"name": "Tripod", "quantity": 5},
+        )
+        item_id = (await create_resp.get_json())["item"]["id"]
+        checkout_resp = await _post_json(
+            client,
+            f"/api/v1/admin/{community_id}/inventory/checkout",
+            auth_headers(scope="community.inventory:use", user_id="1"),
+            {"item_id": item_id, "quantity": 3},
+        )
+        checkout_id = (await checkout_resp.get_json())["checkout"]["id"]
+
+        response = await _post_json(
+            client,
+            f"/api/v1/admin/{community_id}/inventory/checkin",
+            auth_headers(scope="community.inventory:use", user_id="1"),
+            {"checkout_id": checkout_id, "quantity_returned": 3},
+        )
+        assert response.status_code == 200
+
+
+class TestUpdateDeleteNotFound:
+    async def test_update_unknown_item_is_404(
+        self, client: Any, auth_headers: Any, community_db: Any
+    ) -> None:
+        _, community_id = community_db
+        response = await client.put(
+            f"/api/v1/admin/{community_id}/inventory/items/9999",
+            headers={
+                **auth_headers(scope="community.inventory:write"),
+                "Content-Type": "application/json",
+            },
+            data=json_module.dumps({"name": "x"}),
+        )
+        assert response.status_code == 404
+
+    async def test_delete_unknown_item_is_404(
+        self, client: Any, auth_headers: Any, community_db: Any
+    ) -> None:
+        _, community_id = community_db
+        response = await client.delete(
+            f"/api/v1/admin/{community_id}/inventory/items/9999",
+            headers=auth_headers(scope="community.inventory:write"),
+        )
+        assert response.status_code == 404
+
+
+class TestStockAdjustments:
+    async def test_add_stock_success(
+        self, client: Any, auth_headers: Any, community_db: Any, monkeypatch: Any
+    ) -> None:
+        monkeypatch.setattr(inventory_svc, "_run_stock_fn", _fake_stock_fn)
+        _, community_id = community_db
+        create_resp = await _post_json(
+            client,
+            f"/api/v1/admin/{community_id}/inventory/items",
+            auth_headers(scope="community.inventory:write"),
+            {"name": "Batteries", "quantity": 10},
+        )
+        item_id = (await create_resp.get_json())["item"]["id"]
+
+        response = await _post_json(
+            client,
+            f"/api/v1/admin/{community_id}/inventory/items/{item_id}/stock/add",
+            auth_headers(scope="community.inventory:write", user_id="1"),
+            {"quantity": 5, "notes": "restock"},
+        )
+        assert response.status_code == 200
+        assert (await response.get_json())["item"]["available_quantity"] == 15
+
+    async def test_add_stock_invalid_quantity_is_400(
+        self, client: Any, auth_headers: Any, community_db: Any
+    ) -> None:
+        _, community_id = community_db
+        response = await _post_json(
+            client,
+            f"/api/v1/admin/{community_id}/inventory/items/1/stock/add",
+            auth_headers(scope="community.inventory:write", user_id="1"),
+            {"quantity": -1},
+        )
+        assert response.status_code == 400
+
+    async def test_remove_stock_success(
+        self, client: Any, auth_headers: Any, community_db: Any, monkeypatch: Any
+    ) -> None:
+        monkeypatch.setattr(inventory_svc, "_run_stock_fn", _fake_stock_fn)
+        _, community_id = community_db
+        create_resp = await _post_json(
+            client,
+            f"/api/v1/admin/{community_id}/inventory/items",
+            auth_headers(scope="community.inventory:write"),
+            {"name": "Cables", "quantity": 10},
+        )
+        item_id = (await create_resp.get_json())["item"]["id"]
+
+        response = await _post_json(
+            client,
+            f"/api/v1/admin/{community_id}/inventory/items/{item_id}/stock/remove",
+            auth_headers(scope="community.inventory:write", user_id="1"),
+            {"quantity": 4, "notes": "damaged"},
+        )
+        assert response.status_code == 200
+        assert (await response.get_json())["item"]["available_quantity"] == 6
+
+    async def test_remove_stock_invalid_quantity_is_400(
+        self, client: Any, auth_headers: Any, community_db: Any
+    ) -> None:
+        _, community_id = community_db
+        response = await _post_json(
+            client,
+            f"/api/v1/admin/{community_id}/inventory/items/1/stock/remove",
+            auth_headers(scope="community.inventory:write", user_id="1"),
+            {"quantity": 0},
+        )
+        assert response.status_code == 400
+
+
+class TestListCheckoutsAuditAndSummary:
+    async def test_list_checkouts_with_and_without_status_filter(
+        self, client: Any, auth_headers: Any, community_db: Any, monkeypatch: Any
+    ) -> None:
+        monkeypatch.setattr(inventory_svc, "_run_stock_fn", _fake_stock_fn)
+        dal, community_id = community_db
+        dal.hub_users.insert(username="alice", display_name="Alice")
+        dal.commit()
+        create_resp = await _post_json(
+            client,
+            f"/api/v1/admin/{community_id}/inventory/items",
+            auth_headers(scope="community.inventory:write"),
+            {"name": "Camera", "quantity": 3},
+        )
+        item_id = (await create_resp.get_json())["item"]["id"]
+        await _post_json(
+            client,
+            f"/api/v1/admin/{community_id}/inventory/checkout",
+            auth_headers(scope="community.inventory:use", user_id="1"),
+            {"item_id": item_id, "quantity": 1},
+        )
+
+        all_resp = await client.get(
+            f"/api/v1/admin/{community_id}/inventory/checkouts",
+            headers=auth_headers(scope="community.inventory:read"),
+        )
+        assert all_resp.status_code == 200
+        assert len((await all_resp.get_json())["checkouts"]) == 1
+
+        filtered_resp = await client.get(
+            f"/api/v1/admin/{community_id}/inventory/checkouts?status=active",
+            headers=auth_headers(scope="community.inventory:read"),
+        )
+        assert len((await filtered_resp.get_json())["checkouts"]) == 1
+
+        none_resp = await client.get(
+            f"/api/v1/admin/{community_id}/inventory/checkouts?status=returned",
+            headers=auth_headers(scope="community.inventory:read"),
+        )
+        assert len((await none_resp.get_json())["checkouts"]) == 0
+
+    async def test_summary_uses_stored_function(
+        self, client: Any, auth_headers: Any, community_db: Any, monkeypatch: Any
+    ) -> None:
+        """`get_inventory_summary()` is a Postgres stored function -- stub.
+
+        `dal.executesql` for just that call (sqlite:memory has no stored
+        functions), same technique as `test_community_relay.py`.
+        """
+        dal, community_id = community_db
+        real_executesql = dal.executesql
+
+        def fake_executesql(sql: str, placeholders: Any = None, **kwargs: Any) -> list[Any]:
+            if "get_inventory_summary" in sql:
+                return [(3, 30, 20, 2, 1, 4)]
+            return real_executesql(sql, placeholders=placeholders, **kwargs)
+
+        monkeypatch.setattr(dal, "executesql", fake_executesql)
+
+        response = await client.get(
+            f"/api/v1/admin/{community_id}/inventory/summary",
+            headers=auth_headers(scope="community.inventory:read"),
+        )
+        assert response.status_code == 200
+        assert (await response.get_json())["summary"] == {
+            "total_items": 3,
+            "total_quantity": 30,
+            "total_available": 20,
+            "active_checkouts": 2,
+            "overdue_checkouts": 1,
+            "low_stock_items": 4,
+        }
+
+    async def test_audit_log_with_filters(
+        self, client: Any, auth_headers: Any, community_db: Any, monkeypatch: Any
+    ) -> None:
+        monkeypatch.setattr(inventory_svc, "_run_stock_fn", _fake_stock_fn)
+        dal, community_id = community_db
+        create_resp = await _post_json(
+            client,
+            f"/api/v1/admin/{community_id}/inventory/items",
+            auth_headers(scope="community.inventory:write"),
+            {"name": "Mixer", "quantity": 2},
+        )
+        item_id = (await create_resp.get_json())["item"]["id"]
+        await _post_json(
+            client,
+            f"/api/v1/admin/{community_id}/inventory/items/{item_id}/stock/add",
+            auth_headers(scope="community.inventory:write", user_id="1"),
+            {"quantity": 1},
+        )
+        # `get_audit_log`'s raw SQL joins on `il.performed_by_user_id`, but the
+        # shared `ensure_community_tables()` test/prod binding names this
+        # column `user_id` -- irrelevant in production (migrate=False, the
+        # real Postgres table already has the correctly-named column;
+        # `performed_by_user_id` is never consulted through pydal's field
+        # mapping for raw executesql) but sqlite:memory's `migrate=True`
+        # table genuinely lacks it. Test-only ALTER TABLE, no source touched.
+        dal.executesql("ALTER TABLE inventory_log ADD COLUMN performed_by_user_id INTEGER")
+        # add_stock via the stubbed _run_stock_fn doesn't write inventory_log
+        # (that's the real stored function's job) -- insert a row directly so
+        # the read path (get_audit_log) has something to filter/return.
+        dal.inventory_log.insert(
+            item_id=item_id, community_id=community_id, action="add_stock", quantity_change=1
+        )
+        dal.commit()
+
+        all_resp = await client.get(
+            f"/api/v1/admin/{community_id}/inventory/log",
+            headers=auth_headers(scope="community.inventory:read"),
+        )
+        assert all_resp.status_code == 200
+        assert len((await all_resp.get_json())["log"]) == 1
+
+        item_filtered = await client.get(
+            f"/api/v1/admin/{community_id}/inventory/log?item_id={item_id}&action=add_stock",
+            headers=auth_headers(scope="community.inventory:read"),
+        )
+        assert len((await item_filtered.get_json())["log"]) == 1
+
+        no_match = await client.get(
+            f"/api/v1/admin/{community_id}/inventory/log?action=remove_stock",
+            headers=auth_headers(scope="community.inventory:read"),
+        )
+        assert len((await no_match.get_json())["log"]) == 0
+
+
+class TestAvailableItems:
+    async def test_available_without_search(
+        self, client: Any, auth_headers: Any, community_db: Any
+    ) -> None:
+        _, community_id = community_db
+        await _post_json(
+            client,
+            f"/api/v1/admin/{community_id}/inventory/items",
+            auth_headers(scope="community.inventory:write"),
+            {"name": "Drone", "quantity": 1},
+        )
+        response = await client.get(
+            f"/api/v1/admin/{community_id}/inventory/available",
+            headers=auth_headers(scope="community.inventory:use"),
+        )
+        assert response.status_code == 200
+        assert len((await response.get_json())["items"]) == 1
+
+    async def test_available_with_search_uses_stored_function(
+        self, client: Any, auth_headers: Any, community_db: Any, monkeypatch: Any
+    ) -> None:
+        """`search_inventory_items()` is a Postgres full-text-search stored.
+
+        function -- stub `dal.executesql` for just that call.
+        """
+        dal, community_id = community_db
+        real_executesql = dal.executesql
+
+        def fake_executesql(sql: str, placeholders: Any = None, **kwargs: Any) -> list[Any]:
+            if "search_inventory_items" in sql:
+                return [(1, "Drone", "desc", "gear", "electronics", 1, 1, 0)]
+            return real_executesql(sql, placeholders=placeholders, **kwargs)
+
+        monkeypatch.setattr(dal, "executesql", fake_executesql)
+
+        response = await client.get(
+            f"/api/v1/admin/{community_id}/inventory/available?search=drone",
+            headers=auth_headers(scope="community.inventory:use"),
+        )
+        assert response.status_code == 200
+        body = await response.get_json()
+        assert body["items"][0]["name"] == "Drone"
