@@ -324,6 +324,46 @@ class TestOAuthExchangeCodeHandoff:
     green again.
     """
 
+    async def test_provider_error_redirects_without_calling_the_service(
+        self, client: Any, monkeypatch: Any
+    ) -> None:
+        called = False
+
+        async def fail_if_called(*args: Any, **kwargs: Any) -> str:
+            nonlocal called
+            called = True
+            return "unreachable"
+
+        monkeypatch.setattr(oauth_service, "oauth_callback", fail_if_called)
+        response = await client.get(
+            "/api/v1/auth/oauth/discord/callback",
+            query_string={"error": "access_denied"},
+        )
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/login?error=oauth_denied")
+        assert not called
+
+    async def test_missing_code_or_state_redirects_to_login(self, client: Any) -> None:
+        response = await client.get("/api/v1/auth/oauth/discord/callback")
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/login?error=oauth_failed")
+
+    async def test_service_api_error_redirects_to_login_without_minting_a_code(
+        self, client: Any, monkeypatch: Any
+    ) -> None:
+        from services.errors import bad_request
+
+        async def fake_oauth_callback_raises(*args: Any, **kwargs: Any) -> str:
+            raise bad_request("Invalid or expired OAuth state")
+
+        monkeypatch.setattr(oauth_service, "oauth_callback", fake_oauth_callback_raises)
+        response = await client.get(
+            "/api/v1/auth/oauth/discord/callback",
+            query_string={"code": "platform-auth-code", "state": "s"},
+        )
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/login?error=oauth_failed")
+
     async def test_callback_redirect_never_contains_the_jwt(
         self, client: Any, monkeypatch: Any
     ) -> None:

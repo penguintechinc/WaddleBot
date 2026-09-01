@@ -8,7 +8,7 @@ function OAuthCallback() {
   const { handleOAuthCallback } = useAuth();
 
   useEffect(() => {
-    const token = searchParams.get('token');
+    const code = searchParams.get('code');
     const error = searchParams.get('error');
 
     if (error) {
@@ -16,12 +16,16 @@ function OAuthCallback() {
       return;
     }
 
-    if (token) {
-      handleOAuthCallback(token).then(() => {
-        navigate('/dashboard');
-      });
+    if (code) {
+      handleOAuthCallback(code)
+        .then(() => {
+          navigate('/dashboard');
+        })
+        .catch(() => {
+          navigate('/login?error=oauth_failed');
+        });
     } else {
-      navigate('/login?error=missing_token');
+      navigate('/login?error=missing_code');
     }
   }, [searchParams, handleOAuthCallback, navigate]);
 
