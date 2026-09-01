@@ -68,9 +68,7 @@ async def get_theme_config(async_dal: Any, dal: Any, *, community: str) -> Theme
     community_id = _community_id(community)
     if community_id is None:
         return ThemeConfig(primary_color=None, secondary_color=None, font_family=None)
-    rows = await async_dal.select_async(
-        dal(dal.presentation_config.community_id == community_id)
-    )
+    rows = await async_dal.select_async(dal(dal.presentation_config.community_id == community_id))
     if not rows:
         return ThemeConfig(primary_color=None, secondary_color=None, font_family=None)
     row = rows.first()

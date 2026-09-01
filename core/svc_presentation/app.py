@@ -46,7 +46,9 @@ def create_app(config: Config | None = None) -> Quart:
     @app.before_serving
     async def startup() -> None:
         """Initialize the DAL, bind this service's own tables, connect Valkey."""
-        logger.system("Starting svc-presentation", action="startup", extra={"port": cfg.module_port})
+        logger.system(
+            "Starting svc-presentation", action="startup", extra={"port": cfg.module_port}
+        )
 
         async_dal = init_database(
             cfg.database_url,
@@ -54,7 +56,17 @@ def create_app(config: Config | None = None) -> Quart:
             read_replica_uri=cfg.database_read_replica_url,
         )
         dal = async_dal.dal
-        bind_presentation_tables(dal)
+        bind_presentation_tables(dal, migrate=cfg.db_migrate)
+        # `lazy_tables=True` (AsyncDAL's own default) defers each table's
+        # actual `CREATE TABLE` until first ORM access -- left lazy, the
+        # first access could happen on an `async_dal.*_async()` worker
+        # thread mid-request, racing its own `CREATE TABLE` against this
+        # thread's still-open sqlite file handle ("database is locked" --
+        # the exact gotcha `hub_api/tests/conftest.py`'s `auth_db` fixture
+        # documents). Touching every table once here, still on this
+        # thread, forces that DDL to run before any worker thread exists.
+        for table_name in dal.tables:
+            dal(dal[table_name]).count()
         app.config["async_dal"] = async_dal
         app.config["dal"] = dal
 
@@ -62,7 +74,9 @@ def create_app(config: Config | None = None) -> Quart:
         await hub.start()
         app.config["PRESENTATION_HUB"] = hub
 
-        queue_reader = MusicQueueReader(valkey_url=cfg.valkey_url, namespace=cfg.music_queue_namespace)
+        queue_reader = MusicQueueReader(
+            valkey_url=cfg.valkey_url, namespace=cfg.music_queue_namespace
+        )
         await queue_reader.start()
         app.config["MUSIC_QUEUE_READER"] = queue_reader
 

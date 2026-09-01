@@ -35,7 +35,7 @@ try:
     REDIS_AVAILABLE = True
 except ImportError:  # pragma: no cover - exercised only if redis isn't installed
     REDIS_AVAILABLE = False
-    redis_asyncio = None  # type: ignore[assignment]
+    redis_asyncio = None
 
 logger = logging.getLogger(__name__)
 

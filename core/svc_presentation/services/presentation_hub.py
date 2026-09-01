@@ -33,7 +33,7 @@ try:
     REDIS_AVAILABLE = True
 except ImportError:  # pragma: no cover - exercised only if redis isn't installed
     REDIS_AVAILABLE = False
-    redis_asyncio = None  # type: ignore[assignment]
+    redis_asyncio = None
 
 logger = logging.getLogger(__name__)
 
@@ -103,8 +103,10 @@ class PresentationHub:
             self._listen_task.cancel()
             try:
                 await self._listen_task
-            except (asyncio.CancelledError, Exception):  # noqa: BLE001
+            except asyncio.CancelledError:
                 pass
+            except Exception:  # noqa: BLE001 - shutdown must not raise
+                logger.exception("presentation_hub.listen_task_error_on_shutdown")
         if self._pubsub is not None:
             await self._pubsub.close()
         if self._redis is not None:
@@ -133,7 +135,9 @@ class PresentationHub:
         self._local.setdefault((community, surface), set()).add(queue)
         return queue
 
-    def unregister(self, community: str, surface: str, queue: asyncio.Queue[dict[str, Any]]) -> None:
+    def unregister(
+        self, community: str, surface: str, queue: asyncio.Queue[dict[str, Any]]
+    ) -> None:
         """Drop a disconnected SSE connection's queue."""
         subscribers = self._local.get((community, surface))
         if subscribers is not None:

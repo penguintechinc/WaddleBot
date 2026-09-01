@@ -24,7 +24,8 @@ from typing import Any
 #: overlay it supersedes, not a visual break.
 _BASE_STYLE = """
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: var(--wb-font, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif); background: transparent; overflow: hidden; color: #fff; }
+    body { font-family: var(--wb-font, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif);
+      background: transparent; overflow: hidden; color: #fff; }
     .hidden { display: none !important; }
 """
 
@@ -46,7 +47,8 @@ def _theme_style(
     """
     primary = html.escape(primary_color) if primary_color else "#1db954"
     secondary = html.escape(secondary_color) if secondary_color else "#1ed760"
-    font = html.escape(font_family) if font_family else "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+    default_font = "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+    font = html.escape(font_family) if font_family else default_font
     return f"""
     <style>
       :root {{
@@ -232,7 +234,8 @@ def render_crawler(
 {_BASE_STYLE}
     #ticker {{ position: fixed; bottom: 0; left: 0; right: 0; height: 56px;
       background: rgba(0,0,0,0.75); display: flex; align-items: center; overflow: hidden; }}
-    #track {{ white-space: nowrap; font-size: 26px; font-weight: 600; color: var(--wb-primary, #fff);
+    #track {{ white-space: nowrap; font-size: 26px; font-weight: 600;
+      color: var(--wb-primary, #fff);
       padding-left: 100%; animation: scroll-left 20s linear infinite; }}
     @keyframes scroll-left {{
       0% {{ transform: translateX(0); }}
@@ -328,7 +331,9 @@ def render_music(
     function renderPlayer(track) {{
       const slot = document.getElementById('player-slot');
       if (track.provider === 'spotify' && track.external_id) {{
-        slot.innerHTML = `<iframe src="https://open.spotify.com/embed/track/${{encodeURIComponent(track.external_id)}}" allow="encrypted-media" loading="lazy"></iframe>`;
+        const trackId = encodeURIComponent(track.external_id);
+        const src = `https://open.spotify.com/embed/track/${{trackId}}`;
+        slot.innerHTML = `<iframe src="${{src}}" allow="encrypted-media" loading="lazy"></iframe>`;
         ytPlayer = null;
       }} else if (track.provider === 'youtube' && track.external_id) {{
         slot.innerHTML = '<div id="yt-target"></div>';
@@ -339,8 +344,10 @@ def render_music(
           }});
         }}
       }} else {{
-        slot.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;">' +
-          (track.provider ? track.provider + ' (no embeddable player)' : '') + '</div>';
+        const label = track.provider ? track.provider + ' (no embeddable player)' : '';
+        slot.innerHTML =
+          '<div style="display:flex;align-items:center;justify-content:center;' +
+          'height:100%;color:#888;">' + label + '</div>';
         ytPlayer = null;
       }}
     }}

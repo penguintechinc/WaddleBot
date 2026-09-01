@@ -71,6 +71,11 @@ class Config:
     database_url: str
     database_read_replica_url: str | None
     db_pool_size: int
+    #: `bind_presentation_tables(dal, migrate=db_migrate)` -- prod NEVER
+    #: auto-migrates (backend-database.md rule 9: schema owned by the
+    #: numbered migration file, `073_svc_presentation_overlays.sql`); tests
+    #: set this True to get real DDL against an ephemeral sqlite file.
+    db_migrate: bool
 
     valkey_url: str | None
 
@@ -120,6 +125,9 @@ class Config:
             database_url=database_url,
             database_read_replica_url=read_replica_url,
             db_pool_size=int(os.getenv("DB_POOL_SIZE", "10")),
+            db_migrate=(
+                os.getenv("DB_MIGRATE", "false").strip().lower() in {"1", "true", "yes", "on"}
+            ),
             valkey_url=os.getenv("VALKEY_URL") or os.getenv("REDIS_URL") or None,
             hub_api_url=os.getenv("HUB_API_URL", "http://hub-api:8204"),
             hub_api_poll_interval_seconds=int(os.getenv("HUB_API_POLL_INTERVAL_SECONDS", "30")),

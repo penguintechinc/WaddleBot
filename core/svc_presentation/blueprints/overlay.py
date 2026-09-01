@@ -81,7 +81,7 @@ async def live(community: str, surface: str) -> Any:
     hub = _hub()
     queue = hub.register(community, surface)
 
-    async def event_stream() -> AsyncGenerator[bytes, None]:
+    async def event_stream() -> AsyncGenerator[bytes]:
         try:
             yield _sse_event({"type": "connected", "community": community, "surface": surface})
             while True:
@@ -103,7 +103,7 @@ async def live(community: str, surface: str) -> Any:
 
 
 def _sse_event(payload: dict[str, Any]) -> bytes:
-    """Encode one Python dict as a single `data: ...\\n\\n` SSE frame."""
+    r"""Encode one Python dict as a single `data: ...\n\n` SSE frame."""
     return f"data: {json.dumps(payload)}\n\n".encode()
 
 
