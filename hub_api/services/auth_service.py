@@ -144,6 +144,19 @@ async def create_session_token(
             scopes.update(SCOPE_BUNDLES["global"]["admin"])
         if user.is_vendor:
             roles.append("vendor")
+        if user.is_analytics_consumer:
+            # Analytics-module port (M9): `analytics:read` is the pre-
+            # existing scope name from security.md's own SCOPE_BUNDLES
+            # table (`maintainer -> ... analytics:read`), already granted
+            # via the `global`/`tenant` maintainer bundles and the
+            # `global` admin bundle's `*:read` wildcard (superadmins
+            # already pass `require_scope("analytics:read")` without this
+            # branch). What was missing: `hub_users.is_analytics_consumer`
+            # (M1, `060_analytics_consumer_role.sql`) had no corresponding
+            # scope grant at mint time, so no analytics-consumer user
+            # could ever satisfy `blueprints/v1/analytics.py`'s platform-
+            # overview gate -- see that module's docstring.
+            scopes.add("analytics:read")
 
         if tenant_id is not None:
             ta_rows = await async_dal.select_async(

@@ -103,6 +103,10 @@ convention = "google"
 "blueprints/v1/join_request.py" = ["N815"]
 "services/community_profile_service.py" = ["S101"]
 "services/join_request_service.py" = ["N815"]
+# Analytics module port (M9) -- same tenant_middleware postcondition
+# assert as blueprints/v2/platform.py above (`get_tenant_context` always
+# non-None on the success path for Scenario 2/4 routes).
+"blueprints/v1/analytics.py" = ["S101"]
 
 [tool.mypy]
 python_version = "3.13"
