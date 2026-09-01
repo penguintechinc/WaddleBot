@@ -10,7 +10,7 @@ Features:
 - Sanitization of dangerous patterns
 - Comprehensive audit logging
 
-Author: WaddleBot Team
+Author: Waddles Team
 License: PenguinTech License Server
 """
 

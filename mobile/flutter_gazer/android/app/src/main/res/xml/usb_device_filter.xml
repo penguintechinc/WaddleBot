@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- USB Video Class (UVC) devices - standard for USB capture cards -->
+    <usb-device class="14" subclass="1" protocol="0" />
+    <usb-device class="14" subclass="2" protocol="0" />
+
+    <!-- Common USB capture card vendors -->
+    <!-- Elgato -->
+    <usb-device vendor-id="2893" />
+    <!-- AVerMedia -->
+    <usb-device vendor-id="1817" />
+    <!-- Magewell -->
+    <usb-device vendor-id="4176" />
+    <!-- Generic UVC devices -->
+    <usb-device class="239" subclass="2" />
+</resources>

@@ -1,5 +1,5 @@
 #!/bin/bash
-# WaddleBot MicroK8s Testing Script
+# Waddles MicroK8s Testing Script
 # Alternative to docker-compose for local Kubernetes testing
 
 set -e
@@ -36,18 +36,18 @@ kubectl_cmd() {
 }
 
 usage() {
-    echo "WaddleBot MicroK8s Testing Script"
+    echo "Waddles MicroK8s Testing Script"
     echo ""
     echo "Usage: $0 <command>"
     echo ""
     echo "Commands:"
     echo "  setup       - Enable required microk8s addons"
     echo "  build       - Build and push Docker images to local registry"
-    echo "  deploy      - Deploy WaddleBot stack to microk8s"
+    echo "  deploy      - Deploy Waddles stack to microk8s"
     echo "  status      - Show deployment status"
     echo "  logs <pod>  - Show logs for a pod (e.g., logs hub)"
     echo "  shell <pod> - Open shell in a pod"
-    echo "  teardown    - Remove all WaddleBot resources"
+    echo "  teardown    - Remove all Waddles resources"
     echo "  restart     - Teardown and redeploy"
     echo "  all         - Run setup, build, and deploy"
     echo ""
@@ -204,7 +204,7 @@ deploy_openwhisk() {
 }
 
 deploy_modules() {
-    log_info "Deploying WaddleBot modules..."
+    log_info "Deploying Waddles modules..."
     kubectl_cmd apply -f "$K8S_DIR/modules.yaml" -n "$NAMESPACE"
 
     log_info "Waiting for modules to be ready..."
@@ -215,7 +215,7 @@ deploy_modules() {
 
 show_status() {
     echo ""
-    log_info "=== WaddleBot Deployment Status ==="
+    log_info "=== Waddles Deployment Status ==="
     echo ""
 
     log_info "Pods:"
@@ -258,7 +258,7 @@ open_shell() {
 }
 
 teardown() {
-    log_warn "Removing all WaddleBot resources..."
+    log_warn "Removing all Waddles resources..."
     kubectl_cmd delete namespace "$NAMESPACE" --ignore-not-found
     log_success "Teardown complete"
 }

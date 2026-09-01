@@ -1,12 +1,16 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import api from '../services/api';
 
 const AuthContext = createContext(null);
+
+// Threshold in milliseconds before user data is considered stale
+const USER_STALE_THRESHOLD_MS = 30 * 1000; // 30 seconds
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const lastFetchedAt = useRef(null);
 
   // Check for existing session on mount
   useEffect(() => {
@@ -23,16 +27,39 @@ export function AuthProvider({ children }) {
       const response = await api.get('/api/v1/auth/me');
       if (response.data.success && response.data.user) {
         setUser(response.data.user);
+        lastFetchedAt.current = Date.now();
       } else {
         localStorage.removeItem('token');
       }
     } catch (err) {
       console.error('Failed to fetch user:', err);
-      localStorage.removeItem('token');
+      // Only clear token on auth errors (401/403). Transient errors like
+      // 429 rate limiting or network failures should not log the user out.
+      const status = err.response?.status;
+      if (status === 401 || status === 403) {
+        localStorage.removeItem('token');
+      }
     } finally {
       setLoading(false);
     }
   };
+
+  /**
+   * Re-fetch current user data from the server.
+   * Skips if data was fetched within the staleness threshold
+   * unless force=true is passed.
+   */
+  const refreshUser = useCallback(async (force = false) => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    const now = Date.now();
+    if (!force && lastFetchedAt.current && (now - lastFetchedAt.current) < USER_STALE_THRESHOLD_MS) {
+      return; // Data is still fresh
+    }
+
+    await fetchCurrentUser();
+  }, []);
 
   const loginWithOAuth = useCallback(async (platform) => {
     try {
@@ -127,9 +154,15 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  const handleOAuthCallback = useCallback(async (token) => {
-    if (token) {
-      localStorage.setItem('token', token);
+  const handleOAuthCallback = useCallback(async (code) => {
+    if (!code) return;
+    // Exchange the short-lived, single-use code the OAuth callback redirect
+    // carried in the URL for the real session JWT, delivered over the
+    // response body instead of a query string (query strings leak into
+    // proxy/access logs, browser history, and the Referer header).
+    const response = await api.post('/api/v1/auth/exchange', { code });
+    if (response.data.success && response.data.token) {
+      localStorage.setItem('token', response.data.token);
       await fetchCurrentUser();
     }
   }, []);
@@ -169,6 +202,7 @@ export function AuthProvider({ children }) {
     handleOAuthCallback,
     logout,
     refreshToken,
+    refreshUser,
     isAuthenticated: !!user,
     // Role checks - use roles array directly
     hasRole: (role) => user?.roles?.includes(role),
@@ -176,6 +210,15 @@ export function AuthProvider({ children }) {
     isSuperAdmin: user?.roles?.includes('super_admin'),
     isPlatformAdmin: user?.roles?.includes('platform-admin'),
     isVendor: user?.roles?.includes('vendor'),
+    isAnalyticsConsumer: user?.isAnalyticsConsumer || false,
+    // Community-level admin check (for any community, or a specific one)
+    isCommunityAdmin: (communityId) => {
+      const adminRoles = ['community-owner', 'community-admin', 'moderator'];
+      if (communityId) {
+        return user?.communities?.some(c => c.id === Number(communityId) && adminRoles.includes(c.role));
+      }
+      return user?.communities?.some(c => adminRoles.includes(c.role));
+    },
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -1,0 +1,7 @@
+# v1.4.0
+## Features
+### WebRTC to RTMP
+Allow the community admin to set up the ability to do a capture of WebRTC calls and send them out to a platform (using existing RTMP/AV1 forwarding module).
+
+### Screen Share
+Add screen sharing to the WebRTC video calls

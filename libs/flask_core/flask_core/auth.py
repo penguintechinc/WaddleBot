@@ -15,12 +15,28 @@ Provides comprehensive authentication and authorization:
 from authlib.integrations.flask_client import OAuth
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import jwt
 import secrets
 import logging
 
 logger = logging.getLogger(__name__)
+
+#: Slug of the tenant every pre-Task-0.4 token and every single-tenant
+#: (Free/Professional, capped) deployment resolves to. Matches
+#: `tenants.slug = 'global'` seeded by migration 058 -- not a bypass, the
+#: identical tenant-scoping code in tenancy.py runs for it with N=1. See
+#: security.md Tenant Isolation.
+DEFAULT_TENANT_SLUG = "global"
+
+# TODO(tenancy-migration, tracking: v3.0.x Task 0.4): tokens minted before
+# this cutoff predate the mandatory `tenant` claim and are treated as
+# DEFAULT_TENANT_SLUG by verify_jwt_token() below. create_jwt_token() has
+# required `tenant` since this change landed, so any token issued *after*
+# the cutoff that is still missing the claim is rejected outright, not
+# defaulted. Extend only with explicit sign-off -- a permanently open
+# cutoff is the untenanted backdoor in a different shape.
+TENANT_CLAIM_MIGRATION_CUTOFF = datetime(2026, 11, 26, tzinfo=timezone.utc)
 
 
 @dataclass(slots=True)
@@ -117,9 +133,10 @@ def setup_auth(app, dal, config: Optional[Dict[str, Any]] = None):
 
     dal.define_table(
         'auth_role',
-        dal.Field('name', 'string', unique=True, notnull=True),
+        dal.Field('name', 'string', unique=True, notnull=True),  # e.g. 'tenant:admin'
+        dal.Field('level', 'string'),  # 'global' | 'tenant' | 'community'
         dal.Field('description', 'text'),
-        dal.Field('permissions', 'json'),  # List of permission strings
+        dal.Field('permissions', 'json'),  # List of scope strings, e.g. 'community:read'
         dal.Field('created_at', 'datetime', default=datetime.utcnow)
     )
 
@@ -181,6 +198,8 @@ def create_jwt_token(
     email: str,
     roles: List[str],
     secret_key: str,
+    tenant: str,
+    scope: str = "",
     expiration_hours: int = 24
 ) -> str:
     """
@@ -192,11 +211,29 @@ def create_jwt_token(
         email: User email
         roles: List of role names
         secret_key: JWT secret key
+        tenant: Tenant slug the token is scoped to. Mandatory -- security.md
+            requires every token to carry a `tenant` claim; single-tenant
+            deployments pass DEFAULT_TENANT_SLUG, not an empty/omitted value.
+        scope: Space-delimited OIDC `scope` claim (SCOPE_BUNDLES-derived
+            resource:action strings, e.g. "customer.account:write") --
+            checked by `authz.require_scope()` at the HTTP layer. Empty by
+            default (no scopes granted), never omitted from the payload, so
+            downstream scope checks always see an explicit claim to parse
+            rather than a missing key.
         expiration_hours: Token expiration in hours
 
     Returns:
         JWT token string
+
+    Raises:
+        ValueError: If tenant is empty -- there is no untenanted token.
     """
+    if not tenant:
+        raise ValueError(
+            "tenant is mandatory on every JWT (security.md Tenant Isolation) -- "
+            "pass DEFAULT_TENANT_SLUG for single-tenant deployments, never empty"
+        )
+
     now = datetime.utcnow()
     expiration = now + timedelta(hours=expiration_hours)
 
@@ -205,6 +242,8 @@ def create_jwt_token(
         'username': username,
         'email': email,
         'roles': roles,
+        'tenant': tenant,
+        'scope': scope,
         'iat': now,
         'exp': expiration,
         'type': 'access'
@@ -212,7 +251,7 @@ def create_jwt_token(
 
     token = jwt.encode(payload, secret_key, algorithm='HS256')
 
-    logger.info(f"JWT token created for user {username} (expires in {expiration_hours}h)")
+    logger.info(f"JWT token created for user {username} (tenant={tenant}, expires in {expiration_hours}h)")
 
     return token
 
@@ -221,20 +260,59 @@ def verify_jwt_token(token: str, secret_key: str) -> Optional[Dict[str, Any]]:
     """
     Verify and decode JWT token.
 
+    Rejects tokens with no `tenant` claim, per security.md Tenant Isolation
+    -- except during the bounded migration window (TENANT_CLAIM_MIGRATION_CUTOFF),
+    where a legacy token (issued before the cutoff, before this claim
+    existed) is defaulted to DEFAULT_TENANT_SLUG rather than rejected. This
+    fallback is time-bounded, not a permanent bypass: a claim missing on a
+    token issued after the cutoff is rejected outright.
+
     Args:
         token: JWT token string
         secret_key: JWT secret key
 
     Returns:
-        Decoded token payload or None if invalid
+        Decoded token payload (always carrying a `tenant` key on success),
+        or None if invalid, expired, or missing a mandatory tenant claim
+        past the migration cutoff.
     """
     try:
         payload = jwt.decode(token, secret_key, algorithms=['HS256'])
 
-        # Check expiration
-        if datetime.fromtimestamp(payload['exp']) < datetime.utcnow():
+        # Check expiration. Timezone-aware on both sides -- the previous
+        # `fromtimestamp(exp) < utcnow()` compared local-time-interpreted
+        # exp against naive-UTC now, which falsely expired short-lived
+        # tokens in any timezone behind UTC (and the inverse security bug --
+        # falsely valid past real expiry -- ahead of UTC). Found while
+        # adding the tenant-claim check below; fixed in place since a
+        # broken expiry check undermines everything else in this function.
+        if datetime.fromtimestamp(payload['exp'], tz=timezone.utc) < datetime.now(timezone.utc):
             logger.warning("JWT token expired")
             return None
+
+        if not payload.get('tenant'):
+            issued_at = datetime.fromtimestamp(payload['iat'], tz=timezone.utc)
+            if issued_at < TENANT_CLAIM_MIGRATION_CUTOFF:
+                logger.warning(
+                    f"JWT missing tenant claim -- applying migration-window "
+                    f"default tenant fallback (cutoff {TENANT_CLAIM_MIGRATION_CUTOFF.isoformat()})",
+                    extra={
+                        'event_type': 'AUTH',
+                        'action': 'verify_jwt_token',
+                        'result': 'DEFAULT_TENANT_FALLBACK'
+                    }
+                )
+                payload = {**payload, 'tenant': DEFAULT_TENANT_SLUG}
+            else:
+                logger.error(
+                    "JWT missing mandatory tenant claim past migration cutoff -- rejecting",
+                    extra={
+                        'event_type': 'AUTH',
+                        'action': 'verify_jwt_token',
+                        'result': 'FAILURE'
+                    }
+                )
+                return None
 
         return payload
 
@@ -251,7 +329,7 @@ def create_api_key(prefix: str = "wa", length: int = 64) -> str:
     Create API key with prefix.
 
     Args:
-        prefix: API key prefix (default: 'wa' for WaddleBot)
+        prefix: API key prefix (default: 'wa' for Waddles)
         length: API key length (default: 64)
 
     Returns:
@@ -356,39 +434,65 @@ def verify_service_key(provided_key: str, expected_key: Optional[str]) -> bool:
     return secrets.compare_digest(provided_key, expected_key)
 
 
+#: Per-level scope bundles -- security.md's admin/maintainer/viewer table,
+#: instantiated at each of the global/tenant/community levels from
+#: docs/plans/2026-08-26-v3-scbm-apps-design.md's Identity and data scoping
+#: ladder. No bundle grants the unbounded '*': narrower levels restrict what
+#: a broader level granted, they never expand it. Middleware checks these
+#: scopes only -- never the role/bundle name.
+SCOPE_BUNDLES: Dict[str, Dict[str, List[str]]] = {
+    'global': {
+        'admin': ['*:read', '*:write', '*:admin', '*:delete', 'settings:write', 'users:admin'],
+        'maintainer': ['*:read', '*:write', 'teams:read', 'reports:read', 'analytics:read'],
+        'viewer': ['*:read'],
+    },
+    'tenant': {
+        'admin': [
+            'tenant:read', 'tenant:write', 'tenant:admin', 'tenant:delete',
+            'community:create', 'community:delete', 'billing:read', 'billing:write',
+            'settings:write', 'users:admin',
+        ],
+        'maintainer': [
+            'tenant:read', 'tenant:write', 'community:create',
+            'billing:read', 'reports:read', 'analytics:read',
+        ],
+        'viewer': ['tenant:read', 'billing:read'],
+    },
+    'community': {
+        'admin': [
+            'community:read', 'community:write', 'community:admin', 'community:delete',
+            'bot.command:admin', 'social.polls:write', 'settings:write',
+        ],
+        'maintainer': [
+            'community:read', 'community:write', 'bot.command:admin', 'social.polls:write',
+        ],
+        'viewer': ['community:read', 'social.polls:read'],
+    },
+}
+
+
 def setup_default_roles(dal):
     """
-    Create default roles if they don't exist.
+    Create default per-level scope-bundle roles if they don't exist.
+
+    Replaces the old flat admin/community_owner/moderator/user roles -- one
+    of which granted the unbounded '*' -- with admin/maintainer/viewer
+    bundles at each of global/tenant/community, per security.md's bundle
+    table. Role name is `{level}:{bundle}` (e.g. 'tenant:admin'); middleware
+    must check the resulting scopes, never the role name.
 
     Args:
         dal: AsyncDAL instance
     """
-    default_roles = [
-        {
-            'name': 'admin',
-            'description': 'Full system access',
-            'permissions': ['*']
-        },
-        {
-            'name': 'community_owner',
-            'description': 'Owns and manages communities',
-            'permissions': ['community:*', 'module:install', 'module:configure']
-        },
-        {
-            'name': 'moderator',
-            'description': 'Community moderator',
-            'permissions': ['community:moderate', 'user:manage']
-        },
-        {
-            'name': 'user',
-            'description': 'Standard user',
-            'permissions': ['profile:view', 'profile:edit']
-        }
-    ]
-
-    for role_data in default_roles:
-        # Check if role exists
-        existing = dal(dal.auth_role.name == role_data['name']).select().first()
-        if not existing:
-            dal.auth_role.insert(**role_data)
-            logger.info(f"Created default role: {role_data['name']}")
+    for level, bundles in SCOPE_BUNDLES.items():
+        for bundle_name, scopes in bundles.items():
+            role_name = f"{level}:{bundle_name}"
+            existing = dal(dal.auth_role.name == role_name).select().first()
+            if not existing:
+                dal.auth_role.insert(
+                    name=role_name,
+                    level=level,
+                    description=f"{bundle_name.capitalize()} scope bundle at {level} level",
+                    permissions=scopes,
+                )
+                logger.info(f"Created default role: {role_name}")

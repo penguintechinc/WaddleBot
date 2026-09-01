@@ -61,7 +61,7 @@ export default {
           800: '#065f46',
           900: '#064e3b',
         },
-        // WaddleBot brand colors
+        // Waddles brand colors
         waddle: {
           navy: '#102a43',
           lightBlue: '#38bdf8',

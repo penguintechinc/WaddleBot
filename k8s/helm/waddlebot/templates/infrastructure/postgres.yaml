@@ -32,7 +32,7 @@ metadata:
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 data:
   init.sql: |
-    -- WaddleBot PostgreSQL initialization script
+    -- Waddles PostgreSQL initialization script
     -- This script is executed when the database is first created
 
     -- Enable required extensions
@@ -48,6 +48,7 @@ data:
     GRANT ALL PRIVILEGES ON SCHEMA router TO {{ .Values.infrastructure.postgresql.username }};
     GRANT ALL PRIVILEGES ON SCHEMA identity TO {{ .Values.infrastructure.postgresql.username }};
     GRANT ALL PRIVILEGES ON SCHEMA community TO {{ .Values.infrastructure.postgresql.username }};
+
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -81,6 +82,7 @@ spec:
       - name: postgres
         image: {{ .Values.infrastructure.postgresql.image }}
         imagePullPolicy: IfNotPresent
+        args: ["-c", "max_connections=300"]
         ports:
         - name: postgres
           containerPort: 5432

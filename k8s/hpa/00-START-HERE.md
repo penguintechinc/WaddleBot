@@ -1,6 +1,6 @@
-# START HERE - WaddleBot Kubernetes HPA Setup
+# START HERE - Waddles Kubernetes HPA Setup
 
-Welcome! This directory contains production-ready Horizontal Pod Autoscaler (HPA) configurations for WaddleBot. This file will get you started in 5 minutes.
+Welcome! This directory contains production-ready Horizontal Pod Autoscaler (HPA) configurations for Waddles. This file will get you started in 5 minutes.
 
 ## What is HPA?
 
@@ -320,6 +320,6 @@ After deployment, you'll know it's working when:
 **Last Updated:** 2025-12-09
 **Files Created:** 9 (80 KB total)
 **Kubernetes:** 1.18+
-**WaddleBot:** 1.0.0+
+**Waddles:** 1.0.0+
 
 Happy scaling!

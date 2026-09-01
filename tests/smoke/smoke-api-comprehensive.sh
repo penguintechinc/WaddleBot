@@ -1,5 +1,5 @@
 #!/bin/bash
-# WaddleBot Comprehensive API Smoke Tests
+# Waddles Comprehensive API Smoke Tests
 # Tests all major API endpoints across all route files
 #
 # Usage: ./tests/smoke/smoke-api-comprehensive.sh [BASE_URL] [ALB_HOST]
@@ -45,7 +45,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 echo "========================================"
-echo "WaddleBot API Smoke Tests (Comprehensive)"
+echo "Waddles API Smoke Tests (Comprehensive)"
 echo "========================================"
 echo ""
 echo "Target: $BASE_URL"

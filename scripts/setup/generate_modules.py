@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Generate Flask modules from template
-Systematically creates all remaining WaddleBot modules
+Systematically creates all remaining Waddles modules
 """
 
 import os
@@ -30,7 +30,6 @@ MODULES = {
     'slack_module_flask': {'port': 8004, 'desc': 'Slack collector'},
 
     # Supporting
-    'kong_admin_broker_flask': {'port': 8100, 'desc': 'Kong admin broker'},
     'community_module_flask': {'port': 8020, 'desc': 'Community management'},
     'reputation_module_flask': {'port': 8021, 'desc': 'Reputation tracking'},
 }
@@ -148,7 +147,7 @@ def create_module(module_name, port, desc):
     print(f"✓ Created {module_name}")
 
 if __name__ == '__main__':
-    print("Generating all WaddleBot Flask modules...")
+    print("Generating all Waddles Flask modules...")
     for module_name, config in MODULES.items():
         create_module(module_name, config['port'], config['desc'])
     print(f"\\n✓ Successfully generated {len(MODULES)} modules!")

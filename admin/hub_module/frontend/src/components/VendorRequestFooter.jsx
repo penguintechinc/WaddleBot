@@ -28,7 +28,7 @@ function VendorRequestFooter() {
           <SparklesIcon className="w-5 h-5 flex-shrink-0" />
           <div className="flex-1">
             <p className="font-medium">Become a Vendor</p>
-            <p className="text-sm text-purple-100">Submit your first module to the WaddleBot marketplace</p>
+            <p className="text-sm text-purple-100">Submit your first module to the Waddles marketplace</p>
           </div>
         </div>
         <div className="flex items-center space-x-3">

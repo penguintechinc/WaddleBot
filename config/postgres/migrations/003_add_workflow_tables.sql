@@ -1,4 +1,4 @@
--- WaddleBot Workflow System - Database Schema Migration
+-- Waddles Workflow System - Database Schema Migration
 -- Creates all tables for the visual workflow automation system
 
 -- ============================================================================

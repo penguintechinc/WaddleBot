@@ -145,7 +145,7 @@ LOG_LEVEL=INFO
 
 Place `.env` file in the module root:
 ```
-/home/penguin/code/WaddleBot/core/identity_core_module/.env
+/home/penguin/code/Waddles/core/identity_core_module/.env
 ```
 
 ### Loading Order
@@ -160,7 +160,7 @@ Place `.env` file in the module root:
 
 ### Dockerfile
 
-Location: `/home/penguin/code/WaddleBot/core/identity_core_module/Dockerfile`
+Location: `/home/penguin/code/Waddles/core/identity_core_module/Dockerfile`
 
 **Key Configuration:**
 
@@ -200,7 +200,7 @@ CMD ["hypercorn", "app:app", "--bind", "0.0.0.0:8050", "--workers", "4"]
 
 **Build Command:**
 ```bash
-cd /home/penguin/code/WaddleBot
+cd /home/penguin/code/Waddles
 docker build -f core/identity_core_module/Dockerfile \
   -t waddlebot/identity-core:latest .
 ```
@@ -423,8 +423,8 @@ CREATE INDEX idx_hub_users_active
 
 Apply migrations using:
 ```bash
-psql -U waddlebot -d waddlebot -f /home/penguin/code/WaddleBot/config/postgres/init.sql
-psql -U waddlebot -d waddlebot -f /home/penguin/code/WaddleBot/config/postgres/migrations/001_add_performance_indexes.sql
+psql -U waddlebot -d waddlebot -f /home/penguin/code/Waddles/config/postgres/init.sql
+psql -U waddlebot -d waddlebot -f /home/penguin/code/Waddles/config/postgres/migrations/001_add_performance_indexes.sql
 ```
 
 ---

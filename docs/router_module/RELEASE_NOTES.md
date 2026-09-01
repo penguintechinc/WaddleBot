@@ -4,7 +4,7 @@
 
 ### Overview
 
-WaddleBot Router Module - Central command routing and event processing system.
+Waddles Router Module - Central command routing and event processing system.
 
 **Release Date:** 2025-12-16
 **Module Type:** Core Processing Module
@@ -438,7 +438,7 @@ curl http://router-module:8000/health | jq '.data.version'
 1. **Documentation:** Check the docs in `/docs/router_module/`
 2. **Troubleshooting:** See [TROUBLESHOOTING.md](./TROUBLESHOOTING.md)
 3. **Issues:** File an issue on GitHub
-4. **Community:** Join the WaddleBot Discord
+4. **Community:** Join the Waddles Discord
 
 ### Reporting Bugs
 
@@ -453,7 +453,7 @@ When reporting bugs, include:
 
 ## License
 
-Copyright © 2025 WaddleBot
+Copyright © 2025 Waddles
 Licensed under the MIT License
 
 ---

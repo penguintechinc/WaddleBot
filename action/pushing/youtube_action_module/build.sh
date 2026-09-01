@@ -34,7 +34,7 @@ fi
 # Generate protobuf files
 echo ""
 echo "Step 1: Generating protobuf files..."
-python -m grpc_tools.protoc \
+python3 -m grpc_tools.protoc \
     -I./proto \
     --python_out=./proto \
     --grpc_python_out=./proto \

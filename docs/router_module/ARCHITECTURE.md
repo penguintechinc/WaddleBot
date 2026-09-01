@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Router Module is WaddleBot's central command routing and event processing system. It receives events from action modules (Discord, Slack, Twitch, YouTube), determines the appropriate interaction module to handle each command, manages rate limiting and caching, and coordinates responses back to users.
+The Router Module is Waddles's central command routing and event processing system. It receives events from action modules (Discord, Slack, Twitch, YouTube), determines the appropriate interaction module to handle each command, manages rate limiting and caching, and coordinates responses back to users.
 
 **Version:** 2.0.0
 **Framework:** Quart (async Flask)
@@ -30,7 +30,7 @@ The Router Module is WaddleBot's central command routing and event processing sy
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                     WaddleBot Ecosystem                          │
+│                     Waddles Ecosystem                          │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                   │
 │  ┌────────────┐  ┌────────────┐  ┌────────────┐  ┌──────────┐ │

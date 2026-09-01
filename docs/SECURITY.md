@@ -1,8 +1,8 @@
-# WaddleBot Security Documentation
+# Waddles Security Documentation
 
 ## Security Ethos
 
-WaddleBot is built on a foundation of security-first principles, recognizing that as a critical infrastructure component for community management and chat automation, security is not an optional feature but a core requirement. Our security ethos emphasizes:
+Waddles is built on a foundation of security-first principles, recognizing that as a critical infrastructure component for community management and chat automation, security is not an optional feature but a core requirement. Our security ethos emphasizes:
 
 - **Defense in Depth**: Multiple layers of security controls across authentication, authorization, network, and application layers
 - **Zero Trust Architecture**: Every request is authenticated and authorized, regardless of origin
@@ -13,7 +13,7 @@ WaddleBot is built on a foundation of security-first principles, recognizing tha
 
 ### Threat Model Overview
 
-WaddleBot's threat model addresses risks across multiple attack vectors:
+Waddles's threat model addresses risks across multiple attack vectors:
 
 **1. External Threats**
 - **Unauthorized API Access**: Mitigated through API key authentication, JWT tokens, and rate limiting
@@ -37,7 +37,7 @@ WaddleBot's threat model addresses risks across multiple attack vectors:
 
 ## Authentication
 
-WaddleBot implements multiple authentication mechanisms optimized for different use cases.
+Waddles implements multiple authentication mechanisms optimized for different use cases.
 
 ### 1. API Key Authentication
 
@@ -212,7 +212,7 @@ async def twitch_callback():
 
 ## Authorization (RBAC)
 
-WaddleBot implements Role-Based Access Control (RBAC) for fine-grained permission management.
+Waddles implements Role-Based Access Control (RBAC) for fine-grained permission management.
 
 ### Role Hierarchy
 
@@ -429,7 +429,7 @@ async def discord_webhook():
 
 ## Rate Limiting
 
-WaddleBot uses distributed rate limiting with Redis for accurate enforcement across all instances.
+Waddles uses distributed rate limiting with Redis for accurate enforcement across all instances.
 
 ### Sliding Window Algorithm
 
@@ -737,7 +737,7 @@ truffleHog --regex --entropy=True .
 
 ## Compliance & Standards
 
-WaddleBot follows industry-standard security frameworks:
+Waddles follows industry-standard security frameworks:
 
 - **OWASP Top 10**: Mitigations implemented for all items
 - **CWE Coverage**: Focus on CWE-89 (SQL Injection), CWE-79 (XSS), CWE-200 (Information Exposure), CWE-306 (Authentication), CWE-798 (Hardcoded Credentials)

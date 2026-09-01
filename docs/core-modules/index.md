@@ -1,6 +1,6 @@
 # Core Modules Overview
 
-Core modules are the foundation of WaddleBot's architecture. These modules must be running for the system to function properly and provide the essential services that all other components depend on.
+Core modules are the foundation of Waddles's architecture. These modules must be running for the system to function properly and provide the essential services that all other components depend on.
 
 ## Module Categories
 
@@ -77,7 +77,7 @@ graph TB
 ## Core Module Responsibilities
 
 ### 🚦 **Router Module** - Traffic Control Center
-The heart of the WaddleBot system that handles all message routing and command processing.
+The heart of the Waddles system that handles all message routing and command processing.
 
 **Key Features:**
 - High-performance multi-threaded command processing

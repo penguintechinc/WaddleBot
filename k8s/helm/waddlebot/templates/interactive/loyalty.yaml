@@ -1,30 +1,33 @@
-{{- if .Values.modules.interactive.loyalty.enabled }}
+{{- if .Values.modules.interactiveLoyalty.enabled }}
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "waddlebot.fullname" . }}-loyalty-interaction
+  name: {{ include "waddlebot.fullname" . }}-interactive-loyalty
   labels:
     {{- include "waddlebot.labels" . | nindent 4 }}
-    app.kubernetes.io/component: loyalty-interaction
+    app.kubernetes.io/component: interactive-loyalty
 spec:
-  replicas: {{ .Values.modules.interactive.loyalty.replicas }}
+  replicas: {{ .Values.modules.interactiveLoyalty.replicas }}
   selector:
     matchLabels:
       {{- include "waddlebot.selectorLabels" . | nindent 6 }}
-      app.kubernetes.io/component: loyalty-interaction
+      app.kubernetes.io/component: interactive-loyalty
   template:
     metadata:
       labels:
         {{- include "waddlebot.selectorLabels" . | nindent 8 }}
-        app.kubernetes.io/component: loyalty-interaction
+        app.kubernetes.io/component: interactive-loyalty
     spec:
       serviceAccountName: {{ include "waddlebot.serviceAccountName" . }}
+      {{- include "waddlebot.imagePullSecrets" . | nindent 6 }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+      {{- include "waddlebot.dbMigrateInitContainer" . | nindent 6 }}
       containers:
-      - name: loyalty-interaction
-        image: "{{ .Values.global.imageRegistry }}/interactive-loyalty:{{ .Values.modules.interactive.loyalty.imageTag | default .Values.global.imageTag }}"
+      - name: interactive-loyalty
+        image: "{{ .Values.global.imageRegistry }}/interactive-loyalty:{{ .Values.modules.interactiveLoyalty.imageTag | default .Values.global.imageTag }}"
         imagePullPolicy: {{ .Values.global.imagePullPolicy }}
         securityContext:
           {{- toYaml .Values.securityContext | nindent 10 }}
@@ -36,16 +39,16 @@ spec:
         - configMapRef:
             name: {{ include "waddlebot.fullname" . }}-config
         - configMapRef:
-            name: {{ include "waddlebot.fullname" . }}-loyalty-interaction-config
+            name: {{ include "waddlebot.fullname" . }}-interactive-loyalty-config
             optional: true
         - secretRef:
             name: {{ include "waddlebot.fullname" . }}-secrets
         - secretRef:
-            name: {{ include "waddlebot.fullname" . }}-loyalty-interaction-secret
+            name: {{ include "waddlebot.fullname" . }}-interactive-loyalty-secret
             optional: true
         env:
         - name: MODULE_NAME
-          value: "loyalty-interaction"
+          value: "interactive-loyalty"
         - name: MODULE_PORT
           value: "8032"
         - name: REPUTATION_SERVICE_URL
@@ -67,21 +70,25 @@ spec:
           timeoutSeconds: 3
           failureThreshold: 3
         resources:
-          {{- toYaml .Values.modules.interactive.loyalty.resources | nindent 10 }}
+          {{- toYaml .Values.modules.interactiveLoyalty.resources | nindent 10 }}
         volumeMounts:
         - name: logs
           mountPath: /var/log/waddlebotlog
+        - name: tmp
+          mountPath: /tmp
       volumes:
       - name: logs
+        emptyDir: {}
+      - name: tmp
         emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "waddlebot.fullname" . }}-loyalty-interaction
+  name: {{ include "waddlebot.fullname" . }}-interactive-loyalty
   labels:
     {{- include "waddlebot.labels" . | nindent 4 }}
-    app.kubernetes.io/component: loyalty-interaction
+    app.kubernetes.io/component: interactive-loyalty
 spec:
   type: ClusterIP
   ports:
@@ -91,5 +98,5 @@ spec:
     name: http
   selector:
     {{- include "waddlebot.selectorLabels" . | nindent 4 }}
-    app.kubernetes.io/component: loyalty-interaction
+    app.kubernetes.io/component: interactive-loyalty
 {{- end }}

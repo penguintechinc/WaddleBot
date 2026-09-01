@@ -591,7 +591,7 @@ When reporting issues, include:
 
 ### Support Channels
 
-- GitHub Issues: [WaddleBot Issues](https://github.com/waddlebot/waddlebot/issues)
+- GitHub Issues: [Waddles Issues](https://github.com/waddlebot/waddlebot/issues)
 - Documentation: `/docs/labels_core_module/`
 - Logs: `/var/log/waddlebot/labels_core_module.log`
 

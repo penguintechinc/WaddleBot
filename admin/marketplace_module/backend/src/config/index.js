@@ -19,7 +19,7 @@ if (process.env.NODE_ENV === 'production') {
 export const config = {
   // Server
   env: process.env.NODE_ENV || 'development',
-  port: parseInt(process.env.PORT || '8070', 10),
+  port: parseInt(process.env.MODULE_PORT || process.env.PORT || '8070', 10),
   host: process.env.HOST || '0.0.0.0',
 
   // Database

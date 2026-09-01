@@ -1,4 +1,12 @@
 .PLAN*
+*.tmp
+*.temp
+.worktrees/
+
+# Playwright
+tests/e2e/.auth-state.json
+tests/e2e/test-results/
+tests/e2e/playwright-report/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -11,12 +19,13 @@ __pycache__/
 # Distribution / packaging
 .Python
 
+build/
 develop-eggs/
 dist/
 downloads/
 eggs/
 .eggs/
-lib/
+/lib/
 lib64/
 parts/
 sdist/
@@ -123,6 +132,9 @@ celerybeat.pid
 # SageMath parsed files
 *.sage.py
 
+# NPM auth
+**/.npmrc
+
 # Environments
 .env
 .venv
@@ -176,5 +188,13 @@ config/kong/ssl/*.pem
 
 # Node.js
 node_modules/
-package-lock.json
+
+# Android and Gradle build outputs
+**/.gradle/
+mobile/android/app/build/
+mobile/android/.cxx/
+mobile/android/local.properties
+mobile/flutter_gazer/android/build/
+*.apk
+*.aab
 

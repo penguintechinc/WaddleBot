@@ -84,7 +84,7 @@ The script tests all endpoints:
 
 ```
 ========================================
-WaddleBot Router Module API Tests
+Waddles Router Module API Tests
 ========================================
 Router URL: http://localhost:8000
 API Key: [set]

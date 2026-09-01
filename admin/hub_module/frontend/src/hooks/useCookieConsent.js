@@ -107,6 +107,7 @@ export function useCookieConsent() {
     acceptAll: context.acceptAll,
     rejectNonEssential: context.rejectNonEssential,
     savePreferences: context.savePreferences,
+    setDoNotSell: context.setDoNotSell,
     openPreferences: context.openPreferences,
     closeBanner: context.closeBanner,
     setShowPreferences: context.setShowPreferences,

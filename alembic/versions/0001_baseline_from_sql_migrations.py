@@ -1,0 +1,141 @@
+"""Baseline migration from legacy SQL files.
+
+Handles two scenarios:
+1. Existing DB (beta): schema_migrations table exists with entries → no-op
+2. Fresh DB: Executes all legacy SQL migration files in order
+
+Revision ID: 0001_baseline
+Revises: None
+Create Date: 2026-02-16
+"""
+import os
+import glob
+from alembic import op
+import sqlalchemy as sa
+
+revision = '0001_baseline'
+down_revision = None
+branch_labels = None
+depends_on = None
+
+import re
+
+
+def _prepare_sql(sql_content):
+    """Prepare raw SQL file content for execution via psycopg2.
+
+    Strips explicit BEGIN/COMMIT (alembic manages the transaction)
+    and removes psql meta-commands (\\-prefixed lines).
+    The result is passed as-is to cursor.execute() which handles
+    semicolons, $$ blocks, comments, and string literals natively.
+    """
+    # Remove psql meta-commands (e.g. \set, \echo)
+    lines = sql_content.split('\n')
+    lines = [l for l in lines if not l.strip().startswith('\\')]
+    content = '\n'.join(lines)
+    # Strip standalone BEGIN/COMMIT statements (alembic wraps in txn).
+    # Match only bare BEGIN; or COMMIT; on their own lines.
+    content = re.sub(r'(?m)^\s*BEGIN\s*;\s*$', '', content)
+    content = re.sub(r'(?m)^\s*COMMIT\s*;\s*$', '', content)
+    return content.strip()
+
+
+# Path where legacy SQL files are mounted in the migration container
+LEGACY_SQL_DIR = os.environ.get(
+    'LEGACY_SQL_DIR',
+    os.path.join(os.path.dirname(__file__), '..', '..', 'config', 'postgres', 'migrations')
+)
+
+
+def upgrade() -> None:
+    conn = op.get_bind()
+
+    # Check if this DB was already migrated by the legacy psql runner
+    result = conn.execute(sa.text(
+        "SELECT EXISTS ("
+        "  SELECT 1 FROM information_schema.tables "
+        "  WHERE table_schema = 'public' AND table_name = 'schema_migrations'"
+        ")"
+    ))
+    has_schema_migrations = result.scalar()
+
+    if has_schema_migrations:
+        count = conn.execute(sa.text(
+            "SELECT COUNT(*) FROM schema_migrations"
+        )).scalar()
+        if count > 0:
+            print(f"[baseline] Legacy schema_migrations has {count} entries — DB already migrated, skipping.")
+            return
+
+    # Fresh DB: run all legacy SQL migration files in sorted order
+    sql_dir = os.path.abspath(LEGACY_SQL_DIR)
+    sql_files = sorted(glob.glob(os.path.join(sql_dir, '*.sql')))
+
+    if not sql_files:
+        print(f"[baseline] WARNING: No SQL files found in {sql_dir}")
+        print("[baseline] If this is a fresh deployment, tables will be created by autogenerate migrations.")
+        return
+
+    print(f"[baseline] Fresh DB detected. Applying {len(sql_files)} legacy SQL migrations...")
+
+    # Create schema_migrations table for tracking
+    conn.execute(sa.text(
+        "CREATE TABLE IF NOT EXISTS schema_migrations ("
+        "  version VARCHAR(255) PRIMARY KEY,"
+        "  applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,"
+        "  description TEXT"
+        ")"
+    ))
+
+    for sql_file in sql_files:
+        fname = os.path.basename(sql_file)
+        version = fname.replace('.sql', '')
+
+        # Check if already applied (defensive)
+        already = conn.execute(sa.text(
+            "SELECT 1 FROM schema_migrations WHERE version = :v"
+        ), {"v": version}).fetchone()
+
+        if already:
+            print(f"  Skipping (already applied): {fname}")
+            continue
+
+        print(f"  Applying: {fname}")
+        with open(sql_file, 'r') as f:
+            sql_content = f.read()
+
+        # Use psycopg2's native multi-statement execution which correctly
+        # handles $$-delimited blocks, /* */ comments, and string literals.
+        prepared = _prepare_sql(sql_content)
+        if prepared:
+            raw_conn = conn.connection.dbapi_connection
+            cursor = raw_conn.cursor()
+            try:
+                # Savepoint so a single file failure doesn't abort the txn.
+                # Legacy migrations may reference tables created by app code
+                # (hub-api, ai-researcher, etc.) that don't exist on fresh DB.
+                cursor.execute("SAVEPOINT sp_migration")
+                cursor.execute(prepared)
+                cursor.execute("RELEASE SAVEPOINT sp_migration")
+            except Exception as e:
+                cursor.execute("ROLLBACK TO SAVEPOINT sp_migration")
+                cursor.execute("RELEASE SAVEPOINT sp_migration")
+                cursor.close()
+                print(f"    WARNING: {fname} skipped — {str(e).strip().splitlines()[0]}")
+                continue
+            cursor.close()
+
+        conn.execute(sa.text(
+            "INSERT INTO schema_migrations (version) VALUES (:v) ON CONFLICT DO NOTHING"
+        ), {"v": version})
+
+    print("[baseline] Legacy SQL migrations applied.")
+
+
+def downgrade() -> None:
+    # Downgrade is intentionally not supported for the baseline.
+    # Dropping all tables would destroy the database.
+    raise RuntimeError(
+        "Cannot downgrade baseline migration. "
+        "To reset, drop the database and re-run migrations."
+    )

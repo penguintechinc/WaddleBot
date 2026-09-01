@@ -396,7 +396,7 @@ class ConditionFilterConfig(BaseNodeConfig):
 @dataclass(slots=True)
 class ActionModuleConfig(BaseNodeConfig):
     """
-    Module action - Calls a WaddleBot action module.
+    Module action - Calls a Waddles action module.
 
     Attributes:
         module_name: Name of action module (ai_interaction, shoutout, etc.)

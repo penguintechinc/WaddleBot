@@ -1,0 +1,62 @@
+{{- if .Values.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "waddlebot-spire.fullname" . }}-agent
+  labels:
+    {{- include "waddlebot-spire.labels" . | nindent 4 }}
+    component: agent
+  namespace: {{ .Release.Namespace }}
+data:
+  agent.hcl: |
+    agent {
+      data_dir = "/run/spire/agent"
+      log_level = "INFO"
+      server_address = "{{ include "waddlebot-spire.fullname" . }}-server"
+      server_port = "{{ .Values.server.ports.grpc }}"
+      socket_path = "{{ .Values.agent.socketPath }}"
+      trust_domain = "{{ .Values.trustDomain }}"
+      trust_bundle_path = "/run/spire/bundle/bundle.crt"
+      insecure_bootstrap = false
+    }
+
+    plugins {
+      {{- if .Values.server.nodeAttestation.k8sPsat.enabled }}
+      NodeAttestor "k8s_psat" {
+        plugin_data {
+          cluster = "{{ .Values.server.nodeAttestation.k8sPsat.cluster }}"
+          token_path = "{{ .Values.agent.serviceAccountTokenPath }}"
+        }
+      }
+      {{- end }}
+      {{- if .Values.server.nodeAttestation.awsIid.enabled }}
+      NodeAttestor "aws_iid" {
+        plugin_data {}
+      }
+      {{- end }}
+
+      KeyManager "memory" {
+        plugin_data {}
+      }
+      {{- if .Values.agent.workloadAttestors.k8s.enabled }}
+      WorkloadAttestor "k8s" {
+        plugin_data {
+          skip_kubelet_verification = {{ .Values.agent.workloadAttestors.k8s.skipKubeletVerification }}
+        }
+      }
+      {{- end }}
+      {{- if .Values.agent.workloadAttestors.unix.enabled }}
+      WorkloadAttestor "unix" {
+        plugin_data {}
+      }
+      {{- end }}
+    }
+
+    health_checks {
+      listener_enabled = true
+      bind_address = "0.0.0.0"
+      bind_port = "8080"
+      live_path = "/live"
+      ready_path = "/ready"
+    }
+{{- end }}

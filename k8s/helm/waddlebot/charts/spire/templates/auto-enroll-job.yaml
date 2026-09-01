@@ -1,0 +1,76 @@
+{{- if and .Values.enabled .Values.autoEnroll.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "waddlebot-spire.fullname" . }}-auto-enroll
+  labels:
+    {{- include "waddlebot-spire.labels" . | nindent 4 }}
+    component: auto-enroll
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        {{- include "waddlebot-spire.selectorLabels" . | nindent 8 }}
+        component: auto-enroll
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "waddlebot-spire.fullname" . }}-auto-enroll
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+      containers:
+      - name: auto-enroll
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: [ALL]
+        # kubectl exec's INTO the running spire-server pod (built from the
+        # digest-pinned .Values.server.image.repository) to run
+        # `/opt/spire/bin/spire-server entry create` there — see enroll.sh.
+        # This image only needs the kubectl binary itself; the official
+        # spire-server image is distroless (no shell/package manager), so
+        # it cannot run this shell script directly.
+        #
+        # Bitnami archived versioned kubectl tags in its 2025 licensing
+        # change — only a rolling `latest` tag remains available. Pinning
+        # the digest keeps this immutable regardless; re-resolve via
+        # `pinning-dependency-digests` skill on rotation, same as any
+        # other external image in this chart.
+        image: "bitnami/kubectl@sha256:95de17e6eb92da83a58c90a9df0c4cede634f898d2e6b92ea04f4a6ee6ace08d"
+        imagePullPolicy: IfNotPresent
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi
+        command:
+        - /bin/sh
+        - -c
+        - |
+          /scripts/enroll.sh
+        volumeMounts:
+        - name: enroll-script
+          mountPath: /scripts
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: enroll-script
+        configMap:
+          name: {{ include "waddlebot-spire.fullname" . }}-enroll-script
+          defaultMode: 0755
+      - name: tmp
+        emptyDir: {}
+{{- end }}

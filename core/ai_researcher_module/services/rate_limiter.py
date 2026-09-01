@@ -41,6 +41,8 @@ class RateLimiter:
     - "research": 5 per user per hour, 50 per community per hour
     - "ask": 10 per user per hour, 100 per community per hour
     - "recall": 20 per user per hour, 200 per community per hour
+    - "game": 20 per user per hour, 200 per community per hour
+    - "game_quick": 60 per user per hour, 600 per community per hour
     """
 
     # Default rate limits (per hour)
@@ -48,6 +50,17 @@ class RateLimiter:
         'research': {'user': 5, 'community': 50},
         'ask': {'user': 10, 'community': 100},
         'recall': {'user': 20, 'community': 200},
+        'game': {'user': 20, 'community': 200},
+        'game_quick': {'user': 60, 'community': 600},
+        'patch_notes': {'user': 15, 'community': 150},
+        'build_advisor': {'user': 15, 'community': 150},
+        'meta_lookup': {'user': 20, 'community': 200},
+        'tech_fix': {'user': 10, 'community': 100},
+        'price_lookup': {'user': 20, 'community': 200},
+        'deals_lookup': {'user': 30, 'community': 300},
+        'clip_research': {'user': 20, 'community': 200},
+        'event_lookup': {'user': 20, 'community': 200},
+        'tournament_lookup': {'user': 15, 'community': 150},
     }
 
     def __init__(self, redis_client: redis.Redis, db_connection=None):

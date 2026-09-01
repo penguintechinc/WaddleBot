@@ -1199,6 +1199,374 @@ class EventAdminRevokeRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
 
+# ============================================================================
+# Calendar OAuth & Availability Validation Models (Phase 4A + 4B)
+# ============================================================================
+
+class AvailabilitySettingsUpdateRequest(BaseModel):
+    """
+    Validation model for updating user calendar/availability settings.
+    """
+    visibility_public: Optional[str] = Field(
+        None,
+        pattern=r'^(hidden|free_busy|details)$',
+        description="Public visibility level"
+    )
+    visibility_registered: Optional[str] = Field(
+        None,
+        pattern=r'^(hidden|free_busy|details)$',
+        description="Registered user visibility level"
+    )
+    visibility_community: Optional[str] = Field(
+        None,
+        pattern=r'^(hidden|free_busy|details)$',
+        description="Community member visibility level"
+    )
+    slot_durations: Optional[List[int]] = Field(
+        None,
+        description="Available slot durations in minutes"
+    )
+    default_slot_duration: Optional[int] = Field(
+        None,
+        ge=5,
+        le=480,
+        description="Default slot duration in minutes (5-480)"
+    )
+    min_notice_hours: Optional[int] = Field(
+        None,
+        ge=0,
+        le=168,
+        description="Minimum notice hours before booking (0-168)"
+    )
+    max_future_days: Optional[int] = Field(
+        None,
+        ge=1,
+        le=365,
+        description="Maximum days in future for booking (1-365)"
+    )
+    buffer_minutes: Optional[int] = Field(
+        None,
+        ge=0,
+        le=120,
+        description="Buffer between appointments in minutes (0-120)"
+    )
+    timezone: Optional[str] = Field(
+        None,
+        max_length=50,
+        description="User timezone (e.g., America/New_York)"
+    )
+    booking_enabled: Optional[bool] = Field(
+        None,
+        description="Enable public booking page"
+    )
+    booking_slug: Optional[str] = Field(
+        None,
+        min_length=3,
+        max_length=100,
+        pattern=r'^[a-z0-9-]+$',
+        description="Booking page slug (lowercase, numbers, hyphens)"
+    )
+    booking_page_title: Optional[str] = Field(
+        None,
+        max_length=255,
+        description="Booking page title"
+    )
+    booking_page_description: Optional[str] = Field(
+        None,
+        max_length=2000,
+        description="Booking page description"
+    )
+
+    model_config = ConfigDict(extra='forbid')
+
+
+class WeeklyAvailabilityUpdateRequest(BaseModel):
+    """
+    Validation model for updating weekly availability.
+    Example: {"monday": [{"start":"09:00","end":"17:00"}], ...}
+    """
+    monday: Optional[List[dict]] = Field(default_factory=list)
+    tuesday: Optional[List[dict]] = Field(default_factory=list)
+    wednesday: Optional[List[dict]] = Field(default_factory=list)
+    thursday: Optional[List[dict]] = Field(default_factory=list)
+    friday: Optional[List[dict]] = Field(default_factory=list)
+    saturday: Optional[List[dict]] = Field(default_factory=list)
+    sunday: Optional[List[dict]] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra='forbid')
+
+
+class AvailableSlotsParams(BaseModel):
+    """
+    Validation model for available slots query parameters.
+    """
+    date: str = Field(
+        ...,
+        pattern=r'^\d{4}-\d{2}-\d{2}$',
+        description="Date in YYYY-MM-DD format"
+    )
+    duration: int = Field(
+        default=30,
+        ge=5,
+        le=480,
+        description="Slot duration in minutes (5-480, default 30)"
+    )
+
+    model_config = ConfigDict(extra='forbid')
+
+
+# ============================================================================
+# Booking Page Validation Models (Phase 4C + 4D)
+# ============================================================================
+
+class BookingPageCreateRequest(BaseModel):
+    """
+    Validation model for creating a booking page.
+    """
+    slug: str = Field(
+        ...,
+        min_length=3,
+        max_length=100,
+        pattern=r'^[a-z0-9-]+$',
+        description="URL slug (lowercase, numbers, hyphens)"
+    )
+    title: str = Field(
+        ...,
+        min_length=3,
+        max_length=255,
+        description="Booking page title"
+    )
+    description: Optional[str] = Field(
+        None,
+        max_length=2000,
+        description="Booking page description"
+    )
+    slot_duration: int = Field(
+        default=30,
+        ge=5,
+        le=480,
+        description="Slot duration in minutes (5-480)"
+    )
+    access_scope: str = Field(
+        default='public',
+        pattern=r'^(public|registered|community)$',
+        description="Access scope"
+    )
+    form_fields: Optional[List[dict]] = Field(
+        default_factory=list,
+        max_length=8,
+        description="Custom form fields (max 8)"
+    )
+
+    model_config = ConfigDict(extra='forbid')
+
+
+class BookingPageUpdateRequest(BaseModel):
+    """
+    Validation model for updating a booking page.
+    """
+    title: Optional[str] = Field(
+        None,
+        min_length=3,
+        max_length=255,
+        description="Booking page title"
+    )
+    description: Optional[str] = Field(
+        None,
+        max_length=2000,
+        description="Booking page description"
+    )
+    slot_duration: Optional[int] = Field(
+        None,
+        ge=5,
+        le=480,
+        description="Slot duration in minutes (5-480)"
+    )
+    access_scope: Optional[str] = Field(
+        None,
+        pattern=r'^(public|registered|community)$',
+        description="Access scope"
+    )
+    form_fields: Optional[List[dict]] = Field(
+        None,
+        max_length=8,
+        description="Custom form fields (max 8)"
+    )
+    is_active: Optional[bool] = Field(
+        None,
+        description="Active status"
+    )
+
+    model_config = ConfigDict(extra='forbid')
+
+
+class BookingCreateRequest(BaseModel):
+    """
+    Validation model for creating a booking.
+    """
+    guest_name: str = Field(
+        ...,
+        min_length=1,
+        max_length=255,
+        description="Guest name"
+    )
+    guest_email: Optional[str] = Field(
+        None,
+        max_length=255,
+        description="Guest email"
+    )
+    slot_start: datetime = Field(
+        ...,
+        description="Booking start time (ISO 8601)"
+    )
+    slot_end: datetime = Field(
+        ...,
+        description="Booking end time (ISO 8601)"
+    )
+    form_responses: Optional[dict] = Field(
+        default_factory=dict,
+        description="Custom form responses"
+    )
+
+    @field_validator('guest_email')
+    @classmethod
+    def validate_email(cls, v):
+        """Validate email format if provided."""
+        if v:
+            email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+            if not re.match(email_pattern, v):
+                raise ValueError('Invalid email format')
+        return v
+
+    @model_validator(mode='after')
+    def validate_time_order(self):
+        """Ensure slot_end is after slot_start."""
+        if self.slot_end <= self.slot_start:
+            raise ValueError('slot_end must be after slot_start')
+        return self
+
+    model_config = ConfigDict(extra='forbid')
+
+
+class AvailableSlotsQueryParams(BaseModel):
+    """
+    Validation model for available slots query parameters.
+    """
+    date: str = Field(
+        ...,
+        pattern=r'^\d{4}-\d{2}-\d{2}$',
+        description="Date in YYYY-MM-DD format"
+    )
+
+    model_config = ConfigDict(extra='forbid')
+
+
+class BookingListParams(BaseModel):
+    """
+    Validation model for booking list query parameters.
+    """
+    status: Optional[str] = Field(
+        None,
+        pattern=r'^(pending|confirmed|cancelled_by_host|cancelled_by_guest|completed|no_show)$',
+        description="Filter by status"
+    )
+    start: Optional[str] = Field(
+        None,
+        pattern=r'^\d{4}-\d{2}-\d{2}$',
+        description="Start date filter (YYYY-MM-DD)"
+    )
+    end: Optional[str] = Field(
+        None,
+        pattern=r'^\d{4}-\d{2}-\d{2}$',
+        description="End date filter (YYYY-MM-DD)"
+    )
+
+    model_config = ConfigDict(extra='forbid')
+
+
+class GroupBookingPageCreateRequest(BaseModel):
+    """
+    Validation model for creating a group booking page.
+    """
+    slug: str = Field(
+        ...,
+        min_length=3,
+        max_length=100,
+        pattern=r'^[a-z0-9-]+$',
+        description="URL slug (lowercase, numbers, hyphens)"
+    )
+    title: str = Field(
+        ...,
+        min_length=3,
+        max_length=255,
+        description="Booking page title"
+    )
+    description: Optional[str] = Field(
+        None,
+        max_length=2000,
+        description="Booking page description"
+    )
+    slot_duration: int = Field(
+        default=30,
+        ge=5,
+        le=480,
+        description="Slot duration in minutes (5-480)"
+    )
+    access_scope: str = Field(
+        default='public',
+        pattern=r'^(public|registered|community)$',
+        description="Access scope"
+    )
+    form_fields: Optional[List[dict]] = Field(
+        default_factory=list,
+        max_length=8,
+        description="Custom form fields (max 8)"
+    )
+
+    model_config = ConfigDict(extra='forbid')
+
+
+class GroupMemberAddRequest(BaseModel):
+    """
+    Validation model for adding a member to a group booking page.
+    """
+    user_id: int = Field(
+        ...,
+        gt=0,
+        description="Hub user ID to add"
+    )
+    is_required: bool = Field(
+        default=True,
+        description="Whether member is required for availability"
+    )
+
+    model_config = ConfigDict(extra='forbid')
+
+
+class BestSlotsParams(BaseModel):
+    """
+    Validation model for best slots query parameters.
+    """
+    start: str = Field(
+        ...,
+        pattern=r'^\d{4}-\d{2}-\d{2}$',
+        description="Start date (YYYY-MM-DD)"
+    )
+    end: str = Field(
+        ...,
+        pattern=r'^\d{4}-\d{2}-\d{2}$',
+        description="End date (YYYY-MM-DD)"
+    )
+    limit: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Number of slots to return (1-20)"
+    )
+
+    model_config = ConfigDict(extra='forbid')
+
+
 __all__ = [
     # Event management
     'EventCreateRequest',
@@ -1232,4 +1600,17 @@ __all__ = [
     'EventAdminAssignRequest',
     'EventAdminUpdateRequest',
     'EventAdminRevokeRequest',
+    # Calendar OAuth & Availability
+    'AvailabilitySettingsUpdateRequest',
+    'WeeklyAvailabilityUpdateRequest',
+    'AvailableSlotsParams',
+    # Booking pages
+    'BookingPageCreateRequest',
+    'BookingPageUpdateRequest',
+    'BookingCreateRequest',
+    'AvailableSlotsQueryParams',
+    'BookingListParams',
+    'GroupBookingPageCreateRequest',
+    'GroupMemberAddRequest',
+    'BestSlotsParams',
 ]

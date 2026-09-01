@@ -1,6 +1,6 @@
-# WaddleBot GitHub Actions Workflows Documentation
+# Waddles GitHub Actions Workflows Documentation
 
-Complete technical reference for WaddleBot's GitHub Actions CI/CD workflows, covering automated builds, security scanning, version management, and deployment pipelines for 24+ microservices.
+Complete technical reference for Waddles's GitHub Actions CI/CD workflows, covering automated builds, security scanning, version management, and deployment pipelines for 24+ microservices.
 
 ---
 
@@ -22,7 +22,7 @@ Complete technical reference for WaddleBot's GitHub Actions CI/CD workflows, cov
 
 ## Overview
 
-WaddleBot uses a sophisticated multi-workflow CI/CD pipeline that automates:
+Waddles uses a sophisticated multi-workflow CI/CD pipeline that automates:
 
 - **Container builds** for 24+ microservices modules
 - **Multi-language security scanning** (Python, JavaScript, Go, Kotlin)
@@ -79,12 +79,8 @@ WaddleBot uses a sophisticated multi-workflow CI/CD pipeline that automates:
 ├── build-spotify-interaction.yml
 ├── build-loyalty-interaction.yml
 │
-├── android.yml                        # Mobile/Desktop builds
-├── desktop-bridge.yml
-├── desktop-linux.yml
-├── desktop-macos.yml
-├── desktop-windows.yml
-└── desktop-release.yml
+├── android.yml                        # Android validation
+└── pr-validation.yml                  # Pull request and merge-queue tests
 ```
 
 ### Workflow Trigger Strategy
@@ -154,15 +150,13 @@ The comprehensive pipeline that runs security checks, builds containers, and dep
      - Upload artifacts
    ```
 
-4. **Desktop Bridge Build** (parallel, multi-OS)
+4. **Pull Request Validation**
    ```yaml
-   desktop-bridge:
-     strategy:
-       matrix:
-         os: [ubuntu-latest, windows-latest, macos-latest]
-     - Go tests with coverage
-     - Integration tests
-     - Cross-platform binary builds
+   pr-validation:
+     - Python unit tests
+     - Marketplace refund authorization tests
+     - Hub frontend tests and build
+     - Website build
    ```
 
 5. **Performance Tests** (main branch only)
@@ -478,7 +472,7 @@ jobs:
 
 ### .version File
 
-**Location**: `/home/penguin/code/WaddleBot/.version`
+**Location**: `/home/penguin/code/Waddles/.version`
 
 **Format**: `vMajor.Minor.Patch` (e.g., `0.2.0`)
 
@@ -504,7 +498,7 @@ jobs:
 **Manual Update**:
 ```bash
 # Navigate to repository root
-cd /home/penguin/code/WaddleBot
+cd /home/penguin/code/Waddles
 
 # Edit version file
 echo "0.3.0" > .version
@@ -569,7 +563,7 @@ vMajor.Minor.Patch.Epoch64
 
 ### Multi-Language Security Strategy
 
-WaddleBot implements comprehensive security scanning across all supported languages.
+Waddles implements comprehensive security scanning across all supported languages.
 
 ### Python Security
 
@@ -950,12 +944,7 @@ identity-core-xxxxx          2/2     Running   0          2m
 - Upload artifacts
 ```
 
-**Desktop Bridge** (`desktop-bridge.yml`):
-- Multi-OS matrix (Ubuntu, Windows, macOS)
-- Go 1.21+ with tests and coverage
-- Integration tests
-- Cross-platform binary builds
-- Upload to artifacts
+Legacy desktop workflows were removed when their source projects were retired.
 
 ---
 
@@ -1017,7 +1006,7 @@ gh run list --workflow=build-router.yml
 curl -X POST \
   -H "Accept: application/vnd.github.v3+json" \
   -H "Authorization: token $GITHUB_TOKEN" \
-  https://api.github.com/repos/owner/WaddleBot/actions/workflows/build-router.yml/dispatches \
+  https://api.github.com/repos/owner/Waddles/actions/workflows/build-router.yml/dispatches \
   -d '{"ref":"main"}'
 ```
 
@@ -1147,7 +1136,7 @@ jobs:
 **Diagnosis**:
 ```bash
 # Check GitHub Actions logs
-# Navigate to: https://github.com/owner/WaddleBot/actions
+# Navigate to: https://github.com/owner/Waddles/actions
 # Click failed workflow run
 # Review job logs
 ```
@@ -1414,7 +1403,7 @@ gh run view <run-id> --log
 ---
 
 **Last Updated**: 2025-12-16
-**WaddleBot Version**: 0.2.0
+**Waddles Version**: 0.2.0
 **Total Workflow Files**: 35+
 **Module Build Workflows**: 24+
 **Container Platforms**: 2 (amd64, arm64)

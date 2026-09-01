@@ -1,7 +1,7 @@
 /**
  * Community Controller - Authenticated member features
  */
-import { query } from '../config/database.js';
+import { query, transaction } from '../config/database.js';
 import { errors } from '../middleware/errorHandler.js';
 import { logger } from '../utils/logger.js';
 import { formatReputation, clampReputation } from '../utils/reputation.js';
@@ -9,6 +9,8 @@ import {
   verifyPlatformAdmin,
   isUserCommunityAdmin,
 } from '../services/platformPermissionService.js';
+
+const VALID_COMMUNITY_TYPES = ['shared_interest_group', 'gaming', 'creator', 'corporate', 'other'];
 
 /**
  * Get user's communities
@@ -168,7 +170,7 @@ export async function getLeaderboard(req, res, next) {
     const result = await query(
       `SELECT cm.user_id, u.username, u.avatar_url, cm.reputation, cm.role
        FROM community_members cm
-       LEFT JOIN hub_users u ON u.id = cm.user_id
+       LEFT JOIN hub_users u ON u.id = cm.user_id::integer
        WHERE cm.community_id = $1 AND cm.is_active = true
        ORDER BY cm.reputation DESC
        LIMIT $2`,
@@ -232,7 +234,7 @@ export async function getCommunityMembers(req, res, next) {
     const countResult = await query(
       `SELECT COUNT(*) as count
        FROM community_members cm
-       LEFT JOIN hub_users u ON u.id = cm.user_id
+       LEFT JOIN hub_users u ON u.id = cm.user_id::integer
        ${whereClause}`,
       params
     );
@@ -243,7 +245,7 @@ export async function getCommunityMembers(req, res, next) {
     const result = await query(
       `SELECT cm.user_id, u.username, u.avatar_url, cm.role, cm.joined_at
        FROM community_members cm
-       LEFT JOIN hub_users u ON u.id = cm.user_id
+       LEFT JOIN hub_users u ON u.id = cm.user_id::integer
        ${whereClause}
        ORDER BY
          CASE cm.role
@@ -970,6 +972,115 @@ export async function cancelServerLinkRequest(req, res, next) {
     });
 
     res.json({ success: true, message: 'Server link request cancelled' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Create a new community (authenticated user becomes owner)
+ * POST /api/v1/communities/create
+ */
+export async function createCommunity(req, res, next) {
+  try {
+    const { name, displayName, description, platform, platformServerId, isPublic, communityType, ownerId, ownerName } = req.body;
+
+    if (!name || !platform) {
+      return next(errors.badRequest('Name and platform are required'));
+    }
+
+    // Validate community type
+    const validatedCommunityType = communityType || 'creator';
+    if (!VALID_COMMUNITY_TYPES.includes(validatedCommunityType)) {
+      return next(errors.badRequest(
+        `Invalid community type. Must be one of: ${VALID_COMMUNITY_TYPES.join(', ')}`
+      ));
+    }
+
+    // Normalize community name
+    const normalizedName = name
+      .toLowerCase()
+      .replace(/[^a-z0-9\s\-_]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .slice(0, 100);
+
+    if (!normalizedName) {
+      return next(errors.badRequest('Community name must contain valid characters'));
+    }
+
+    // Check if community name already exists
+    const existingResult = await query(
+      'SELECT id FROM communities WHERE name = $1',
+      [normalizedName]
+    );
+
+    if (existingResult.rows.length > 0) {
+      return next(errors.conflict('Community name already exists'));
+    }
+
+    const result = await transaction(async (client) => {
+      // Create the community with the current user as owner
+      const communityResult = await client.query(
+        `INSERT INTO communities
+         (name, display_name, description, platform, platform_server_id,
+          owner_id, owner_name, is_public, community_type, member_count, created_by, tenant_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 1, $6, $10)
+         RETURNING id, name, display_name, platform, community_type, created_at`,
+        [
+          normalizedName,
+          displayName || name,
+          description || '',
+          platform,
+          platformServerId || null,
+          (req.user.isSuperAdmin && ownerId) ? parseInt(ownerId, 10) : req.user.id,
+          (req.user.isSuperAdmin && ownerName) ? ownerName : (req.user.username || null),
+          isPublic !== false,
+          validatedCommunityType,
+          req.user.tenantId || 1,
+        ]
+      );
+
+      const newCommunity = communityResult.rows[0];
+
+      // Seed system roles for the new community
+      await client.query('SELECT seed_community_system_roles($1)', [newCommunity.id]);
+
+      // Add creator as community-owner member (reputation starts at 600)
+      const ownerRoleResult = await client.query(
+        `SELECT id FROM community_roles WHERE community_id = $1 AND name = 'community-owner'`,
+        [newCommunity.id]
+      );
+      const ownerRoleId = ownerRoleResult.rows[0]?.id || null;
+
+      await client.query(
+        `INSERT INTO community_members
+         (community_id, user_id, role, community_role_id, reputation, is_active, joined_at)
+         VALUES ($1, $2, 'community-owner', $3, 600, true, NOW())`,
+        [newCommunity.id, (req.user.isSuperAdmin && ownerId) ? parseInt(ownerId, 10) : req.user.id, ownerRoleId]
+      );
+
+      return newCommunity;
+    });
+
+    logger.audit('Community created by user', {
+      userId: req.user.id,
+      communityId: result.id,
+      name: result.name,
+      communityType: result.community_type,
+    });
+
+    res.status(201).json({
+      success: true,
+      community: {
+        id: result.id,
+        name: result.name,
+        displayName: result.display_name,
+        platform: result.platform,
+        communityType: result.community_type,
+        createdAt: result.created_at?.toISOString(),
+      },
+    });
   } catch (err) {
     next(err);
   }

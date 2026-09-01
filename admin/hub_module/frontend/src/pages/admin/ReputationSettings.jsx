@@ -64,7 +64,34 @@ function ReputationSettings() {
     try {
       const response = await adminApi.getReputationConfig(communityId);
       if (response.data.success) {
-        setConfig(response.data.config);
+        const raw = response.data.config;
+        setConfig({
+          is_premium: raw.isPremium,
+          can_customize: raw.canCustomize,
+          // weights
+          chat_message:         raw.weights?.chatMessage,
+          command_usage:        raw.weights?.commandUsage,
+          giveaway_entry:       raw.weights?.giveawayEntry,
+          follow:               raw.weights?.follow,
+          subscription:         raw.weights?.subscription,
+          subscription_tier2:   raw.weights?.subscriptionTier2,
+          subscription_tier3:   raw.weights?.subscriptionTier3,
+          gift_subscription:    raw.weights?.giftSubscription,
+          donation_per_dollar:  raw.weights?.donationPerDollar,
+          cheer_per_100bits:    raw.weights?.cheerPer100Bits,
+          raid:                 raw.weights?.raid,
+          boost:                raw.weights?.boost,
+          warn:                 raw.weights?.warn,
+          timeout:              raw.weights?.timeout,
+          kick:                 raw.weights?.kick,
+          ban:                  raw.weights?.ban,
+          // policy
+          auto_ban_enabled:     raw.policy?.autoBanEnabled,
+          auto_ban_threshold:   raw.policy?.autoBanThreshold,
+          starting_score:       raw.policy?.startingScore,
+          min_score:            raw.policy?.minScore,
+          max_score:            raw.policy?.maxScore,
+        });
       }
     } catch (err) {
       console.error('Failed to fetch config:', err);

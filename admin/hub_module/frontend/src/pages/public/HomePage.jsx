@@ -1,23 +1,39 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { publicApi } from '../../services/api';
+import { getAllPlatformOptions, getPlatformConfig } from '../../utils/platformConfig';
+
+const COMMUNITY_TYPE_ICONS = {
+  creator: '🎨',
+  gaming: '🎮',
+  corporate: '🏢',
+  shared_interest_group: '🤝',
+  workforce: '🏗️',
+  support: '🎧',
+  other: '🌐',
+};
 
 function HomePage() {
   const [stats, setStats] = useState(null);
+  const [spotlighted, setSpotlighted] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchStats() {
+    async function fetchData() {
       try {
-        const response = await publicApi.getStats();
-        setStats(response.data.stats);
+        const [statsRes, spotlightRes] = await Promise.all([
+          publicApi.getStats(),
+          publicApi.getSpotlightedCommunities().catch(() => ({ data: { communities: [] } })),
+        ]);
+        setStats(statsRes.data.stats);
+        setSpotlighted(spotlightRes.data?.communities || []);
       } catch (err) {
-        console.error('Failed to fetch stats:', err);
+        console.error('Failed to fetch data:', err);
       } finally {
         setLoading(false);
       }
     }
-    fetchStats();
+    fetchData();
   }, []);
 
   return (
@@ -26,10 +42,10 @@ function HomePage() {
       <section className="bg-gradient-to-br from-navy-900 via-navy-800 to-navy-900 py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h1 className="text-4xl md:text-5xl font-bold mb-6 gradient-text">
-            Unite Your Communities
+            Unite Your Workforce &amp; Communities
           </h1>
           <p className="text-xl text-navy-300 max-w-2xl mx-auto mb-8">
-            WaddleBot brings your Discord, Twitch, and Slack communities together with
+            Waddles brings your teams and communities together across every platform with
             powerful tools for engagement, moderation, and growth.
           </p>
           <div className="flex flex-col sm:flex-row justify-center gap-4">
@@ -43,34 +59,30 @@ function HomePage() {
         </div>
       </section>
 
-      {/* Stats section */}
+      {/* Stats section — dynamic platforms */}
       <section className="py-16 bg-navy-900 border-t border-navy-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid md:grid-cols-4 gap-8 text-center">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-8 text-center">
             <div>
               <div className="text-4xl font-bold text-gold-400">
                 {loading ? '...' : stats?.communities || 0}
               </div>
               <div className="text-navy-400 mt-1">Communities</div>
             </div>
-            <div>
-              <div className="text-4xl font-bold text-indigo-400">
-                {loading ? '...' : stats?.discord?.servers || 0}
-              </div>
-              <div className="text-navy-400 mt-1">Discord Servers</div>
-            </div>
-            <div>
-              <div className="text-4xl font-bold text-purple-400">
-                {loading ? '...' : stats?.twitch?.channels || 0}
-              </div>
-              <div className="text-navy-400 mt-1">Twitch Channels</div>
-            </div>
-            <div>
-              <div className="text-4xl font-bold text-emerald-400">
-                {loading ? '...' : stats?.slack?.workspaces || 0}
-              </div>
-              <div className="text-navy-400 mt-1">Slack Workspaces</div>
-            </div>
+            {getAllPlatformOptions().slice(0, 5).map((p) => {
+              const platformStats = stats?.[p.id];
+              const count = typeof platformStats === 'object'
+                ? (platformStats.servers || platformStats.channels || 0)
+                : (platformStats || 0);
+              return (
+                <div key={p.id}>
+                  <div className="text-4xl font-bold" style={{ color: p.hex }}>
+                    {loading ? '...' : count}
+                  </div>
+                  <div className="text-navy-400 mt-1">{p.icon} {p.label}</div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -79,14 +91,14 @@ function HomePage() {
       <section className="py-20 bg-navy-950">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl font-bold text-center mb-12 text-sky-100">
-            Everything You Need to Build Community
+            Everything You Need to Build &amp; Manage Your Community or Workforce
           </h2>
           <div className="grid md:grid-cols-3 gap-8">
             <div className="card p-6">
               <div className="text-3xl mb-4">🎮</div>
               <h3 className="text-xl font-semibold mb-2 text-sky-100">Multi-Platform</h3>
               <p className="text-navy-400">
-                Connect Discord, Twitch, and Slack communities under one unified system.
+                Connect Discord, Twitch, Slack, YouTube, Kick, Telegram, and more under one unified system.
               </p>
             </div>
             <div className="card p-6">
@@ -128,12 +140,52 @@ function HomePage() {
         </div>
       </section>
 
+      {/* Spotlighted Communities */}
+      {spotlighted.length > 0 && (
+        <section className="py-20 bg-navy-900 border-t border-navy-700">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <h2 className="text-3xl font-bold text-center mb-12 text-sky-100">
+              Spotlighted Communities
+            </h2>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {spotlighted.map((c) => (
+                <Link
+                  key={c.id}
+                  to={`/communities/${c.id}`}
+                  className="card p-6 hover:ring-2 hover:ring-gold-500/50 transition"
+                >
+                  <div className="flex items-center gap-3 mb-3">
+                    <span className="text-2xl">
+                      {COMMUNITY_TYPE_ICONS[c.communityType] || '🌐'}
+                    </span>
+                    <h3 className="text-lg font-semibold text-sky-100 truncate">
+                      {c.displayName}
+                    </h3>
+                  </div>
+                  {c.description && (
+                    <p className="text-navy-400 text-sm line-clamp-2 mb-3">{c.description}</p>
+                  )}
+                  <div className="flex items-center justify-between text-xs text-navy-500">
+                    <span>{c.memberCount.toLocaleString()} members</span>
+                    {c.platform && (
+                      <span className="flex items-center gap-1">
+                        {getPlatformConfig(c.platform).icon} {getPlatformConfig(c.platform).label}
+                      </span>
+                    )}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* CTA section */}
       <section className="py-20 bg-gradient-to-r from-navy-900 via-navy-800 to-navy-900 border-t border-navy-700">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-3xl font-bold mb-4 text-sky-100">Ready to Grow Your Community?</h2>
+          <h2 className="text-3xl font-bold mb-4 text-sky-100">Ready to Grow Your Community or Workforce?</h2>
           <p className="text-navy-400 mb-8">
-            Join hundreds of communities already using WaddleBot to engage their audience.
+            Join hundreds of communities already using Waddles to engage their audience.
           </p>
           <Link to="/login" className="btn btn-primary px-8 py-3">
             Start Free Today

@@ -5,7 +5,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { adminApi } from '../../services/api';
-import { FormModalBuilder } from '@penguin/react_libs';
+import { FormModalBuilder } from '@penguintechinc/react-libs';
 import {
   TicketIcon,
   PlusIcon,
@@ -18,37 +18,7 @@ import {
   UserGroupIcon,
   CheckCircleIcon,
 } from '@heroicons/react/24/outline';
-
-// WaddleBot theme colors matching the existing UI
-const waddlebotColors = {
-  modalBackground: 'bg-navy-800',
-  headerBackground: 'bg-navy-800',
-  footerBackground: 'bg-navy-850',
-  overlayBackground: 'bg-black bg-opacity-50',
-  titleText: 'text-sky-100',
-  labelText: 'text-sky-100',
-  descriptionText: 'text-navy-400',
-  errorText: 'text-red-400',
-  buttonText: 'text-white',
-  fieldBackground: 'bg-navy-700',
-  fieldBorder: 'border-navy-600',
-  fieldText: 'text-sky-100',
-  fieldPlaceholder: 'placeholder-navy-400',
-  focusRing: 'focus:ring-gold-500',
-  focusBorder: 'focus:border-gold-500',
-  primaryButton: 'bg-sky-600',
-  primaryButtonHover: 'hover:bg-sky-700',
-  secondaryButton: 'bg-navy-700',
-  secondaryButtonHover: 'hover:bg-navy-600',
-  secondaryButtonBorder: 'border-navy-600',
-  activeTab: 'text-gold-400',
-  activeTabBorder: 'border-gold-500',
-  inactiveTab: 'text-navy-400',
-  inactiveTabHover: 'hover:text-navy-300 hover:border-navy-500',
-  tabBorder: 'border-navy-700',
-  errorTabText: 'text-red-400',
-  errorTabBorder: 'border-red-500',
-};
+import { WADDLES_COLORS } from '../../theme/waddlebotTheme';
 
 export default function AdminCalendarTicketing() {
   const { communityId, eventId } = useParams();
@@ -555,7 +525,8 @@ export default function AdminCalendarTicketing() {
         submitButtonText={actionLoading ? 'Creating...' : 'Create Ticket'}
         cancelButtonText="Cancel"
         width="md"
-        colors={waddlebotColors}
+        themeMode="dark"
+        colors={WADDLES_COLORS}
       />
 
       {/* Transfer Modal */}
@@ -572,8 +543,9 @@ export default function AdminCalendarTicketing() {
         submitButtonText={actionLoading ? 'Transferring...' : 'Transfer'}
         cancelButtonText="Cancel"
         width="md"
+        themeMode="dark"
         colors={{
-          ...waddlebotColors,
+          ...WADDLES_COLORS,
           primaryButton: 'bg-purple-600',
           primaryButtonHover: 'hover:bg-purple-700',
         }}
@@ -593,8 +565,9 @@ export default function AdminCalendarTicketing() {
         submitButtonText={actionLoading ? 'Cancelling...' : 'Cancel Ticket'}
         cancelButtonText="Keep Ticket"
         width="md"
+        themeMode="dark"
         colors={{
-          ...waddlebotColors,
+          ...WADDLES_COLORS,
           primaryButton: 'bg-red-600',
           primaryButtonHover: 'hover:bg-red-700',
         }}

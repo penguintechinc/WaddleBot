@@ -111,4 +111,28 @@ router.post(
   callsController.acknowledgeHand
 );
 
+/**
+ * Member-facing voice routes (auth required, no admin)
+ * These are mounted under /community by the interaction routes
+ */
+export const memberVoiceRouter = Router({ mergeParams: true });
+memberVoiceRouter.use(requireAuth);
+
+memberVoiceRouter.get(
+  '/:id/interact/voice/rooms',
+  callsController.getCallRooms
+);
+memberVoiceRouter.post(
+  '/:id/interact/voice/rooms',
+  callsController.createCallRoom
+);
+memberVoiceRouter.post(
+  '/:id/interact/voice/rooms/:roomName/join',
+  callsController.joinVoiceRoom
+);
+memberVoiceRouter.post(
+  '/:id/interact/voice/rooms/:roomName/leave',
+  callsController.leaveVoiceRoom
+);
+
 export default router;

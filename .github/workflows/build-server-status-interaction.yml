@@ -1,0 +1,32 @@
+name: Build server-status-interaction
+
+on:
+  push:
+    branches: [main, 'v*', 'release/**', 'feature/**', 'fix/**', 'chore/**', 'hotfix/**', 'docs/**', 'refactor/**']
+    paths:
+      - 'action/interactive/server_status_interaction_module/**'
+      - 'libs/flask_core/**'
+      - '.version'
+      - '.github/workflows/build-server-status-interaction.yml'
+      - '.github/workflows/build-container.yml'
+  pull_request:
+    branches: [main, 'v*', 'release/**', 'feature/**', 'fix/**', 'chore/**', 'hotfix/**', 'docs/**', 'refactor/**']
+    paths:
+      - 'action/interactive/server_status_interaction_module/**'
+      - 'libs/flask_core/**'
+  workflow_dispatch:
+
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    name: Build server-status-interaction Container
+    uses: ./.github/workflows/build-container.yml
+    with:
+      module_path: 'action/interactive/server_status_interaction_module'
+      module_name: 'server-status-interaction'
+      module_port: '8097'
+    secrets: inherit

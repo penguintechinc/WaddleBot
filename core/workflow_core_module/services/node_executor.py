@@ -515,7 +515,7 @@ class NodeExecutor:
         """
         Execute ACTION_MODULE node.
 
-        Calls WaddleBot action module via router API.
+        Calls Waddles action module via router API.
         """
         try:
             await self._ensure_http_session()

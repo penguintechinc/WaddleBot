@@ -22,13 +22,12 @@ spec:
         app.kubernetes.io/component: discord-collector
         tier: trigger
     spec:
-      {{- with .Values.imagePullSecrets }}
-      imagePullSecrets:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+      {{- include "waddlebot.imagePullSecrets" . | nindent 6 }}
+      initContainers:
+      {{- include "waddlebot.dbMigrateInitContainer" . | nindent 8 }}
       containers:
         - name: discord-collector
-          image: "{{ .Values.global.imageRegistry }}/{{ .Values.modules.collectors.discord.image }}:{{ .Values.modules.collectors.discord.tag | default "latest" }}"
+          image: "{{ .Values.global.imageRegistry }}/{{ .Values.modules.collectors.discord.image }}:{{ .Values.modules.collectors.discord.imageTag | default .Values.global.imageTag }}"
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
           ports:
             - name: http
@@ -74,6 +73,16 @@ spec:
             failureThreshold: 3
           resources:
             {{- toYaml .Values.modules.collectors.discord.resources | nindent 12 }}
+          volumeMounts:
+          - name: logs
+            mountPath: /var/log/waddlebotlog
+          - name: tmp
+            mountPath: /tmp
+      volumes:
+      - name: logs
+        emptyDir: {}
+      - name: tmp
+        emptyDir: {}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

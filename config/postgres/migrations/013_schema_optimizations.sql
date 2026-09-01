@@ -2,7 +2,7 @@
 -- Description: Comprehensive database optimizations including performance indexes,
 --              foreign key improvements, updated_at triggers, soft delete support,
 --              and JSONB metadata columns for extensibility
--- Author: WaddleBot Team
+-- Author: Waddles Team
 -- Date: 2025-12-15
 
 -- =============================================================================
@@ -335,7 +335,7 @@ ANALYZE hub_users;
 -- =============================================================================
 
 COMMENT ON SCHEMA public IS
-  'Main WaddleBot schema with optimizations for performance (indexes, triggers, soft deletes)';
+  'Main Waddles schema with optimizations for performance (indexes, triggers, soft deletes)';
 
 /*
 MIGRATION 013: SCHEMA OPTIMIZATIONS - SUMMARY

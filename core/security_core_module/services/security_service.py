@@ -24,7 +24,8 @@ class SecurityService:
                           rate_limit_enabled, rate_limit_commands_per_minute,
                           rate_limit_messages_per_minute, auto_timeout_enabled,
                           timeout_base_duration_minutes, cross_platform_sync,
-                          reputation_integration_enabled, created_at, updated_at
+                          reputation_integration_enabled, use_default_profanity_list,
+                          created_at, updated_at
                    FROM security_config
                    WHERE community_id = %s""",
                 [community_id]
@@ -53,7 +54,8 @@ class SecurityService:
                     'auto_timeout_enabled': True,
                     'timeout_base_duration_minutes': 10,
                     'cross_platform_sync': False,
-                    'reputation_integration_enabled': True
+                    'reputation_integration_enabled': True,
+                    'use_default_profanity_list': Config.DEFAULT_USE_BUILTIN_PROFANITY,
                 }
 
             row = result[0]
@@ -78,8 +80,9 @@ class SecurityService:
                 'timeout_base_duration_minutes': row[16],
                 'cross_platform_sync': row[17],
                 'reputation_integration_enabled': row[18],
-                'created_at': row[19].isoformat() + 'Z' if row[19] else None,
-                'updated_at': row[20].isoformat() + 'Z' if row[20] else None
+                'use_default_profanity_list': row[19] if row[19] is not None else False,
+                'created_at': row[20].isoformat() + 'Z' if row[20] else None,
+                'updated_at': row[21].isoformat() + 'Z' if row[21] else None
             }
 
         except Exception as e:
@@ -109,9 +112,10 @@ class SecurityService:
                         warning_threshold_ban, warning_decay_days, rate_limit_enabled,
                         rate_limit_commands_per_minute, rate_limit_messages_per_minute,
                         auto_timeout_enabled, timeout_base_duration_minutes,
-                        cross_platform_sync, reputation_integration_enabled)
+                        cross_platform_sync, reputation_integration_enabled,
+                        use_default_profanity_list)
                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                               %s, %s, %s, %s, %s, %s)""",
+                               %s, %s, %s, %s, %s, %s, %s)""",
                     [
                         community_id,
                         updates.get('spam_detection_enabled', config['spam_detection_enabled']),
@@ -132,7 +136,8 @@ class SecurityService:
                         updates.get('auto_timeout_enabled', config['auto_timeout_enabled']),
                         updates.get('timeout_base_duration_minutes', config['timeout_base_duration_minutes']),
                         updates.get('cross_platform_sync', config['cross_platform_sync']),
-                        updates.get('reputation_integration_enabled', config['reputation_integration_enabled'])
+                        updates.get('reputation_integration_enabled', config['reputation_integration_enabled']),
+                        updates.get('use_default_profanity_list', config.get('use_default_profanity_list', False))
                     ]
                 )
             else:
@@ -260,6 +265,15 @@ class SecurityService:
                     platform_user_id, reputation_impact, action_type
                 )
 
+            # Sync to game servers (RCON, Mumble, TeamSpeak) if requested
+            game_server_platforms = {'rcon', 'mumble', 'teamspeak'}
+            game_targets = [p for p in sync_to_platforms if p in game_server_platforms]
+            if game_targets and action_type in ('ban', 'kick'):
+                await self._sync_to_game_servers(
+                    community_id, platform_user_id, action_type,
+                    action_reason, game_targets
+                )
+
             self.logger.audit(
                 "Moderation action synced",
                 community_id=community_id,
@@ -320,3 +334,66 @@ class SecurityService:
             )
         except Exception as e:
             self.logger.error(f"Failed to apply reputation impact: {e}")
+
+    async def _sync_to_game_servers(
+        self,
+        community_id: int,
+        platform_user_id: str,
+        action_type: str,
+        reason: Optional[str],
+        target_types: List[str],
+    ):
+        """Sync ban/kick to game servers (RCON, Mumble, TeamSpeak).
+
+        Queries active server_status_configs for the community and forwards
+        the moderation action to the server_manager module.
+        """
+        import os
+        import httpx
+
+        server_manager_url = os.getenv(
+            'SERVER_MANAGER_URL', 'http://server-manager-service:8098'
+        )
+
+        try:
+            type_filter = ', '.join(f"'{t}'" for t in target_types)
+            servers = self.dal.executesql(
+                f"""SELECT id, server_type FROM server_status_configs
+                    WHERE community_id = %s
+                      AND server_type IN ({type_filter})
+                      AND is_active = TRUE
+                      AND deleted_at IS NULL""",
+                [community_id]
+            )
+
+            if not servers:
+                return
+
+            endpoint = 'kick' if action_type == 'kick' else 'ban'
+            async with httpx.AsyncClient(timeout=10) as client:
+                for server_id, server_type in servers:
+                    url = (
+                        f"{server_manager_url}/api/v1/server-manager"
+                        f"/{community_id}/servers/{server_id}/{endpoint}"
+                    )
+                    try:
+                        await client.post(url, json={
+                            'player': platform_user_id,
+                            'reason': reason or f'Cross-platform {action_type}',
+                        })
+                        self.logger.audit(
+                            f"Game server {endpoint} synced",
+                            community_id=community_id,
+                            server_id=server_id,
+                            server_type=server_type,
+                            player=platform_user_id,
+                            action="sync_to_game_server",
+                            result="SUCCESS",
+                        )
+                    except Exception as exc:
+                        self.logger.error(
+                            f"Failed to sync {endpoint} to server {server_id}: {exc}"
+                        )
+
+        except Exception as e:
+            self.logger.error(f"Failed to sync to game servers: {e}")

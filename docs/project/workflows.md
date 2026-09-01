@@ -1,8 +1,8 @@
-# WaddleBot Workflow Compliance and CI/CD Documentation
+# Waddles Workflow Compliance and CI/CD Documentation
 
 ## Overview
 
-WaddleBot uses automated CI/CD workflows with `.version` file monitoring, multi-language security scanning, and containerized builds for 24+ microservices modules. This document provides complete workflow configuration and compliance standards.
+Waddles uses automated CI/CD workflows with `.version` file monitoring, multi-language security scanning, and containerized builds for 24+ microservices modules. This document provides complete workflow configuration and compliance standards.
 
 **Current Version**: 0.2.0 (stored in `.version` file at repository root)
 
@@ -15,7 +15,7 @@ WaddleBot uses automated CI/CD workflows with `.version` file monitoring, multi-
 The `.version` file serves as the single source of truth for semantic versioning:
 
 ```
-Location: /home/penguin/code/WaddleBot/.version
+Location: /home/penguin/code/Waddles/.version
 Format: vMajor.Minor.Patch (e.g., 0.2.0)
 Current: 0.2.0
 ```
@@ -201,13 +201,10 @@ Response modules that execute commands and user interactions:
 ├── version-release.yml                # Version release workflow
 ├── build-router.yml                   # Router module build
 ├── build-{module-name}.yml            # Individual module builds (24 files)
-├── android.yml                        # Android app CI/CD
+├── android.yml                        # Android lint, tests, and debug build
 ├── containers.yml                     # Container orchestration
-├── desktop-bridge.yml                 # Desktop bridge integration
-├── desktop-linux.yml                  # Desktop Linux build
-├── desktop-macos.yml                  # Desktop macOS build
-├── desktop-windows.yml                # Desktop Windows build
-└── desktop-release.yml                # Desktop release workflow
+├── pr-validation.yml                  # Pull request and merge-queue tests
+└── security.yml                       # Dependency and code security checks
 ```
 
 ### Main CI/CD Pipeline (`ci-cd.yml`)
@@ -291,7 +288,7 @@ on:
       - '.github/workflows/build-router.yml'
       - '.github/workflows/build-container.yml'
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, 'v*']
   workflow_dispatch:
 
 jobs:
@@ -318,14 +315,13 @@ jobs:
 - GitHub Release: `v0.2.0` (or current version)
 - Release artifacts and changelog
 
-### Desktop & Mobile Workflows
+### Mobile Workflow
 
-**android.yml**: Kotlin/Gradle Android builds and testing
-**desktop-linux.yml**: Linux desktop application builds
-**desktop-macos.yml**: macOS desktop application builds
-**desktop-windows.yml**: Windows desktop application builds
-**desktop-bridge.yml**: Desktop-to-web bridge integration
-**desktop-release.yml**: Coordinated desktop release workflow
+**android.yml** validates the maintained Kotlin application under
+`mobile/android` with Gradle wrapper validation, lint, unit tests, and a debug
+assembly. **pr-validation.yml** provides the pull-request and merge-queue test
+gate. The former desktop workflows were removed when their source projects were
+retired.
 
 ---
 
@@ -417,7 +413,7 @@ vMajor.Minor.Patch.Epoch64
 **Manual Update**:
 ```bash
 # Navigate to repository root
-cd /home/penguin/code/WaddleBot
+cd /home/penguin/code/Waddles
 
 # Update version file
 ./scripts/version/update-version.sh patch
@@ -487,8 +483,8 @@ All container builds target:
 
 ```bash
 # Clone and setup
-git clone https://github.com/penguintechinc/WaddleBot.git
-cd WaddleBot
+git clone https://github.com/penguintechinc/Waddles.git
+cd Waddles
 
 # Install dependencies
 pip install -r requirements.txt
@@ -557,7 +553,7 @@ git push origin main
 ### Build Status Monitoring
 
 **GitHub Actions Dashboard**:
-1. Navigate to: https://github.com/{owner}/WaddleBot/actions
+1. Navigate to: https://github.com/{owner}/Waddles/actions
 2. View workflow runs by name
 3. Click workflow to see job logs
 4. Check step output for build details
@@ -656,7 +652,7 @@ git checkout .version
 ---
 
 **Last Updated**: 2025-12-11
-**WaddleBot Version**: 0.2.0
+**Waddles Version**: 0.2.0
 **Total Modules**: 24+
 **Workflow Files**: 35+
 **Container Platforms**: 2 (amd64, arm64)

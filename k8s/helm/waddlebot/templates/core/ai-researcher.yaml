@@ -20,8 +20,11 @@ spec:
         app.kubernetes.io/component: ai-researcher
     spec:
       serviceAccountName: {{ include "waddlebot.serviceAccountName" . }}
+      {{- include "waddlebot.imagePullSecrets" . | nindent 6 }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+      {{- include "waddlebot.dbMigrateInitContainer" . | nindent 6 }}
       containers:
       - name: ai-researcher
         image: "{{ .Values.global.imageRegistry }}/ai-researcher:{{ .Values.modules.aiResearcher.imageTag | default .Values.global.imageTag }}"
@@ -77,8 +80,12 @@ spec:
         volumeMounts:
         - name: logs
           mountPath: /var/log/waddlebotlog
+        - name: tmp
+          mountPath: /tmp
       volumes:
       - name: logs
+        emptyDir: {}
+      - name: tmp
         emptyDir: {}
 ---
 apiVersion: v1

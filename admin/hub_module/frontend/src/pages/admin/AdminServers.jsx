@@ -1,20 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { adminApi } from '../../services/api';
+import { getPlatformIcon, getPlatformColor } from '../../utils/platformConfig';
+import { XMarkIcon, PlusIcon } from '@heroicons/react/24/outline';
 
-const PLATFORM_ICONS = {
-  discord: '🎮',
-  twitch: '📺',
-  slack: '💬',
-  youtube: '▶️',
-};
-
-const PLATFORM_COLORS = {
-  discord: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
-  twitch: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
-  slack: 'bg-green-500/20 text-green-300 border-green-500/30',
-  youtube: 'bg-red-500/20 text-red-300 border-red-500/30',
-};
+const PLATFORM_ICONS = new Proxy({}, { get: (_, key) => getPlatformIcon(key) });
+const PLATFORM_COLORS = new Proxy({}, { get: (_, key) => getPlatformColor(key) });
 
 function AdminServers() {
   const { communityId } = useParams();
@@ -24,6 +15,17 @@ function AdminServers() {
   const [activeTab, setActiveTab] = useState('servers');
   const [actionLoading, setActionLoading] = useState(null);
   const [message, setMessage] = useState(null);
+
+  // Request Link modal state
+  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [requestForm, setRequestForm] = useState({
+    platform: 'discord',
+    platformServerId: '',
+    platformServerName: '',
+    linkType: 'standard',
+  });
+  const [requestSubmitting, setRequestSubmitting] = useState(false);
+  const [requestError, setRequestError] = useState(null);
 
   useEffect(() => {
     fetchData();
@@ -99,12 +101,44 @@ function AdminServers() {
     }
   }
 
+  async function handleRequestLink() {
+    if (!requestForm.platformServerId.trim()) {
+      setRequestError('Server / Channel ID is required');
+      return;
+    }
+    setRequestSubmitting(true);
+    setRequestError(null);
+    try {
+      await adminApi.createServerLinkRequest(communityId, {
+        platform: requestForm.platform,
+        platformServerId: requestForm.platformServerId.trim(),
+        platformServerName: requestForm.platformServerName.trim() || undefined,
+        linkType: requestForm.linkType,
+      });
+      setMessage({ type: 'success', text: 'Server link request submitted' });
+      setShowRequestModal(false);
+      setRequestForm({ platform: 'discord', platformServerId: '', platformServerName: '', linkType: 'standard' });
+      fetchData();
+    } catch (err) {
+      setRequestError(err.response?.data?.error?.message || 'Failed to submit request');
+    } finally {
+      setRequestSubmitting(false);
+    }
+  }
+
   const pendingCount = requests.length;
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-sky-100">Linked Servers</h1>
+        <button
+          onClick={() => { setShowRequestModal(true); setRequestError(null); }}
+          className="inline-flex items-center space-x-2 px-4 py-2 bg-gold-500 hover:bg-gold-600 text-navy-900 font-medium rounded-lg transition-colors text-sm"
+        >
+          <PlusIcon className="w-4 h-4" />
+          <span>Request Link</span>
+        </button>
       </div>
 
       {message && (
@@ -245,6 +279,15 @@ function AdminServers() {
                     <td>
                       <div className="text-sky-100">{request.requestedBy}</div>
                       <div className="text-xs text-navy-500">{request.requestedByEmail}</div>
+                      {request.initiatedBy && (
+                        <span className={`mt-1 inline-block text-xs px-2 py-0.5 rounded-full border ${
+                          request.initiatedBy === 'community'
+                            ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
+                            : 'bg-purple-500/20 text-purple-300 border-purple-500/30'
+                        }`}>
+                          {request.initiatedBy === 'community' ? 'Community Initiated' : 'Server Initiated'}
+                        </span>
+                      )}
                     </td>
                     <td className="text-sm text-navy-400">
                       {new Date(request.createdAt).toLocaleDateString()}
@@ -272,6 +315,100 @@ function AdminServers() {
               </tbody>
             </table>
           )}
+        </div>
+      )}
+      {/* Request Link Modal */}
+      {showRequestModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-navy-800 border border-navy-700 rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-sky-100">Request Server Link</h3>
+              <button
+                onClick={() => setShowRequestModal(false)}
+                className="text-navy-400 hover:text-sky-100"
+              >
+                <XMarkIcon className="w-6 h-6" />
+              </button>
+            </div>
+
+            {requestError && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-4 text-red-400 text-sm">
+                {requestError}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-navy-300 mb-1">Platform</label>
+                <select
+                  value={requestForm.platform}
+                  onChange={(e) => setRequestForm({ ...requestForm, platform: e.target.value })}
+                  className="w-full px-3 py-2 bg-navy-900 border border-navy-700 rounded-lg text-sky-100 text-sm focus:outline-none focus:border-gold-500"
+                >
+                  <option value="discord">Discord</option>
+                  <option value="slack">Slack</option>
+                  <option value="twitch">Twitch</option>
+                  <option value="kick">KICK</option>
+                  <option value="youtube">YouTube</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-navy-300 mb-1">
+                  Server / Channel ID <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={requestForm.platformServerId}
+                  onChange={(e) => setRequestForm({ ...requestForm, platformServerId: e.target.value })}
+                  placeholder="e.g. 123456789012345678"
+                  className="w-full px-3 py-2 bg-navy-900 border border-navy-700 rounded-lg text-sky-100 placeholder-navy-500 text-sm focus:outline-none focus:border-gold-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-navy-300 mb-1">
+                  Server / Channel Name <span className="text-navy-500">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={requestForm.platformServerName}
+                  onChange={(e) => setRequestForm({ ...requestForm, platformServerName: e.target.value })}
+                  placeholder="My Discord Server"
+                  className="w-full px-3 py-2 bg-navy-900 border border-navy-700 rounded-lg text-sky-100 placeholder-navy-500 text-sm focus:outline-none focus:border-gold-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-navy-300 mb-1">Link Type</label>
+                <select
+                  value={requestForm.linkType}
+                  onChange={(e) => setRequestForm({ ...requestForm, linkType: e.target.value })}
+                  className="w-full px-3 py-2 bg-navy-900 border border-navy-700 rounded-lg text-sky-100 text-sm focus:outline-none focus:border-gold-500"
+                >
+                  <option value="standard">Standard</option>
+                  <option value="read_only">Read Only</option>
+                  <option value="announcement_only">Announcement Only</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                onClick={() => setShowRequestModal(false)}
+                className="px-4 py-2 text-navy-300 hover:text-sky-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRequestLink}
+                disabled={requestSubmitting}
+                className="px-4 py-2 bg-gold-500 hover:bg-gold-600 text-navy-900 font-medium rounded-lg disabled:opacity-50 transition-colors"
+              >
+                {requestSubmitting ? 'Submitting...' : 'Submit Request'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

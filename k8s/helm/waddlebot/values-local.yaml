@@ -1,4 +1,4 @@
-# WaddleBot Helm Chart - Local/MicroK8s Overrides
+# Waddles Helm Chart - Local/MicroK8s Overrides
 # This file contains overrides for local development and MicroK8s deployments
 
 # Global settings for local development
@@ -16,7 +16,7 @@ redis:
   replicas: 1
   image:
     repository: redis
-    tag: 7-alpine
+    tag: 7-bookworm@sha256:33d7c9a245edd95e6703a0addbeaa48fe40c3b3b4783627a72085155462ebfdb
     pullPolicy: IfNotPresent
   maxMemory: "256mb"
   maxMemoryPolicy: "allkeys-lru"
@@ -333,8 +333,8 @@ redis:
 
 # MinIO credentials
 minio:
-  rootUser: "minioadmin"
-  rootPassword: "minioadmin"
+  rootUser: "REPLACE_ME"
+  rootPassword: "REPLACE_ME"
 
 # AWS credentials (for Lambda)
 aws:
@@ -606,3 +606,7 @@ modules:
     youtubeAction:
       <<: *module_defaults
       enabled: false
+
+spire:
+  enabled: true
+  environment: "alpha"

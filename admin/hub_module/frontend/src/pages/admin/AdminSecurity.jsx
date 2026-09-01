@@ -218,6 +218,22 @@ function AdminSecurity() {
 
               <label className="flex items-center justify-between p-4 bg-navy-800 rounded-lg cursor-pointer">
                 <div>
+                  <div className="font-medium text-sky-100">Enable Built-in Profanity Filter</div>
+                  <div className="text-sm text-navy-400">
+                    Adds ~130 common English profanity terms to your block list
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={config.use_default_profanity_list || false}
+                  onChange={(e) => updateConfig('use_default_profanity_list', e.target.checked)}
+                  disabled={!config.contentFilterEnabled}
+                  className="w-5 h-5 rounded border-navy-600 text-sky-500 focus:ring-sky-500 disabled:opacity-50"
+                />
+              </label>
+
+              <label className="flex items-center justify-between p-4 bg-navy-800 rounded-lg cursor-pointer">
+                <div>
                   <div className="font-medium text-sky-100">Case Sensitive</div>
                   <div className="text-sm text-navy-400">
                     Match words with exact case

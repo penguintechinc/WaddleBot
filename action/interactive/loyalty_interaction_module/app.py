@@ -746,6 +746,133 @@ async def end_giveaway(community_id: int, giveaway_id: int):
 
 
 # ============================================================================
+# KEY GIVEAWAY ENDPOINTS
+# ============================================================================
+
+@giveaway_bp.route('/<int:community_id>/<int:giveaway_id>/keys', methods=['POST'])
+@auth_required
+@async_endpoint
+async def add_giveaway_keys(community_id: int, giveaway_id: int):
+    """Add game keys to a key-type giveaway (admin)."""
+    try:
+        data = await request.get_json()
+        keys = data.get('keys', [])
+        key_platform = data.get('key_platform')
+
+        if not keys:
+            return error_response("keys list is required", status_code=400)
+
+        max_batch = getattr(Config, 'GIVEAWAY_MAX_KEYS_PER_BATCH', 100)
+        if len(keys) > max_batch:
+            return error_response(
+                f"Maximum {max_batch} keys per batch", status_code=400,
+            )
+
+        result = await giveaway_service.add_keys(giveaway_id, keys, key_platform)
+
+        logger.audit(
+            action="add_giveaway_keys",
+            community=community_id,
+            result="SUCCESS",
+            user=request.current_user.get('username', 'unknown'),
+            giveaway_id=giveaway_id,
+            keys_added=result['added'],
+        )
+
+        return success_response(result)
+
+    except Exception as e:
+        logger.error(f"Add keys error: {e}", community=community_id)
+        return error_response(str(e), status_code=500)
+
+
+@giveaway_bp.route('/<int:community_id>/<int:giveaway_id>/keys/count', methods=['GET'])
+@auth_required
+@async_endpoint
+async def get_key_count(community_id: int, giveaway_id: int):
+    """Get count of unclaimed keys for a giveaway."""
+    try:
+        counts = await giveaway_service.get_key_count(giveaway_id)
+        return success_response(counts)
+    except Exception as e:
+        logger.error(f"Key count error: {e}", community=community_id)
+        return error_response(str(e), status_code=500)
+
+
+@giveaway_bp.route('/<int:community_id>/<int:giveaway_id>/eligibility', methods=['POST'])
+@async_endpoint
+async def check_eligibility(community_id: int, giveaway_id: int):
+    """Check if a user meets giveaway eligibility requirements."""
+    try:
+        data = await request.get_json()
+        result = await giveaway_service.check_eligibility(
+            giveaway_id=giveaway_id,
+            community_id=community_id,
+            platform=data.get('platform', ''),
+            platform_user_id=str(data.get('user_id', '')),
+            is_subscriber=data.get('is_subscriber', False),
+            account_age_days=data.get('account_age_days', 0),
+            loyalty_points=data.get('loyalty_points', 0),
+        )
+        return success_response(result)
+    except Exception as e:
+        logger.error(f"Eligibility check error: {e}", community=community_id)
+        return error_response(str(e), status_code=500)
+
+
+@giveaway_bp.route('/<int:community_id>/<int:giveaway_id>/draw-winners', methods=['POST'])
+@auth_required
+@async_endpoint
+async def draw_giveaway_winners(community_id: int, giveaway_id: int):
+    """Draw N winners for a giveaway (admin)."""
+    try:
+        data = await request.get_json()
+        count = data.get('count')
+
+        max_winners = getattr(Config, 'GIVEAWAY_MAX_WINNERS', 10)
+        if count and count > max_winners:
+            return error_response(
+                f"Maximum {max_winners} winners", status_code=400,
+            )
+
+        winners = await giveaway_service.draw_winners(giveaway_id, count)
+
+        logger.audit(
+            action="draw_giveaway_winners",
+            community=community_id,
+            result="SUCCESS",
+            user=request.current_user.get('username', 'unknown'),
+            giveaway_id=giveaway_id,
+            winners_drawn=len(winners),
+        )
+
+        return success_response({
+            'winners': winners,
+            'count': len(winners),
+        })
+
+    except Exception as e:
+        logger.error(f"Draw winners error: {e}", community=community_id)
+        return error_response(str(e), status_code=500)
+
+
+@giveaway_bp.route('/<int:community_id>/<int:giveaway_id>/winners', methods=['GET'])
+@auth_required
+@async_endpoint
+async def list_giveaway_winners(community_id: int, giveaway_id: int):
+    """List all winners for a giveaway."""
+    try:
+        winners = await giveaway_service.get_winners(giveaway_id)
+        return success_response({
+            'winners': winners,
+            'count': len(winners),
+        })
+    except Exception as e:
+        logger.error(f"List winners error: {e}", community=community_id)
+        return error_response(str(e), status_code=500)
+
+
+# ============================================================================
 # MINIGAME ENDPOINTS
 # ============================================================================
 

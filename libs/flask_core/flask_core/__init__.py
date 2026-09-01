@@ -1,8 +1,8 @@
 """
-WaddleBot Flask Core Library
+Waddles Flask Core Library
 ============================
 
-Shared utilities for all WaddleBot Flask/Quart modules.
+Shared utilities for all Waddles Flask/Quart modules.
 
 Provides:
 - AsyncDAL: Async wrapper for PyDAL database operations
@@ -12,11 +12,40 @@ Provides:
 - API utilities: Standardized API responses and error handling
 """
 
-__version__ = "2.0.0"
-__author__ = "WaddleBot Team"
+__author__ = "Waddles Team"
+
+from .platform_version import get_platform_version, platform_version_compatible
+
+# Derived from flask_core/VERSION (see platform_version.py) rather than a
+# second hardcoded literal -- avoids the exact staleness bug this module
+# previously had (__version__ pinned at "2.0.0" long after the repo moved
+# to release/v3.0.X).
+__version__ = get_platform_version()
 
 from .database import AsyncDAL, init_database
-from .auth import setup_auth, OAuthProvider, create_jwt_token, verify_jwt_token, verify_service_key
+from .auth import (
+    setup_auth,
+    OAuthProvider,
+    create_jwt_token,
+    verify_jwt_token,
+    verify_service_key,
+    setup_default_roles,
+    DEFAULT_TENANT_SLUG,
+    TENANT_CLAIM_MIGRATION_CUTOFF,
+    SCOPE_BUNDLES,
+)
+from .tenancy import (
+    TenantContext,
+    TenantIsolationError,
+    tenant_middleware,
+    tenant_scoped,
+    resolve_tenant_context,
+    get_tenant_context,
+)
+from .authz import (
+    require_scope,
+    has_required_scopes,
+)
 from .datamodels import (
     CommandRequest,
     CommandResult,
@@ -26,6 +55,7 @@ from .datamodels import (
     ModuleResponse
 )
 from .logging_config import setup_aaa_logging, get_logger
+from .feature_flags import feature_enabled
 from .api_utils import (
     success_response,
     error_response,
@@ -115,8 +145,26 @@ from .sanitization import (
     ALLOWED_ATTRIBUTES,
     ALLOWED_PROTOCOLS
 )
+from .workload_identity import (
+    IdentityProvider,
+    SpiffeIdMatcher,
+    SpiffeId,
+    TrustDomain,
+    MtlsConfig,
+    WorkloadApiSource,
+    RealWorkloadApiSource,
+    IdentityError,
+    Degraded,
+    WorkloadApiUnavailable,
+    PeerNotAuthorized,
+    EmptyTrustBundle,
+    NoDefaultSvid,
+)
 
 __all__ = [
+    # Platform version / App Bundle compatibility
+    "get_platform_version",
+    "platform_version_compatible",
     # Database
     "AsyncDAL",
     "init_database",
@@ -126,6 +174,20 @@ __all__ = [
     "create_jwt_token",
     "verify_jwt_token",
     "verify_service_key",
+    "setup_default_roles",
+    "DEFAULT_TENANT_SLUG",
+    "TENANT_CLAIM_MIGRATION_CUTOFF",
+    "SCOPE_BUNDLES",
+    # Tenancy
+    "TenantContext",
+    "TenantIsolationError",
+    "tenant_middleware",
+    "tenant_scoped",
+    "resolve_tenant_context",
+    "get_tenant_context",
+    # Scope Enforcement (HTTP layer)
+    "require_scope",
+    "has_required_scopes",
     # Datamodels
     "CommandRequest",
     "CommandResult",
@@ -136,6 +198,8 @@ __all__ = [
     # Logging
     "setup_aaa_logging",
     "get_logger",
+    # Feature Flags
+    "feature_enabled",
     # API Utils
     "success_response",
     "error_response",
@@ -231,4 +295,18 @@ __all__ = [
     "ALLOWED_TAGS",
     "ALLOWED_ATTRIBUTES",
     "ALLOWED_PROTOCOLS",
+    # Workload identity (SPIFFE/SPIRE)
+    "IdentityProvider",
+    "SpiffeIdMatcher",
+    "SpiffeId",
+    "TrustDomain",
+    "MtlsConfig",
+    "WorkloadApiSource",
+    "RealWorkloadApiSource",
+    "IdentityError",
+    "Degraded",
+    "WorkloadApiUnavailable",
+    "PeerNotAuthorized",
+    "EmptyTrustBundle",
+    "NoDefaultSvid",
 ]

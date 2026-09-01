@@ -2,7 +2,7 @@
 
 ## Overview
 
-The WaddleBot Hub Module provides a comprehensive RESTful API for managing communities, users, authentication, and platform integrations. The API follows REST conventions and returns JSON responses.
+The Waddles Hub Module provides a comprehensive RESTful API for managing communities, users, authentication, and platform integrations. The API follows REST conventions and returns JSON responses.
 
 **Base URL:** `http://localhost:8060/api/v1`
 **Version:** 1.0.1
@@ -192,7 +192,7 @@ List all public communities with pagination.
       "id": 1,
       "name": "waddle-community",
       "displayName": "Waddle Community",
-      "description": "The official WaddleBot community",
+      "description": "The official Waddles community",
       "logoUrl": "https://example.com/logo.png",
       "memberCount": 523,
       "isPublic": true,
@@ -221,7 +221,7 @@ Get detailed information about a specific public community.
     "id": 1,
     "name": "waddle-community",
     "displayName": "Waddle Community",
-    "description": "The official WaddleBot community",
+    "description": "The official Waddles community",
     "logoUrl": "https://example.com/logo.png",
     "bannerUrl": "https://example.com/banner.png",
     "memberCount": 523,
@@ -950,42 +950,81 @@ Create a new module.
 
 ---
 
+### Community OAuth Credentials (Community Admin)
+
+Community admins manage their own OAuth credentials under the admin namespace.
+These are scoped to the community and cannot be accessed by other communities.
+
+#### GET /admin/:communityId/oauth/credentials
+List all active `community_oauth` credentials for a community.
+
+**Auth:** Community admin role required.
+
+**Response:** `200 OK`
+```json
+{ "success": true, "data": [...], "count": 2 }
+```
+
+#### POST /admin/:communityId/oauth/credentials
+Create a new community OAuth credential. `communityId` and `integrationType` are
+enforced server-side — request body values are ignored/overridden.
+
+**Auth:** Community admin role required.
+
+**Request Body:**
+```json
+{ "platform": "twitch", "clientId": "...", "clientSecret": "...", "scopes": ["channel:read"] }
+```
+
+#### PUT /admin/:communityId/oauth/credentials/:id
+Update a credential. Verifies the credential belongs to this community before updating.
+
+#### DELETE /admin/:communityId/oauth/credentials/:id
+Deactivate a credential. Verifies community ownership.
+
+#### POST /admin/:communityId/oauth/credentials/:id/test
+Test a credential against the platform API.
+
+---
+
+### User OAuth Credentials (Authenticated User)
+
+Users manage their own personal OAuth credentials. The authenticated user's ID
+is always derived from the JWT — no user ID can be passed in the request body.
+
+#### GET /user/oauth/credentials
+List the authenticated user's own `user_oauth` credentials.
+
+**Auth:** Any authenticated user.
+
+#### POST /user/oauth/credentials
+Create a credential. `userId` and `integrationType` are enforced from session.
+
+#### PUT /user/oauth/credentials/:id
+Update a credential. Verifies ownership (user_id = authenticated user).
+
+#### DELETE /user/oauth/credentials/:id
+Deactivate a credential. Verifies ownership.
+
+#### POST /user/oauth/credentials/:id/test
+Test credential against platform API.
+
+---
+
 ### GET /superadmin/platform-config
-Get OAuth platform configurations.
+Get bot and auth platform configurations (bot credentials only — community OAuth
+and user OAuth have been moved to their respective ownership layers above).
 
 **Response:** `200 OK`
 ```json
 {
   "success": true,
   "platforms": {
-    "discord": {
-      "enabled": true,
-      "clientId": "123456789"
-    },
-    "twitch": {
-      "enabled": true,
-      "clientId": "987654321"
-    }
+    "discord": { "enabled": true, "clientId": "123456789" },
+    "twitch": { "enabled": true, "clientId": "987654321" }
   }
 }
 ```
-
----
-
-### PUT /superadmin/platform-config/:platform
-Update platform OAuth configuration.
-
-**Request Body:**
-```json
-{
-  "clientId": "new-client-id",
-  "clientSecret": "new-client-secret",
-  "redirectUri": "https://hub.example.com/auth/callback",
-  "enabled": true
-}
-```
-
-**Response:** `200 OK`
 
 ---
 
@@ -1046,7 +1085,7 @@ Browse available modules.
       "displayName": "Loyalty System",
       "description": "Points and rewards system",
       "version": "1.0.0",
-      "author": "WaddleBot",
+      "author": "Waddles",
       "isInstalled": false,
       "rating": 4.8,
       "downloads": 523

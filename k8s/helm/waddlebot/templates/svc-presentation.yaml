@@ -1,0 +1,117 @@
+# v3.0.x — SKELETON. 8th container / 4th stage-runner. Renders per-community:
+# (a) core overlays (full_screen/media/crawler), (b) the Music Station, (c) each activated
+# bundle's `presentation` component (HTML/JS overlay). Supersedes/absorbs
+# core/browser_source_core_module's per-community browser-source role — that legacy
+# Deployment coexists until cutover (not folded here; no PIPELINE_MAPPING.md entry yet).
+# See docs/plans/2026-08-31-app-bundle-sdk-design.md §6 (distribution model) and
+# docs/plans/2026-08-31-music-station-design.md §8 (presentation container & player).
+#
+# Unlike svc-rtc (owned solely by Social, gated on modules.social.enabled), presentation is
+# generic pipeline infra like svc-ingest/svc-process/svc-action — it serves every Module's
+# activated bundles plus Core overlays, so it is NOT gated on any single modules.<name>.enabled.
+# It also does not emit MODULE_LOAD_* env vars: module ownership of Music Station is an open
+# decision (music-station-design.md §11.2, "either reuse social or add music") and guessing
+# a module set here would just be wrong later — left out deliberately, not an oversight.
+#
+# Distribution model (both stubbed in svc_presentation/app.py, not wired here):
+#   1. Poll hub-api's `GET /api/v1/apps/installed?stage=presentation` and reconcile locally
+#      (bundle-sdk-design.md §6.2) — KNOWN_SURFACES gains `presentation`, follow-up work.
+#   2. Read per-community activation/routing from the read replica, never primary
+#      (bundle-sdk-design.md §6.3) — this container gets a read-only DB account.
+#
+# Base image pinned to the same digest already used by every other pipeline-stage skeleton
+# in this file (pipeline.pythonBaseImage) — no Dockerfile/CI image exists for svc-presentation
+# yet; core/svc_presentation/Dockerfile in this PR is scaffold-only, not wired into CI.
+{{- if .Values.pipeline.svcPresentation.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "waddlebot.fullname" . }}-svc-presentation
+  labels:
+    {{- include "waddlebot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: svc-presentation
+spec:
+  replicas: {{ .Values.pipeline.svcPresentation.replicas }}
+  selector:
+    matchLabels:
+      {{- include "waddlebot.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: svc-presentation
+  template:
+    metadata:
+      labels:
+        {{- include "waddlebot.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: svc-presentation
+    spec:
+      serviceAccountName: {{ include "waddlebot.serviceAccountName" . }}
+      {{- include "waddlebot.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - name: svc-presentation
+        # SKELETON PLACEHOLDER — no Dockerfile/CI image exists yet for svc-presentation;
+        # pinned to the repo's existing Python base digest rather than inventing one or
+        # using a mutable tag. Replace once svc-presentation has its own CI build.
+        image: "{{ .Values.pipeline.pythonBaseImage }}"
+        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 10 }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.pipeline.svcPresentation.port }}
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: {{ include "waddlebot.fullname" . }}-config
+        - secretRef:
+            name: {{ include "waddlebot.fullname" . }}-secrets
+        env:
+        - name: MODULE_NAME
+          value: "svc-presentation"
+        - name: PIPELINE_STAGE
+          value: "presentation"
+        - name: MODULE_PORT
+          value: {{ .Values.pipeline.svcPresentation.port | quote }}
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          {{- toYaml .Values.pipeline.svcPresentation.resources | nindent 10 }}
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "waddlebot.fullname" . }}-svc-presentation
+  labels:
+    {{- include "waddlebot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: svc-presentation
+spec:
+  type: ClusterIP
+  ports:
+  - port: {{ .Values.pipeline.svcPresentation.port }}
+    targetPort: http
+    protocol: TCP
+    name: http
+  selector:
+    {{- include "waddlebot.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: svc-presentation
+{{- end }}

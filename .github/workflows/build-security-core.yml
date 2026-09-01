@@ -2,7 +2,7 @@ name: Build security-core
 
 on:
   push:
-    branches: [ main, develop, 'feature/**', 'bugfix/**' ]
+    branches: [main, 'v*', 'release/**', 'feature/**', 'fix/**', 'chore/**', 'hotfix/**', 'docs/**', 'refactor/**']
     paths:
       - 'core/security_core_module/**'
       - 'libs/flask_core/**'
@@ -10,11 +10,16 @@ on:
       - '.github/workflows/build-security-core.yml'
       - '.github/workflows/build-container.yml'
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, 'v*', 'release/**', 'feature/**', 'fix/**', 'chore/**', 'hotfix/**', 'docs/**', 'refactor/**']
     paths:
       - 'core/security_core_module/**'
       - 'libs/flask_core/**'
   workflow_dispatch:
+
+
+permissions:
+  contents: read
+  packages: write
 
 jobs:
   build:

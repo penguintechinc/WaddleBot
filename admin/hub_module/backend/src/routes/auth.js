@@ -5,8 +5,12 @@ import { Router } from 'express';
 import * as authController from '../controllers/authController.js';
 import { requireAuth, optionalAuth } from '../middleware/auth.js';
 import { validators, validationRules, validateRequest } from '../middleware/validation.js';
+import { body } from 'express-validator';
 
 const router = Router();
+
+// Tenant login info (public)
+router.get('/tenant/:slug', authController.getTenantLoginInfo);
 
 // Local auth (email/password)
 router.post('/register',
@@ -36,7 +40,10 @@ router.post('/resend-verification',
 // Password management (requires auth)
 router.post('/password',
   requireAuth,
-  validators.password(),
+  body('newPassword')
+    .isLength({ min: 8 })
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
+    .withMessage('Password must be at least 8 characters with uppercase, lowercase, and number'),
   validateRequest,
   authController.setPassword
 );

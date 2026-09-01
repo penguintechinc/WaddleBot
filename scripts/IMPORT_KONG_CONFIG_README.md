@@ -272,9 +272,9 @@ WARNING: Resource already exists (409): /services
 
 **Solution**: This is normal and expected. The script is idempotent and will continue. To force re-import, delete existing resources in Kong Admin API first.
 
-## WaddleBot Configuration
+## Waddles Configuration
 
-The WaddleBot Kong configuration includes:
+The Waddles Kong configuration includes:
 
 - **Services**: 15 microservices (hub, router, AI, identity, labels, etc.)
 - **Routes**: 25+ API endpoints with path-based routing
@@ -290,4 +290,4 @@ The WaddleBot Kong configuration includes:
 
 - Kong Documentation: https://docs.konghq.com/
 - Kong Admin API: https://docs.konghq.com/gateway/latest/admin-api/
-- WaddleBot Architecture: `/home/penguin/code/WaddleBot/CLAUDE.md`
+- Waddles Architecture: `/home/penguin/code/waddlebot/CLAUDE.md`

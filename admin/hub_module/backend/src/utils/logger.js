@@ -1,7 +1,7 @@
 /**
  * AAA Logging Utility
  * Authentication, Authorization, and Auditing logging
- * following WaddleBot logging patterns.
+ * following Waddles logging patterns.
  */
 import { config } from '../config/index.js';
 

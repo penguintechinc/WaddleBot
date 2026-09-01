@@ -1,21 +1,17 @@
 # Multi-stage Dockerfile for WaddleBot Hub Module
 # Stage 1: Build frontend
-FROM node:20-bookworm-slim AS frontend-build
+FROM node:20-bookworm-slim@sha256:1e85773c98c31d4fe5b545e4cb17379e617b348832fb3738b22a08f68dec30f3 AS frontend-build
 
-WORKDIR /build
-
-# Copy shared react_libs first (required by frontend)
-# Path matches package.json: file:../../../shared/react_libs
-COPY shared/react_libs ./shared/react_libs
-
-# Create frontend directory matching expected path structure
 WORKDIR /build/admin/hub_module/frontend
 
 # Copy frontend package files
 COPY admin/hub_module/frontend/package*.json ./
 
-# Install frontend dependencies
-RUN npm install
+# Install the exact locked dependency graph from public npm without running
+# arbitrary lifecycle scripts, then rebuild the one approved native dependency.
+# @penguintechinc packages are published to npmjs.com, so no registry auth is
+# needed and no token ever enters the build.
+RUN npm ci --ignore-scripts && npm rebuild esbuild
 
 # Copy frontend source
 COPY admin/hub_module/frontend/ ./
@@ -24,7 +20,7 @@ COPY admin/hub_module/frontend/ ./
 RUN npm run build
 
 # Stage 2: Production image
-FROM node:20-bookworm-slim
+FROM node:20-bookworm-slim@sha256:1e85773c98c31d4fe5b545e4cb17379e617b348832fb3738b22a08f68dec30f3
 
 WORKDIR /app
 
@@ -41,8 +37,9 @@ RUN groupadd -g 1001 nodejs && \
 # Copy backend package files
 COPY admin/hub_module/backend/package*.json ./
 
-# Install production dependencies only
-RUN npm install --only=production
+# Install the exact production dependency graph without running arbitrary
+# lifecycle scripts, then rebuild the one approved native dependency.
+RUN npm ci --omit=dev --ignore-scripts && npm rebuild bcrypt
 
 # Remove build tools to reduce image size (keep curl for healthcheck)
 RUN apt-get purge -y make g++ && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*

@@ -10,6 +10,8 @@ import * as communityProfileController from '../controllers/communityProfileCont
 import * as overlayController from '../controllers/overlayController.js';
 import * as loyaltyController from '../controllers/loyaltyController.js';
 import * as announcementController from '../controllers/announcementController.js';
+import * as aiChatterController from '../controllers/aiChatterController.js';
+import PlatformConfigController from '../controllers/platformConfigController.js';
 import { requireAuth, requireCommunityAdmin } from '../middleware/auth.js';
 import { validators, validateRequest } from '../middleware/validation.js';
 import workflowRoutes from './workflow.js';
@@ -22,10 +24,49 @@ const upload = multer({
 
 router.use(requireAuth);
 
+// Members management
+router.get('/:communityId/members', requireCommunityAdmin, adminController.getMembers);
+router.put('/:communityId/members/:userId/role', requireCommunityAdmin, adminController.updateMemberRole);
+router.put('/:communityId/members/:userId/reputation', requireCommunityAdmin, adminController.adjustReputation);
+router.delete('/:communityId/members/:userId', requireCommunityAdmin, adminController.removeMember);
+router.post('/:communityId/members/:userId/temp-password', requireCommunityAdmin, adminController.generateTempPassword);
+
+// Modules management
+router.get('/:communityId/modules', requireCommunityAdmin, adminController.getModules);
+router.put('/:communityId/modules/:moduleId/config', requireCommunityAdmin, adminController.updateModuleConfig);
+
+// Browser sources
+router.get('/:communityId/browser-sources', requireCommunityAdmin, adminController.getBrowserSources);
+router.post('/:communityId/browser-sources/regenerate', requireCommunityAdmin, adminController.regenerateBrowserSources);
+
+// Custom domains
+router.get('/:communityId/domains', requireCommunityAdmin, adminController.getDomains);
+router.post('/:communityId/domains', requireCommunityAdmin, adminController.addDomain);
+router.post('/:communityId/domains/:domainId/verify', requireCommunityAdmin, adminController.verifyDomain);
+router.delete('/:communityId/domains/:domainId', requireCommunityAdmin, adminController.removeDomain);
+
+// Linked servers
+router.get('/:communityId/servers', requireCommunityAdmin, adminController.getLinkedServers);
+router.put('/:communityId/servers/:serverId', requireCommunityAdmin, adminController.updateServer);
+router.delete('/:communityId/servers/:serverId', requireCommunityAdmin, adminController.removeServer);
+
+// Community settings
+router.get('/:communityId/settings', requireCommunityAdmin, adminController.getCommunitySettings);
+router.put('/:communityId/settings', requireCommunityAdmin, adminController.updateCommunitySettings);
+
+// Join requests
+router.get('/:communityId/join-requests', requireCommunityAdmin, adminController.getJoinRequests);
+router.post('/:communityId/join-requests/:requestId/approve', requireCommunityAdmin, adminController.approveJoinRequest);
+router.post('/:communityId/join-requests/:requestId/reject', requireCommunityAdmin, adminController.rejectJoinRequest);
+
 // Server link requests
 router.get('/:communityId/server-link-requests', requireCommunityAdmin, adminController.getServerLinkRequests);
+router.post('/:communityId/server-link-requests', requireCommunityAdmin, adminController.createServerLinkRequest);
 router.post('/:communityId/server-link-requests/:requestId/approve', requireCommunityAdmin, adminController.approveServerLinkRequest);
 router.post('/:communityId/server-link-requests/:requestId/reject', requireCommunityAdmin, adminController.rejectServerLinkRequest);
+
+// Commands reference
+router.get('/:communityId/commands', requireCommunityAdmin, adminController.getCommands);
 
 // Mirror groups
 router.get('/:communityId/mirror-groups', requireCommunityAdmin, adminController.getMirrorGroups);
@@ -278,12 +319,20 @@ router.get('/:communityId/analytics/*', requireCommunityAdmin, async (req, res) 
     );
     res.json(response.data);
   } catch (error) {
+    if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+      return res.json({ success: true, unavailable: true, message: 'Analytics service not available' });
+    }
     console.error('Analytics proxy error:', error.message);
     res.status(error.response?.status || 500).json({
       error: error.response?.data?.error || 'Failed to fetch analytics',
     });
   }
 });
+
+// Helper: check if error is a connection failure (service not deployed)
+function isServiceUnavailable(error) {
+  return error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND';
+}
 
 // Security proxy routes
 router.get('/:communityId/security/*', requireCommunityAdmin, async (req, res) => {
@@ -302,6 +351,9 @@ router.get('/:communityId/security/*', requireCommunityAdmin, async (req, res) =
     );
     res.json(response.data);
   } catch (error) {
+    if (isServiceUnavailable(error)) {
+      return res.json({ success: true, unavailable: true, message: 'Security service not available' });
+    }
     console.error('Security proxy error:', error.message);
     res.status(error.response?.status || 500).json({
       error: error.response?.data?.error || 'Failed to fetch security data',
@@ -326,6 +378,9 @@ router.put('/:communityId/security/*', requireCommunityAdmin, async (req, res) =
     );
     res.json(response.data);
   } catch (error) {
+    if (isServiceUnavailable(error)) {
+      return res.json({ success: true, unavailable: true, message: 'Security service not available' });
+    }
     console.error('Security proxy error:', error.message);
     res.status(error.response?.status || 500).json({
       error: error.response?.data?.error || 'Failed to update security settings',
@@ -350,6 +405,9 @@ router.post('/:communityId/security/*', requireCommunityAdmin, async (req, res) 
     );
     res.json(response.data);
   } catch (error) {
+    if (isServiceUnavailable(error)) {
+      return res.json({ success: true, unavailable: true, message: 'Security service not available' });
+    }
     console.error('Security proxy error:', error.message);
     res.status(error.response?.status || 500).json({
       error: error.response?.data?.error || 'Failed to process security action',
@@ -373,6 +431,9 @@ router.delete('/:communityId/security/*', requireCommunityAdmin, async (req, res
     );
     res.json(response.data);
   } catch (error) {
+    if (isServiceUnavailable(error)) {
+      return res.json({ success: true, unavailable: true, message: 'Security service not available' });
+    }
     console.error('Security proxy error:', error.message);
     res.status(error.response?.status || 500).json({
       error: error.response?.data?.error || 'Failed to delete security item',
@@ -380,11 +441,33 @@ router.delete('/:communityId/security/*', requireCommunityAdmin, async (req, res
   }
 });
 
+// Connected platforms (aggregates from community_servers)
+router.get('/:communityId/connected-platforms', requireCommunityAdmin, adminController.getConnectedPlatforms);
+
+// Community OAuth credential management (community admin only)
+router.get('/:communityId/oauth/credentials', requireCommunityAdmin, PlatformConfigController.getCommunityCredentials);
+router.post('/:communityId/oauth/credentials', requireCommunityAdmin, PlatformConfigController.createCommunityCredential);
+router.put('/:communityId/oauth/credentials/:id', requireCommunityAdmin, PlatformConfigController.updateCommunityCredential);
+router.delete('/:communityId/oauth/credentials/:id', requireCommunityAdmin, PlatformConfigController.deleteCommunityCredential);
+router.post('/:communityId/oauth/credentials/:id/test', requireCommunityAdmin, PlatformConfigController.testCredential);
+
+// Shoutout management
+router.get('/:communityId/shoutout/config', requireCommunityAdmin, adminController.getShoutoutConfig);
+router.put('/:communityId/shoutout/config', requireCommunityAdmin, adminController.updateShoutoutConfig);
+router.get('/:communityId/shoutout/creators', requireCommunityAdmin, adminController.getShoutoutCreators);
+router.post('/:communityId/shoutout/creators', requireCommunityAdmin, adminController.addShoutoutCreator);
+router.delete('/:communityId/shoutout/creators/:creatorId', requireCommunityAdmin, adminController.removeShoutoutCreator);
+router.get('/:communityId/shoutout/history', requireCommunityAdmin, adminController.getShoutoutHistory);
+
 // Translation configuration routes
 router.get('/:communityId/translation/config', requireCommunityAdmin, adminController.getTranslationConfig);
 router.put('/:communityId/translation/config', requireCommunityAdmin, adminController.updateTranslationConfig);
 
 // Workflow routes
 router.use('/:communityId/workflows', workflowRoutes);
+
+// AI Chatter configuration
+router.get('/:communityId/ai-chatter/config', requireCommunityAdmin, aiChatterController.getChatterConfig);
+router.put('/:communityId/ai-chatter/config', requireCommunityAdmin, aiChatterController.updateChatterConfig);
 
 export default router;

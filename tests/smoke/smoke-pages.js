@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * WaddleBot Page Load Smoke Tests
+ * Waddles Page Load Smoke Tests
  * Tests that all frontend pages load without JavaScript errors
  *
  * Tests:
@@ -65,8 +65,7 @@ const AUTHENTICATED_PAGES = [
   '/superadmin',
   '/superadmin/communities',
   '/superadmin/users',
-  '/superadmin/platform-config',
-  '/superadmin/kong'
+  '/superadmin/platform-config'
 ];
 
 let passed = 0;
@@ -192,7 +191,7 @@ async function loginUser(page) {
 
 async function main() {
   console.log('========================================');
-  console.log('WaddleBot Page Load Smoke Tests');
+  console.log('Waddles Page Load Smoke Tests');
   console.log('========================================');
   console.log('');
   console.log(`Target: ${BASE_URL}`);

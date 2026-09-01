@@ -65,6 +65,7 @@ export class CookieConsentService {
           functional: false,
           analytics: false,
           marketing: false,
+          doNotSell: false,
         },
         version: process.env.COOKIE_CONSENT_VERSION || '1.0.0',
         consentedAt: null,

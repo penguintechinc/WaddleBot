@@ -1,6 +1,6 @@
-# WaddleBot Hub Backend API Tests
+# Waddles Hub Backend API Tests
 
-Comprehensive API integration tests for the WaddleBot Hub Backend.
+Comprehensive API integration tests for the Waddles Hub Backend.
 
 ## Test Coverage
 
@@ -8,7 +8,7 @@ Comprehensive API integration tests for the WaddleBot Hub Backend.
 - **public.test.js** - Public endpoints (health, stats, communities list)
 - **community.test.js** - Community management (CRUD, members, join/leave)
 - **vendor.test.js** - Vendor submissions and dashboard
-- More tests to be added for: admin, superadmin, polls, forms, streaming, music, workflow, calls
+- More tests to be added for: admin, superadmin, polls, forms, streaming, music, workflow, calls (Waddles features)
 
 ## Running Tests
 

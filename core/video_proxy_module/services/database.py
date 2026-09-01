@@ -40,8 +40,7 @@ def get_db() -> DAL:
             db_uri,
             folder=os.getenv("DB_FOLDER", "/app/data/databases"),
             pool_size=int(os.getenv("DB_POOL_SIZE", "10")),
-            migrate=True,
-            fake_migrate=False,
+            migrate=False,
         )
         
         logger.info(f"Database connected: {db_type}")

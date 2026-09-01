@@ -1,4 +1,4 @@
-# WaddleBot Observability Quick Reference
+# Waddles Observability Quick Reference
 
 ## Fast Integration (Copy-Paste Ready)
 
@@ -157,14 +157,14 @@ export GENERATE_REQUEST_ID=true
 
 # Metrics
 export METRICS_ENABLED=true
-export METRICS_NAMESPACE=waddlebot
+export METRICS_NAMESPACE=waddles
 ```
 
 ## Docker Compose Commands
 
 ```bash
 # Start observability stack
-cd /home/penguin/code/WaddleBot/config/observability
+cd /home/penguin/code/waddlebot/config/observability
 docker-compose -f docker-compose.observability.yml up -d
 
 # Stop stack
@@ -273,30 +273,30 @@ curl -i http://localhost:8000/api/example/simple
 
 ```
 Python Modules:
-  /home/penguin/code/WaddleBot/libs/flask_core/flask_core/tracing.py
-  /home/penguin/code/WaddleBot/libs/flask_core/flask_core/correlation.py
-  /home/penguin/code/WaddleBot/libs/flask_core/flask_core/custom_metrics.py
+  /home/penguin/code/Waddles/libs/flask_core/flask_core/tracing.py
+  /home/penguin/code/Waddles/libs/flask_core/flask_core/correlation.py
+  /home/penguin/code/Waddles/libs/flask_core/flask_core/custom_metrics.py
 
 Configuration:
-  /home/penguin/code/WaddleBot/config/observability/prometheus.yml
-  /home/penguin/code/WaddleBot/config/observability/jaeger-config.yaml
-  /home/penguin/code/WaddleBot/config/observability/jaeger-sampling.json
-  /home/penguin/code/WaddleBot/config/observability/docker-compose.observability.yml
+  /home/penguin/code/Waddles/config/observability/prometheus.yml
+  /home/penguin/code/Waddles/config/observability/jaeger-config.yaml
+  /home/penguin/code/Waddles/config/observability/jaeger-sampling.json
+  /home/penguin/code/Waddles/config/observability/docker-compose.observability.yml
 
 Documentation:
-  /home/penguin/code/WaddleBot/config/observability/README.md
-  /home/penguin/code/WaddleBot/config/observability/IMPLEMENTATION_SUMMARY.md
-  /home/penguin/code/WaddleBot/config/observability/QUICK_REFERENCE.md
+  /home/penguin/code/Waddles/config/observability/README.md
+  /home/penguin/code/Waddles/config/observability/IMPLEMENTATION_SUMMARY.md
+  /home/penguin/code/Waddles/config/observability/QUICK_REFERENCE.md
 
 Examples:
-  /home/penguin/code/WaddleBot/config/observability/example_integration.py
+  /home/penguin/code/Waddles/config/observability/example_integration.py
 ```
 
 ## Quick Test
 
 ```bash
 # 1. Start observability stack
-cd /home/penguin/code/WaddleBot/config/observability
+cd /home/penguin/code/waddlebot/config/observability
 docker-compose -f docker-compose.observability.yml up -d
 
 # 2. Run example service

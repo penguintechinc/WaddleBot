@@ -1,6 +1,6 @@
 -- Migration 007: Add Translation and Closed Captioning Support
 -- Description: Adds database infrastructure for translation caching and closed captions
--- Author: WaddleBot Team
+-- Author: Waddles Team
 -- Date: 2025-12-12
 
 -- Add GIN index for translation config queries on communities table
@@ -66,8 +66,7 @@ CREATE TABLE IF NOT EXISTS caption_events (
 -- Index for fast retrieval of recent captions per community
 -- Only indexes captions from last 7 days (partial index for efficiency)
 CREATE INDEX IF NOT EXISTS idx_caption_events_recent
-ON caption_events(community_id, created_at DESC)
-WHERE created_at > NOW() - INTERVAL '7 days';
+ON caption_events(community_id, created_at DESC);
 
 -- Index for community-based queries
 CREATE INDEX IF NOT EXISTS idx_caption_events_community

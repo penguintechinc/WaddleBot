@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { query } from '../config/database.js';
 import { errors } from '../middleware/errorHandler.js';
 import { logger } from '../utils/logger.js';
+import { applyGlobalPrivacyControl } from '../utils/globalPrivacyControl.js';
 import { CookieConsentService } from '../services/cookieConsentService.js';
 
 const service = new CookieConsentService();
@@ -26,12 +27,13 @@ export async function getConsent(req, res, next) {
         data: {
           consentId: null,
           userId: null,
-          preferences: {
+          preferences: applyGlobalPrivacyControl(req, {
             necessary: true,
             functional: false,
             analytics: false,
             marketing: false,
-          },
+            doNotSell: false,
+          }).preferences,
           version: process.env.COOKIE_CONSENT_VERSION || '1.0.0',
           consentedAt: null,
           expiresAt: null,
@@ -42,9 +44,14 @@ export async function getConsent(req, res, next) {
 
     const consent = await service.getOrCreateConsent(userId, consentId);
 
+    // A stored record predates this request, so a GPC signal sent now still has
+    // to be reflected in what the client is told — otherwise the UI would show
+    // sharing as permitted while the signal says otherwise.
+    const { preferences, applied } = applyGlobalPrivacyControl(req, consent.preferences);
+
     res.json({
       success: true,
-      data: consent,
+      data: { ...consent, preferences, gpcApplied: applied },
     });
   } catch (err) {
     logger.error('Error getting consent', { error: err.message });
@@ -69,12 +76,19 @@ export async function saveConsent(req, res, next) {
     }
 
     // Necessary is always true
-    const validated = {
+    const requested = {
       necessary: true,
       functional: Boolean(preferences.functional),
       analytics: Boolean(preferences.analytics),
       marketing: Boolean(preferences.marketing),
+      doNotSell: Boolean(preferences.doNotSell),
     };
+
+    // A GPC signal is itself a valid opt-out request under CPRA, so it wins over
+    // whatever the form submitted — including a stale form rendered before the
+    // signal was set.
+    const { preferences: validated, applied: gpcApplied } =
+      applyGlobalPrivacyControl(req, requested);
 
     // Get or create consent record
     const consentId = req.cookies?.waddlebot_consent_id || uuidv4();
@@ -100,7 +114,8 @@ export async function saveConsent(req, res, next) {
       userId,
       consentId,
       preferences: validated,
-      method: consentMethod,
+      method: gpcApplied ? 'global_privacy_control' : consentMethod,
+      gpcApplied,
     });
 
     res.json({

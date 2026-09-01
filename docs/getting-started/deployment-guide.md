@@ -1,8 +1,8 @@
-# WaddleBot Deployment Guide
+# Waddles Deployment Guide
 
 ## Overview
 
-This guide covers the complete deployment of WaddleBot's multi-platform chat bot system using Docker, Kubernetes, and CI/CD pipelines. WaddleBot follows a microservices architecture with separate containers for core services, collectors, and interaction modules.
+This guide covers the complete deployment of Waddles's multi-platform chat bot system using Docker, Kubernetes, and CI/CD pipelines. Waddles follows a microservices architecture with separate containers for core services, collectors, and interaction modules.
 
 ## Prerequisites
 
@@ -128,8 +128,8 @@ BROKER_API_KEY=wbot_broker_master_key_placeholder
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/WaddleBot.git
-cd WaddleBot
+git clone https://github.com/your-org/Waddles.git
+cd Waddles
 
 # Create and configure environment file
 cp .env.example .env
@@ -382,7 +382,7 @@ The repository includes comprehensive GitHub Actions workflows:
 1. **containers.yml**: Builds and tests all container modules
 2. **ci-cd.yml**: Main CI/CD pipeline with security scanning
 3. **android.yml**: Android app building and testing
-4. **desktop-bridge.yml**: Golang desktop bridge compilation
+4. **pr-validation.yml**: Pull request and merge-queue test gate
 
 #### Secrets Configuration
 
@@ -483,7 +483,7 @@ data:
 ```json
 {
   "dashboard": {
-    "title": "WaddleBot Overview",
+    "title": "Waddles Overview",
     "panels": [
       {
         "title": "Request Rate",
@@ -787,4 +787,4 @@ done
 - [ ] Security scans passing
 - [ ] Performance within acceptable ranges
 
-This deployment guide provides a comprehensive foundation for running WaddleBot in production environments with proper monitoring, security, and scalability considerations.
+This deployment guide provides a comprehensive foundation for running Waddles in production environments with proper monitoring, security, and scalability considerations.

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The WaddleBot Hub Module is a full-stack web application that serves as the central administration portal and community management interface. It consists of a Node.js/Express backend API and a React-based frontend SPA.
+The Waddles Hub Module is a full-stack web application that serves as the central administration portal and community management interface. It consists of a Node.js/Express backend API and a React-based frontend SPA.
 
 **Version:** 1.0.1
 **Tech Stack:** Node.js 20+, Express, React 18, PostgreSQL, Socket.io
@@ -57,7 +57,7 @@ The WaddleBot Hub Module is a full-stack web application that serves as the cent
            │ PostgreSQL     │ HTTP           │ WebSocket
            ▼                ▼                ▼
 ┌──────────────────┐  ┌─────────────────────────────────────┐
-│   Database       │  │    WaddleBot Microservices          │
+│   Database       │  │    Waddles Microservices          │
 │  - Users         │  │  - Identity Core (OAuth)            │
 │  - Communities   │  │  - Analytics Core                   │
 │  - Modules       │  │  - Security Core                    │
@@ -1043,4 +1043,4 @@ Structured JSON logging with levels:
 
 ## Conclusion
 
-The Hub Module is a well-architected full-stack application with clear separation of concerns, comprehensive security, and scalable design patterns. Its role as an API gateway enables seamless integration with the broader WaddleBot ecosystem.
+The Hub Module is a well-architected full-stack application with clear separation of concerns, comprehensive security, and scalable design patterns. Its role as an API gateway enables seamless integration with the broader Waddles ecosystem.

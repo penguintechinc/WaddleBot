@@ -18,6 +18,13 @@ from flask_core import (  # noqa: E402
     error_response,
     create_health_blueprint
 )
+from flask_core.authz import require_scope  # noqa: E402
+from flask_core.feature_flags import feature_enabled  # noqa: E402
+from flask_core.tenancy import (  # noqa: E402
+    DEFAULT_TENANT_SLUG,
+    get_tenant_context,
+    tenant_middleware,
+)
 from config import Config  # noqa: E402
 
 app = Quart(__name__)
@@ -66,9 +73,30 @@ async def status():
 
 
 @api_bp.route('/quotes', methods=['POST'])
+# regression: tenant-isolation audit 2026-08-30 -- tenant_middleware was
+# missing here, so get_tenant_context(request) always returned None and
+# every request silently ran as DEFAULT_TENANT_SLUG with no auth. Must be
+# the outermost decorator (security.md: tenant before scope/handler logic)
+# so an invalid/missing JWT 401s before async_endpoint or the handler body
+# ever run.
+@tenant_middleware
+# HTTP-layer scope enforcement -- social_module/features.py's "social.quote"
+# Feature contract declares requires_scopes == {"social.quote:write"}; this
+# wires that declaration up to an actual 403 rather than leaving it
+# unenforced.
+@require_scope("social.quote:write")
 @async_endpoint
 async def add_quote():
     """Add a new quote"""
+    # v3 Feature gate (social.quote / waddles.social.quote, free tier). The
+    # other Free-tier Social Features (polls, presence, communities, alias,
+    # browser_source, rtc) follow this identical one-line guard at their own
+    # handler entry points.
+    tenant_ctx = get_tenant_context(request)
+    tenant_slug = tenant_ctx.tenant_slug if tenant_ctx is not None else DEFAULT_TENANT_SLUG
+    if not await feature_enabled("waddles.social.quote", tenant=tenant_slug):
+        return error_response("quotes are not available", status_code=404)
+
     try:
         data = await request.get_json()
 

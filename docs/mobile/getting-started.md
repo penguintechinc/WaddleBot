@@ -1,4 +1,4 @@
-# Getting Started with WaddleBot Mobile
+# Getting Started with Waddles Mobile
 
 This guide covers setup instructions for both Android and iOS development environments.
 
@@ -7,7 +7,7 @@ This guide covers setup instructions for both Android and iOS development enviro
 ### Common Requirements
 
 - Git for version control
-- Access to the WaddleBot repository
+- Access to the Waddles repository
 - Hub API server running (local or remote)
 
 ## Android Setup
@@ -156,7 +156,7 @@ app/src/main/
 4. **Open in Xcode**
 
    ```bash
-   open WaddleBotHub.xcodeproj
+   open WaddlesHub.xcodeproj
    ```
 
    Or double-click the `.xcodeproj` file in Finder.
@@ -198,7 +198,7 @@ app/src/main/
 ### iOS Project Structure
 
 ```
-WaddleBotHub/
+WaddlesHub/
 +-- Services/
 |   +-- WebSocketManager.swift    # WebSocket handling
 |   +-- APIClient.swift           # REST API client

@@ -1,5 +1,5 @@
 #!/bin/bash
-# WaddleBot Alpha Smoke Test
+# Waddles Alpha Smoke Test
 # Tests that all docker-compose services are healthy before deployment
 #
 # IMPORTANT: This test MUST pass before pushing to beta cluster.
@@ -12,7 +12,7 @@
 #   2 - Services still starting (WARN - wait and retry)
 
 echo "========================================"
-echo "WaddleBot Alpha Smoke Test"
+echo "Waddles Alpha Smoke Test"
 echo "========================================"
 echo ""
 echo "Checking container health status..."

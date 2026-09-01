@@ -666,4 +666,4 @@ A: Yes, create a test webhook with debug logging enabled. Monitor logs in real-t
 For issues or questions:
 - Check logs: `/var/log/waddlebotlog/`
 - Review this documentation
-- Contact the WaddleBot team
+- Contact the Waddles team

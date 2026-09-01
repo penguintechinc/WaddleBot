@@ -8,14 +8,24 @@ import aiohttp
 
 from config import Config
 from services.command_registry import CommandRegistry, CommandInfo
-from services.translation_service import TranslationService
+from services.context_service import ContextService
 from services.grpc_clients import get_grpc_manager
+from services.ai_chatter_config_cache import AiChatterConfigCache
 
 logger = logging.getLogger(__name__)
 
 
 class CommandProcessor:
-    def __init__(self, dal, cache_manager, rate_limiter, session_manager, command_registry: CommandRegistry, stream_pipeline=None):
+    def __init__(
+        self,
+        dal,
+        cache_manager,
+        rate_limiter,
+        session_manager,
+        command_registry: CommandRegistry,
+        stream_pipeline=None,
+        ai_chatter_config_cache=None,
+    ):
         self.dal = dal
         self.cache = cache_manager
         self.rate_limiter = rate_limiter
@@ -23,12 +33,16 @@ class CommandProcessor:
         self.command_registry = command_registry
         self._http_session = None
         self._response_cache: Dict[str, Any] = {}  # session_id -> response
-        self.translation_service = TranslationService(
-            dal=dal,
-            cache_manager=cache_manager
-        )
         self._grpc_manager = get_grpc_manager() if Config.GRPC_ENABLED else None
         self.stream_pipeline = stream_pipeline  # Optional Redis streams pipeline
+        self.ai_chatter_config_cache = ai_chatter_config_cache  # AIChatter config cache
+
+        # Context service: per-user community context overrides
+        self.context_service = ContextService(dal, cache_manager)
+
+        # Translate module gRPC channel (lazy-initialised)
+        self._translate_channel = None
+        self._translate_stub = None
 
     def _setup_proto_path(self):
         """Add proto path to sys.path if not already present"""
@@ -70,6 +84,11 @@ class CommandProcessor:
                     event_data, entity_id, user_id, session_id, metadata
                 )
 
+            # Handle presence updates (forward to presence service)
+            if message_type == 'presence_update':
+                asyncio.create_task(self._forward_presence_update(event_data))
+                return {"success": True, "session_id": session_id, "processed": True}
+
             # Handle stream events (no command response, just activity tracking)
             if message_type in ('stream_online', 'stream_offline', 'subscription',
                                 'gift_subscription', 'follow', 'raid', 'cheer'):
@@ -86,8 +105,33 @@ class CommandProcessor:
                 # Also record for reputation tracking
                 asyncio.create_task(self._record_reputation_event(event_data))
 
-                # NEW: Translate message if translation enabled for this community
+                # AIChatter: proactive response if community has opted in (fire-and-forget)
+                asyncio.create_task(self._maybe_ai_chatter_respond(event_data))
+
+                # Translate message if translation enabled for this community
                 translation_result = await self._translate_message(event_data, entity_id)
+                if translation_result:
+                    translated_text = translation_result['translated_text']
+
+                    # Check translated text against content filter (may contain
+                    # profanity not present in the original language)
+                    community_id = await self._get_community_for_entity(entity_id)
+                    if community_id:
+                        filter_result = await self._check_content_filter(
+                            community_id=community_id,
+                            message=translated_text,
+                            platform=event_data.get('platform', 'unknown'),
+                            user_id=user_id,
+                        )
+                        if filter_result and not filter_result.get('allowed', True):
+                            logger.info(
+                                f"Translated message blocked by content filter: "
+                                f"reason={filter_result.get('blocked_reason')}, "
+                                f"pattern={filter_result.get('matched_pattern')}"
+                            )
+                            # Skip caption broadcast for filtered translations
+                            translation_result = None
+
                 if translation_result:
                     # Update event data with translated message
                     event_data['message'] = translation_result['translated_text']
@@ -183,34 +227,116 @@ class CommandProcessor:
         session_id: str,
         metadata: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Process button click, modal submit, or select menu"""
+        """Process button click, modal submit, or select menu.
+
+        custom_id format: module:action:context  (e.g. "inventory:buy:item_123")
+        Looks up the module URL and POSTs to its /api/v1/execute endpoint.
+        """
         interaction_type = event_data.get('message_type')
         custom_id = metadata.get('custom_id', '')
         values = metadata.get('values', {})
         platform = event_data.get('platform', 'unknown')
 
-        # Parse custom_id to determine action
-        # Format: module:action:context (e.g., "inventory:buy:item_123")
+        # Parse custom_id → module : action : context
         parts = custom_id.split(':')
-        module = parts[0] if parts else ''
+        module_name = parts[0] if parts else ''
         action = parts[1] if len(parts) > 1 else ''
         context = ':'.join(parts[2:]) if len(parts) > 2 else ''
 
         logger.info(f"Processing interaction: {interaction_type} - {custom_id}")
 
-        # Route to appropriate module based on custom_id
-        return {
-            "success": True,
-            "session_id": session_id,
-            "interaction_type": interaction_type,
-            "module": module,
+        if not module_name:
+            return {
+                "success": False,
+                "error": "Interaction has no module identifier in custom_id",
+                "session_id": session_id,
+            }
+
+        # Resolve community for this entity
+        community_id = await self._get_community_for_entity(entity_id)
+
+        # Look up the module's HTTP URL from the command registry (fast) or DB (fallback)
+        module_url: Optional[str] = None
+        try:
+            result = self.dal.executesql(
+                "SELECT url FROM hub_modules WHERE name = %s AND is_active = true LIMIT 1",
+                [module_name],
+            )
+            if result:
+                module_url = result[0][0]
+        except Exception as e:
+            logger.warning(f"Failed to look up module URL for '{module_name}': {e}")
+
+        if not module_url:
+            # Reasonable default: modules are discoverable by name on a fixed port
+            module_url = f"http://{module_name}:8000"
+            logger.debug(f"Module URL not found in DB, falling back to {module_url}")
+
+        # Build the execute payload (same schema as execute_command uses)
+        payload = {
             "action": action,
             "context": context,
             "values": values,
+            "user_id": user_id,
+            "entity_id": entity_id,
+            "community_id": community_id,
+            "session_id": session_id,
+            "platform": platform,
+            "interaction_type": interaction_type,
             "interaction_id": metadata.get('interaction_id'),
             "interaction_token": metadata.get('interaction_token'),
-            "platform": platform
         }
+
+        module_response = await self._call_module_with_retry(
+            f"{module_url}/api/v1/execute",
+            payload,
+            max_retries=2,
+        )
+
+        if module_response:
+            await self.handle_module_response({"session_id": session_id, "response": module_response})
+            return {
+                "success": True,
+                "session_id": session_id,
+                "module": module_name,
+                "action": action,
+                "interaction_id": metadata.get('interaction_id'),
+                "interaction_token": metadata.get('interaction_token'),
+                "platform": platform,
+                "response": module_response,
+            }
+
+        return {
+            "success": False,
+            "error": f"Module '{module_name}' did not respond to interaction",
+            "session_id": session_id,
+            "interaction_id": metadata.get('interaction_id'),
+            "interaction_token": metadata.get('interaction_token'),
+            "platform": platform,
+        }
+
+    async def _forward_presence_update(self, event_data: Dict[str, Any]):
+        """Forward presence update events to the presence service."""
+        try:
+            session = await self._get_http_session()
+            presence_url = getattr(Config, 'PRESENCE_API_URL', None)
+            if not presence_url:
+                logger.debug("PRESENCE_API_URL not configured, skipping presence update")
+                return
+
+            async with session.post(
+                f"{presence_url}/api/v1/presence/update",
+                json=event_data,
+                timeout=aiohttp.ClientTimeout(total=5)
+            ) as resp:
+                if resp.status != 200:
+                    logger.warning(
+                        "Presence update forward failed: HTTP %d",
+                        resp.status,
+                        extra={"event": event_data.get("user_id")}
+                    )
+        except Exception as exc:
+            logger.warning("Failed to forward presence update: %s", exc)
 
     async def _record_stream_activity(self, event_data: Dict[str, Any]):
         """Record stream events (subs, follows, raids, etc.) for activity tracking"""
@@ -337,22 +463,41 @@ class CommandProcessor:
             # Don't let activity tracking failures affect message processing
             logger.warning(f"Failed to record message activity: {e}")
 
-    async def _get_community_for_entity(self, entity_id: str) -> int | None:
-        """Get community ID for an entity from cache or database"""
+    async def _get_community_for_entity(
+        self,
+        entity_id: str,
+        user_id: Optional[str] = None,
+        platform: Optional[str] = None,
+    ) -> int | None:
+        """Get community ID for an entity, respecting per-user context overrides.
+
+        Resolution order:
+          1. Per-user override (Redis / user_platform_context table)
+          2. Channel/server primary community (community_servers, cached)
+          3. None
+        """
         if not entity_id:
             return None
 
-        # Check cache first
+        # 1. Per-user override (only when user_id and platform are provided)
+        if user_id and platform:
+            user_ctx = await self.context_service.get_context(platform, user_id, entity_id)
+            if user_ctx:
+                return user_ctx
+
+        # 2. Channel/server default — check cache first
         cache_key = f"entity:community:{entity_id}"
         cached = await self.cache.get(cache_key)
         if cached:
             return int(cached)
 
-        # Query database for server -> community mapping
+        # 3. Query database for server -> primary community mapping
         try:
             result = self.dal.executesql(
                 """SELECT cs.community_id FROM community_servers cs
-                   WHERE cs.platform_server_id = %s AND cs.is_active = true
+                   WHERE cs.platform_server_id = %s
+                     AND cs.status = 'approved'
+                   ORDER BY cs.is_primary DESC NULLS LAST
                    LIMIT 1""",
                 [entity_id],
             )
@@ -450,6 +595,10 @@ class CommandProcessor:
         if not community_id:
             return True  # No community context, allow by default
 
+        # For marketplace modules, check subscription and module status first
+        if module_name.startswith('marketplace:'):
+            return await self._is_marketplace_module_enabled(module_name, community_id)
+
         cache_key = f"module_enabled:{community_id}:{module_name}"
 
         # Check Redis cache first
@@ -483,6 +632,66 @@ class CommandProcessor:
         except Exception as e:
             logger.error(f"Failed to check module status: {e}")
             return True  # Default to enabled on error
+
+    async def _is_marketplace_module_enabled(self, module_name: str, community_id: int) -> bool:
+        """Check if a marketplace module subscription is active for this community.
+
+        Marketplace modules require:
+        1. Community subscription to the marketplace module
+        2. Subscription status = 'active'
+        3. is_enabled = true
+        4. Marketplace module itself must be approved and not deleted
+        """
+        if not module_name.startswith('marketplace:'):
+            return True
+
+        cache_key = f"marketplace_enabled:{community_id}:{module_name}"
+
+        # Check Redis cache first
+        try:
+            cached = await self.cache.get(cache_key)
+            if cached is not None:
+                return cached == b'1'
+        except Exception as e:
+            logger.warning(f"Redis cache check failed for marketplace module: {e}")
+
+        try:
+            # Extract module ID from module_name format: 'marketplace:{moduleId}'
+            module_id = int(module_name.split(':', 1)[1])
+        except (ValueError, IndexError):
+            logger.error(f"Invalid marketplace module name format: {module_name}")
+            return False
+
+        try:
+            # Check marketplace_subscriptions status and module approval status
+            result = self.dal.executesql(
+                """SELECT ms.status
+                   FROM marketplace_subscriptions ms
+                   JOIN marketplace_modules mm ON mm.id = ms.module_id
+                   WHERE ms.community_id = %s
+                   AND ms.module_id = %s
+                   AND ms.is_enabled = true
+                   AND mm.status = 'approved'
+                   AND mm.deleted_at IS NULL""",
+                [community_id, module_id]
+            )
+
+            is_enabled = result[0][0] == 'active' if result and result[0] else False
+
+            # Cache result for 5 minutes
+            try:
+                await self.cache.set(
+                    cache_key,
+                    b'1' if is_enabled else b'0',
+                    ttl=300
+                )
+            except Exception:
+                pass
+
+            return is_enabled
+        except Exception as e:
+            logger.warning(f"Failed to check marketplace module status: {e}")
+            return True  # Fail open (don't block commands if check fails)
 
     async def execute_command(
         self,
@@ -826,16 +1035,25 @@ class CommandProcessor:
             "cache_hit_rate": 0
         }
 
+    async def _get_translate_stub(self):
+        """Lazy-initialise gRPC channel and stub for translate_interaction_module."""
+        if self._translate_stub is None:
+            import grpc
+            from proto_clients.translate_interaction_pb2_grpc import TranslateInteractionStub
+            self._translate_channel = grpc.aio.insecure_channel(Config.TRANSLATE_GRPC_HOST)
+            self._translate_stub = TranslateInteractionStub(self._translate_channel)
+        return self._translate_stub
+
     async def _translate_message(
         self,
         event_data: Dict[str, Any],
         entity_id: str
     ) -> Optional[Dict[str, Any]]:
         """
-        Translate message if enabled for community.
+        Translate message via translate_interaction_module gRPC (hot-path).
 
-        Preserves @mentions, !commands, emails, URLs, and platform emotes
-        during translation using placeholder substitution.
+        The translation logic (provider fallback, emote preservation, caching)
+        now lives in translate_interaction_module; the router just proxies the call.
         """
         try:
             # Get community ID from entity
@@ -843,32 +1061,101 @@ class CommandProcessor:
             if not community_id:
                 return None
 
-            # Get translation config
+            # Quick check: is translation enabled for this community?
             config = await self._get_translation_config(community_id)
             if not config or not config.get('enabled', False):
                 return None
 
+            from proto_clients import translate_interaction_pb2
+
             message = event_data.get('message', '')
             target_lang = config.get('default_language', 'en')
-
-            # Extract platform context for emote detection
             platform = event_data.get('platform', 'unknown')
             channel_id = event_data.get('channel_id', entity_id)
 
-            # Translate using service (with platform context for emote preservation)
-            result = await self.translation_service.translate(
+            token = self._grpc_manager.generate_token() if self._grpc_manager else ''
+
+            stub = await self._get_translate_stub()
+            req = translate_interaction_pb2.TranslateRequest(
                 text=message,
                 target_lang=target_lang,
-                community_id=community_id,
-                config=config,
+                community_id=str(community_id),
                 platform=platform,
-                channel_id=channel_id
+                channel_id=str(channel_id),
+                token=token,
             )
+            resp = await stub.Translate(req, timeout=10)
 
-            return result
+            if not resp.success:
+                logger.warning(f"Translation failed: {resp.error}")
+                return None
+            if resp.skipped:
+                return None
+            return {
+                'translated_text': resp.translated_text,
+                'original_text': resp.original_text,
+                'detected_lang': resp.detected_lang,
+                'target_lang': resp.target_lang,
+                'confidence': resp.confidence,
+                'provider': resp.provider,
+                'cached': resp.cached,
+                'tokens_preserved': resp.tokens_preserved,
+            }
 
         except Exception as e:
-            logger.warning(f"Translation failed: {e}")
+            logger.warning(f"Translate gRPC call failed: {e}")
+            return None
+
+    async def _check_content_filter(
+        self,
+        community_id: int,
+        message: str,
+        platform: str,
+        user_id: str,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Check translated message against security-core content filter.
+
+        Fail-open: if security-core is unreachable, allow the message through
+        so translation isn't broken by a filter outage.
+
+        Returns:
+            Filter result dict with 'allowed' key, or None on error.
+        """
+        try:
+            if not Config.SECURITY_CORE_URL:
+                return None
+
+            session = await self._get_http_session()
+            payload = {
+                'community_id': community_id,
+                'platform': platform,
+                'platform_user_id': user_id,
+                'message': message,
+            }
+
+            headers = {}
+            if Config.SERVICE_API_KEY:
+                headers['X-Service-Key'] = Config.SERVICE_API_KEY
+
+            async with session.post(
+                f"{Config.SECURITY_CORE_URL}/api/v1/internal/check",
+                json=payload,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=3),
+            ) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    return result.get('data', result)
+                else:
+                    logger.warning(
+                        f"Content filter returned status {response.status}"
+                    )
+                    return None
+
+        except Exception as e:
+            # Fail-open: don't block translations if filter is unavailable
+            logger.warning(f"Content filter check failed (fail-open): {e}")
             return None
 
     async def _get_translation_config(
@@ -1017,3 +1304,58 @@ class CommandProcessor:
         except Exception as e:
             logger.error(f"Failed to process stream event: {e}")
             return {"success": False, "error": str(e)}
+
+    async def _maybe_ai_chatter_respond(self, event_data: dict) -> None:
+        """
+        Fire-and-forget: check if community has AIChatter enabled,
+        and if so, POST to ai_interaction_module proactive-chat endpoint.
+        Never raises — logs failures silently.
+        """
+        try:
+            community_id = event_data.get('community_id')
+            if not community_id:
+                return
+
+            # Check config cache (fast Redis lookup)
+            if not self.ai_chatter_config_cache:
+                return
+
+            config = await self.ai_chatter_config_cache.get(int(community_id))
+            if not config or not config.get('enabled', False):
+                return
+
+            # POST to ai_interaction_module proactive-chat endpoint
+            ai_interaction_url = self._get_ai_interaction_url()
+            if not ai_interaction_url:
+                return
+
+            payload = {
+                'session_id': event_data.get('session_id', ''),
+                'community_id': community_id,
+                'user_id': event_data.get('user_id', ''),
+                'platform_user_id': event_data.get('platform_user_id', ''),
+                'message': event_data.get('message_content', event_data.get('message', '')),
+                'platform': event_data.get('platform', 'unknown'),
+                'channel_id': event_data.get('entity_id', event_data.get('channel_id', '')),
+            }
+
+            session = await self._get_http_session()
+            async with session.post(
+                f"{ai_interaction_url}/api/v1/ai/proactive-chat",
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=5),
+            ) as resp:
+                if resp.status not in (200, 202):
+                    logger.warning(
+                        f"Proactive chat returned {resp.status}",
+                        extra={'community_id': community_id}
+                    )
+
+        except Exception as e:
+            # Fire-and-forget: log and swallow
+            logger.warning(f"AIChatter proactive response failed (non-critical): {e}")
+
+    def _get_ai_interaction_url(self) -> str:
+        """Get the ai_interaction_module base URL from config."""
+        import os
+        return os.getenv('AI_INTERACTION_API_URL', 'http://ai-interaction:8005')

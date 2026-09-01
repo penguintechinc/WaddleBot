@@ -1,0 +1,75 @@
+# Tetragon exec-allowlist for the spire chart's workloads. ENFORCE: any
+# sys_execve NOT matching one of the listed binaries is SIGKILLed. Requires
+# the Tetragon agent DaemonSet running in the cluster (cluster add-on, not
+# part of this chart).
+{{- if and .Values.enabled (.Values.tetragon.enabled | default true) }}
+---
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicyNamespaced
+metadata:
+  name: {{ include "waddlebot-spire.fullname" . }}-server-exec-allowlist
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "waddlebot-spire.selectorLabels" . | nindent 6 }}
+      component: server
+  kprobes:
+    - call: "sys_execve"
+      syscall: true
+      args:
+        - index: 0
+          type: "string"
+        - index: 1
+          type: "string_arr"
+      selectors:
+        - matchArgs:
+            - index: 0
+              operator: "NotEqual"
+              values:
+                # Official ghcr.io/spiffe/spire-server image ENTRYPOINT.
+                - "/opt/spire/bin/spire-server"
+          matchActions:
+            - action: Sigkill
+---
+# spire-agent's pod also runs a busybox init container (wait-for-server)
+# and, only in nested-child topology, a busybox downstream-agent sidecar
+# ("/bin/sh -c ..."). Tetragon's podSelector applies to every container in
+# the matched pod, so busybox's shell/wget are allowlisted alongside the
+# agent binary itself -- narrower than a blanket shell allow (limited to
+# this specific pod, not every waddlebot pod), but broader than a
+# single-binary allowlist because of these two legitimate supporting
+# containers.
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicyNamespaced
+metadata:
+  name: {{ include "waddlebot-spire.fullname" . }}-agent-exec-allowlist
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "waddlebot-spire.selectorLabels" . | nindent 6 }}
+      component: agent
+  kprobes:
+    - call: "sys_execve"
+      syscall: true
+      args:
+        - index: 0
+          type: "string"
+        - index: 1
+          type: "string_arr"
+      selectors:
+        - matchArgs:
+            - index: 0
+              operator: "NotEqual"
+              values:
+                # Official ghcr.io/spiffe/spire-agent image ENTRYPOINT.
+                - "/opt/spire/bin/spire-agent"
+                # busybox:1.36 init container (init-server-bundle) + the
+                # conditional nested-topology downstream-agent sidecar.
+                - "/bin/sh"
+                - "/bin/busybox"
+                - "/bin/wget"
+          matchActions:
+            - action: Sigkill
+{{- end }}

@@ -2,7 +2,7 @@
 Redis Streams Pipeline for Event-Driven Architecture
 
 Provides a high-level event streaming pipeline with:
-- Multiple event streams (inbound, commands, actions, responses)
+- Multiple event streams (inbound, process, actions, responses)
 - Dead letter queue support
 - Consumer group management
 - Event acknowledgment and retry logic
@@ -16,6 +16,136 @@ import asyncio
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, asdict, field
 from datetime import datetime
+
+# --- Per-(community x app) isolation keys (App Bundle SDK Phase C4) ---
+#
+# Design doc: docs/plans/2026-08-31-app-bundle-sdk-design.md Sec6.2/Sec7.2.
+# Three stream-naming generations coexist in this codebase on purpose:
+#   1. Legacy (STREAM_INBOUND etc. + _make_stream_name below) --
+#      `{stream_prefix}:{stream}` -- no tenant/community/app. UNCHANGED.
+#   2. `waddles:t:{tenant}:{stage}` -- tenant-scoped only, still one shared
+#      stream per stage across every bundle. Not implemented here.
+#   3. THIS: `waddles:t:{tenant}:c:{community}:app:{app_id}:{stage}` --
+#      full per-(community, app) isolation. Additive only -- neither legacy
+#      scheme above is modified or removed by these helpers.
+#
+# Reconciliation with the tenant ACL-user scheme (design doc Sec6.2,
+# 2026-08-26-v3-scbm-apps-design.md:586-599, `waddles-t-{tenant}-{stage}`):
+# that credential scheme is UNCHANGED -- a Valkey ACL user is still
+# provisioned per (tenant, stage). Only the *key* underneath that
+# credential changes: it now also carries `community` and `app_id`, so one
+# (tenant, stage)-scoped credential addresses many per-community, per-app
+# keys within its ACL key-prefix pattern (`waddles:t:{tenant}:*`) instead
+# of a single shared stream per stage.
+#
+# `app_id` is a dot-delimited reverse-DNS-style identifier (e.g.
+# `waddles.bot.shoutout.default`). Dots are valid Valkey/Redis key bytes,
+# so `app_id` passes through these builders unescaped and intact.
+
+BUNDLE_STAGES = ("ingest", "process", "action")
+
+_TENANT_WIDE_COMMUNITY_SEGMENT = "_tenant"
+
+
+def _validate_bundle_stage(stage: str) -> None:
+    """Reject any stage outside the fixed ingest/process/action set.
+
+    Keeps a malformed stage from silently producing a plausible-looking
+    but wrong isolation key (e.g. a typo'd stage routing events into a
+    stream nothing ever consumes).
+    """
+    if stage not in BUNDLE_STAGES:
+        raise ValueError(
+            f"invalid bundle stage {stage!r}; must be one of {BUNDLE_STAGES}"
+        )
+
+
+def _bundle_community_segment(community: Optional[str]) -> str:
+    """Render the `c:` segment of a bundle isolation key.
+
+    `community is None` denotes a tenant-wide activation (`AppInstallation`
+    with `community_id IS NULL`). Per design doc Sec7.2 this renders as the
+    literal `_tenant` segment rather than being omitted, so every key this
+    module produces is uniformly parseable -- splitting on `:` always
+    yields the same field count and field meaning regardless of activation
+    scope.
+    """
+    return community if community is not None else _TENANT_WIDE_COMMUNITY_SEGMENT
+
+
+def _bundle_key_base(tenant: str, community: Optional[str], app_id: str) -> str:
+    """Shared `waddles:t:{tenant}:c:{community}:app:{app_id}` prefix."""
+    return (
+        f"waddles:t:{tenant}:c:{_bundle_community_segment(community)}:app:{app_id}"
+    )
+
+
+def bundle_stream_key(
+    tenant: str, community: Optional[str], app_id: str, stage: str
+) -> str:
+    """Build the per-(community x app x stage) Valkey stream key.
+
+    `stage` in {ingest, process, action}; each gets its own independent
+    stream. `community=None` -> tenant-wide activation, rendered as
+    `c:_tenant` (never omitted). See module-level docstring above for the
+    full isolation-key rationale and ACL-scheme reconciliation.
+    """
+    _validate_bundle_stage(stage)
+    return f"{_bundle_key_base(tenant, community, app_id)}:{stage}"
+
+
+def bundle_config_key(tenant: str, community: Optional[str], app_id: str) -> str:
+    """Build the per-(community x app) bundle config key (`...:cfg`)."""
+    return f"{_bundle_key_base(tenant, community, app_id)}:cfg"
+
+
+def bundle_state_key(tenant: str, community: Optional[str], app_id: str) -> str:
+    """Build the per-(community x app) bundle state key (`...:state`)."""
+    return f"{_bundle_key_base(tenant, community, app_id)}:state"
+
+
+def bundle_consumer_group(app_id: str, stage: str) -> str:
+    """Build the `{app_id}:{stage}-group` consumer group name.
+
+    Feeds the existing `StreamPipeline.create_consumer_group` mechanism
+    unchanged -- only the naming convention is new for Phase C4.
+    """
+    _validate_bundle_stage(stage)
+    return f"{app_id}:{stage}-group"
+
+
+@dataclass(frozen=True, slots=True)
+class BundleIsolationKeys:
+    """Typed per-(tenant x community x app_id) Valkey key namespace.
+
+    Thin struct wrapper over `bundle_stream_key`/`bundle_config_key`/
+    `bundle_state_key`/`bundle_consumer_group` for callers that want one
+    object to carry the (tenant, community, app_id) triple instead of
+    threading it through every call. Frozen + slots: a key namespace is an
+    immutable value object, not mutable state.
+    """
+
+    tenant: str
+    community: Optional[str]
+    app_id: str
+
+    def stream_key(self, stage: str) -> str:
+        """Stream key for one stage; see `bundle_stream_key`."""
+        return bundle_stream_key(self.tenant, self.community, self.app_id, stage)
+
+    @property
+    def config_key(self) -> str:
+        """Config key; see `bundle_config_key`."""
+        return bundle_config_key(self.tenant, self.community, self.app_id)
+
+    @property
+    def state_key(self) -> str:
+        """State key; see `bundle_state_key`."""
+        return bundle_state_key(self.tenant, self.community, self.app_id)
+
+    def consumer_group(self, stage: str) -> str:
+        """Consumer group name for one stage; see `bundle_consumer_group`."""
+        return bundle_consumer_group(self.app_id, stage)
 
 try:
     import redis.asyncio as redis
@@ -43,11 +173,11 @@ class StreamEvent:
 
 class StreamPipeline:
     """
-    Redis Streams Pipeline for WaddleBot event processing.
+    Redis Streams Pipeline for Waddles event processing.
 
     Manages multiple event streams with dedicated purposes:
     - inbound: External events entering the system
-    - commands: User commands to be executed
+    - process: Business logic processing of inbound events
     - actions: System actions to be performed
     - responses: Responses to be sent back
 
@@ -62,9 +192,15 @@ class StreamPipeline:
 
     # Default stream names
     STREAM_INBOUND = "events:inbound"
-    STREAM_COMMANDS = "events:commands"
+    STREAM_PROCESS = "events:process"
     STREAM_ACTIONS = "events:actions"
     STREAM_RESPONSES = "events:responses"
+
+    # GDPR: unbounded streams are an unbounded retention period. This is the
+    # default applied to every stream write that does not pass an explicit
+    # bound (main streams already require callers to pass max_len; the DLQ
+    # bound lives here since poison events otherwise sit the longest).
+    DEFAULT_DLQ_MAXLEN = 10000
 
     def __init__(
         self,
@@ -74,7 +210,8 @@ class StreamPipeline:
         max_retries: Optional[int] = None,
         batch_size: Optional[int] = None,
         block_ms: Optional[int] = None,
-        enabled: Optional[bool] = None
+        enabled: Optional[bool] = None,
+        dlq_maxlen: Optional[int] = None
     ):
         """
         Initialize stream pipeline.
@@ -87,6 +224,10 @@ class StreamPipeline:
             batch_size: Events per batch (from env or default: 10)
             block_ms: Block time in ms (from env or default: 5000)
             enabled: Enable pipeline (from env or default: False)
+            dlq_maxlen: Maximum DLQ length before oldest entries are trimmed
+                (from env STREAM_DLQ_MAXLEN or default: 10000). GDPR
+                retention-period control for the dead letter queue, which
+                is otherwise an unbounded append-only log.
         """
         self.redis_url = redis_url
         self.stream_prefix = stream_prefix
@@ -97,6 +238,9 @@ class StreamPipeline:
         self.max_retries = max_retries if max_retries is not None else int(os.getenv('STREAM_MAX_RETRIES', '3'))
         self.batch_size = batch_size if batch_size is not None else int(os.getenv('STREAM_BATCH_SIZE', '10'))
         self.block_ms = block_ms if block_ms is not None else int(os.getenv('STREAM_BLOCK_MS', '5000'))
+        self.dlq_maxlen = dlq_maxlen if dlq_maxlen is not None else int(
+            os.getenv('STREAM_DLQ_MAXLEN', str(self.DEFAULT_DLQ_MAXLEN))
+        )
 
         self._redis: Optional[redis.Redis] = None
         self._connected = False
@@ -105,7 +249,7 @@ class StreamPipeline:
         logger.info(
             f"StreamPipeline initialized: enabled={self.enabled}, "
             f"max_retries={self.max_retries}, batch_size={self.batch_size}, "
-            f"block_ms={self.block_ms}"
+            f"block_ms={self.block_ms}, dlq_maxlen={self.dlq_maxlen}"
         )
 
     @staticmethod
@@ -182,7 +326,7 @@ class StreamPipeline:
         Publish event to a stream.
 
         Args:
-            stream_name: Stream name (e.g., 'events:inbound', 'events:commands')
+            stream_name: Stream name (e.g., 'events:inbound', 'events:process')
             event_data: Event data (must be JSON-serializable)
             max_len: Maximum stream length (oldest events trimmed)
 
@@ -191,8 +335,8 @@ class StreamPipeline:
 
         Example:
             message_id = await pipeline.publish_event(
-                'events:commands',
-                {'command': 'translate', 'text': 'Hello'}
+                'events:process',
+                {'type': 'translate', 'text': 'Hello'}
             )
         """
         if not self._connected:
@@ -247,7 +391,7 @@ class StreamPipeline:
 
         Example:
             events = await pipeline.consume_events(
-                'events:commands',
+                'events:process',
                 'router-group',
                 'router-1'
             )
@@ -322,7 +466,7 @@ class StreamPipeline:
 
         Example:
             success = await pipeline.acknowledge_event(
-                'events:commands',
+                'events:process',
                 'router-group',
                 '1234567890-0'
             )
@@ -374,10 +518,10 @@ class StreamPipeline:
 
         Example:
             success = await pipeline.move_to_dlq(
-                'events:commands',
+                'events:process',
                 '1234567890-0',
                 'max_retries_exceeded',
-                event_data={'command': 'translate'},
+                event_data={'type': 'translate'},
                 retry_count=3
             )
         """
@@ -402,8 +546,15 @@ class StreamPipeline:
             if event_data:
                 dlq_data['data'] = json.dumps(event_data)
 
-            # Add to DLQ
-            dlq_id = await self._redis.xadd(dlq_name, dlq_data)
+            # Add to DLQ with a bounded length (GDPR retention control —
+            # poison events are the ones most likely to sit indefinitely
+            # in an unbounded log, so the DLQ must never be exempt).
+            dlq_id = await self._redis.xadd(
+                dlq_name,
+                dlq_data,
+                maxlen=self.dlq_maxlen,
+                approximate=True
+            )
 
             logger.warning(
                 f"Event {message_id} moved to DLQ: {error_reason} "
@@ -435,7 +586,7 @@ class StreamPipeline:
 
         Example:
             success = await pipeline.create_consumer_group(
-                'events:commands',
+                'events:process',
                 'router-group'
             )
         """
@@ -492,7 +643,7 @@ class StreamPipeline:
 
         Example:
             pending = await pipeline.get_pending_events(
-                'events:commands',
+                'events:process',
                 'router-group'
             )
             for event in pending:
@@ -541,7 +692,7 @@ class StreamPipeline:
             Stream info with length, first_entry, last_entry, consumer_groups, etc.
 
         Example:
-            info = await pipeline.get_stream_info('events:commands')
+            info = await pipeline.get_stream_info('events:process')
             print(f"Stream length: {info['length']}")
         """
         if not self._connected:
@@ -593,7 +744,7 @@ class StreamPipeline:
             List of DLQ events with id, data, original_id, failure_reason, etc.
 
         Example:
-            dlq_events = await pipeline.get_dlq_events('events:commands')
+            dlq_events = await pipeline.get_dlq_events('events:process')
             for event in dlq_events:
                 print(f"Failed: {event['failure_reason']}")
         """
@@ -677,7 +828,8 @@ def create_stream_pipeline(
     max_retries: Optional[int] = None,
     batch_size: Optional[int] = None,
     block_ms: Optional[int] = None,
-    enabled: Optional[bool] = None
+    enabled: Optional[bool] = None,
+    dlq_maxlen: Optional[int] = None
 ) -> StreamPipeline:
     """
     Factory function to create a stream pipeline.
@@ -690,6 +842,7 @@ def create_stream_pipeline(
         batch_size: Events per batch
         block_ms: Block time in ms
         enabled: Enable pipeline
+        dlq_maxlen: Maximum DLQ length before trimming (default: 10000)
 
     Returns:
         Configured StreamPipeline instance
@@ -708,5 +861,6 @@ def create_stream_pipeline(
         max_retries=max_retries,
         batch_size=batch_size,
         block_ms=block_ms,
-        enabled=enabled
+        enabled=enabled,
+        dlq_maxlen=dlq_maxlen
     )

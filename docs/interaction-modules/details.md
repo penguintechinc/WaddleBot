@@ -1,6 +1,6 @@
-# WaddleBot Module Details - Action/Interactive Modules
+# Waddles Module Details - Action/Interactive Modules
 
-This document provides comprehensive technical details for WaddleBot action/interactive modules. For core components and trigger modules, see [module-details-core.md](module-details-core.md). For high-level architecture, see [CLAUDE.md](../CLAUDE.md).
+This document provides comprehensive technical details for Waddles action/interactive modules. For core components and trigger modules, see [module-details-core.md](module-details-core.md). For high-level architecture, see [CLAUDE.md](../CLAUDE.md).
 
 ## Overview
 
@@ -398,6 +398,42 @@ browser_source_access_log (
 - **Performance Optimized**: Minimal resource usage with efficient DOM updates
 - **Cross-browser**: Compatible with OBS browser source engine
 - **Responsive Layouts**: Adapts to different scene sizes and orientations
+
+---
+
+### Server Manager Interaction Module (`action/interactive/server_manager_interaction_module/`)
+
+**Purpose**: Comprehensive game server and voice server management with RCON, Mumble Ice RPC, and TeamSpeak ServerQuery support. Replaces and absorbs `server_status_interaction_module`.
+
+**Key Features**:
+- **RCON Management**: Source RCON protocol support for Rust, Minecraft, CS2, ARK, Valheim, Palworld, Factorio, and more
+- **Mumble Voice Servers**: Full management via Ice RPC — users, channels, kick/ban, broadcast messages
+- **TeamSpeak Voice Servers**: Full management via ServerQuery — clients, channels, kick/ban, messaging
+- **Encrypted Credentials**: AES-256-GCM encrypted server passwords stored in PostgreSQL, decrypted only at connection time
+- **Reputation Auto-Moderation**: FICO-style scoring (300-850) with configurable auto-kick/ban thresholds per server
+- **Cross-Platform Sync**: Integrates with security_core_module to propagate bans/kicks to/from game servers
+- **Connection Pooling**: TTL-based RCON connection reuse (60s default)
+- **Audit Logging**: All commands logged to rcon_command_log, all automated actions to server_access_log
+
+**Supported Server Types**:
+- `rcon` — Game servers using Source RCON (Rust, Minecraft, CS2, ARK, Valheim, etc.)
+- `mumble` — Mumble voice servers via Ice RPC
+- `teamspeak` — TeamSpeak voice servers via ServerQuery
+- `status_only` — Legacy status-only monitoring (backward compatible)
+
+**Supported Game Types**: rust, minecraft, cs2, ark, valheim, palworld, factorio, conan_exiles, 7dtd, squad, unturned, terraria, starbound, source, mumble, teamspeak, other
+
+**Database Tables**:
+```sql
+-- Extended existing table
+server_status_configs (+ server_type, host, game_port, rcon_port, credential_enc, credential_iv, game_type, visibility, display_name, added_by, metadata, deleted_at)
+
+-- New tables
+rcon_command_log (id, server_config_id, user_id, command, response_summary, success, executed_at)
+server_ban_sync (id, community_id, server_config_id, sync_enabled, sync_direction, last_synced_at, created_at)
+server_access_policies (id, server_config_id, community_id, require_community_member, auto_kick_enabled, auto_kick_threshold, auto_ban_enabled, auto_ban_threshold, ...)
+server_access_log (id, server_config_id, target_player, action, reason, reputation_score, created_at)
+```
 
 ---
 

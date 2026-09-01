@@ -165,7 +165,7 @@ curl -X PUT http://localhost:8005/api/v1/ai/config \
     "community_id": 123,
     "model": "gpt-4",
     "temperature": 0.8,
-    "system_prompt": "You are WaddleBot, a friendly penguin assistant for streamers."
+    "system_prompt": "You are Waddles, a friendly penguin assistant for streamers."
   }'
 ```
 

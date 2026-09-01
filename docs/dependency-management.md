@@ -1,10 +1,10 @@
-# WaddleBot Dependency Management Strategy
+# Waddles Dependency Management Strategy
 
 ## Overview
 
-WaddleBot uses a **mixed dependency strategy** that balances security, stability, and feature velocity. Security-critical packages are pinned to specific versions, while standard libraries use flexible version ranges to allow compatible updates.
+Waddles uses a **mixed dependency strategy** that balances security, stability, and feature velocity. Security-critical packages are pinned to specific versions, while standard libraries use flexible version ranges to allow compatible updates.
 
-This document outlines our dependency classification, update procedures, testing requirements, and tools for managing the complex dependency landscape across all WaddleBot modules.
+This document outlines our dependency classification, update procedures, testing requirements, and tools for managing the complex dependency landscape across all Waddles modules.
 
 ## 1. Dependency Classification Strategy
 
@@ -116,7 +116,7 @@ These can use flexible versioning (latest compatible).
 **For Critical Vulnerabilities (CVSS >= 9.0):**
 
 1. **Immediate Action** (within 2 hours)
-   - Verify vulnerability affects WaddleBot
+   - Verify vulnerability affects Waddles
    - Begin patch development or pinned version update
    - Notify team in #security-incident Slack channel
 
@@ -534,7 +534,7 @@ Periodically audit and remove unused dependencies:
 When a vulnerability is discovered in a dependency:
 
 1. **Assessment** (< 1 hour)
-   - Check if WaddleBot is affected
+   - Check if Waddles is affected
    - Determine severity (use CVSS)
    - Check if newer version available
 

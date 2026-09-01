@@ -9,7 +9,7 @@
 
 ## Overview
 
-The Workflow Core Module v1.0.0 is a production-ready workflow automation engine for WaddleBot, providing visual workflow creation, advanced control flow, and seamless integration with external systems.
+The Workflow Core Module v1.0.0 is a production-ready workflow automation engine for Waddles, providing visual workflow creation, advanced control flow, and seamless integration with external systems.
 
 ---
 
@@ -479,14 +479,14 @@ pytest services/test_node_executor.py
 
 ## Contributors
 
-- WaddleBot Development Team
+- Waddles Development Team
 - Community Contributors
 
 ---
 
 ## License
 
-Copyright © 2025 WaddleBot Team. All rights reserved.
+Copyright © 2025 Waddles Team. All rights reserved.
 
 ---
 
@@ -566,6 +566,6 @@ For support, please:
 ## Acknowledgments
 
 Special thanks to:
-- The WaddleBot community for testing and feedback
+- The Waddles community for testing and feedback
 - Contributors who helped shape the workflow engine design
 - Open source projects we depend on (Quart, APScheduler, RestrictedPython)

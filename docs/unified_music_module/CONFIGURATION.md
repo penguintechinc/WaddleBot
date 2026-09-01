@@ -117,7 +117,7 @@ export SPOTIFY_REDIRECT_URI="http://localhost:8888/callback"
 
 **Example**:
 ```bash
-export YOUTUBE_API_KEY="AIzaSyD1234567890abcdefghijklmnopqrstuv"
+export YOUTUBE_API_KEY="This15TotallyAnExampleKey!NotReal"
 ```
 
 **API Limits**:
@@ -688,4 +688,4 @@ python validate_config.py
 
 **Last Updated**: 2025-12-16
 **Configuration Version**: 1.0.0
-**Maintainer**: WaddleBot Development Team
+**Maintainer**: Waddles Development Team

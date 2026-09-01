@@ -2,7 +2,7 @@
 
 ## Overview
 
-WaddleBot uses Redis for multiple purposes with proper separation via namespacing, database selection, and access patterns.
+Waddles uses Redis for multiple purposes with proper separation via namespacing, database selection, and access patterns.
 
 ## Redis Use Cases
 

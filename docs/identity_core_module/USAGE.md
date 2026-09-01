@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide provides comprehensive documentation on using the Identity Core Module for cross-platform identity management, user authentication, and platform linking in WaddleBot.
+This guide provides comprehensive documentation on using the Identity Core Module for cross-platform identity management, user authentication, and platform linking in Waddles.
 
 ---
 
@@ -25,7 +25,7 @@ This guide provides comprehensive documentation on using the Identity Core Modul
 
 ### Prerequisites
 
-- WaddleBot system running
+- Waddles system running
 - Identity Core Module deployed (REST API + gRPC)
 - Database migrations applied
 - Valid API key or user session
@@ -215,7 +215,7 @@ curl -X PUT http://localhost:8050/auth/profile \
   -H "Content-Type: application/json" \
   -d '{
     "display_name": "New Display Name",
-    "bio": "I am a WaddleBot user",
+    "bio": "I am a Waddles user",
     "website_url": "https://mywebsite.com",
     "location": "San Francisco, CA"
   }'
@@ -587,7 +587,7 @@ curl -X DELETE http://localhost:8050/identity/api-keys/key_xyz789 \
 
 ### Admin Hub - Identity Management
 
-Access the Identity Management section in the WaddleBot Admin Hub:
+Access the Identity Management section in the Waddles Admin Hub:
 
 **URL:** `https://your-waddlebot-instance/admin/identity`
 
@@ -629,12 +629,12 @@ Access the Identity Management section in the WaddleBot Admin Hub:
 2. Select platform (e.g., YouTube)
 3. Click **"Connect YouTube Account"**
 4. Redirected to YouTube OAuth
-5. Authorize WaddleBot
+5. Authorize Waddles
 6. Redirected back with success message
 
 **OAuth Flow:**
 ```
-[WaddleBot] → [Platform OAuth] → [User Authorizes] → [Callback] → [Linked!]
+[Waddles] → [Platform OAuth] → [User Authorizes] → [Callback] → [Linked!]
 ```
 
 ---
@@ -684,7 +684,7 @@ pip install grpcio grpcio-tools
 
 **Generate Client Stubs:**
 ```bash
-cd /home/penguin/code/WaddleBot
+cd /home/penguin/code/Waddles
 python -m grpc_tools.protoc \
   -I./libs/grpc_protos \
   --python_out=. \
@@ -736,7 +736,7 @@ go get google.golang.org/protobuf
 **Generate Client Stubs:**
 ```bash
 protoc \
-  -I /home/penguin/code/WaddleBot/libs/grpc_protos \
+  -I /home/penguin/code/Waddles/libs/grpc_protos \
   --go_out=. \
   --go-grpc_out=. \
   identity.proto common.proto
@@ -1058,4 +1058,4 @@ def notify_achievement(hub_user_id, achievement):
 - [Configuration Guide](CONFIGURATION.md)
 - [Architecture Documentation](ARCHITECTURE.md)
 - [Testing Guide](TESTING.md)
-- [gRPC Integration Guide](/home/penguin/code/WaddleBot/core/identity_core_module/GRPC_INTEGRATION.md)
+- [gRPC Integration Guide](/home/penguin/code/Waddles/core/identity_core_module/GRPC_INTEGRATION.md)

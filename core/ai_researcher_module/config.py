@@ -243,6 +243,103 @@ class Config:
     )
 
     # ========================================================================
+    # GAME LOOKUP CONFIGURATION
+    # ========================================================================
+    GAME_LOOKUP_ENABLED = (
+        os.getenv('GAME_LOOKUP_ENABLED', 'false').lower() == 'true'
+    )
+    SEARXNG_URL = os.getenv('SEARXNG_URL', 'http://infra-searxng:8888')
+    SEARXNG_TIMEOUT = int(os.getenv('SEARXNG_TIMEOUT', '15'))
+    SEARXNG_MAX_CONCURRENT = int(os.getenv('SEARXNG_MAX_CONCURRENT', '5'))
+    GAME_SEARCH_ENGINES = os.getenv(
+        'GAME_SEARCH_ENGINES', 'google,duckduckgo,wikipedia,brave'
+    ).split(',')
+    GAME_CACHE_TTL = int(os.getenv('GAME_CACHE_TTL', '7200'))  # 2 hours
+    GAME_ITEM_EXPIRY_DAYS = int(os.getenv('GAME_ITEM_EXPIRY_DAYS', '30'))
+    GAME_SEARCH_MAX_RESULTS = int(os.getenv('GAME_SEARCH_MAX_RESULTS', '10'))
+    GAME_SEARCH_SYSTEM_PROMPT = os.getenv(
+        'GAME_SEARCH_SYSTEM_PROMPT',
+        'You are a gaming expert assistant. Given web search results about a '
+        'game, synthesize a clear, accurate answer. Cite sources where '
+        'possible. Focus on factual in-game data (stats, locations, mechanics). '
+        'If the search results are insufficient, say so honestly.'
+    )
+
+    # ========================================================================
+    # PATCH NOTES TRACKER CONFIGURATION
+    # ========================================================================
+    PATCH_NOTES_ENABLED = (
+        os.getenv('PATCH_NOTES_ENABLED', 'false').lower() == 'true'
+    )
+    PATCH_NOTES_CACHE_TTL = int(os.getenv('PATCH_NOTES_CACHE_TTL', '1800'))
+    PATCH_NOTES_MAX_RESULTS = int(os.getenv('PATCH_NOTES_MAX_RESULTS', '10'))
+
+    # ========================================================================
+    # BUILD / LOADOUT ADVISOR CONFIGURATION
+    # ========================================================================
+    BUILD_ADVISOR_ENABLED = (
+        os.getenv('BUILD_ADVISOR_ENABLED', 'false').lower() == 'true'
+    )
+    BUILD_ADVISOR_CACHE_TTL = int(
+        os.getenv('BUILD_ADVISOR_CACHE_TTL', '10800')
+    )  # 3 hours
+    BUILD_ADVISOR_MAX_RESULTS = int(
+        os.getenv('BUILD_ADVISOR_MAX_RESULTS', '10')
+    )
+
+    # ========================================================================
+    # TECH TROUBLESHOOTER CONFIGURATION
+    # ========================================================================
+    TECH_TROUBLESHOOTER_ENABLED = (
+        os.getenv('TECH_TROUBLESHOOTER_ENABLED', 'false').lower() == 'true'
+    )
+    TECH_TROUBLESHOOTER_CACHE_TTL = int(
+        os.getenv('TECH_TROUBLESHOOTER_CACHE_TTL', '14400')
+    )  # 4 hours
+    TECH_TROUBLESHOOTER_MAX_RESULTS = int(
+        os.getenv('TECH_TROUBLESHOOTER_MAX_RESULTS', '10')
+    )
+
+    # ========================================================================
+    # PRICE / DEAL TRACKER CONFIGURATION
+    # ========================================================================
+    PRICE_TRACKER_ENABLED = (
+        os.getenv('PRICE_TRACKER_ENABLED', 'false').lower() == 'true'
+    )
+    PRICE_TRACKER_CACHE_TTL = int(
+        os.getenv('PRICE_TRACKER_CACHE_TTL', '900')
+    )  # 15 min
+    PRICE_TRACKER_MAX_RESULTS = int(
+        os.getenv('PRICE_TRACKER_MAX_RESULTS', '10')
+    )
+
+    # ========================================================================
+    # CLIP / HIGHLIGHT RESEARCHER CONFIGURATION
+    # ========================================================================
+    CLIP_RESEARCHER_ENABLED = (
+        os.getenv('CLIP_RESEARCHER_ENABLED', 'false').lower() == 'true'
+    )
+    CLIP_RESEARCHER_CACHE_TTL = int(
+        os.getenv('CLIP_RESEARCHER_CACHE_TTL', '3600')
+    )  # 1 hour
+    CLIP_RESEARCHER_MAX_RESULTS = int(
+        os.getenv('CLIP_RESEARCHER_MAX_RESULTS', '10')
+    )
+
+    # ========================================================================
+    # EVENT / TOURNAMENT LOOKUP CONFIGURATION
+    # ========================================================================
+    EVENT_LOOKUP_ENABLED = (
+        os.getenv('EVENT_LOOKUP_ENABLED', 'false').lower() == 'true'
+    )
+    EVENT_LOOKUP_CACHE_TTL = int(
+        os.getenv('EVENT_LOOKUP_CACHE_TTL', '1800')
+    )  # 30 min
+    EVENT_LOOKUP_MAX_RESULTS = int(
+        os.getenv('EVENT_LOOKUP_MAX_RESULTS', '10')
+    )
+
+    # ========================================================================
     # PERFORMANCE CONFIGURATION
     # ========================================================================
     # Thread pool executor settings
@@ -385,6 +482,14 @@ class Config:
             errors.append("SEMANTIC_CACHE_THRESHOLD must be between 0 and 1")
         if cls.VECTOR_SCORE_THRESHOLD < 0 or cls.VECTOR_SCORE_THRESHOLD > 1:
             errors.append("VECTOR_SCORE_THRESHOLD must be between 0 and 1")
+
+        # Validate game lookup configuration
+        if cls.GAME_LOOKUP_ENABLED:
+            if not cls.SEARXNG_URL:
+                errors.append(
+                    "SEARXNG_URL is required when "
+                    "GAME_LOOKUP_ENABLED=true"
+                )
 
         # Validate batch processing settings
         if cls.CONTEXT_BATCH_SIZE < 1:

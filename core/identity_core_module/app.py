@@ -1,5 +1,4 @@
 """Identity linking system - Quart Application"""
-import asyncio
 import os
 import sys
 
@@ -12,6 +11,7 @@ from flask_core import (  # noqa: E402
     async_endpoint, create_health_blueprint, init_database, setup_aaa_logging, success_response,
 )
 from services.grpc_handler import IdentityServiceServicer  # noqa: E402
+from proto import identity_pb2_grpc  # noqa: E402
 
 app = Quart(__name__)
 
@@ -33,37 +33,29 @@ async def startup():
     dal = init_database(Config.DATABASE_URL)
     app.config['dal'] = dal
 
-    # Start gRPC server
-    try:
-        import grpc
-        from grpc import aio
+    if not Config.JWT_SECRET:
+        raise RuntimeError(
+            "JWT_SECRET must be configured for Identity gRPC authentication"
+        )
 
-        servicer = IdentityServiceServicer(dal=dal, logger=logger)
-        grpc_server = aio.server()
+    from grpc import aio
 
-        # Add IdentityService servicer to gRPC server
-        # Note: Requires generated grpc service from proto files
-        # For now, we create a simple gRPC server without reflection
-        logger.system(f"gRPC server initialized (will listen on 0.0.0.0:{Config.GRPC_PORT})")
-
-        # Start gRPC server in background
-        asyncio.create_task(_start_grpc_server(grpc_server, logger))
-    except Exception as e:
-        logger.warning(f"Failed to initialize gRPC server: {str(e)}")
-        logger.warning("Continuing with REST API only")
+    servicer = IdentityServiceServicer(dal=dal, logger=logger)
+    grpc_server = aio.server()
+    identity_pb2_grpc.add_IdentityServiceServicer_to_server(
+        servicer, grpc_server
+    )
+    listen_address = f"0.0.0.0:{Config.GRPC_PORT}"
+    if grpc_server.add_insecure_port(listen_address) == 0:
+        raise RuntimeError(f"Unable to bind Identity gRPC server to {listen_address}")
+    await grpc_server.start()
+    logger.system(
+        "Identity gRPC server started",
+        action="grpc_startup",
+        address=listen_address,
+    )
 
     logger.system("identity_core_module started", result="SUCCESS")
-
-
-async def _start_grpc_server(server, logger):
-    """Start the gRPC server"""
-    try:
-        server.add_insecure_port(f"0.0.0.0:{Config.GRPC_PORT}")
-        await server.start()
-        logger.system(f"gRPC server started on 0.0.0.0:{Config.GRPC_PORT}", action="grpc_startup")
-        await server.wait_for_termination()
-    except Exception as e:
-        logger.error(f"gRPC server error: {str(e)}")
 
 
 @app.after_serving
@@ -71,7 +63,7 @@ async def shutdown():
     global grpc_server
     if grpc_server:
         logger.system("Stopping gRPC server", action="grpc_shutdown")
-        await grpc_server.stop(0)
+        await grpc_server.stop(grace=5)
 
 
 @api_bp.route('/status')

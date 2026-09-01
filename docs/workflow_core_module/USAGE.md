@@ -27,7 +27,7 @@ This guide provides comprehensive examples and tutorials for creating, testing, 
 
 ### Prerequisites
 
-- Access to WaddleBot admin panel
+- Access to Waddles admin panel
 - Valid JWT authentication token
 - Understanding of basic workflow concepts
 - (Optional) License for advanced features

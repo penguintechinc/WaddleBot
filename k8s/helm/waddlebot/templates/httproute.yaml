@@ -1,0 +1,31 @@
+{{- if .Values.httproute.enabled -}}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "waddlebot.fullname" . }}
+  namespace: {{ include "waddlebot.namespace" . }}
+spec:
+  parentRefs:
+    - name: {{ .Values.httproute.gatewayName }}
+      namespace: {{ .Values.httproute.gatewayNamespace }}
+      sectionName: https
+  hostnames:
+    {{- range .Values.httproute.hostnames }}
+    - {{ . | quote }}
+    {{- end }}
+  rules:
+    {{- range .Values.httproute.rules }}
+    - matches:
+        - path:
+            type: PathPrefix
+            value: {{ .path | quote }}
+      {{- if .timeoutSeconds }}
+      timeouts:
+        request: {{ printf "%ds" (.timeoutSeconds | int) }}
+        backendRequest: {{ printf "%ds" (.timeoutSeconds | int) }}
+      {{- end }}
+      backendRefs:
+        - name: {{ .service }}
+          port: {{ .port }}
+    {{- end }}
+{{- end }}

@@ -1,7 +1,7 @@
 # Discord Action Module Dockerfile
 # Build: docker compose build discord-action
 
-FROM python:3.12-slim
+FROM python:3.13-slim-bookworm@sha256:f13a6b7565175da40695e8109f64cbc4d2e65f4c9ef2e3b321c3a44fa3c06fe7
 
 # Set working directory
 WORKDIR /app
@@ -15,7 +15,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy requirements and install Python dependencies
 COPY action/pushing/discord_action_module/requirements.txt /app/
-RUN pip install --no-cache-dir -r requirements.txt
+# Pre-install setuptools to satisfy grpcio-tools' unlocked transitive dep in --require-hashes mode
+RUN pip install --no-cache-dir setuptools && pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
 COPY action/pushing/discord_action_module/ /app/

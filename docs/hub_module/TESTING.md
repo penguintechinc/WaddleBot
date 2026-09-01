@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes how to test the WaddleBot Hub Module, including API tests, WebUI tests, integration tests, and manual testing procedures.
+This document describes how to test the Waddles Hub Module, including API tests, WebUI tests, integration tests, and manual testing procedures.
 
 **Version:** 1.0.1
 
@@ -37,8 +37,8 @@ This document describes how to test the WaddleBot Hub Module, including API test
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/yourusername/WaddleBot.git
-cd WaddleBot/admin/hub_module
+git clone https://github.com/yourusername/Waddles.git
+cd Waddles/admin/hub_module
 
 # 2. Install backend dependencies
 cd backend
@@ -113,7 +113,7 @@ Location: `/admin/hub_module/test-api.sh`
 ### Test Output
 
 ```
-WaddleBot Hub Module API Test Suite
+Waddles Hub Module API Test Suite
 Testing: http://localhost:8060
 Admin: admin@localhost
 
@@ -255,7 +255,7 @@ HUB_URL=http://hub.example.com ./test-webui.sh
 ### Test Output
 
 ```
-WaddleBot Hub WebUI Load Test
+Waddles Hub WebUI Load Test
 ==============================
 Base URL: http://localhost:8060
 

@@ -1,6 +1,6 @@
 -- Migration 026: Add Video Proxy and WebRTC Call Tables
 -- Description: Add video stream proxy configurations, WebRTC call rooms, and premium feature tracking
--- Author: WaddleBot Engineering
+-- Author: Waddles Engineering
 -- Date: 2026-01-21
 
 BEGIN;

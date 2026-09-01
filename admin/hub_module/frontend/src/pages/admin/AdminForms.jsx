@@ -8,38 +8,8 @@ import {
   ArrowDownTrayIcon,
 } from '@heroicons/react/24/outline';
 import { adminApi } from '../../services/api';
-import { FormModalBuilder } from '@penguin/react_libs';
-
-// WaddleBot theme colors matching the existing UI
-const waddlebotColors = {
-  modalBackground: 'bg-navy-800',
-  headerBackground: 'bg-navy-800',
-  footerBackground: 'bg-navy-850',
-  overlayBackground: 'bg-black bg-opacity-50',
-  titleText: 'text-sky-100',
-  labelText: 'text-sky-100',
-  descriptionText: 'text-navy-400',
-  errorText: 'text-red-400',
-  buttonText: 'text-white',
-  fieldBackground: 'bg-navy-700',
-  fieldBorder: 'border-navy-600',
-  fieldText: 'text-sky-100',
-  fieldPlaceholder: 'placeholder-navy-400',
-  focusRing: 'focus:ring-gold-500',
-  focusBorder: 'focus:border-gold-500',
-  primaryButton: 'bg-sky-600',
-  primaryButtonHover: 'hover:bg-sky-700',
-  secondaryButton: 'bg-navy-700',
-  secondaryButtonHover: 'hover:bg-navy-600',
-  secondaryButtonBorder: 'border-navy-600',
-  activeTab: 'text-gold-400',
-  activeTabBorder: 'border-gold-500',
-  inactiveTab: 'text-navy-400',
-  inactiveTabHover: 'hover:text-navy-300 hover:border-navy-500',
-  tabBorder: 'border-navy-700',
-  errorTabText: 'text-red-400',
-  errorTabBorder: 'border-red-500',
-};
+import { FormModalBuilder } from '@penguintechinc/react-libs';
+import { WADDLES_COLORS } from '../../theme/waddlebotTheme';
 
 const FIELD_TYPES = [
   { value: 'text', label: 'Text' },
@@ -58,6 +28,13 @@ const VISIBILITY_OPTIONS = [
   { value: 'registered', label: 'Registered Users' },
   { value: 'community', label: 'Community Members' },
   { value: 'admins', label: 'Admins Only' },
+];
+
+const RESULTS_VISIBILITY_OPTIONS = [
+  { value: 'community', label: 'All Community Members' },
+  { value: 'registered', label: 'All Registered Users' },
+  { value: 'submitter_and_admins', label: 'Submitter + Mods/Admins' },
+  { value: 'admins', label: 'Mods/Admins Only' },
 ];
 
 /**
@@ -129,6 +106,7 @@ function AdminForms() {
         fields: parsedFields,
         view_visibility: data.view_visibility,
         submit_visibility: data.submit_visibility,
+        results_visibility: data.results_visibility || 'submitter_and_admins',
         allow_anonymous: data.allow_anonymous || false,
         submit_once_per_user: data.submit_once_per_user !== false,
       });
@@ -223,6 +201,13 @@ function AdminForms() {
       options: VISIBILITY_OPTIONS,
     },
     {
+      name: 'results_visibility',
+      type: 'select',
+      label: 'Who can see results',
+      defaultValue: 'submitter_and_admins',
+      options: RESULTS_VISIBILITY_OPTIONS,
+    },
+    {
       name: 'allow_anonymous',
       type: 'checkbox',
       label: 'Allow anonymous submissions',
@@ -299,6 +284,7 @@ function AdminForms() {
                         <EyeIcon className="h-3 w-3" />
                         {form.view_visibility}
                       </span>
+                      <span>{form.results_visibility || 'submitter_and_admins'}</span>
                       <span>{form.fields?.length || 0} fields</span>
                     </div>
                   </div>
@@ -367,7 +353,8 @@ function AdminForms() {
         submitButtonText="Create Form"
         cancelButtonText="Cancel"
         width="lg"
-        colors={waddlebotColors}
+        themeMode="dark"
+        colors={WADDLES_COLORS}
       />
     </div>
   );

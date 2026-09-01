@@ -22,13 +22,12 @@ spec:
         app.kubernetes.io/component: kick-collector
         tier: trigger
     spec:
-      {{- with .Values.imagePullSecrets }}
-      imagePullSecrets:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+      {{- include "waddlebot.imagePullSecrets" . | nindent 6 }}
+      initContainers:
+      {{- include "waddlebot.dbMigrateInitContainer" . | nindent 8 }}
       containers:
         - name: kick-collector
-          image: "{{ .Values.global.imageRegistry }}/{{ .Values.modules.collectors.kick.image }}:{{ .Values.modules.collectors.kick.tag | default "latest" }}"
+          image: "{{ .Values.global.imageRegistry }}/{{ .Values.modules.collectors.kick.image }}:{{ .Values.modules.collectors.kick.imageTag | default .Values.global.imageTag }}"
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
           ports:
             - name: http

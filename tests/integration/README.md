@@ -1,4 +1,4 @@
-# WaddleBot Integration Tests
+# Waddles Integration Tests
 
 Tests for multi-service workflows, database transactions, and inter-module communication.
 
@@ -6,7 +6,7 @@ Tests for multi-service workflows, database transactions, and inter-module commu
 
 - **database.test.js** - Database transactions, referential integrity, data consistency
 - **websocket.test.js** - Real-time WebSocket communication
-- More tests to be added: module-to-module communication, OAuth flows, webhook handling
+- More tests to be added: module-to-module communication, OAuth flows, webhook handling (Waddles features)
 
 ## Running Tests
 

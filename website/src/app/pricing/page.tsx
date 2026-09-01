@@ -6,7 +6,7 @@ export default function Pricing() {
       {/* Navigation */}
       <nav className="flex justify-between items-center p-6 bg-black/20 backdrop-blur-sm sticky top-0 z-50">
         <Link href="/" className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-          WaddleBot
+          Waddles
         </Link>
         <div className="hidden md:flex gap-8">
           <Link href="/features" className="hover:text-blue-300 transition-colors">Features</Link>
@@ -326,7 +326,7 @@ export default function Pricing() {
               <div>
                 <h3 className="text-lg font-bold mb-2 text-orange-300">Marketplace Modules</h3>
                 <p className="text-gray-300 mb-2">
-                  While WaddleBot&rsquo;s core features are included in your plan, some specialized modules from our marketplace may require additional subscriptions or one-time payments.
+                  While Waddles&rsquo; core features are included in your plan, some specialized modules from our marketplace may require additional subscriptions or one-time payments.
                 </p>
                 <div className="text-sm text-gray-400">
                   Examples include premium AI models, advanced analytics packages, or third-party integrations developed by our community partners.
@@ -372,7 +372,7 @@ export default function Pricing() {
               <div className="bg-white/5 rounded-xl p-6">
                 <h3 className="text-xl font-bold mb-3 text-blue-300">What counts as a &ldquo;channel&rdquo;?</h3>
                 <p className="text-gray-300">
-                  A channel is any individual Discord channel, Twitch stream, or Slack channel where WaddleBot is active. For Discord servers, each text channel counts separately. For Twitch, each stream channel counts as one. For Slack, each workspace channel counts as one.
+                  A channel is any individual Discord channel, Twitch stream, or Slack channel where Waddles is active. For Discord servers, each text channel counts separately. For Twitch, each stream channel counts as one. For Slack, each workspace channel counts as one.
                 </p>
               </div>
 
@@ -393,7 +393,7 @@ export default function Pricing() {
               <div className="bg-white/5 rounded-xl p-6">
                 <h3 className="text-xl font-bold mb-3 text-blue-300">Do marketplace modules cost extra?</h3>
                 <p className="text-gray-300">
-                  Core WaddleBot modules are included in your plan. However, some specialized modules from our community marketplace may require additional one-time purchases or subscriptions. These are clearly marked in the marketplace with their pricing.
+                  Core Waddles modules are included in your plan. However, some specialized modules from our community marketplace may require additional one-time purchases or subscriptions. These are clearly marked in the marketplace with their pricing.
                 </p>
               </div>
 
@@ -432,7 +432,7 @@ export default function Pricing() {
               Ready to Get Started?
             </h2>
             <p className="text-xl mb-8 text-blue-100">
-              Join thousands of communities already using WaddleBot
+              Join thousands of communities already using Waddles
             </p>
             <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
               <a
@@ -464,7 +464,7 @@ export default function Pricing() {
           <div className="grid md:grid-cols-4 gap-8">
             <div>
               <Link href="/" className="text-2xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent block">
-                WaddleBot
+                Waddles
               </Link>
               <p className="text-gray-400 mb-4">
                 The future of multi-platform community management
@@ -501,7 +501,7 @@ export default function Pricing() {
             </div>
           </div>
           <div className="border-t border-white/10 mt-12 pt-8 text-center text-gray-400">
-            <p>© 2024 WaddleBot. All rights reserved. Built for the future of community management.</p>
+            <p>© 2024 Waddles. All rights reserved. Built for the future of community management.</p>
           </div>
         </div>
       </footer>

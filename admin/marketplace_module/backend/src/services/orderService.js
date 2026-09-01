@@ -4,7 +4,7 @@
  * This demonstrates the complete flow from checkout to fulfillment
  */
 
-const paymentService = require('./paymentService');
+import paymentService from './paymentService.js';
 
 class OrderService {
   /**
@@ -478,4 +478,4 @@ class OrderService {
   }
 }
 
-module.exports = new OrderService();
+export default new OrderService();

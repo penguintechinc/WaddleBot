@@ -1,8 +1,8 @@
 apiVersion: v2
 name: waddlebot
-description: Multi-platform chat bot system with microservices architecture
+description: Waddles - Multi-platform chat bot system with microservices architecture
 type: application
-version: 0.1.0
+version: 0.2.0
 appVersion: "1.0.0"
 kubeVersion: ">=1.23.0-0"
 keywords:
@@ -13,4 +13,10 @@ keywords:
   - streaming
 home: https://github.com/waddlebot/waddlebot
 maintainers:
-  - name: WaddleBot Team
+  - name: Waddles Team
+dependencies:
+  - name: waddlebot-spire
+    version: 0.1.0
+    repository: "file://charts/spire"
+    alias: spire
+    condition: spire.enabled

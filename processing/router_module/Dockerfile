@@ -1,7 +1,7 @@
 # Build from parent directory: docker build -f processing/router_module/Dockerfile -t waddlebot/router:latest .
 
 # Use Python 3.12 for better fastText compatibility (C++17 issues with 3.13)
-FROM python:3.12-slim
+FROM python:3.13-slim-bookworm@sha256:f13a6b7565175da40695e8109f64cbc4d2e65f4c9ef2e3b321c3a44fa3c06fe7
 
 WORKDIR /app
 
@@ -37,12 +37,14 @@ RUN mkdir -p /app/models && \
 RUN mkdir -p /var/log/waddlebotlog
 
 # Create non-root user
-RUN groupadd -r waddlebot && useradd -r -g waddlebot -m waddlebot
+RUN useradd --create-home --shell /bin/bash appuser
 
 # Set proper permissions for app directory, models, and log directory
-RUN chown -R waddlebot:waddlebot /app /var/log/waddlebotlog
+RUN chown -R appuser:appuser /app /var/log/waddlebotlog
 
 # Environment variable for fastText model path
 ENV FASTTEXT_MODEL_PATH=/app/models/lid.176.bin
+
+USER appuser
 
 CMD ["hypercorn", "app:app", "--bind", "0.0.0.0:8000", "--workers", "4"]

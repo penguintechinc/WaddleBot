@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import api from '../../services/api';
+import api, { passkeyApi, userOAuthApi } from '../../services/api';
 import {
   UserCircleIcon,
   LinkIcon,
@@ -68,6 +68,20 @@ function AccountSettings() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
+  // Passkey state
+  const [passkeys, setPasskeys] = useState([]);
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
+  const [passkeyError, setPasskeyError] = useState('');
+  const [registeringPasskey, setRegisteringPasskey] = useState(false);
+
+  // OAuth credentials state
+  const [oauthCredentials, setOauthCredentials] = useState([]);
+  const [oauthLoading, setOauthLoading] = useState(true);
+  const [oauthError, setOauthError] = useState(null);
+  const [oauthSuccess, setOauthSuccess] = useState(null);
+  const [showOAuthForm, setShowOAuthForm] = useState(false);
+  const [oauthForm, setOauthForm] = useState({ platform: '', clientId: '', clientSecret: '', scopes: '' });
+
   // Password form state
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
@@ -91,7 +105,54 @@ function AccountSettings() {
     }
 
     loadUserData();
+    loadOAuthCredentials();
   }, [searchParams]);
+
+  const loadOAuthCredentials = async () => {
+    try {
+      setOauthLoading(true);
+      const response = await userOAuthApi.getCredentials();
+      setOauthCredentials(response.data?.data || []);
+    } catch {
+      // Non-critical — silently fail if endpoint not yet available
+      setOauthCredentials([]);
+    } finally {
+      setOauthLoading(false);
+    }
+  };
+
+  const handleOAuthCreate = async (e) => {
+    e.preventDefault();
+    try {
+      setOauthError(null);
+      await userOAuthApi.createCredential({
+        platform: oauthForm.platform,
+        clientId: oauthForm.clientId,
+        clientSecret: oauthForm.clientSecret,
+        scopes: oauthForm.scopes ? oauthForm.scopes.split(',').map(s => s.trim()) : [],
+      });
+      setOauthSuccess('OAuth credential created');
+      setShowOAuthForm(false);
+      setOauthForm({ platform: '', clientId: '', clientSecret: '', scopes: '' });
+      loadOAuthCredentials();
+      setTimeout(() => setOauthSuccess(null), 3000);
+    } catch (err) {
+      setOauthError(err.response?.data?.error || 'Failed to create credential');
+    }
+  };
+
+  const handleOAuthDelete = async (id) => {
+    if (!window.confirm('Delete this OAuth credential?')) return;
+    try {
+      setOauthError(null);
+      await userOAuthApi.deleteCredential(id);
+      setOauthSuccess('Credential deleted');
+      loadOAuthCredentials();
+      setTimeout(() => setOauthSuccess(null), 3000);
+    } catch (err) {
+      setOauthError(err.response?.data?.error || 'Failed to delete credential');
+    }
+  };
 
   const loadUserData = async () => {
     try {
@@ -100,11 +161,58 @@ function AccountSettings() {
       if (response.data.success && response.data.user) {
         setLinkedPlatforms(response.data.user.linkedPlatforms || []);
       }
+      const pkRes = await passkeyApi.listCredentials().catch(() => ({ data: { credentials: [] } }));
+      setPasskeys(pkRes.data?.credentials || []);
     } catch (err) {
       console.error('Failed to load user data:', err);
       setError('Failed to load account information');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRegisterPasskey = async () => {
+    setRegisteringPasskey(true);
+    setPasskeyError('');
+    try {
+      const optRes = await passkeyApi.startRegistration();
+      const options = optRes.data;
+      const credential = await navigator.credentials.create({ publicKey: {
+        ...options,
+        challenge: Uint8Array.from(atob(options.challenge.replace(/-/g,'+').replace(/_/g,'/')), c => c.charCodeAt(0)),
+        user: { ...options.user, id: Uint8Array.from(atob(options.user.id.replace(/-/g,'+').replace(/_/g,'/')), c => c.charCodeAt(0)) },
+        excludeCredentials: (options.excludeCredentials || []).map(ec => ({ ...ec, id: Uint8Array.from(atob(ec.id.replace(/-/g,'+').replace(/_/g,'/')), c => c.charCodeAt(0)) })),
+      }});
+      const encoded = {
+        id: credential.id,
+        rawId: btoa(String.fromCharCode(...new Uint8Array(credential.rawId))),
+        type: credential.type,
+        response: {
+          attestationObject: btoa(String.fromCharCode(...new Uint8Array(credential.response.attestationObject))),
+          clientDataJSON: btoa(String.fromCharCode(...new Uint8Array(credential.response.clientDataJSON))),
+        },
+      };
+      await passkeyApi.finishRegistration(encoded);
+      const updated = await passkeyApi.listCredentials();
+      setPasskeys(updated.data?.credentials || []);
+    } catch (err) {
+      setPasskeyError(err?.response?.data?.error || err?.message || 'Passkey registration failed.');
+    } finally {
+      setRegisteringPasskey(false);
+    }
+  };
+
+  const handleRemovePasskey = async (id) => {
+    if (!confirm('Are you sure you want to remove this passkey?')) return;
+    setPasskeyLoading(true);
+    try {
+      await passkeyApi.removeCredential(id);
+      const updated = await passkeyApi.listCredentials();
+      setPasskeys(updated.data?.credentials || []);
+    } catch (err) {
+      setPasskeyError(err?.response?.data?.error || err?.message || 'Failed to remove passkey.');
+    } finally {
+      setPasskeyLoading(false);
     }
   };
 
@@ -245,7 +353,7 @@ function AccountSettings() {
         </div>
 
         <p className="text-navy-300 mb-6">
-          Connect your accounts to use WaddleBot across different platforms. When you log in with a platform,
+          Connect your accounts to use Waddles across different platforms. When you log in with a platform,
           it will automatically be linked to your account.
         </p>
 
@@ -407,6 +515,179 @@ function AccountSettings() {
             You can always sign in using any connected platform. Setting a password allows you to also sign in with your email.
           </p>
         </div>
+      </div>
+
+      {/* Passkeys */}
+      <div className="card p-6 mt-6">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <KeyIcon className="w-6 h-6 text-gold-400" />
+            <h2 className="text-xl font-semibold text-sky-100">Passkeys</h2>
+          </div>
+          <button
+            onClick={handleRegisterPasskey}
+            disabled={registeringPasskey || passkeyLoading}
+            className="btn btn-primary text-sm"
+          >
+            {registeringPasskey ? 'Registering...' : 'Add Passkey'}
+          </button>
+        </div>
+
+        {passkeyError && (
+          <div className="p-3 bg-red-500/20 border border-red-500/30 rounded-lg text-red-300 text-sm mb-4">
+            {passkeyError}
+          </div>
+        )}
+
+        <p className="text-navy-300 mb-4 text-sm">
+          Passkeys let you sign in securely using your device's biometrics or PIN, without a password.
+        </p>
+
+        {passkeys.length === 0 ? (
+          <div className="p-4 bg-navy-900 rounded-lg border border-navy-700 text-navy-400 text-sm text-center">
+            No passkeys registered yet.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {passkeys.map((pk) => (
+              <div
+                key={pk.id}
+                className="flex items-center justify-between p-4 bg-navy-800 rounded-lg border border-navy-700"
+              >
+                <div className="flex items-center gap-3">
+                  <KeyIcon className="w-5 h-5 text-navy-400" />
+                  <div>
+                    <div className="font-medium text-sky-100">{pk.device_name || 'Unnamed device'}</div>
+                    <div className="text-xs text-navy-400">
+                      Added {pk.created_at ? new Date(pk.created_at).toLocaleDateString() : 'unknown'}
+                      {pk.last_used_at && ` · Last used ${new Date(pk.last_used_at).toLocaleDateString()}`}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleRemovePasskey(pk.id)}
+                  disabled={passkeyLoading}
+                  className="btn btn-secondary text-sm py-1 px-3"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      {/* OAuth Credentials */}
+      <div className="card p-6 mt-6">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <KeyIcon className="w-6 h-6 text-gold-400" />
+            <h2 className="text-xl font-semibold text-sky-100">OAuth Credentials</h2>
+          </div>
+          <button
+            onClick={() => setShowOAuthForm(v => !v)}
+            className="btn btn-primary text-sm"
+          >
+            Add Credential
+          </button>
+        </div>
+
+        <p className="text-navy-300 mb-4 text-sm">
+          Personal OAuth tokens for platform integrations tied to your account.
+        </p>
+
+        {oauthError && (
+          <div className="p-3 bg-red-500/20 border border-red-500/30 rounded-lg text-red-300 text-sm mb-4">{oauthError}</div>
+        )}
+        {oauthSuccess && (
+          <div className="p-3 bg-emerald-500/20 border border-emerald-500/30 rounded-lg text-emerald-300 text-sm mb-4">{oauthSuccess}</div>
+        )}
+
+        {showOAuthForm && (
+          <form onSubmit={handleOAuthCreate} className="p-4 bg-navy-900 rounded-lg border border-navy-700 space-y-4 mb-4">
+            <h3 className="font-medium text-sky-100">New OAuth Credential</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-sky-200 mb-1">Platform</label>
+                <input
+                  className="input w-full"
+                  placeholder="e.g. twitch, discord"
+                  value={oauthForm.platform}
+                  onChange={e => setOauthForm(f => ({ ...f, platform: e.target.value }))}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-sky-200 mb-1">Scopes (comma-separated)</label>
+                <input
+                  className="input w-full"
+                  placeholder="e.g. read:user"
+                  value={oauthForm.scopes}
+                  onChange={e => setOauthForm(f => ({ ...f, scopes: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-sky-200 mb-1">Client ID</label>
+                <input
+                  className="input w-full"
+                  placeholder="Client ID"
+                  value={oauthForm.clientId}
+                  onChange={e => setOauthForm(f => ({ ...f, clientId: e.target.value }))}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-sky-200 mb-1">Client Secret</label>
+                <input
+                  type="password"
+                  className="input w-full"
+                  placeholder="Client Secret"
+                  value={oauthForm.clientSecret}
+                  onChange={e => setOauthForm(f => ({ ...f, clientSecret: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button type="submit" className="btn btn-primary text-sm">Save</button>
+              <button type="button" onClick={() => setShowOAuthForm(false)} className="btn btn-secondary text-sm">Cancel</button>
+            </div>
+          </form>
+        )}
+
+        {oauthLoading ? (
+          <div className="flex items-center justify-center py-6">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gold-400"></div>
+          </div>
+        ) : oauthCredentials.length === 0 ? (
+          <div className="p-4 bg-navy-900 rounded-lg border border-navy-700 text-navy-400 text-sm text-center">
+            No OAuth credentials configured yet.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {oauthCredentials.map(cred => (
+              <div
+                key={cred.id}
+                className="flex items-center justify-between p-4 bg-navy-800 rounded-lg border border-navy-700"
+              >
+                <div className="flex items-center gap-3">
+                  <KeyIcon className="w-5 h-5 text-navy-400" />
+                  <div>
+                    <div className="font-medium text-sky-100 capitalize">{cred.platform}</div>
+                    <div className="text-xs text-navy-400">
+                      Client ID: {cred.clientId || '—'}
+                      {cred.scopes?.length > 0 && ` · Scopes: ${cred.scopes.join(', ')}`}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleOAuthDelete(cred.id)}
+                  className="btn btn-secondary text-sm py-1 px-3"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Identity Core Module is a dual-protocol microservice that provides unified cross-platform identity management for WaddleBot. It bridges multiple streaming and social platforms (Twitch, Discord, YouTube, etc.) to a unified hub user system, supporting both REST and gRPC interfaces.
+The Identity Core Module is a dual-protocol microservice that provides unified cross-platform identity management for Waddles. It bridges multiple streaming and social platforms (Twitch, Discord, YouTube, etc.) to a unified hub user system, supporting both REST and gRPC interfaces.
 
 **Version:** 2.0.0
 **Framework:** Quart (async Python) + gRPC
@@ -199,7 +199,7 @@ except Exception as e:
 
 ### 4. Data Access Layer (flask_core)
 
-**Source:** Shared library at `/home/penguin/code/WaddleBot/libs/flask_core`
+**Source:** Shared library at `/home/penguin/code/Waddles/libs/flask_core`
 
 **Responsibility:** Database abstraction and ORM
 
@@ -406,7 +406,7 @@ dal.hub_user_identities.update(
 
 ### Proto Definition
 
-**File:** `/home/penguin/code/WaddleBot/libs/grpc_protos/identity.proto`
+**File:** `/home/penguin/code/Waddles/libs/grpc_protos/identity.proto`
 
 ```protobuf
 syntax = "proto3";

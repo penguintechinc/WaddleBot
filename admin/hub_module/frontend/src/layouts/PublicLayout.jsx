@@ -1,5 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import GlobalBanner from '../components/GlobalBanner';
 
 function PublicLayout() {
   const { user, isAuthenticated, logout } = useAuth();
@@ -13,6 +14,7 @@ function PublicLayout() {
 
   return (
     <div className="min-h-screen flex flex-col bg-navy-950">
+      <GlobalBanner />
       {/* Header */}
       <header className="bg-navy-900 border-b border-navy-700 sticky top-0 z-50">
         <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -20,8 +22,8 @@ function PublicLayout() {
             {/* Logo */}
             <div className="flex items-center">
               <Link to="/" className="flex items-center space-x-2">
-                <img src="/waddlebot-logo.png" alt="WaddleBot" className="w-8 h-8" />
-                <span className="text-xl font-bold text-gold-400">WaddleBot</span>
+                <img src="/waddlebot-logo.png" alt="Waddles" className="w-8 h-8" />
+                <span className="text-xl font-bold text-gold-400">Waddles</span>
               </Link>
             </div>
 
@@ -101,11 +103,11 @@ function PublicLayout() {
           <div className="grid md:grid-cols-4 gap-8">
             <div>
               <div className="flex items-center space-x-2 mb-4">
-                <img src="/waddlebot-logo.png" alt="WaddleBot" className="w-8 h-8" />
-                <span className="text-lg font-bold text-gold-400">WaddleBot</span>
+                <img src="/waddlebot-logo.png" alt="Waddles" className="w-8 h-8" />
+                <span className="text-lg font-bold text-gold-400">Waddles</span>
               </div>
               <p className="text-sm">
-                Multi-platform community management for Discord, Twitch, and Slack.
+                Multi-platform community and workforce management across all your platforms.
               </p>
             </div>
             <div>

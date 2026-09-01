@@ -1,12 +1,12 @@
-# WaddleBot End-to-End (E2E) Tests
+# Waddles End-to-End (E2E) Tests
 
 Playwright-based E2E tests for critical user workflows.
 
 ## Test Coverage
 
-- **auth-workflow.spec.js** - Registration, login, logout flows
-- **community-workflow.spec.js** - Community creation, viewing, management
-- **vendor-workflow.spec.js** - Vendor submission and approval process
+- **auth-workflow.spec.js** - Registration, login, logout flows (Waddles)
+- **community-workflow.spec.js** - Community creation, viewing, management (Waddles)
+- **vendor-workflow.spec.js** - Vendor submission and approval process (Waddles)
 
 ## Running Tests
 

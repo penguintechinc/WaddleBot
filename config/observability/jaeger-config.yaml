@@ -1,7 +1,7 @@
-# Jaeger All-in-One Configuration for WaddleBot
+# Jaeger All-in-One Configuration for Waddles
 # ==============================================
 #
-# This configuration sets up Jaeger for distributed tracing across WaddleBot services.
+# This configuration sets up Jaeger for distributed tracing across Waddles services.
 #
 # Jaeger provides:
 # - Trace collection and storage

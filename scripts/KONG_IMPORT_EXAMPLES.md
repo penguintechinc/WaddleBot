@@ -13,7 +13,7 @@ pip install requests pyyaml
 Or in a Docker container:
 
 ```bash
-docker run -it -v /path/to/WaddleBot:/app -w /app python:3.13 bash
+docker run -it -v /path/to/waddles:/app -w /app python:3.13 bash
 pip install requests pyyaml
 python3 scripts/import-kong-config.py
 ```
@@ -70,7 +70,7 @@ Or with the Kong image:
 
 ```bash
 docker run --network host \
-  -v /path/to/WaddleBot:/app \
+  -v /path/to/waddles:/app \
   -w /app \
   kong:latest \
   bash -c "pip install requests pyyaml && \
@@ -199,7 +199,7 @@ spec:
 ### 8. GitHub Actions Example
 
 ```yaml
-name: Deploy Kong Configuration
+name: Deploy Kong Configuration for Waddles
 
 on:
   push:

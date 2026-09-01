@@ -1,6 +1,6 @@
 -- Migration: Add Services Table for Service Discovery
 -- Version: 020
--- Description: Tables for tracking WaddleBot microservices and their health status
+-- Description: Tables for tracking Waddles microservices and their health status
 
 -- Services table (main registry)
 CREATE TABLE IF NOT EXISTS services (
@@ -58,7 +58,7 @@ FOR EACH ROW
 EXECUTE FUNCTION update_services_updated_at();
 
 -- Comments
-COMMENT ON TABLE services IS 'Registry of all WaddleBot microservices and their health status';
+COMMENT ON TABLE services IS 'Registry of all Waddles microservices and their health status';
 COMMENT ON TABLE service_events IS 'Historical event log for service status changes and incidents';
 COMMENT ON COLUMN services.category IS 'Service category: infrastructure/core/triggers/actions/processing/admin';
 COMMENT ON COLUMN services.status IS 'Service status: healthy/unhealthy/degraded/unknown/starting/stopped';

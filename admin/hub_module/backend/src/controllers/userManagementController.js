@@ -4,6 +4,7 @@
 import bcrypt from 'bcrypt';
 import { query, transaction } from '../config/database.js';
 import { errors } from '../middleware/errorHandler.js';
+import crypto from 'crypto';
 import { logger } from '../utils/logger.js';
 
 const SALT_ROUNDS = 10;
@@ -447,6 +448,141 @@ export async function assignVendorRole(req, res, next) {
 }
 
 /**
+ * Set email verification status for a user
+ */
+export async function setEmailVerification(req, res, next) {
+  try {
+    const userId = parseInt(req.params.userId, 10);
+    const { verified } = req.body;
+
+    if (verified === undefined) {
+      return next(errors.badRequest('Verified parameter required'));
+    }
+
+    const result = await query(
+      'SELECT id, email_verified FROM hub_users WHERE id = $1',
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      return next(errors.notFound('User not found'));
+    }
+
+    const user = result.rows[0];
+    if (user.email_verified === verified) {
+      return res.json({
+        success: true,
+        message: `User email is already ${verified ? 'verified' : 'unverified'}`,
+      });
+    }
+
+    if (verified) {
+      // When verifying, also clear any pending verification token
+      await query(
+        `UPDATE hub_users
+         SET email_verified = true, email_verification_token = NULL, updated_at = NOW()
+         WHERE id = $1`,
+        [userId]
+      );
+    } else {
+      await query(
+        'UPDATE hub_users SET email_verified = false, updated_at = NOW() WHERE id = $1',
+        [userId]
+      );
+    }
+
+    logger.audit('Set email verification', {
+      community: 'platform',
+      user: req.user.id,
+      action: 'set_email_verification',
+      targetUser: userId,
+      verified,
+      result: 'success',
+    });
+
+    res.json({
+      success: true,
+      message: `Email ${verified ? 'verified' : 'unverified'}`,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/v1/superadmin/users/:userId/analytics-consumer-role
+ * Toggle analytics consumer role for a user.
+ */
+export async function assignAnalyticsConsumerRole(req, res, next) {
+  try {
+    const userId = parseInt(req.params.userId, 10);
+    const { enabled } = req.body;
+
+    if (typeof enabled !== 'boolean') {
+      return next(errors.badRequest('enabled (boolean) is required'));
+    }
+
+    const result = await query(
+      'UPDATE hub_users SET is_analytics_consumer = $1, updated_at = NOW() WHERE id = $2 RETURNING id, email, username, is_analytics_consumer',
+      [enabled, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return next(errors.notFound('User not found'));
+    }
+
+    logger.audit('Toggle analytics consumer role', {
+      community: 'platform',
+      user: req.user.id,
+      action: 'assign_analytics_consumer_role',
+      result: 'success',
+      targetUser: userId,
+      enabled,
+    });
+
+    res.json({
+      success: true,
+      user: {
+        id: result.rows[0].id,
+        email: result.rows[0].email,
+        username: result.rows[0].username,
+        isAnalyticsConsumer: result.rows[0].is_analytics_consumer,
+      },
+    });
+  } catch (err) {
+    logger.error('Failed to toggle analytics consumer role', err);
+    next(err);
+  }
+}
+
+/**
+ * GET /api/v1/superadmin/users/:userId/deletion-request
+ * Read-only view of a user's data deletion status (for support).
+ */
+export async function getUserDeletionRequest(req, res, next) {
+  try {
+    const userId = parseInt(req.params.userId, 10);
+
+    const result = await query(
+      `SELECT requested_at, completed_at, status
+       FROM data_deletion_requests
+       WHERE hub_user_id = $1
+       ORDER BY requested_at DESC
+       LIMIT 1`,
+      [userId]
+    );
+
+    res.json({
+      success: true,
+      deletion_request: result.rows[0] || null,
+    });
+  } catch (err) {
+    logger.error('Failed to fetch deletion request', err);
+    next(err);
+  }
+}
+
+/**
  * Generate password reset token
  */
 export async function generatePasswordReset(req, res, next) {
@@ -465,7 +601,7 @@ export async function generatePasswordReset(req, res, next) {
     const user = result.rows[0];
 
     // Generate reset token (random 32-char hex)
-    const resetToken = require('crypto').randomBytes(16).toString('hex');
+    const resetToken = crypto.randomBytes(16).toString('hex');
     const resetExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     await query(

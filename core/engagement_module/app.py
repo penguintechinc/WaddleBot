@@ -20,6 +20,9 @@ from quart import Quart, request, jsonify
 import jwt
 from pydal import DAL, Field
 
+from flask_core.auth import DEFAULT_TENANT_SLUG
+from flask_core.feature_flags import feature_enabled
+
 from config import Config
 
 
@@ -84,8 +87,7 @@ db = DAL(
     config.DATABASE_URL,
     folder="databases",
     pool_size=config.DB_POOL_SIZE,
-    migrate_enabled=True,
-    fake_migrate_all=False
+    migrate_enabled=False,
 )
 
 
@@ -106,7 +108,7 @@ def init_database():
         Field('is_active', 'boolean', default=True),
         Field('created_at', 'datetime', default=datetime.utcnow),
         Field('updated_at', 'datetime', update=datetime.utcnow),
-        migrate=True
+        migrate=False
     )
 
     db.define_table(
@@ -115,7 +117,7 @@ def init_database():
         Field('option_text', 'string', length=500, notnull=True),
         Field('sort_order', 'integer', default=0),
         Field('created_at', 'datetime', default=datetime.utcnow),
-        migrate=True
+        migrate=False
     )
 
     db.define_table(
@@ -125,7 +127,7 @@ def init_database():
         Field('user_id', 'integer'),
         Field('ip_hash', 'string', length=64),
         Field('voted_at', 'datetime', default=datetime.utcnow),
-        migrate=True
+        migrate=False
     )
 
     db.define_table(
@@ -141,7 +143,7 @@ def init_database():
         Field('is_active', 'boolean', default=True),
         Field('created_at', 'datetime', default=datetime.utcnow),
         Field('updated_at', 'datetime', update=datetime.utcnow),
-        migrate=True
+        migrate=False
     )
 
     db.define_table(
@@ -155,7 +157,7 @@ def init_database():
         Field('validation_json', 'json'),
         Field('sort_order', 'integer', default=0),
         Field('created_at', 'datetime', default=datetime.utcnow),
-        migrate=True
+        migrate=False
     )
 
     db.define_table(
@@ -164,7 +166,7 @@ def init_database():
         Field('user_id', 'integer'),
         Field('ip_hash', 'string', length=64),
         Field('submitted_at', 'datetime', default=datetime.utcnow),
-        migrate=True
+        migrate=False
     )
 
     db.define_table(
@@ -174,7 +176,7 @@ def init_database():
         Field('value_text', 'text'),
         Field('value_json', 'json'),
         Field('created_at', 'datetime', default=datetime.utcnow),
-        migrate=True
+        migrate=False
     )
 
     db.commit()
@@ -287,6 +289,16 @@ async def create_poll():
         community_id = data.get("community_id")
         title = data.get("title")
         options = data.get("options", [])
+
+        # v3 Feature gate (marketing.engagement / waddles.marketing.engagement,
+        # free tier). The paid Marketing Features (marketing.scheduling,
+        # marketing.publishing) follow this identical one-line guard at their
+        # own handler entry points once wired.
+        tenant_slug = request.auth_payload.get("tenant", DEFAULT_TENANT_SLUG)
+        if not await feature_enabled(
+            "waddles.marketing.engagement", tenant=tenant_slug, community=community_id
+        ):
+            return jsonify({"error": "engagement is not available"}), 404
 
         if not all([community_id, title, options]):
             return jsonify({"error": "community_id, title, and options required"}), 400

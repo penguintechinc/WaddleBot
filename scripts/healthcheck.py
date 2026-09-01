@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Standard health check script for all WaddleBot containers.
+Standard health check script for all Waddles containers.
 Can be used in Dockerfiles and for manual testing.
 
 Supports /health, /healthz, and /metrics endpoints.

@@ -1,0 +1,31 @@
+# Ignore node_modules everywhere - containers run their own npm install
+**/node_modules
+
+# Git
+.git
+
+# Environment files
+**/.env
+**/.env.*
+**/.npmrc
+!**/.env.example
+!**/.env-example
+
+# IDE
+.vscode
+.idea
+
+# OS files
+**/.DS_Store
+**/Thumbs.db
+
+# Logs
+**/*.log
+
+# Test/coverage
+**/coverage
+**/.nyc_output
+
+# Python cache
+**/__pycache__
+**/*.pyc

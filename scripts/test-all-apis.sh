@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# WaddleBot Master API Test Runner
+# Waddles Master API Test Runner
 # Runs all REST and gRPC API tests across all modules
 # =============================================================================
 
@@ -29,7 +29,7 @@ TOTAL_SKIPPED=0
 print_banner() {
     echo -e "${CYAN}"
     echo "╔══════════════════════════════════════════════════════════════╗"
-    echo "║         WaddleBot Master API Test Runner                     ║"
+    echo "║         Waddles Master API Test Runner                     ║"
     echo "╚══════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
 }

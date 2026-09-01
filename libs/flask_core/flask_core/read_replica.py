@@ -1,5 +1,5 @@
 """
-PostgreSQL Read Replica Manager for WaddleBot
+PostgreSQL Read Replica Manager for Waddles
 
 Provides intelligent routing of read/write operations to primary and replica databases
 with automatic failover and connection pool management.
@@ -57,7 +57,7 @@ class ReplicaMetrics:
 
 class ReadReplicaManager:
     """
-    Manages read replica routing and health for WaddleBot.
+    Manages read replica routing and health for Waddles.
 
     Routes SELECT queries to healthy replicas and INSERT/UPDATE/DELETE to primary.
     Implements health checking, failover, and connection pooling.

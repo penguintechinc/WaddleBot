@@ -2,7 +2,7 @@ name: Build spotify-interaction
 
 on:
   push:
-    branches: [ main, develop, 'feature/**', 'bugfix/**' ]
+    branches: [main, 'v*', 'release/**', 'feature/**', 'fix/**', 'chore/**', 'hotfix/**', 'docs/**', 'refactor/**']
     paths:
       - 'action/interactive/spotify_interaction_module/**'
       - 'libs/flask_core/**'
@@ -10,11 +10,16 @@ on:
       - '.github/workflows/build-spotify-interaction.yml'
       - '.github/workflows/build-container.yml'
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, 'v*', 'release/**', 'feature/**', 'fix/**', 'chore/**', 'hotfix/**', 'docs/**', 'refactor/**']
     paths:
       - 'action/interactive/spotify_interaction_module/**'
       - 'libs/flask_core/**'
   workflow_dispatch:
+
+
+permissions:
+  contents: read
+  packages: write
 
 jobs:
   build:

@@ -1,8 +1,8 @@
-# WaddleBot Microservices Standards and Patterns
+# Waddles Microservices Standards and Patterns
 
 ## Overview
 
-This document defines architectural patterns, code standards, and best practices for developing WaddleBot microservices. All module implementations must follow these standards to ensure consistency, reliability, and maintainability across the 24+ service architecture.
+This document defines architectural patterns, code standards, and best practices for developing Waddles microservices. All module implementations must follow these standards to ensure consistency, reliability, and maintainability across the 24+ service architecture.
 
 ---
 
@@ -816,5 +816,5 @@ Before deploying any module, verify:
 ---
 
 **Last Updated**: 2025-12-11
-**WaddleBot Version**: 0.2.0
+**Waddles Version**: 0.2.0
 **Total Modules**: 24+

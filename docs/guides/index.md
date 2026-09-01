@@ -1,6 +1,6 @@
 # Guides
 
-How-to guides for common WaddleBot tasks.
+How-to guides for common Waddles tasks.
 
 ## Topics
 

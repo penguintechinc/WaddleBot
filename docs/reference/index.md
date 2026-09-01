@@ -1,6 +1,6 @@
 # Reference
 
-Technical reference documentation for WaddleBot.
+Technical reference documentation for Waddles.
 
 ## Topics
 

@@ -1,0 +1,80 @@
+{{- if .Values.posthog.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: posthog-redis
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "waddlebot.posthog.labels" . | nindent 4 }}
+    app.kubernetes.io/name: posthog-redis
+    app.kubernetes.io/component: cache
+spec:
+  selector:
+    app.kubernetes.io/name: posthog-redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+      name: redis
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: posthog-redis
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "waddlebot.posthog.labels" . | nindent 4 }}
+    app.kubernetes.io/name: posthog-redis
+    app.kubernetes.io/component: cache
+spec:
+  serviceName: posthog-redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: posthog-redis
+  template:
+    metadata:
+      labels:
+        {{- include "waddlebot.posthog.labels" . | nindent 8 }}
+        app.kubernetes.io/name: posthog-redis
+        app.kubernetes.io/component: cache
+    spec:
+      securityContext:
+        fsGroup: 999
+      containers:
+        # Valkey (Redis-protocol-compatible fork) — reuses the same
+        # digest-pinned image already used for waddlebot's own cache
+        # (infrastructure.redis.image), matching this chart's
+        # redis(valkey) convention instead of the upstream redis:7 pin.
+        - name: redis
+          image: "{{ .Values.posthog.redis.image }}@{{ .Values.posthog.redis.digest }}"
+          imagePullPolicy: {{ .Values.posthog.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.posthog.securityContext.redis | nindent 12 }}
+          args: ["redis-server", "--maxmemory", "200mb", "--maxmemory-policy", "allkeys-lru"]
+          ports:
+            - containerPort: 6379
+              name: redis
+          resources:
+            {{- toYaml .Values.posthog.redis.resources | nindent 12 }}
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          volumeMounts:
+            - name: data
+              mountPath: /data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.posthog.redis.storage }}
+{{- end }}

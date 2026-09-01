@@ -47,32 +47,42 @@ data:
   OLLAMA_MODEL: {{ .Values.infrastructure.ollama.defaultModel | quote }}
 
   # Service URLs - Router
-  ROUTER_API_URL: "http://router-service:8000"
+  ROUTER_API_URL: "http://waddlebot-router:8000"
 
   # Service URLs - Core
-  IDENTITY_API_URL: "http://identity-core-service:8050"
-  LABELS_API_URL: "http://labels-core-service:8023"
-  BROWSER_SOURCE_API_URL: "http://browser-source-service:8027"
-  COMMUNITY_API_URL: "http://community-service:8020"
-  REPUTATION_API_URL: "http://reputation-service:8021"
+  IDENTITY_API_URL: "http://waddlebot-identity-core:8050"
+  LABELS_API_URL: "http://waddlebot-labels-core:8023"
+  BROWSER_SOURCE_API_URL: "http://waddlebot-browser-source:8027"
+  COMMUNITY_API_URL: "http://waddlebot-community:8020"
+  REPUTATION_API_URL: "http://waddlebot-reputation:8021"
 
   # Service URLs - Interactive
-  AI_INTERACTION_API_URL: "http://ai-interaction-service:8005"
-  ALIAS_API_URL: "http://alias-interaction-service:8010"
-  SHOUTOUT_API_URL: "http://shoutout-interaction-service:8011"
-  INVENTORY_API_URL: "http://inventory-interaction-service:8024"
-  CALENDAR_API_URL: "http://calendar-interaction-service:8030"
-  MEMORIES_API_URL: "http://memories-interaction-service:8031"
-  YOUTUBE_MUSIC_API_URL: "http://youtube-music-service:8025"
-  SPOTIFY_API_URL: "http://spotify-interaction-service:8026"
-  LOYALTY_API_URL: "http://loyalty-interaction-service:8032"
+  AI_INTERACTION_API_URL: "http://waddlebot-ai-interaction:8005"
+  ALIAS_API_URL: "http://waddlebot-alias-interaction:8010"
+  SHOUTOUT_API_URL: "http://waddlebot-shoutout-interaction:8011"
+  INVENTORY_API_URL: "http://waddlebot-inventory-interaction:8024"
+  CALENDAR_API_URL: "http://waddlebot-calendar-interaction:8030"
+  MEMORIES_API_URL: "http://waddlebot-memories-interaction:8031"
+  YOUTUBE_MUSIC_API_URL: "http://waddlebot-youtube-music:8025"
+  SPOTIFY_API_URL: "http://waddlebot-spotify-interaction:8026"
+  LOYALTY_API_URL: "http://waddlebot-loyalty-interaction:8032"
+  PRESENCE_API_URL: "http://waddlebot-presence:8042"
 
   # Service URLs - Collectors
-  TWITCH_COLLECTOR_API_URL: "http://twitch-collector-service:8002"
-  DISCORD_COLLECTOR_API_URL: "http://discord-collector-service:8003"
-  SLACK_COLLECTOR_API_URL: "http://slack-collector-service:8004"
-  YOUTUBE_LIVE_COLLECTOR_API_URL: "http://youtube-live-collector-service:8006"
-  KICK_COLLECTOR_API_URL: "http://kick-collector-service:8007"
+  TWITCH_COLLECTOR_API_URL: "http://waddlebot-twitch-collector:8002"
+  DISCORD_COLLECTOR_API_URL: "http://waddlebot-discord-collector:8003"
+  SLACK_COLLECTOR_API_URL: "http://waddlebot-slack-collector:8004"
+  YOUTUBE_LIVE_COLLECTOR_API_URL: "http://waddlebot-youtube-live-collector:8006"
+  KICK_COLLECTOR_API_URL: "http://waddlebot-kick-collector:8007"
+  TEAMS_COLLECTOR_API_URL: "http://waddlebot-teams-collector:8008"
+  MATTERMOST_COLLECTOR_API_URL: "http://waddlebot-mattermost-collector:8009"
+  GOOGLECHAT_COLLECTOR_API_URL: "http://waddlebot-googlechat-collector:8012"
+  TEAMS_ACTION_API_URL: "http://waddlebot-teams-action:8074"
+  MATTERMOST_ACTION_API_URL: "http://waddlebot-mattermost-action:8075"
+  GOOGLECHAT_ACTION_API_URL: "http://waddlebot-googlechat-action:8076"
+
+  # CORS Configuration (comma-separated origins for hub-api)
+  CORS_ORIGIN: {{ .Values.global.corsOrigin | default "http://localhost:5173" | quote }}
 
   # General Configuration
   LOG_LEVEL: {{ .Values.global.logLevel | quote }}
@@ -83,3 +93,8 @@ data:
 
   # PostgreSQL Init Configuration
   POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+
+  # PostHog (feature-flag execution plane) — in-cluster posthog-web Service
+  # when posthog.enabled=true and posthog.host is blank, else the external
+  # hosted default. See templates/infrastructure/posthog/_helpers.tpl.
+  POSTHOG_HOST: {{ include "waddlebot.posthog.effectiveHost" . | quote }}

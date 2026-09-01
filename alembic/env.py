@@ -1,13 +1,25 @@
 """Alembic environment configuration for WaddleBot migrations."""
 
 import os
+import sys
+import types
 from logging.config import fileConfig
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
+from sqlalchemy import engine_from_config, pool, text
 from alembic import context
 
-# Import models
-from libs.flask_core.flask_core.models import db
+# Stub the flask_core package so its __init__.py (which eagerly imports pydal,
+# authlib, redis, etc.) never runs.  The migration container only ships
+# alembic + sqlalchemy + psycopg2 — those heavy deps aren't installed.
+# Model submodules import "from flask_core.models import db", so we add
+# libs/flask_core to sys.path and replace the flask_core package entry.
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'libs', 'flask_core'))
+_stub = types.ModuleType('flask_core')
+_stub.__path__ = [os.path.join(os.path.dirname(__file__), '..', 'libs', 'flask_core', 'flask_core')]
+_stub.__package__ = 'flask_core'
+sys.modules['flask_core'] = _stub
+
+# Now import models — only triggers models/__init__.py (flask-sqlalchemy + model defs)
+from flask_core.models import db  # noqa: E402
 
 # this is the Alembic Config object
 config = context.config
@@ -28,6 +40,17 @@ if database_url:
 target_metadata = db.metadata
 
 
+def include_name(name, type_, parent_names):
+    """Filter autogenerate to only tables with SQLAlchemy models.
+
+    Prevents Alembic from generating DROP TABLE for tables managed by
+    Node.js hub-api or other systems that lack SQLAlchemy models.
+    """
+    if type_ == "table":
+        return name in target_metadata.tables
+    return True
+
+
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
     url = config.get_main_option("sqlalchemy.url")
@@ -36,6 +59,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_name=include_name,
     )
 
     with context.begin_transaction():
@@ -43,7 +67,7 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    """Run migrations in 'online' mode."""
+    """Run migrations in 'online' mode with advisory locking."""
     configuration = config.get_section(config.config_ini_section)
     configuration["sqlalchemy.url"] = config.get_main_option("sqlalchemy.url")
 
@@ -54,12 +78,20 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        # Acquire PostgreSQL advisory lock to prevent concurrent migrations
+        connection.execute(text("SELECT pg_advisory_lock(20250001)"))
+        try:
+            context.configure(
+                connection=connection,
+                target_metadata=target_metadata,
+                include_name=include_name,
+            )
 
-        with context.begin_transaction():
-            context.run_migrations()
+            with context.begin_transaction():
+                context.run_migrations()
+        finally:
+            connection.execute(text("SELECT pg_advisory_unlock(20250001)"))
+            connection.commit()
 
 
 if context.is_offline_mode():

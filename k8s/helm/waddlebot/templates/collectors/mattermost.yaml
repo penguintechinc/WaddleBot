@@ -1,0 +1,112 @@
+{{- if .Values.modules.collectors.mattermost.enabled }}
+---
+# Mattermost Collector Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "waddlebot.fullname" . }}-mattermost-collector
+  labels:
+    {{- include "waddlebot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mattermost-collector
+    tier: trigger
+spec:
+  replicas: {{ .Values.modules.collectors.mattermost.replicas }}
+  selector:
+    matchLabels:
+      {{- include "waddlebot.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: mattermost-collector
+  template:
+    metadata:
+      labels:
+        {{- include "waddlebot.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: mattermost-collector
+        tier: trigger
+    spec:
+      {{- include "waddlebot.imagePullSecrets" . | nindent 6 }}
+      initContainers:
+      {{- include "waddlebot.dbMigrateInitContainer" . | nindent 8 }}
+      containers:
+        - name: mattermost-collector
+          image: "{{ .Values.global.imageRegistry }}/{{ .Values.modules.collectors.mattermost.image }}:{{ .Values.modules.collectors.mattermost.imageTag | default .Values.global.imageTag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8009
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "waddlebot.fullname" . }}-config
+            - secretRef:
+                name: {{ include "waddlebot.fullname" . }}-secrets
+          env:
+            - name: PORT
+              value: "8009"
+            - name: MODULE_NAME
+              value: "mattermost-collector"
+            - name: ROUTER_URL
+              value: "http://{{ include "waddlebot.fullname" . }}-router:8000"
+            - name: MATTERMOST_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "waddlebot.fullname" . }}-secrets
+                  key: MATTERMOST_URL
+            - name: MATTERMOST_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "waddlebot.fullname" . }}-secrets
+                  key: MATTERMOST_BOT_TOKEN
+            - name: MATTERMOST_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "waddlebot.fullname" . }}-secrets
+                  key: MATTERMOST_WEBHOOK_SECRET
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.modules.collectors.mattermost.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+# Mattermost Collector Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "waddlebot.fullname" . }}-mattermost-collector
+  labels:
+    {{- include "waddlebot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mattermost-collector
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8009
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "waddlebot.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: mattermost-collector
+{{- end }}

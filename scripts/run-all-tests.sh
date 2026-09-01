@@ -1,11 +1,11 @@
 #!/bin/bash
-# Comprehensive Test Suite for WaddleBot Implementation
+# Comprehensive Test Suite for Waddles Implementation
 # Tests all completed phases
 
 set -e
 
 echo "========================================="
-echo "WaddleBot Comprehensive Test Suite"
+echo "Waddles Comprehensive Test Suite"
 echo "========================================="
 echo ""
 

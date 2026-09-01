@@ -1,6 +1,6 @@
 # Mobile Application Architecture
 
-This document describes the architecture and design patterns used in the WaddleBot mobile applications.
+This document describes the architecture and design patterns used in the Waddles mobile applications.
 
 ## Overview
 
@@ -313,7 +313,7 @@ object NetworkModule {
 ```swift
 // App entry point
 @main
-struct WaddleBotHubApp: App {
+struct WaddlesHubApp: App {
     let webSocketManager = WebSocketManager(
         baseURL: Configuration.webSocketURL
     )

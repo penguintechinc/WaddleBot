@@ -1,4 +1,4 @@
-# WaddleBot Credentials Rotation Checklist
+# Waddles Credentials Rotation Checklist
 
 **CRITICAL SECURITY**: This document lists all credentials that require rotation in production environments.
 

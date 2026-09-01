@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide helps diagnose and resolve common issues with the WaddleBot Hub Module.
+This guide helps diagnose and resolve common issues with the Waddles Hub Module.
 
 **Version:** 1.0.1
 
@@ -1171,7 +1171,7 @@ When reporting an issue:
 ### Support Channels
 
 - **Documentation:** `/docs/hub_module/`
-- **GitHub Issues:** https://github.com/yourusername/WaddleBot/issues
+- **GitHub Issues:** https://github.com/yourusername/Waddles/issues
 - **Community Discord:** https://discord.gg/waddlebot
 - **Email:** support@waddlebot.io
 

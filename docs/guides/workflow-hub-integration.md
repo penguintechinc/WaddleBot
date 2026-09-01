@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the complete workflow backend integration into the WaddleBot hub module. The implementation provides Express controllers and routes that proxy workflow management operations to the workflow-core microservice while enforcing license validation and permission checks.
+This document describes the complete workflow backend integration into the Waddles hub module. The implementation provides Express controllers and routes that proxy workflow management operations to the workflow-core microservice while enforcing license validation and permission checks.
 
 ## Implementation Details
 
@@ -56,7 +56,7 @@ Express router that defines all workflow-related endpoints with proper authentic
 - All routes require authentication via `requireAuth` middleware
 - All routes require community admin role via `requireCommunityAdmin` middleware
 - Clean separation of route definitions by operation category
-- RESTful endpoint design following WaddleBot patterns
+- RESTful endpoint design following Waddles patterns
 
 **Route Groups:**
 
@@ -220,7 +220,7 @@ The controller returns consistent error responses using the `errors` factory fro
 
 ## Integration with Existing Hub Patterns
 
-The implementation follows established WaddleBot hub patterns:
+The implementation follows established Waddles hub patterns:
 
 1. **Controller Pattern** - Similar to `marketplaceController.js`
 2. **Route Structure** - Follows admin route nesting pattern

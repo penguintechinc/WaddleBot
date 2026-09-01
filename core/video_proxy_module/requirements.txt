@@ -3,20 +3,20 @@ quart==0.20.0
 hypercorn==0.17.3
 
 # gRPC
-grpcio==1.63.0
-grpcio-tools==1.63.0
-protobuf==5.27.0
+grpcio==1.68.1
+grpcio-tools==1.68.1
+protobuf>=5.29.6
 
 # Database
 pydal==20241111.1
-psycopg2-binary==2.9.9
+psycopg2-binary==2.9.12
 
 # HTTP Client
-aiohttp==3.9.3
+aiohttp>=3.13.4
 
 # Authentication & Security
-pyjwt==2.8.0
-cryptography==42.0.5
+pyjwt>=2.13.0
+cryptography>=46.0.6
 
 # Storage
 minio==7.2.5
@@ -26,5 +26,5 @@ python-dateutil==2.8.2
 python-json-logger==2.0.7
 
 # Testing
-pytest==7.4.4
-pytest-asyncio==0.23.3
+pytest>=9.0.3
+pytest-asyncio>=0.23.0

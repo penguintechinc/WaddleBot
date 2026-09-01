@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you believe you have found a security vulnerability in WaddleBot, please report it responsibly and privately. **Do not create a public GitHub issue for security vulnerabilities.**
+If you believe you have found a security vulnerability in Waddles, please report it responsibly and privately. **Do not create a public GitHub issue for security vulnerabilities.**
 
 ### How to Report
 
@@ -18,7 +18,7 @@ Please include:
 - **Location**: Which component/file is affected?
 - **Steps to Reproduce**: How can we verify it?
 - **Impact**: What could an attacker do?
-- **Version**: Which WaddleBot version(s) are vulnerable?
+- **Version**: Which Waddles version(s) are vulnerable?
 - **Contact**: How can we reach you? (name, email, PGP key if available)
 
 ## What to Expect
@@ -53,7 +53,7 @@ We recommend always using the latest version.
 ## Security Best Practices for Users
 
 ### Deployment
-- Run WaddleBot in containers with read-only root filesystems
+- Run Waddles in containers with read-only root filesystems
 - Use a dedicated service account with minimal permissions
 - Enable TLS for all connections
 - Never commit credentials to version control
@@ -85,7 +85,7 @@ For security update procedures, see [security-policy.md](../security-policy.md).
 For sensitive communications, you may encrypt your report using our PGP key:
 
 ```
-[PGP Key ID: WaddleBot-Security]
+[PGP Key ID: Waddles-Security]
 [Fingerprint: To be added]
 ```
 
@@ -111,7 +111,7 @@ If you don't receive a response within 24 hours:
 
 ## Recognition
 
-Security researchers who help us improve WaddleBot are recognized:
+Security researchers who help us improve Waddles are recognized:
 
 - Named in security advisories (if desired)
 - Listed in our Hall of Fame on GitHub

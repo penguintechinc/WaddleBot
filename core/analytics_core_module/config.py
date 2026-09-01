@@ -1,10 +1,16 @@
 """
 Analytics Core Module Configuration
 """
+import logging
 import os
+import threading
+from typing import Optional
+
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 
 class Config:
@@ -26,6 +32,11 @@ class Config:
     REDIS_PORT = int(os.getenv('REDIS_PORT', '6379'))
     REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', '')
     REDIS_DB = int(os.getenv('REDIS_DB', '0'))
+    REDIS_URL: str = os.getenv('REDIS_URL', '')
+
+    # Credential state management
+    _credentials_loaded: bool = False
+    _credential_lock: threading.Lock = threading.Lock()
 
     # Internal service URLs
     ROUTER_API_URL = os.getenv(
@@ -70,3 +81,76 @@ class Config:
         'D': {'min': 60, 'max': 69},
         'F': {'min': 0, 'max': 59}
     }
+
+    @classmethod
+    def load_credentials_from_db(cls, db_connection) -> bool:
+        """Load credentials from platform_integrations table.
+
+        Falls back to environment variables if DB lookup fails.
+
+        Args:
+            db_connection: A database connection with executesql support.
+
+        Returns:
+            True if credentials were loaded from DB.
+        """
+        try:
+            rows = db_connection.executesql(
+                "SELECT access_token, config_data "
+                "FROM platform_integrations "
+                "WHERE platform = 'analytics_core' "
+                "AND integration_type = 'bot' "
+                "AND is_active = TRUE "
+                "LIMIT 1"
+            )
+            if rows and rows[0]:
+                with cls._credential_lock:
+                    cls._credentials_loaded = True
+                logger.info(
+                    "Credentials loaded from platform_integrations for analytics_core"
+                )
+                return True
+        except Exception as e:
+            logger.warning(
+                "Failed to load credentials from DB, using env vars: %s", e
+            )
+        return False
+
+    @classmethod
+    def start_credential_listener(cls, redis_client) -> Optional[threading.Thread]:
+        """Start a background thread that listens for credential refresh events.
+
+        Args:
+            redis_client: A Redis client instance.
+
+        Returns:
+            The listener thread, or None if Redis is not configured.
+        """
+        if not cls.REDIS_URL:
+            return None
+
+        channel = "credentials:analytics_core:bot:refreshed"
+
+        def _listen():
+            try:
+                pubsub = redis_client.pubsub()
+                pubsub.subscribe(channel)
+                logger.info(
+                    "Listening for credential refresh on: %s",
+                    channel,
+                )
+                for message in pubsub.listen():
+                    if message["type"] == "message":
+                        logger.info(
+                            "Credential refresh notification received"
+                        )
+                        with cls._credential_lock:
+                            cls._credentials_loaded = False
+            except Exception as e:
+                logger.error("Credential listener error: %s", e)
+
+        thread = threading.Thread(
+            target=_listen, daemon=True, name="credential-listener"
+        )
+        thread.start()
+        return thread

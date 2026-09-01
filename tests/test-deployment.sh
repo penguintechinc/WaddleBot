@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# WaddleBot Deployment Test Script
+# Waddles Deployment Test Script
 # This script tests the deployment of core services
 
 set -e  # Exit on any error
 
-echo "🚀 WaddleBot Deployment Test"
+echo "🚀 Waddles Deployment Test"
 echo "============================="
 
 # Check if docker-compose is available
@@ -101,16 +101,11 @@ echo "🎉 Basic deployment test passed!"
 echo ""
 echo "📖 Next Steps:"
 echo "1. Review and update .env file with your actual configuration values"
-echo "2. Run 'docker-compose -f docker-compose.updated.yml up -d' to start core services"
-echo "3. Check logs with 'docker-compose -f docker-compose.updated.yml logs -f'"
-echo "4. Access services:"
-echo "   - Kong API Gateway: http://localhost:8000"
-echo "   - Portal: http://localhost:8060"
-echo "   - Router Health: http://localhost:8010/health"
+echo "2. Use Kubernetes (Kustomize for alpha, Helm for beta/prod) instead of Docker Compose"
+echo "3. For local development, use 'make dev' to start services"
 
 echo ""
 echo "⚠️  Important Notes:"
 echo "- Update Dockerfile paths in modules before running full deployment"
 echo "- Configure platform credentials (Discord, Twitch, Slack) in .env"
 echo "- Ensure all required ports are available"
-echo "- Consider using docker-compose.updated.yml for the latest configuration"

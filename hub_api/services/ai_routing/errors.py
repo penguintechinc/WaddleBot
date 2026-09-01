@@ -1,0 +1,43 @@
+"""AI-routing error factories -- same `ApiError` factory convention as `services/errors.py`.
+
+Every route/service function raises one of these; the blueprint catches
+`ApiError` and converts it via `flask_core.api_utils.error_response`
+(`services/errors.py`'s own module docstring). Kept in their own module
+(rather than added to `services/errors.py` directly) since these are
+domain-specific to AI routing/billing, not generic HTTP-status factories
+every group needs.
+"""
+
+from __future__ import annotations
+
+from services.errors import ApiError
+
+
+def ai_routing_disabled(message: str = "AI routing is not enabled for this community") -> ApiError:
+    """503 -- the base `waddles.ai.routing` flag is off."""
+    return ApiError(message, 503, "AI_ROUTING_DISABLED")
+
+
+def not_entitled(message: str = "This AI tier requires a higher plan") -> ApiError:
+    """403 -- flag-or-license-tier gate failed for a premium/BYOK tier request."""
+    return ApiError(message, 403, "AI_TIER_NOT_ENTITLED")
+
+
+def insufficient_balance(message: str = "Insufficient premium-AI token balance") -> ApiError:
+    """402 -- `on_insufficient_balance == 'block'` and the community can't afford it."""
+    return ApiError(message, 402, "AI_INSUFFICIENT_BALANCE")
+
+
+def byok_key_missing(message: str = "No BYOK key configured for this provider") -> ApiError:
+    """409 -- BYOK tier requested/configured but no active key is on file."""
+    return ApiError(message, 409, "AI_BYOK_KEY_MISSING")
+
+
+def provider_error(message: str) -> ApiError:
+    """502 -- the upstream model provider (Ollama/OpenAI/Anthropic) call failed."""
+    return ApiError(message, 502, "AI_PROVIDER_ERROR")
+
+
+def invalid_byok_key(message: str = "BYOK API key failed validation") -> ApiError:
+    """400 -- a rotate/set call's key was rejected by the provider's own API."""
+    return ApiError(message, 400, "AI_BYOK_KEY_INVALID")

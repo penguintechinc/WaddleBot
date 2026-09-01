@@ -4,13 +4,13 @@
 
 ## Overview
 
-This document details the migration of WaddleBot modules from py4web to Flask/Quart framework. The conversion maintains all functionality while leveraging Flask's ecosystem and Python 3.13 optimizations for improved performance and developer experience.
+This document details the migration of Waddles modules from py4web to Flask/Quart framework. The conversion maintains all functionality while leveraging Flask's ecosystem and Python 3.13 optimizations for improved performance and developer experience.
 
 ## Container Build Process
 
 All Flask module Docker builds follow the GitHub Actions workflow pattern defined in `.github/workflows/containers.yml`:
 
-**Build Context**: Repository root (`/home/penguin/code/WaddleBot`)
+**Build Context**: Repository root (`/home/penguin/code/Waddles`)
 
 **Dockerfile Location**: `{module_name}_flask/Dockerfile`
 
@@ -204,7 +204,7 @@ All Flask modules use Python 3.13 optimizations:
 
 ## GitHub Actions Workflows
 
-WaddleBot uses comprehensive GitHub Actions for automated building, testing, and deployment:
+Waddles uses comprehensive GitHub Actions for automated building, testing, and deployment:
 
 ### Main CI/CD Pipeline (`.github/workflows/ci-cd.yml`)
 
@@ -229,12 +229,9 @@ WaddleBot uses comprehensive GitHub Actions for automated building, testing, and
 - **Build Artifacts**: APK and AAB generation for distribution
 - **Play Store Deployment**: Automated deployment to internal testing track
 
-### Desktop Bridge Pipeline (`.github/workflows/desktop-bridge.yml`)
-
-- **Cross-Platform Compilation**: Windows, macOS, and Linux builds
-- **Go Testing**: Comprehensive testing including benchmarks
-- **Release Management**: Automated release creation with checksums
-- **Binary Distribution**: Multi-platform binary artifacts
+The legacy desktop bridge workflows were removed after their source project was
+retired. Desktop-specific release automation now belongs with any future
+desktop source repository rather than the Flask service pipeline.
 
 ## Required CI/CD Standards
 

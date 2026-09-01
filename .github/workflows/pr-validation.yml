@@ -1,0 +1,110 @@
+name: Pull Request Validation
+
+on:
+  pull_request:
+    branches: [main, 'v*', 'release/**', 'feature/**', 'fix/**', 'chore/**', 'hotfix/**', 'docs/**', 'refactor/**']
+  merge_group:
+    types: [checks_requested]
+    branches: [main, 'v*', 'release/**', 'feature/**', 'fix/**', 'chore/**', 'hotfix/**', 'docs/**', 'refactor/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: pr-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python-unit:
+    name: Python unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: |
+            core/identity_core_module/requirements.txt
+            libs/flask_core/requirements.txt
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --disable-pip-version-check \
+            -r core/identity_core_module/requirements.txt \
+            -e libs/flask_core
+
+      - name: Run unit tests
+        env:
+          PYTHON_BIN: python
+        run: make test-unit
+
+  marketplace-refunds:
+    name: Marketplace refund authorization tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: admin/marketplace_module/backend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version: '26'
+          cache: npm
+          cache-dependency-path: admin/marketplace_module/backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run refund tests
+        run: npm test
+
+  web-builds:
+    name: Build ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Hub frontend
+            path: admin/hub_module/frontend
+            test: true
+            native_dependency: esbuild
+          - name: Website
+            path: website
+            test: false
+            native_dependency: sharp
+    defaults:
+      run:
+        working-directory: ${{ matrix.path }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version: '26'
+          cache: npm
+          cache-dependency-path: ${{ matrix.path }}/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Rebuild approved native dependency
+        run: npm rebuild ${{ matrix.native_dependency }}
+
+      - name: Run frontend tests
+        if: matrix.test
+        run: npm test
+
+      - name: Build
+        run: npm run build

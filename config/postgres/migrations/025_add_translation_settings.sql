@@ -47,12 +47,14 @@ CREATE TABLE IF NOT EXISTS community_translation_settings (
 
   -- Timestamps
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-
-  -- Indexes for faster queries
-  INDEX idx_community_translation_enabled (community_id, enabled),
-  INDEX idx_community_translation_method (community_id, detection_method)
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
+
+-- Indexes for faster queries
+CREATE INDEX IF NOT EXISTS idx_community_translation_enabled
+    ON community_translation_settings(community_id, enabled);
+CREATE INDEX IF NOT EXISTS idx_community_translation_method
+    ON community_translation_settings(community_id, detection_method);
 
 -- Create updated_at trigger
 CREATE OR REPLACE FUNCTION update_translation_settings_timestamp()

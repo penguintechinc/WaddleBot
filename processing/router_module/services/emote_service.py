@@ -77,7 +77,7 @@ class EmoteService:
             return
 
         try:
-            from services.translation_providers.emote_providers import (
+            from services.emote_providers import (
                 TwitchEmoteProvider,
                 DiscordEmoteProvider,
                 SlackEmoteProvider,
@@ -475,7 +475,7 @@ class EmoteService:
 from dataclasses import dataclass
 
 
-@dataclass
+@dataclass(slots=True)
 class Emote:
     """Represents a platform emote."""
     code: str

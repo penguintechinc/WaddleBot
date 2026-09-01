@@ -1,7 +1,7 @@
 # Module RTC Dockerfile
 # Multi-stage Go build
 
-FROM golang:1.23-bookworm AS builder
+FROM golang:1.24-bookworm@sha256:1a6d4452c65dea36aac2e2d606b01b4a029ec90cc1ae53890540ce6173ea77ac AS builder
 
 WORKDIR /build
 
@@ -10,18 +10,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy go mod files first for layer caching
-COPY go.mod go.sum* ./
+# Copy go mod files first for layer caching (build context is project root)
+COPY core/module_rtc/go.mod core/module_rtc/go.sum* ./
 RUN go mod download
 
-# Copy source code
-COPY . .
+# Copy module source code
+COPY core/module_rtc/ .
 
 # Build binary
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /build/module_rtc ./cmd/server
 
 # Production stage
-FROM debian:12-slim
+FROM debian:bookworm-slim@sha256:f06537653ac770703bc45b4b113475bd402f451e85223f0f2837acbf89ab020a
 
 WORKDIR /app
 

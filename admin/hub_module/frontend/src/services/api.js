@@ -8,13 +8,27 @@ const api = axios.create({
   },
 });
 
-// Request interceptor to add auth token
+// Request interceptor to add auth token and CSRF token
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    // Add CSRF token for state-changing requests (double-submit cookie pattern).
+    // The backend skips CSRF when a Bearer token is present, but the login
+    // endpoint has no Bearer token yet — so we must send X-XSRF-TOKEN there.
+    if (!['get', 'head', 'options'].includes((config.method || '').toLowerCase())) {
+      const csrfToken = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('XSRF-TOKEN='))
+        ?.split('=')[1];
+      if (csrfToken) {
+        config.headers['X-XSRF-TOKEN'] = csrfToken;
+      }
+    }
+
     return config;
   },
   (error) => Promise.reject(error)
@@ -35,6 +49,9 @@ api.interceptors.response.use(
         if (response.data.success) {
           localStorage.setItem('token', response.data.token);
           originalRequest.headers.Authorization = `Bearer ${response.data.token}`;
+          // Notify any socket connections that the token has changed so they
+          // can update their auth and reconnect with the new token.
+          window.dispatchEvent(new CustomEvent('token-refreshed', { detail: { token: response.data.token } }));
           return api(originalRequest);
         }
       } catch (refreshError) {
@@ -54,15 +71,18 @@ export default api;
 export const publicApi = {
   getStats: () => api.get('/api/v1/public/stats'),
   getCommunities: (params) => api.get('/api/v1/public/communities', { params }),
+  getSpotlightedCommunities: () => api.get('/api/v1/public/communities/spotlighted'),
   getCommunity: (id) => api.get(`/api/v1/public/communities/${id}`),
   getCommunityProfile: (id) => api.get(`/api/v1/public/communities/${id}/profile`),
   getLiveStreams: (params) => api.get('/api/v1/public/live', { params }),
   getStreamDetails: (entityId) => api.get(`/api/v1/public/streams/${entityId}`),
   getSignupSettings: () => api.get('/api/v1/signup-settings'),
+  getBanner: () => api.get('/api/v1/public/banner'),
 };
 
 export const communityApi = {
   getMyCommunities: () => api.get('/api/v1/communities/my'),
+  create: (data) => api.post('/api/v1/communities/create', data),
   getDashboard: (id) => api.get(`/api/v1/communities/${id}/dashboard`),
   getLeaderboard: (id, params) => api.get(`/api/v1/communities/${id}/leaderboard`, { params }),
   getActivity: (id, params) => api.get(`/api/v1/communities/${id}/activity`, { params }),
@@ -113,6 +133,11 @@ export const adminApi = {
   updateModuleConfig: (communityId, moduleId, data) =>
     api.put(`/api/v1/admin/${communityId}/modules/${moduleId}/config`, data),
   getConnectedPlatforms: (communityId) => api.get(`/api/v1/admin/${communityId}/connected-platforms`),
+  getCommunityOAuthCredentials: (communityId) => api.get(`/api/v1/admin/${communityId}/oauth/credentials`),
+  createCommunityOAuthCredential: (communityId, data) => api.post(`/api/v1/admin/${communityId}/oauth/credentials`, data),
+  updateCommunityOAuthCredential: (communityId, id, data) => api.put(`/api/v1/admin/${communityId}/oauth/credentials/${id}`, data),
+  deleteCommunityOAuthCredential: (communityId, id) => api.delete(`/api/v1/admin/${communityId}/oauth/credentials/${id}`),
+  testCommunityOAuthCredential: (communityId, id) => api.post(`/api/v1/admin/${communityId}/oauth/credentials/${id}/test`),
   getBrowserSources: (communityId) => api.get(`/api/v1/admin/${communityId}/browser-sources`),
   regenerateBrowserSources: (communityId, sourceType) =>
     api.post(`/api/v1/admin/${communityId}/browser-sources/regenerate`, { sourceType }),
@@ -197,6 +222,11 @@ export const adminApi = {
     api.put(`/api/v1/admin/${communityId}/ai-researcher/config`, data),
   getAvailableAIModels: (communityId) =>
     api.get(`/api/v1/admin/${communityId}/ai-researcher/available-models`),
+  // AI Chatter Config
+  getAIChatterConfig: (communityId) =>
+    api.get(`/api/v1/admin/${communityId}/ai-chatter/config`),
+  updateAIChatterConfig: (communityId, config) =>
+    api.put(`/api/v1/admin/${communityId}/ai-chatter/config`, config),
   // Bot Detection
   getBotDetections: (communityId, params) =>
     api.get(`/api/v1/admin/${communityId}/bot-detection`, { params }),
@@ -364,6 +394,26 @@ export const adminApi = {
   controlPlayback: (communityId, action) =>
     api.post(`/api/v1/admin/${communityId}/music/playback/control`, { action }),
 
+  // Calendar Events
+  getCalendarEvents: (communityId, params) =>
+    api.get(`/api/v1/admin/${communityId}/calendar/events`, { params }),
+  createCalendarEvent: (communityId, data) =>
+    api.post(`/api/v1/admin/${communityId}/calendar/events`, data),
+  getCalendarEvent: (communityId, eventId) =>
+    api.get(`/api/v1/admin/${communityId}/calendar/events/${eventId}`),
+  updateCalendarEvent: (communityId, eventId, data) =>
+    api.put(`/api/v1/admin/${communityId}/calendar/events/${eventId}`, data),
+  deleteCalendarEvent: (communityId, eventId) =>
+    api.delete(`/api/v1/admin/${communityId}/calendar/events/${eventId}`),
+  approveCalendarEvent: (communityId, eventId) =>
+    api.post(`/api/v1/admin/${communityId}/calendar/events/${eventId}/approve`),
+  rejectCalendarEvent: (communityId, eventId, data) =>
+    api.post(`/api/v1/admin/${communityId}/calendar/events/${eventId}/reject`, data),
+  getEventRsvpCounts: (communityId, eventId) =>
+    api.get(`/api/v1/admin/${communityId}/calendar/events/${eventId}/rsvp-counts`),
+  getEventAttendees: (communityId, eventId) =>
+    api.get(`/api/v1/admin/${communityId}/calendar/events/${eventId}/attendees`),
+
   // ===== Calendar Ticketing =====
   // Ticket types
   getTicketTypes: (communityId, eventId) =>
@@ -484,6 +534,48 @@ export const adminApi = {
     api.delete(`/api/v1/admin/${communityId}/forms/${formId}`),
   getFormSubmissions: (communityId, formId) =>
     api.get(`/api/v1/admin/${communityId}/forms/${formId}/submissions`),
+
+  // ===== Support Tickets =====
+  getSupportCategories: (communityId) =>
+    api.get(`/api/v1/admin/${communityId}/support/categories`),
+  createSupportCategory: (communityId, data) =>
+    api.post(`/api/v1/admin/${communityId}/support/categories`, data),
+  updateSupportCategory: (communityId, categoryId, data) =>
+    api.put(`/api/v1/admin/${communityId}/support/categories/${categoryId}`, data),
+  deleteSupportCategory: (communityId, categoryId) =>
+    api.delete(`/api/v1/admin/${communityId}/support/categories/${categoryId}`),
+  getSupportTickets: (communityId, params) =>
+    api.get(`/api/v1/admin/${communityId}/support/tickets`, { params }),
+  getSupportTicket: (communityId, ticketId) =>
+    api.get(`/api/v1/admin/${communityId}/support/tickets/${ticketId}`),
+  updateTicketStatus: (communityId, ticketId, status) =>
+    api.put(`/api/v1/admin/${communityId}/support/tickets/${ticketId}/status`, { status }),
+  assignSupportTicket: (communityId, ticketId, assigneeUserId) =>
+    api.put(`/api/v1/admin/${communityId}/support/tickets/${ticketId}/assign`, { assignee_user_id: assigneeUserId }),
+  updateSupportTicketPriority: (communityId, ticketId, priority) =>
+    api.put(`/api/v1/admin/${communityId}/support/tickets/${ticketId}/priority`, { priority }),
+  addSupportTicketComment: (communityId, ticketId, content, isInternal) =>
+    api.post(`/api/v1/admin/${communityId}/support/tickets/${ticketId}/comments`, { content, is_internal: isInternal }),
+  getSupportStats: (communityId) =>
+    api.get(`/api/v1/admin/${communityId}/support/stats`),
+  // Commands (read-only)
+  getCommands: (communityId) => api.get(`/api/v1/admin/${communityId}/commands`),
+  // Server link requests (community-initiated)
+  createServerLinkRequest: (communityId, data) =>
+    api.post(`/api/v1/admin/${communityId}/server-link-requests`, data),
+};
+
+export const supportApi = {
+  submitTicket: (communityId, data) =>
+    api.post(`/api/v1/admin/${communityId}/support/submit`, data),
+  getMyTickets: (communityId) =>
+    api.get(`/api/v1/admin/${communityId}/support/my-tickets`),
+  getMyTicket: (communityId, ticketId) =>
+    api.get(`/api/v1/admin/${communityId}/support/my-tickets/${ticketId}`),
+  addComment: (communityId, ticketId, content) =>
+    api.post(`/api/v1/admin/${communityId}/support/my-tickets/${ticketId}/comments`, { content }),
+  getCategories: (communityId) =>
+    api.get(`/api/v1/admin/${communityId}/support/categories`),
 };
 
 export const platformApi = {
@@ -504,6 +596,11 @@ export const platformApi = {
 
 export const superAdminApi = {
   getDashboard: () => api.get('/api/v1/superadmin/dashboard'),
+  // Analytics
+  getAnalytics: () => api.get('/api/v1/superadmin/analytics'),
+  getReputationDistribution: () => api.get('/api/v1/superadmin/analytics/reputation'),
+  getGrowthTrends: (params) => api.get('/api/v1/superadmin/analytics/growth', { params }),
+  getActivityBreakdown: () => api.get('/api/v1/superadmin/analytics/activity'),
   getCommunities: (params) => api.get('/api/v1/superadmin/communities', { params }),
   getCommunity: (id) => api.get(`/api/v1/superadmin/communities/${id}`),
   createCommunity: (data) => api.post('/api/v1/superadmin/communities', data),
@@ -552,6 +649,8 @@ export const superAdminApi = {
     api.post(`/api/v1/superadmin/users/${userId}/super-admin-role`, { grant }),
   assignVendorRole: (userId, grant) =>
     api.post(`/api/v1/superadmin/users/${userId}/vendor-role`, { grant }),
+  setEmailVerification: (userId, verified) =>
+    api.post(`/api/v1/superadmin/users/${userId}/verify-email`, { verified }),
   generatePasswordReset: (userId) =>
     api.post(`/api/v1/superadmin/users/${userId}/password-reset`),
 };
@@ -564,6 +663,49 @@ export const marketplaceApi = {
   uninstallModule: (communityId, moduleId) => api.delete(`/api/v1/admin/${communityId}/marketplace/modules/${moduleId}`),
   configureModule: (communityId, moduleId, data) => api.put(`/api/v1/admin/${communityId}/marketplace/modules/${moduleId}/config`, data),
   addReview: (communityId, moduleId, data) => api.post(`/api/v1/admin/${communityId}/marketplace/modules/${moduleId}/review`, data),
+};
+
+// New unified marketplace API (routes through marketplace module)
+export const unifiedMarketplaceApi = {
+  // Catalog
+  getCatalog: (params) => api.get('/api/v1/marketplace/catalog', { params }),
+  getCatalogEntry: (source, id, params) => api.get(`/api/v1/marketplace/catalog/${source}/${id}`, { params }),
+  getCategories: () => api.get('/api/v1/marketplace/catalog/categories'),
+  getFeatured: (params) => api.get('/api/v1/marketplace/catalog/featured', { params }),
+
+  // Community installations
+  getInstalled: (communityId) => api.get(`/api/v1/marketplace/communities/${communityId}/installed`),
+  installModule: (communityId, data) => api.post(`/api/v1/marketplace/communities/${communityId}/install`, data),
+  uninstallModule: (communityId, moduleId, source) => api.delete(`/api/v1/marketplace/communities/${communityId}/install/${moduleId}`, { params: { source } }),
+  toggleModule: (communityId, moduleId, data) => api.put(`/api/v1/marketplace/communities/${communityId}/install/${moduleId}`, data),
+
+  // Premium
+  getPricing: (params) => api.get('/api/v1/marketplace/premium/pricing', { params }),
+  getPremiumStatus: (communityId) => api.get(`/api/v1/marketplace/premium/status/${communityId}`),
+  subscribePremium: (data) => api.post('/api/v1/marketplace/premium/subscribe', data),
+  cancelPremium: (data) => api.post('/api/v1/marketplace/premium/cancel', data),
+};
+
+export const vendorApi = {
+  getProfile: () => api.get('/api/v1/marketplace/vendor/profile'),
+  createProfile: (data) => api.post('/api/v1/marketplace/vendor/profile', data),
+  getModules: (params) => api.get('/api/v1/marketplace/vendor/modules', { params }),
+  createModule: (data) => api.post('/api/v1/marketplace/vendor/modules', data),
+  updateModule: (id, data) => api.put(`/api/v1/marketplace/vendor/modules/${id}`, data),
+  submitForReview: (id, data) => api.post(`/api/v1/marketplace/vendor/modules/${id}/submit`, data),
+  getRequest: () => api.get('/api/v1/marketplace/vendor/request'),
+  createRequest: (data) => api.post('/api/v1/marketplace/vendor/request', data),
+};
+
+export const marketplaceAdminApi = {
+  getVendorRequests: (params) => api.get('/api/v1/marketplace/admin/marketplace/vendor-requests', { params }),
+  approveVendorRequest: (id, data) => api.post(`/api/v1/marketplace/admin/marketplace/vendor-requests/${id}/approve`, data),
+  rejectVendorRequest: (id, data) => api.post(`/api/v1/marketplace/admin/marketplace/vendor-requests/${id}/reject`, data),
+  getSubmissions: (params) => api.get('/api/v1/marketplace/admin/marketplace/submissions', { params }),
+  approveSubmission: (id, data) => api.post(`/api/v1/marketplace/admin/marketplace/submissions/${id}/approve`, data),
+  rejectSubmission: (id, data) => api.post(`/api/v1/marketplace/admin/marketplace/submissions/${id}/reject`, data),
+  getSettings: () => api.get('/api/v1/marketplace/admin/marketplace/settings'),
+  updateSettings: (data) => api.put('/api/v1/marketplace/admin/marketplace/settings', data),
 };
 
 // User Identity & Profile API
@@ -592,75 +734,26 @@ export const userApi = {
     api.get(`/api/v1/communities/${communityId}/members/${userId}/profile`),
 };
 
+// Analytics API
+export const analyticsApi = {
+  getMyStats: () => api.get('/api/v1/analytics/me/stats'),
+  getMyReputation: () => api.get('/api/v1/analytics/me/reputation'),
+  getMemberStats: (communityId, userId) => api.get(`/api/v1/analytics/community/${communityId}/members/${userId}/stats`),
+  getMemberReputation: (communityId, userId) => api.get(`/api/v1/analytics/community/${communityId}/members/${userId}/reputation`),
+  getPlatformOverview: () => api.get('/api/v1/analytics/platform/overview'),
+  getPlatformReputation: () => api.get('/api/v1/analytics/platform/reputation'),
+  getPlatformGrowth: (period = '30d') => api.get(`/api/v1/analytics/platform/growth?period=${period}`),
+  getPlatformActivity: () => api.get('/api/v1/analytics/platform/activity'),
+  getCommunityHealth: (limit = 50) => api.get(`/api/v1/analytics/platform/community-health?limit=${limit}`),
+  getAdminUserStats: (userId) => api.get(`/api/v1/analytics/admin/users/${userId}/stats`),
+};
+
 // Stream API
 export const streamApi = {
   getLiveStreams: (communityId) => api.get(`/api/v1/communities/${communityId}/streams`),
   getFeaturedStreams: (communityId) => api.get(`/api/v1/communities/${communityId}/streams/featured`),
   getStreamDetails: (communityId, entityId) =>
     api.get(`/api/v1/communities/${communityId}/streams/${entityId}`),
-};
-
-// Kong Gateway API
-export const kongApi = {
-  // Status
-  getKongStatus: () => api.get('/api/v1/superadmin/kong/status'),
-
-  // Services
-  getKongServices: (params) => api.get('/api/v1/superadmin/kong/services', { params }),
-  getKongService: (id) => api.get(`/api/v1/superadmin/kong/services/${id}`),
-  createKongService: (data) => api.post('/api/v1/superadmin/kong/services', data),
-  updateKongService: (id, data) => api.patch(`/api/v1/superadmin/kong/services/${id}`, data),
-  deleteKongService: (id) => api.delete(`/api/v1/superadmin/kong/services/${id}`),
-
-  // Routes
-  getKongRoutes: (params) => api.get('/api/v1/superadmin/kong/routes', { params }),
-  getKongRoute: (id) => api.get(`/api/v1/superadmin/kong/routes/${id}`),
-  getKongServiceRoutes: (serviceId) => api.get(`/api/v1/superadmin/kong/services/${serviceId}/routes`),
-  createKongRoute: (serviceId, data) => api.post(`/api/v1/superadmin/kong/services/${serviceId}/routes`, data),
-  updateKongRoute: (id, data) => api.patch(`/api/v1/superadmin/kong/routes/${id}`, data),
-  deleteKongRoute: (id) => api.delete(`/api/v1/superadmin/kong/routes/${id}`),
-
-  // Plugins
-  getKongPlugins: (params) => api.get('/api/v1/superadmin/kong/plugins', { params }),
-  getKongPlugin: (id) => api.get(`/api/v1/superadmin/kong/plugins/${id}`),
-  createKongPlugin: (data) => api.post('/api/v1/superadmin/kong/plugins', data),
-  updateKongPlugin: (id, data) => api.patch(`/api/v1/superadmin/kong/plugins/${id}`, data),
-  deleteKongPlugin: (id) => api.delete(`/api/v1/superadmin/kong/plugins/${id}`),
-
-  // Consumers
-  getKongConsumers: (params) => api.get('/api/v1/superadmin/kong/consumers', { params }),
-  getKongConsumer: (id) => api.get(`/api/v1/superadmin/kong/consumers/${id}`),
-  createKongConsumer: (data) => api.post('/api/v1/superadmin/kong/consumers', data),
-  deleteKongConsumer: (id) => api.delete(`/api/v1/superadmin/kong/consumers/${id}`),
-
-  // Upstreams
-  getKongUpstreams: (params) => api.get('/api/v1/superadmin/kong/upstreams', { params }),
-  getKongUpstream: (id) => api.get(`/api/v1/superadmin/kong/upstreams/${id}`),
-  createKongUpstream: (data) => api.post('/api/v1/superadmin/kong/upstreams', data),
-  updateKongUpstream: (id, data) => api.patch(`/api/v1/superadmin/kong/upstreams/${id}`, data),
-  deleteKongUpstream: (id) => api.delete(`/api/v1/superadmin/kong/upstreams/${id}`),
-
-  // Targets
-  getKongTargets: (upstreamId, params) => api.get(`/api/v1/superadmin/kong/upstreams/${upstreamId}/targets`, { params }),
-  createKongTarget: (upstreamId, data) => api.post(`/api/v1/superadmin/kong/upstreams/${upstreamId}/targets`, data),
-  deleteKongTarget: (upstreamId, targetId) => api.delete(`/api/v1/superadmin/kong/upstreams/${upstreamId}/targets/${targetId}`),
-
-  // Certificates
-  getKongCertificates: (params) => api.get('/api/v1/superadmin/kong/certificates', { params }),
-  getKongCertificate: (id) => api.get(`/api/v1/superadmin/kong/certificates/${id}`),
-  createKongCertificate: (data) => api.post('/api/v1/superadmin/kong/certificates', data),
-  deleteKongCertificate: (id) => api.delete(`/api/v1/superadmin/kong/certificates/${id}`),
-
-  // Certificate Generation
-  generateSelfSignedCertificate: (data) => api.post('/api/v1/superadmin/kong/certificates/generate/self-signed', data),
-  generateCertbotCertificate: (data) => api.post('/api/v1/superadmin/kong/certificates/generate/certbot', data),
-  renewCertbotCertificate: (domain) => api.post(`/api/v1/superadmin/kong/certificates/renew/${domain}`),
-  listCertbotCertificates: () => api.get('/api/v1/superadmin/kong/certificates/certbot/list'),
-
-  // SNIs
-  getKongSNIs: (params) => api.get('/api/v1/superadmin/kong/snis', { params }),
-  createKongSNI: (data) => api.post('/api/v1/superadmin/kong/snis', data),
-  deleteKongSNI: (id) => api.delete(`/api/v1/superadmin/kong/snis/${id}`),
 };
 
 // Workflow API
@@ -710,4 +803,252 @@ export const workflowApi = {
     api.delete(`/api/v1/admin/${communityId}/workflows/${workflowId}/webhooks/${webhookId}`),
   regenerateWebhookSecret: (communityId, workflowId, webhookId) =>
     api.post(`/api/v1/admin/${communityId}/workflows/${workflowId}/webhooks/${webhookId}/regenerate`),
+};
+
+// Calendar API
+export const calendarApi = {
+  // OAuth
+  getGoogleAuthUrl: () => api.get('/api/v1/calendar/oauth/google/auth-url'),
+  getMicrosoftAuthUrl: () => api.get('/api/v1/calendar/oauth/microsoft/auth-url'),
+  getConnectedCalendars: () => api.get('/api/v1/calendar/oauth/calendars'),
+  syncCalendar: (id) => api.post(`/api/v1/calendar/oauth/calendars/${id}/sync`),
+  disconnectCalendar: (id) => api.delete(`/api/v1/calendar/oauth/calendars/${id}`),
+
+  // Availability
+  getAvailabilitySettings: () => api.get('/api/v1/calendar/availability/settings'),
+  updateAvailabilitySettings: (data) => api.put('/api/v1/calendar/availability/settings', data),
+  getWeeklyAvailability: () => api.get('/api/v1/calendar/availability/weekly'),
+  updateWeeklyAvailability: (data) => api.put('/api/v1/calendar/availability/weekly', data),
+  getAvailableSlots: (userId, date, duration) => api.get(`/api/v1/calendar/availability/${userId}/slots`, { params: { date, duration } }),
+
+  // Booking Pages
+  createBookingPage: (data) => api.post('/api/v1/calendar/booking-pages', data),
+  getBookingPages: () => api.get('/api/v1/calendar/booking-pages'),
+  getBookingPage: (idOrSlug) => api.get(`/api/v1/calendar/booking-pages/${idOrSlug}`),
+  updateBookingPage: (id, data) => api.put(`/api/v1/calendar/booking-pages/${id}`, data),
+  deleteBookingPage: (id) => api.delete(`/api/v1/calendar/booking-pages/${id}`),
+
+  // Public Booking
+  getBookingSlots: (slug, date) => api.get(`/api/v1/calendar/book/${slug}/slots`, { params: { date } }),
+  createBooking: (slug, data) => api.post(`/api/v1/calendar/book/${slug}`, data),
+  getBooking: (uuid) => api.get(`/api/v1/calendar/bookings/${uuid}`),
+  cancelBooking: (uuid) => api.delete(`/api/v1/calendar/bookings/${uuid}`),
+  getMyBookings: (params) => api.get('/api/v1/calendar/my-bookings', { params }),
+
+  // Group
+  addGroupMember: (pageId, data) => api.post(`/api/v1/calendar/booking-pages/${pageId}/members`, data),
+  removeGroupMember: (pageId, userId) => api.delete(`/api/v1/calendar/booking-pages/${pageId}/members/${userId}`),
+  getGroupMembers: (pageId) => api.get(`/api/v1/calendar/booking-pages/${pageId}/members`),
+  getGroupAvailability: (pageId, date) => api.get(`/api/v1/calendar/booking-pages/${pageId}/group-availability`, { params: { date } }),
+  getBestSlots: (pageId, start, end, limit) => api.get(`/api/v1/calendar/booking-pages/${pageId}/best-slots`, { params: { start, end, limit } }),
+};
+
+// Inventory (Quartermaster) API
+export const inventoryApi = {
+  // Admin
+  listItems: (communityId) =>
+    api.get(`/api/v1/admin/${communityId}/inventory/items`),
+  createItem: (communityId, data) =>
+    api.post(`/api/v1/admin/${communityId}/inventory/items`, data),
+  updateItem: (communityId, itemId, data) =>
+    api.put(`/api/v1/admin/${communityId}/inventory/items/${itemId}`, data),
+  deleteItem: (communityId, itemId) =>
+    api.delete(`/api/v1/admin/${communityId}/inventory/items/${itemId}`),
+  addStock: (communityId, itemId, data) =>
+    api.post(`/api/v1/admin/${communityId}/inventory/items/${itemId}/stock/add`, data),
+  removeStock: (communityId, itemId, data) =>
+    api.post(`/api/v1/admin/${communityId}/inventory/items/${itemId}/stock/remove`, data),
+  listAllCheckouts: (communityId, params) =>
+    api.get(`/api/v1/admin/${communityId}/inventory/checkouts`, { params }),
+  getSummary: (communityId) =>
+    api.get(`/api/v1/admin/${communityId}/inventory/summary`),
+  getAuditLog: (communityId, params) =>
+    api.get(`/api/v1/admin/${communityId}/inventory/log`, { params }),
+
+  // Member
+  listAvailable: (communityId, params) =>
+    api.get(`/api/v1/admin/${communityId}/inventory/available`, { params }),
+  checkoutItem: (communityId, data) =>
+    api.post(`/api/v1/admin/${communityId}/inventory/checkout`, data),
+  checkinItem: (communityId, data) =>
+    api.post(`/api/v1/admin/${communityId}/inventory/checkin`, data),
+  getMyCheckouts: (communityId) =>
+    api.get(`/api/v1/admin/${communityId}/inventory/my-items`),
+};
+
+// Personal Access Token (PAT) + Community Access Token (CAT) API
+export const tokenApi = {
+  // User PAT
+  getPATScopes: () =>
+    api.get('/api/v1/user/tokens/scopes'),
+  getPAT: () =>
+    api.get('/api/v1/user/tokens/pat'),
+  createPAT: (data) =>
+    api.post('/api/v1/user/tokens/pat', data),
+  revokePAT: () =>
+    api.delete('/api/v1/user/tokens/pat'),
+
+  // Community CAT (admin)
+  getCATScopes: (communityId) =>
+    api.get(`/api/v1/admin/${communityId}/tokens/scopes`),
+  listCATs: (communityId) =>
+    api.get(`/api/v1/admin/${communityId}/tokens/cats`),
+  createCAT: (communityId, data) =>
+    api.post(`/api/v1/admin/${communityId}/tokens/cats`, data),
+  revokeCAT: (communityId, tokenId) =>
+    api.delete(`/api/v1/admin/${communityId}/tokens/cats/${tokenId}`),
+};
+
+// ─── Join Request API ────────────────────────────────────────────────────────
+export const joinRequestApi = {
+  submit: (communityId, data) => api.post(`/community/${communityId}/join-requests`, data),
+  getMine: (communityId) => api.get(`/community/${communityId}/join-requests/mine`),
+  list: (communityId) => api.get(`/admin/${communityId}/join-requests`),
+  approve: (communityId, requestId) => api.put(`/admin/${communityId}/join-requests/${requestId}/approve`),
+  reject: (communityId, requestId) => api.put(`/admin/${communityId}/join-requests/${requestId}/reject`),
+};
+
+// ─── Passkey API ─────────────────────────────────────────────────────────────
+export const userOAuthApi = {
+  getCredentials: () => api.get('/api/v1/user/oauth/credentials'),
+  createCredential: (data) => api.post('/api/v1/user/oauth/credentials', data),
+  updateCredential: (id, data) => api.put(`/api/v1/user/oauth/credentials/${id}`, data),
+  deleteCredential: (id) => api.delete(`/api/v1/user/oauth/credentials/${id}`),
+  testCredential: (id) => api.post(`/api/v1/user/oauth/credentials/${id}/test`),
+};
+
+export const passkeyApi = {
+  startRegistration: () => api.post('/api/v1/user/passkey/register/start'),
+  finishRegistration: (data) => api.post('/api/v1/user/passkey/register/finish', data),
+  listCredentials: () => api.get('/api/v1/user/passkey/credentials'),
+  removeCredential: (id) => api.delete(`/api/v1/user/passkey/credentials/${id}`),
+  startLogin: (data) => api.post('/api/v1/auth/passkey/login/start', data),
+  finishLogin: (data) => api.post('/api/v1/auth/passkey/login/finish', data),
+};
+
+// ─── Interaction (Hub Channels, Forums, Voice) API ──────────────────────────
+export const interactionApi = {
+  // Admin — channel CRUD
+  getChannels: (communityId) =>
+    api.get(`/api/v1/admin/${communityId}/interaction/channels`),
+  createChannel: (communityId, data) =>
+    api.post(`/api/v1/admin/${communityId}/interaction/channels`, data),
+  updateChannel: (communityId, channelId, data) =>
+    api.put(`/api/v1/admin/${communityId}/interaction/channels/${channelId}`, data),
+  deleteChannel: (communityId, channelId) =>
+    api.delete(`/api/v1/admin/${communityId}/interaction/channels/${channelId}`),
+
+  // Member — channels list (community route)
+  getMemberChannels: (communityId) =>
+    api.get(`/api/v1/community/${communityId}/interact/channels`),
+  createMemberChannel: (communityId, data) =>
+    api.post(`/api/v1/community/${communityId}/interact/channels`, data),
+
+  // Forum
+  getForumPosts: (communityId, channelId, params) =>
+    api.get(`/api/v1/community/${communityId}/interact/forum/${channelId}/posts`, { params }),
+  getForumPost: (communityId, channelId, postId) =>
+    api.get(`/api/v1/community/${communityId}/interact/forum/${channelId}/posts/${postId}`),
+  createForumPost: (communityId, channelId, data) =>
+    api.post(`/api/v1/community/${communityId}/interact/forum/${channelId}/posts`, data),
+  createForumReply: (communityId, postId, data) =>
+    api.post(`/api/v1/community/${communityId}/interact/forum/posts/${postId}/replies`, data),
+
+  // Admin — forum moderation
+  moderatePost: (communityId, postId, data) =>
+    api.put(`/api/v1/admin/${communityId}/interaction/forum/posts/${postId}`, data),
+  deleteReply: (communityId, replyId) =>
+    api.delete(`/api/v1/admin/${communityId}/interaction/forum/replies/${replyId}`),
+
+  // Voice rooms (proxied to module_rtc via calls controller)
+  getVoiceRooms: (communityId) =>
+    api.get(`/api/v1/community/${communityId}/interact/voice/rooms`),
+  joinVoiceRoom: (communityId, roomName) =>
+    api.post(`/api/v1/community/${communityId}/interact/voice/rooms/${encodeURIComponent(roomName)}/join`),
+  leaveVoiceRoom: (communityId, roomName) =>
+    api.post(`/api/v1/community/${communityId}/interact/voice/rooms/${encodeURIComponent(roomName)}/leave`),
+  createAdHocVoiceRoom: (communityId, data) =>
+    api.post(`/api/v1/community/${communityId}/interact/voice/rooms`, data),
+};
+
+// ─── Server Manager (RCON / Voice) API ──────────────────────────────────────
+export const rconApi = {
+  // Admin
+  listServers: (communityId) =>
+    api.get(`/api/v1/admin/${communityId}/rcon/servers`),
+  createServer: (communityId, data) =>
+    api.post(`/api/v1/admin/${communityId}/rcon/servers`, data),
+  updateServer: (communityId, serverId, data) =>
+    api.put(`/api/v1/admin/${communityId}/rcon/servers/${serverId}`, data),
+  deleteServer: (communityId, serverId) =>
+    api.delete(`/api/v1/admin/${communityId}/rcon/servers/${serverId}`),
+  testConnection: (communityId, serverId, data) =>
+    api.post(`/api/v1/admin/${communityId}/rcon/servers/${serverId}/test`, data),
+  executeCommand: (communityId, serverId, data) =>
+    api.post(`/api/v1/admin/${communityId}/rcon/servers/${serverId}/command`, data),
+  kickPlayer: (communityId, serverId, data) =>
+    api.post(`/api/v1/admin/${communityId}/rcon/servers/${serverId}/kick`, data),
+  banPlayer: (communityId, serverId, data) =>
+    api.post(`/api/v1/admin/${communityId}/rcon/servers/${serverId}/ban`, data),
+  getChannels: (communityId, serverId) =>
+    api.get(`/api/v1/admin/${communityId}/rcon/servers/${serverId}/channels`),
+  moveUser: (communityId, serverId, data) =>
+    api.post(`/api/v1/admin/${communityId}/rcon/servers/${serverId}/move`, data),
+  sendMessage: (communityId, serverId, data) =>
+    api.post(`/api/v1/admin/${communityId}/rcon/servers/${serverId}/message`, data),
+  getCommandLog: (communityId, params) =>
+    api.get(`/api/v1/admin/${communityId}/rcon/log`, { params }),
+  getAccessPolicy: (communityId, serverId) =>
+    api.get(`/api/v1/admin/${communityId}/rcon/servers/${serverId}/policy`),
+  updateAccessPolicy: (communityId, serverId, data) =>
+    api.put(`/api/v1/admin/${communityId}/rcon/servers/${serverId}/policy`, data),
+  triggerEnforcement: (communityId, serverId) =>
+    api.post(`/api/v1/admin/${communityId}/rcon/servers/${serverId}/enforce`),
+  getAccessLog: (communityId, serverId, params) =>
+    api.get(`/api/v1/admin/${communityId}/rcon/servers/${serverId}/access-log`, { params }),
+
+  // Member
+  listInfo: (communityId) =>
+    api.get(`/api/v1/admin/${communityId}/rcon/info`),
+  getServerStatus: (communityId, serverId) =>
+    api.get(`/api/v1/admin/${communityId}/rcon/info/${serverId}/status`),
+  getPlayerList: (communityId, serverId) =>
+    api.get(`/api/v1/admin/${communityId}/rcon/info/${serverId}/players`),
+};
+
+// ── Tenant API ─────────────────────────────────────────────────────
+export const tenantApi = {
+  getLoginInfo: (slug) => api.get(`/api/v1/auth/tenant/${slug}`),
+  getTenant: (slug) => api.get(`/api/v1/tenant/${slug}`),
+  updateTenant: (slug, data) => api.put(`/api/v1/tenant/${slug}`, data),
+  getSettings: (slug) => api.get(`/api/v1/tenant/${slug}/settings`),
+  updateSettings: (slug, settings) => api.put(`/api/v1/tenant/${slug}/settings`, { settings }),
+  getCommunities: (slug, params) => api.get(`/api/v1/tenant/${slug}/communities`, { params }),
+  getModules: (slug) => api.get(`/api/v1/tenant/${slug}/modules`),
+  updateModules: (slug, allowedModuleIds) => api.put(`/api/v1/tenant/${slug}/modules`, { allowedModuleIds }),
+  getAdmins: (slug) => api.get(`/api/v1/tenant/${slug}/admins`),
+  addAdmin: (slug, userId, role) => api.post(`/api/v1/tenant/${slug}/admins`, { userId, role }),
+  removeAdmin: (slug, userId) => api.delete(`/api/v1/tenant/${slug}/admins/${userId}`),
+};
+
+// ── Community Roles API ────────────────────────────────────────────
+export const rolesApi = {
+  list: (communityId) => api.get(`/api/v1/admin/${communityId}/interaction/roles`),
+  create: (communityId, data) => api.post(`/api/v1/admin/${communityId}/interaction/roles`, data),
+  update: (communityId, roleId, data) => api.put(`/api/v1/admin/${communityId}/interaction/roles/${roleId}`, data),
+  delete: (communityId, roleId) => api.delete(`/api/v1/admin/${communityId}/interaction/roles/${roleId}`),
+};
+
+// ── Channel Permissions API ────────────────────────────────────────
+export const channelPermissionsApi = {
+  getOverrides: (communityId, channelId) => api.get(`/api/v1/admin/${communityId}/interaction/channels/${channelId}/permissions`),
+  updateOverrides: (communityId, channelId, overrides) => api.put(`/api/v1/admin/${communityId}/interaction/channels/${channelId}/permissions`, { overrides }),
+};
+
+// ── Superadmin Tenant API ──────────────────────────────────────────
+export const superadminTenantApi = {
+  list: (params) => api.get('/api/v1/superadmin/tenants', { params }),
+  create: (data) => api.post('/api/v1/superadmin/tenants', data),
+  update: (id, data) => api.put(`/api/v1/superadmin/tenants/${id}`, data),
+  delete: (id) => api.delete(`/api/v1/superadmin/tenants/${id}`),
 };

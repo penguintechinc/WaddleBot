@@ -1,5 +1,5 @@
 #!/bin/bash
-# WaddleBot OpenWhisk Integration Test
+# Waddles OpenWhisk Integration Test
 # Tests the full flow: test script → openwhisk-action module → OpenWhisk → response
 #
 # Usage: ./scripts/test-openwhisk.sh
@@ -180,7 +180,7 @@ verify_response() {
 main() {
     echo ""
     echo "╔══════════════════════════════════════════════════════════════════════════════╗"
-    echo "║              WaddleBot OpenWhisk Integration Test                            ║"
+    echo "║              Waddles OpenWhisk Integration Test                            ║"
     echo "╚══════════════════════════════════════════════════════════════════════════════╝"
     echo ""
 

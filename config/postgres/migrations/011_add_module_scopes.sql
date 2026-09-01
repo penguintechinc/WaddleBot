@@ -1,7 +1,7 @@
 -- Migration: Add Module Scopes Table
 -- Description: Creates table for storing OAuth-like scope permissions for modules
 -- Dependencies: None
--- Author: WaddleBot Team
+-- Author: Waddles Team
 -- Date: 2025-12-15
 
 -- Create module_scopes table for scope-based permissions
@@ -58,8 +58,7 @@ ON revoked_tokens(jti);
 
 -- Index for cleanup of expired revocations
 CREATE INDEX IF NOT EXISTS idx_revoked_tokens_expires
-ON revoked_tokens(expires_at)
-WHERE expires_at < CURRENT_TIMESTAMP;
+ON revoked_tokens(expires_at);
 
 -- Create table for audit log of scope changes
 CREATE TABLE IF NOT EXISTS module_scope_audit (
@@ -191,10 +190,4 @@ INSERT INTO module_scopes (community_id, module_name, scope, granted_by_user_id)
 ON CONFLICT (community_id, module_name, scope) DO NOTHING;
 */
 
--- Grant permissions to application user
-GRANT SELECT, INSERT, UPDATE, DELETE ON module_scopes TO waddlebot_dev;
-GRANT SELECT, INSERT, DELETE ON revoked_tokens TO waddlebot_dev;
-GRANT SELECT, INSERT ON module_scope_audit TO waddlebot_dev;
-GRANT USAGE, SELECT ON SEQUENCE module_scopes_id_seq TO waddlebot_dev;
-GRANT USAGE, SELECT ON SEQUENCE revoked_tokens_id_seq TO waddlebot_dev;
-GRANT USAGE, SELECT ON SEQUENCE module_scope_audit_id_seq TO waddlebot_dev;
+-- Note: Permissions are granted to scoped roles in 031_scoped_database_users.sql

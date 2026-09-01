@@ -21,6 +21,13 @@ from flask_core import (  # noqa: E402
     success_response,
     error_response,
 )
+from flask_core.authz import require_scope  # noqa: E402
+from flask_core.feature_flags import feature_enabled  # noqa: E402
+from flask_core.tenancy import (  # noqa: E402
+    DEFAULT_TENANT_SLUG,
+    get_tenant_context,
+    tenant_middleware,
+)
 from config import Config  # noqa: E402
 from services.twitch_service import TwitchService  # noqa: E402
 from services.shoutout_service import ShoutoutService  # noqa: E402
@@ -96,6 +103,18 @@ async def status():
 
 
 @api_bp.route('/shoutout', methods=['POST'])
+# regression: tenant-isolation audit 2026-08-30 -- tenant_middleware was
+# missing here, so get_tenant_context(request) always returned None and
+# every request silently ran as DEFAULT_TENANT_SLUG with no auth. Must be
+# the outermost decorator (security.md: tenant before scope/handler logic)
+# so an invalid/missing JWT 401s before async_endpoint or the handler body
+# ever run.
+@tenant_middleware
+# HTTP-layer scope enforcement -- bot_module/features.py's "bot.shoutout"
+# Feature contract declares requires_scopes == {"bot.command:write"}; this
+# wires that declaration up to an actual 403 rather than leaving it
+# unenforced.
+@require_scope("bot.command:write")
 @async_endpoint
 async def create_shoutout():
     """
@@ -110,6 +129,14 @@ async def create_shoutout():
 
     Returns shoutout message and metadata.
     """
+    # v3 Feature gate (bot.shoutout / waddles.bot.shoutout, free tier). The
+    # other 3 Bot Features (bot.commands, bot.connectors, bot.interactions)
+    # follow this identical one-line guard at their own handler entry points.
+    tenant_ctx = get_tenant_context(request)
+    tenant_slug = tenant_ctx.tenant_slug if tenant_ctx is not None else DEFAULT_TENANT_SLUG
+    if not await feature_enabled("waddles.bot.shoutout", tenant=tenant_slug):
+        return error_response("shoutout is not available", status_code=404)
+
     try:
         data = await request.get_json()
 

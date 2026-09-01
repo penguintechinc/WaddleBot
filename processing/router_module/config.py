@@ -47,7 +47,9 @@ class Config:
     OPENWHISK_NAMESPACE = os.getenv('OPENWHISK_NAMESPACE', 'waddlebot')
 
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
-    SECRET_KEY = os.getenv('SECRET_KEY', 'change-me-in-production')
+    # Use the same signing key consumed by Hub and downstream gRPC services.
+    # SECRET_KEY remains a compatibility alias for older deployments.
+    SECRET_KEY = os.getenv('JWT_SECRET') or os.getenv('SECRET_KEY')
 
     # Hub integration for activity tracking
     HUB_API_URL = os.getenv('HUB_API_URL', 'http://hub-module:8060')
@@ -59,6 +61,9 @@ class Config:
 
     # Workflow core module integration
     WORKFLOW_CORE_URL = os.getenv('WORKFLOW_CORE_URL', 'http://workflow-core:8070')
+
+    # Security core module (for content filtering)
+    SECURITY_CORE_URL = os.getenv('SECURITY_CORE_URL', 'http://security-core:8041')
 
     # Browser source module (for captions)
     BROWSER_SOURCE_URL = os.getenv('BROWSER_SOURCE_URL', 'http://browser-source:8050')
@@ -113,6 +118,8 @@ class Config:
     BROWSER_SOURCE_GRPC_HOST = os.getenv('BROWSER_SOURCE_GRPC_HOST', 'browser-source:50050')
     IDENTITY_GRPC_HOST = os.getenv('IDENTITY_GRPC_HOST', 'identity-core:50030')
     HUB_GRPC_HOST = os.getenv('HUB_GRPC_HOST', 'hub:50060')
+    TRANSLATE_GRPC_HOST = os.getenv('TRANSLATE_GRPC_HOST', 'interactive-translate:50033')
+    TRANSLATE_API_URL = os.getenv('TRANSLATE_API_URL', 'http://interactive-translate:8033')
 
     # gRPC settings
     GRPC_KEEPALIVE_TIME_MS = int(os.getenv('GRPC_KEEPALIVE_TIME_MS', '30000'))
@@ -145,18 +152,18 @@ _db_name = Config.DATABASE_NAME
 if _db_password:
     # URL-encode password to handle special characters like / + = etc.
     _encoded_db_password = quote_plus(_db_password)
-    Config.DATABASE_URL = f"postgresql://{_db_user}:{_encoded_db_password}@{_db_host}:{_db_port}/{_db_name}"
+    Config.DATABASE_URL = f"postgres://{_db_user}:{_encoded_db_password}@{_db_host}:{_db_port}/{_db_name}"
 else:
-    Config.DATABASE_URL = f"postgresql://{_db_user}@{_db_host}:{_db_port}/{_db_name}"
+    Config.DATABASE_URL = f"postgres://{_db_user}@{_db_host}:{_db_port}/{_db_name}"
 
 # Compute READ_REPLICA_URL if configured
 _replica_host = Config.READ_REPLICA_HOST
 _replica_port = Config.READ_REPLICA_PORT
 if _replica_host:
     if _db_password:
-        Config.READ_REPLICA_URL = f"postgresql://{_db_user}:{_encoded_db_password}@{_replica_host}:{_replica_port}/{_db_name}"
+        Config.READ_REPLICA_URL = f"postgres://{_db_user}:{_encoded_db_password}@{_replica_host}:{_replica_port}/{_db_name}"
     else:
-        Config.READ_REPLICA_URL = f"postgresql://{_db_user}@{_replica_host}:{_replica_port}/{_db_name}"
+        Config.READ_REPLICA_URL = f"postgres://{_db_user}@{_replica_host}:{_replica_port}/{_db_name}"
 else:
     Config.READ_REPLICA_URL = ''
 

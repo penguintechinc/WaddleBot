@@ -1,7 +1,7 @@
-# Prometheus Configuration for WaddleBot
+# Prometheus Configuration for Waddles
 # =======================================
 #
-# This configuration sets up Prometheus to scrape metrics from all WaddleBot services.
+# This configuration sets up Prometheus to scrape metrics from all Waddles services.
 #
 # Usage:
 #   docker run -p 9090:9090 -v $(pwd)/prometheus.yml:/etc/prometheus/prometheus.yml prom/prometheus

@@ -37,9 +37,15 @@ async def is_premium(community_id: str, request_domain: str) -> bool:
     Returns:
         True if premium, False otherwise
     """
-    # waddlebot.penguintech.io always gets premium
-    if "waddlebot.penguintech.io" in request_domain.lower():
-        logger.info(f"Premium granted for waddlebot.penguintech.io domain")
+    # Known beta/cloud hostnames always get premium (no license key required)
+    PREMIUM_BYPASS_DOMAINS = {
+        "waddlebot.penguintech.io",
+        "waddles.penguintech.cloud",
+        "waddles.penguincloud.io",
+    }
+    domain_lower = request_domain.lower()
+    if any(d in domain_lower for d in PREMIUM_BYPASS_DOMAINS):
+        logger.info(f"Premium granted for bypass domain: {request_domain}")
         return True
     
     # Development mode: all premium

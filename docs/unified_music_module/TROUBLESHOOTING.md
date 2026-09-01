@@ -782,4 +782,4 @@ curl "https://www.googleapis.com/youtube/v3/videos?id=dQw4w9WgXcQ&key=$YOUTUBE_A
 
 **Last Updated**: 2025-12-16
 **Version**: 1.0.0
-**Maintainer**: WaddleBot Development Team
+**Maintainer**: Waddles Development Team

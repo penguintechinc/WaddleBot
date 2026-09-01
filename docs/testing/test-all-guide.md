@@ -1,4 +1,4 @@
-# WaddleBot Comprehensive Test Suite Guide
+# Waddles Comprehensive Test Suite Guide
 
 ## Overview
 
@@ -293,4 +293,4 @@ LOG_DIR="/my/custom/path/waddlebot-tests-${TIMESTAMP}"
 ---
 **Last Updated:** 2025-12-19
 **Script Version:** 1.0.0
-**Maintained by:** WaddleBot Engineering Team
+**Maintained by:** Waddles Engineering Team

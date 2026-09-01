@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
+import { KeyIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline';
 import { adminApi } from '../../services/api';
 
 function AdminMembers() {
@@ -9,6 +10,13 @@ function AdminMembers() {
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState(null);
   const [search, setSearch] = useState('');
+
+  // Reset password modal state
+  const [resetModal, setResetModal] = useState(null); // { member }
+  const [tempPassword, setTempPassword] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetError, setResetError] = useState('');
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     async function fetchMembers() {
@@ -36,6 +44,28 @@ function AdminMembers() {
     }
   };
 
+  const handleResetPassword = async (member) => {
+    setResetModal({ member });
+    setTempPassword('');
+    setResetError('');
+    setCopied(false);
+    setResetLoading(true);
+    try {
+      const res = await adminApi.generateTempPassword(communityId, { userId: member.id });
+      setTempPassword(res.data?.temp_password || res.data?.password || '');
+    } catch (err) {
+      setResetError(err?.response?.data?.error || 'Failed to generate temporary password.');
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  const handleCopyPassword = () => {
+    navigator.clipboard.writeText(tempPassword);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -57,6 +87,7 @@ function AdminMembers() {
               <th>Role</th>
               <th>Rep</th>
               <th>Joined</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -102,6 +133,16 @@ function AdminMembers() {
                   <td className="text-sm text-navy-400">
                     {new Date(member.joinedAt).toLocaleDateString()}
                   </td>
+                  <td>
+                    <button
+                      onClick={() => handleResetPassword(member)}
+                      title="Reset Password"
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 bg-navy-800 border border-navy-600 text-sky-200 rounded-lg hover:bg-navy-700 text-xs transition-colors"
+                    >
+                      <KeyIcon className="w-3.5 h-3.5" />
+                      Reset Password
+                    </button>
+                  </td>
                 </tr>
               ))
             )}
@@ -132,6 +173,54 @@ function AdminMembers() {
           </div>
         )}
       </div>
+      {/* Reset Password Modal */}
+      {resetModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-navy-900 border border-navy-700 rounded-xl p-6 w-full max-w-md mx-4">
+            <h2 className="text-lg font-semibold text-sky-100 mb-1">Reset Password</h2>
+            <p className="text-sm text-navy-400 mb-4">
+              Generating a temporary password for <span className="text-sky-200">{resetModal.member.username}</span>.
+              Share this with them to allow a one-time login.
+            </p>
+
+            {resetLoading && (
+              <div className="flex items-center justify-center py-6">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gold-400" />
+              </div>
+            )}
+
+            {tempPassword && !resetLoading && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 bg-navy-800 border border-navy-600 rounded-lg px-3 py-2">
+                  <span className="font-mono text-gold-400 flex-1 text-sm break-all">{tempPassword}</span>
+                  <button
+                    onClick={handleCopyPassword}
+                    className="shrink-0 p-1.5 text-sky-400 hover:text-sky-200 transition-colors"
+                    title="Copy to clipboard"
+                  >
+                    <ClipboardDocumentIcon className="w-4 h-4" />
+                  </button>
+                </div>
+                {copied && <p className="text-green-400 text-xs">Copied to clipboard!</p>}
+                <p className="text-xs text-navy-500">
+                  This password is valid for a single login. The user should change it immediately.
+                </p>
+              </div>
+            )}
+
+            {resetError && <p className="text-red-400 text-sm mt-2">{resetError}</p>}
+
+            <div className="flex justify-end mt-6">
+              <button
+                onClick={() => setResetModal(null)}
+                className="px-4 py-2 bg-navy-800 border border-navy-600 text-sky-200 rounded-lg hover:bg-navy-700 transition-colors text-sm"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -10,7 +10,7 @@ Comprehensive validation for workflow definitions including:
 - Complexity limits (max nodes, depth)
 - Security validation (malicious code patterns)
 
-Follows WaddleBot patterns with comprehensive logging and error handling.
+Follows Waddles patterns with comprehensive logging and error handling.
 """
 
 import logging

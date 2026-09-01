@@ -6,7 +6,7 @@ export default function Home() {
       {/* Navigation */}
       <nav className="flex justify-between items-center p-6 bg-black/20 backdrop-blur-sm sticky top-0 z-50">
         <div className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-          WaddleBot
+          Waddles
         </div>
         <div className="hidden md:flex gap-8">
           <Link href="/features" className="hover:text-blue-300 transition-colors">Features</Link>
@@ -113,7 +113,7 @@ export default function Home() {
           <div className="max-w-6xl mx-auto">
             <div className="text-center mb-16">
               <h2 className="text-4xl md:text-5xl font-bold mb-6">
-                Meet <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">WaddleBot</span>
+                Meet <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">Waddles</span>
               </h2>
               <p className="text-xl text-gray-300 max-w-3xl mx-auto">
                 Open source, self-hosted community management platform with enterprise-grade reliability and unlimited customization
@@ -240,7 +240,7 @@ export default function Home() {
                   </div>
                 </div>
                 <p className="text-gray-300 mb-4">
-                  &ldquo;WaddleBot transformed our community management. We went from spending 20 hours a week on moderation to just 3 hours, while our engagement increased 45%.&rdquo;
+                  &ldquo;Waddles transformed our community management. We went from spending 20 hours a week on moderation to just 3 hours, while our engagement increased 45%.&rdquo;
                 </p>
                 <div className="text-sm text-blue-400">- Sarah Chen, Community Manager</div>
               </div>
@@ -289,7 +289,7 @@ export default function Home() {
               Ready to Transform Your Community?
             </h2>
             <p className="text-xl mb-8 text-blue-100">
-              Join thousands of community managers who&rsquo;ve already upgraded to WaddleBot
+              Join thousands of community managers who&rsquo;ve already upgraded to Waddles
             </p>
             <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
               <a
@@ -324,7 +324,7 @@ export default function Home() {
           <div className="grid md:grid-cols-4 gap-8">
             <div>
               <div className="text-2xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-                WaddleBot
+                Waddles
               </div>
               <p className="text-gray-400 mb-4">
                 The future of multi-platform community management
@@ -361,7 +361,7 @@ export default function Home() {
             </div>
           </div>
           <div className="border-t border-white/10 mt-12 pt-8 text-center text-gray-400">
-            <p>© 2024 WaddleBot. All rights reserved. Built for the future of community management.</p>
+            <p>© 2024 Waddles. All rights reserved. Built for the future of community management.</p>
           </div>
         </div>
       </footer>

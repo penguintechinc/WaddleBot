@@ -6,7 +6,7 @@ export default function Contact() {
       {/* Navigation */}
       <nav className="flex justify-between items-center p-6 bg-black/20 backdrop-blur-sm sticky top-0 z-50">
         <Link href="/" className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-          WaddleBot
+          Waddles
         </Link>
         <div className="hidden md:flex gap-8">
           <Link href="/features" className="hover:text-blue-300 transition-colors">Features</Link>
@@ -29,7 +29,7 @@ export default function Contact() {
             Get in Touch
           </h1>
           <p className="text-xl md:text-2xl mb-8 text-gray-200">
-            Ready to transform your community management? Let&rsquo;s talk about how WaddleBot can help.
+            Ready to transform your community management? Let&rsquo;s talk about how Waddles can help.
           </p>
         </div>
       </section>
@@ -195,7 +195,7 @@ export default function Contact() {
                   className="w-4 h-4 text-blue-600 bg-white/10 border border-white/20 rounded focus:ring-blue-500"
                 />
                 <label htmlFor="newsletter" className="text-sm text-gray-300">
-                  I&rsquo;d like to receive updates about WaddleBot features and community news
+                  I&rsquo;d like to receive updates about Waddles features and community news
                 </label>
               </div>
 
@@ -269,7 +269,7 @@ export default function Contact() {
               We&rsquo;re a Global Team
             </h2>
             <p className="text-xl text-gray-300 mb-12">
-              While WaddleBot is open source and distributed, our core team operates remotely with contributors worldwide.
+              While Waddles is open source and distributed, our core team operates remotely with contributors worldwide.
             </p>
             
             <div className="grid md:grid-cols-3 gap-8">
@@ -301,7 +301,7 @@ export default function Contact() {
           <div className="grid md:grid-cols-4 gap-8">
             <div>
               <Link href="/" className="text-2xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent block">
-                WaddleBot
+                Waddles
               </Link>
               <p className="text-gray-400 mb-4">
                 The future of multi-platform community management
@@ -341,7 +341,7 @@ export default function Contact() {
             </div>
           </div>
           <div className="border-t border-white/10 mt-12 pt-8 text-center text-gray-400">
-            <p>© 2024 WaddleBot. All rights reserved. Built for the future of community management.</p>
+            <p>© 2024 Waddles. All rights reserved. Built for the future of community management.</p>
           </div>
         </div>
       </footer>

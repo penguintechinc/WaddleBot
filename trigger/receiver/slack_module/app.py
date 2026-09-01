@@ -146,6 +146,32 @@ async def slack_shortcuts():
     return await slack_handler.handle(request)
 
 
+internal_bp = Blueprint('internal', __name__, url_prefix='/internal')
+
+
+@internal_bp.route('/relay', methods=['POST'])
+async def internal_relay():
+    """Receive relayed messages from hub and send to Slack channels"""
+    from quart import jsonify
+    if not slack_bolt:
+        return jsonify({"success": False, "error": "Slack not configured"}), 503
+
+    data = await request.get_json()
+    channel_id = data.get('platformChannelId')
+    content = data.get('content', {})
+    author = data.get('author', {})
+    message_type = data.get('messageType', 'message')
+
+    if not channel_id:
+        return jsonify({"success": False, "error": "platformChannelId required"}), 400
+
+    ok = await slack_bolt.send_to_channel(channel_id, content, author, message_type)
+    if ok:
+        return jsonify({"success": True})
+    return jsonify({"success": False, "error": "Failed to send"}), 500
+
+
+app.register_blueprint(internal_bp)
 app.register_blueprint(api_bp)
 app.register_blueprint(slack_bp)
 

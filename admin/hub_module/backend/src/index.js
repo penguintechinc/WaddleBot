@@ -2,6 +2,7 @@
  * Hub Module - Express Application Entry Point
  * Unified Community Portal and Admin Interface
  */
+import crypto from 'crypto';
 import express from 'express';
 import { createServer } from 'http';
 import cors from 'cors';
@@ -25,6 +26,10 @@ import { setupWebSocket } from './websocket/index.js';
  * Initialize database tables and default admin
  */
 async function initializeDatabase() {
+  if (process.env.SKIP_DB_INIT === 'true') {
+    logger.system('SKIP_DB_INIT=true — skipping Node.js schema creation (Alembic owns schema)');
+    return;
+  }
   try {
     // Create hub_admins table if not exists
     await query(`
@@ -143,6 +148,18 @@ async function initializeDatabase() {
       )
     `);
 
+    // Create community_type enum if not exists
+    await query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'community_type') THEN
+          CREATE TYPE community_type AS ENUM (
+            'shared_interest_group', 'gaming', 'creator', 'corporate', 'other'
+          );
+        END IF;
+      END $$
+    `);
+
     // Create communities table if not exists
     await query(`
       CREATE TABLE IF NOT EXISTS communities (
@@ -157,6 +174,8 @@ async function initializeDatabase() {
         platform_server_id VARCHAR(255),
         owner_id VARCHAR(255),
         owner_name VARCHAR(255),
+        community_type community_type NOT NULL DEFAULT 'creator',
+        join_mode VARCHAR(50) DEFAULT 'open',
         member_count INTEGER DEFAULT 0,
         is_active BOOLEAN DEFAULT true,
         is_public BOOLEAN DEFAULT true,
@@ -175,14 +194,17 @@ async function initializeDatabase() {
         id SERIAL PRIMARY KEY,
         community_id INTEGER REFERENCES communities(id) ON DELETE CASCADE,
         user_id VARCHAR(255),
-        platform VARCHAR(50) NOT NULL,
+        platform VARCHAR(50),
         platform_user_id VARCHAR(255),
         display_name VARCHAR(255),
         avatar_url TEXT,
+        bio TEXT,
+        social_links JSONB DEFAULT '{}',
         role VARCHAR(50) DEFAULT 'member',
         reputation INTEGER DEFAULT 600,
         is_active BOOLEAN DEFAULT true,
         joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        left_at TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(community_id, platform, platform_user_id)
       )
@@ -712,6 +734,69 @@ If you have questions about our cookie policy, please contact us at privacy@wadd
       logger.system('Default cookie policy created');
     }
 
+    // Add 'support' to community_type enum if not exists
+    await query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = 'support' AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'community_type')) THEN
+          ALTER TYPE community_type ADD VALUE IF NOT EXISTS 'support';
+        END IF;
+      END $$
+    `);
+
+    // Support ticket system tables
+    await query(`
+      CREATE TABLE IF NOT EXISTS support_ticket_categories (
+        id SERIAL PRIMARY KEY,
+        community_id INTEGER NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        sort_order INTEGER DEFAULT 0,
+        is_active BOOLEAN DEFAULT true,
+        form_fields JSONB DEFAULT '[]',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await query(`
+      CREATE TABLE IF NOT EXISTS support_tickets (
+        id SERIAL PRIMARY KEY,
+        community_id INTEGER NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+        category_id INTEGER REFERENCES support_ticket_categories(id),
+        ticket_number VARCHAR(20) NOT NULL,
+        subject VARCHAR(500) NOT NULL,
+        description TEXT,
+        status VARCHAR(20) NOT NULL DEFAULT 'open',
+        priority VARCHAR(20) NOT NULL DEFAULT 'medium',
+        reporter_user_id INTEGER,
+        reporter_name VARCHAR(255),
+        reporter_email VARCHAR(255),
+        assignee_user_id INTEGER,
+        custom_fields JSONB DEFAULT '{}',
+        resolved_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await query(`
+      CREATE TABLE IF NOT EXISTS support_ticket_comments (
+        id SERIAL PRIMARY KEY,
+        ticket_id INTEGER NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
+        author_user_id INTEGER,
+        author_name VARCHAR(255),
+        content TEXT NOT NULL,
+        is_internal BOOLEAN DEFAULT false,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await query('CREATE INDEX IF NOT EXISTS idx_support_tickets_community ON support_tickets(community_id)');
+    await query('CREATE INDEX IF NOT EXISTS idx_support_tickets_status ON support_tickets(status)');
+    await query('CREATE INDEX IF NOT EXISTS idx_support_tickets_assignee ON support_tickets(assignee_user_id)');
+    await query('CREATE INDEX IF NOT EXISTS idx_support_tickets_reporter ON support_tickets(reporter_user_id)');
+    await query('CREATE INDEX IF NOT EXISTS idx_support_ticket_comments_ticket ON support_ticket_comments(ticket_id)');
+
     logger.system('Database initialized successfully');
   } catch (err) {
     logger.error('Database initialization failed', { error: err.message });
@@ -755,7 +840,18 @@ app.use(helmet({
 app.use(cors({
   origin: config.cors.origin,
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
+  allowedHeaders: ['Authorization', 'Content-Type', 'X-API-Key', 'X-Request-ID', 'X-Requested-With', 'Accept', 'Origin'],
+  exposedHeaders: ['X-Request-ID'],
 }));
+
+// Correlation ID (replaces Kong correlation-id plugin)
+app.use((req, res, next) => {
+  const requestId = req.headers['x-request-id'] || crypto.randomUUID();
+  req.headers['x-request-id'] = requestId;
+  res.setHeader('X-Request-ID', requestId);
+  next();
+});
 
 // Rate limiting
 const limiter = rateLimit({

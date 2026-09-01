@@ -22,13 +22,12 @@ spec:
         app.kubernetes.io/component: slack-collector
         tier: trigger
     spec:
-      {{- with .Values.imagePullSecrets }}
-      imagePullSecrets:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+      {{- include "waddlebot.imagePullSecrets" . | nindent 6 }}
+      initContainers:
+      {{- include "waddlebot.dbMigrateInitContainer" . | nindent 8 }}
       containers:
         - name: slack-collector
-          image: "{{ .Values.global.imageRegistry }}/{{ .Values.modules.collectors.slack.image }}:{{ .Values.modules.collectors.slack.tag | default "latest" }}"
+          image: "{{ .Values.global.imageRegistry }}/{{ .Values.modules.collectors.slack.image }}:{{ .Values.modules.collectors.slack.imageTag | default .Values.global.imageTag }}"
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
           ports:
             - name: http

@@ -4,6 +4,8 @@ Content Filter Service - Filters blocked words and regex patterns
 import re
 from typing import Optional, Dict, Tuple, List
 
+from data.profanity_wordlist import DEFAULT_PROFANITY_WORDS
+
 
 class ContentFilter:
     """Content filtering for blocked words and patterns."""
@@ -29,8 +31,13 @@ class ContentFilter:
             if not config['content_filter_enabled']:
                 return (False, None)
 
+            # Merge default profanity list if enabled
+            words = list(config['blocked_words'])
+            if config.get('use_default_profanity_list', False):
+                words = words + DEFAULT_PROFANITY_WORDS
+
             # Check blocked words
-            for word in config['blocked_words']:
+            for word in words:
                 if word.lower() in message.lower():
                     await self._log_filter_match(
                         community_id=community_id,
@@ -64,7 +71,8 @@ class ContentFilter:
     async def _get_config(self, community_id: int) -> Dict:
         """Get content filter config."""
         result = self.dal.executesql(
-            """SELECT content_filter_enabled, blocked_words, blocked_patterns, filter_action
+            """SELECT content_filter_enabled, blocked_words, blocked_patterns,
+                      filter_action, use_default_profanity_list
                FROM security_config
                WHERE community_id = %s""",
             [community_id]
@@ -75,7 +83,8 @@ class ContentFilter:
                 'content_filter_enabled': True,
                 'blocked_words': [],
                 'blocked_patterns': [],
-                'filter_action': 'delete'
+                'filter_action': 'delete',
+                'use_default_profanity_list': False,
             }
 
         row = result[0]
@@ -83,7 +92,8 @@ class ContentFilter:
             'content_filter_enabled': row[0],
             'blocked_words': row[1] or [],
             'blocked_patterns': row[2] or [],
-            'filter_action': row[3]
+            'filter_action': row[3],
+            'use_default_profanity_list': row[4] if row[4] is not None else False,
         }
 
     async def add_blocked_words(

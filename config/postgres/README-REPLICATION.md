@@ -1,6 +1,6 @@
-# PostgreSQL Read Replica Configuration for WaddleBot
+# PostgreSQL Read Replica Configuration for Waddles
 
-This directory contains production-ready PostgreSQL replication configuration for scaling WaddleBot's database layer.
+This directory contains production-ready PostgreSQL replication configuration for scaling Waddles's database layer.
 
 ## Overview
 
@@ -67,7 +67,7 @@ REPLICA_DATA_DIR=/custom/path REPLICA_SLOT_NAME=my_replica ./replica-setup.sh lo
 ### 3. `read_replica.py` (Flask Core Library)
 Python library for intelligent read/write query routing with health checking.
 
-**Location:** `/home/penguin/code/WaddleBot/libs/flask_core/flask_core/read_replica.py`
+**Location:** `/home/penguin/code/Waddles/libs/flask_core/flask_core/read_replica.py`
 
 **Features:**
 - Automatic replica health checking
@@ -464,4 +464,4 @@ volumes:
 
 - [PostgreSQL Documentation: Streaming Replication](https://www.postgresql.org/docs/current/warm-standby.html)
 - [PostgreSQL High Availability](https://www.postgresql.org/docs/current/different-replication-setup.html)
-- [WaddleBot Project Documentation](../../docs/)
+- [Waddles Project Documentation](../../docs/)

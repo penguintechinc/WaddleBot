@@ -5,7 +5,9 @@ import { Router } from 'express';
 import multer from 'multer';
 import * as identityController from '../controllers/identityController.js';
 import * as profileController from '../controllers/profileController.js';
+import PlatformConfigController from '../controllers/platformConfigController.js';
 import { requireAuth } from '../middleware/auth.js';
+import * as dataPrivacyController from '../controllers/dataPrivacyController.js';
 import { validators, validateRequest } from '../middleware/validation.js';
 
 const router = Router();
@@ -33,6 +35,13 @@ router.post('/profile/avatar', upload.single('avatar'), profileController.upload
 router.delete('/profile/avatar', profileController.deleteAvatar);
 router.get('/linked-platforms', profileController.getMyLinkedPlatforms);
 
+// User OAuth credential management (authenticated user, own credentials only)
+router.get('/oauth/credentials', PlatformConfigController.getMyCredentials);
+router.post('/oauth/credentials', PlatformConfigController.createMyCredential);
+router.put('/oauth/credentials/:id', PlatformConfigController.updateMyCredential);
+router.delete('/oauth/credentials/:id', PlatformConfigController.deleteMyCredential);
+router.post('/oauth/credentials/:id/test', PlatformConfigController.testCredential);
+
 // Identity linking routes
 router.get('/identities', identityController.getLinkedIdentities);
 router.get('/identities/primary', identityController.getPrimaryIdentity);
@@ -45,5 +54,9 @@ router.put('/identities/primary',
 router.post('/identities/link/:platform', identityController.startIdentityLink);
 router.get('/identities/link/:platform/callback', identityController.identityLinkCallback);
 router.delete('/identities/:platform', identityController.unlinkIdentity);
+
+// GDPR: data deletion (auth already required at top via router.use(requireAuth))
+router.get('/me/data', dataPrivacyController.exportUserData);
+router.delete('/me/data', dataPrivacyController.requestDataDeletion);
 
 export default router;

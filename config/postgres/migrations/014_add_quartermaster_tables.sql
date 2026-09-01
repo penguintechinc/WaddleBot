@@ -1,6 +1,6 @@
 -- Migration 014: Add Quartermaster (Inventory) System
 -- Description: Implements inventory management system with item tracking, checkouts, and audit logging
--- Author: WaddleBot Team
+-- Author: Waddles Team
 -- Date: 2025-12-15
 
 -- =============================================================================
@@ -167,7 +167,7 @@ ON inventory_checkouts(user_id, community_id, status);
 -- Index for overdue items
 CREATE INDEX IF NOT EXISTS idx_inventory_checkouts_overdue
 ON inventory_checkouts(community_id, due_at)
-WHERE status = 'active' AND due_at < NOW();
+WHERE status = 'active';
 
 -- Index for checkout history
 CREATE INDEX IF NOT EXISTS idx_inventory_checkouts_history

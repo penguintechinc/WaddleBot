@@ -1,5 +1,5 @@
 """
-Setup configuration for WaddleBot Flask Core Library
+Setup configuration for Waddles Flask Core Library
 """
 
 from setuptools import setup, find_packages
@@ -7,15 +7,25 @@ from setuptools import setup, find_packages
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
-with open("requirements.txt", "r", encoding="utf-8") as fh:
-    requirements = [line.strip() for line in fh if line.strip() and not line.startswith("#")]
+# install_requires must stay abstract (PEP 508 specifiers only) -- read the
+# loose requirements.in, not the hash-annotated requirements.txt. The hashed
+# requirements.txt is for `pip install -r --require-hashes` reproducibility
+# only; its `--hash=...` continuation lines are not valid requirement
+# specifiers and break setuptools' install_requires validation.
+with open("requirements.in", "r", encoding="utf-8") as fh:
+    requirements = [
+        line.split("#", 1)[0].strip()
+        for line in fh
+        if line.strip() and not line.strip().startswith("#")
+    ]
+    requirements = [r for r in requirements if r]
 
 setup(
     name="waddlebot-flask-core",
     version="2.0.0",
-    author="WaddleBot Team",
+    author="Waddles Team",
     author_email="team@waddlebot.com",
-    description="Shared utilities for WaddleBot Flask/Quart modules",
+    description="Shared utilities for Waddles Flask/Quart modules",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/waddlebot/waddlebot",

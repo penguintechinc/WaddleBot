@@ -1,6 +1,6 @@
-# WaddleBot Attribution
+# Waddles Attribution
 
-This file acknowledges the libraries, contributors, reviewers, beta testers, and community members who have helped make WaddleBot possible.
+This file acknowledges the libraries, contributors, reviewers, beta testers, and community members who have helped make Waddles possible.
 
 ---
 
@@ -62,7 +62,7 @@ This file acknowledges the libraries, contributors, reviewers, beta testers, and
 ### Quartermaster (Inventory System)
 **Idea Contributor**: NicAtNight
 
-The Quartermaster module - WaddleBot's asset tracking and checkout system - was inspired by and named at the request of NicAtNight. This feature enables communities to:
+The Quartermaster module - Waddles's asset tracking and checkout system - was inspired by and named at the request of NicAtNight. This feature enables communities to:
 - Track community assets (in-game items, equipment, resources)
 - Manage checkouts with due dates and notifications
 - Integrate with community currency for checkout pricing
@@ -88,7 +88,9 @@ The Translation module - enabling real-time chat translation and caption overlay
 
 | Contributor | Contributions |
 |-------------|---------------|
-| *Be the first contributor!* | |
+| ArcherPupper | Logo design and initial project support |
+| TeoWulf | Initial architecture support |
+| thysw95 | Initial architecture support |
 
 ---
 
@@ -100,7 +102,7 @@ The Translation module - enabling real-time chat translation and caption overlay
 
 | Reviewer | Areas |
 |----------|-------|
-| *Be the first reviewer!* | |
+| Apollonaut | Initial reviewer and feedback on discord integration, recommended PyCord utilization instead of discordpy |
 
 ---
 
@@ -118,8 +120,8 @@ The Translation module - enabling real-time chat translation and caption overlay
 
 ## Special Thanks
 
-- The open-source community for the amazing libraries that make WaddleBot possible
-- All the streamers and communities who trust WaddleBot to enhance their streams
+- The open-source community for the amazing libraries that make Waddles possible
+- All the streamers and communities who trust Waddles to enhance their streams
 - Everyone who has reported bugs, suggested features, or spread the word
 
 ---
@@ -127,7 +129,7 @@ The Translation module - enabling real-time chat translation and caption overlay
 ## How to Get Credited
 
 ### Feature Ideas
-If you've contributed an idea or feature to WaddleBot:
+If you've contributed an idea or feature to Waddles:
 1. Open an issue on GitHub with your contribution details
 2. Include your preferred name/handle for attribution
 3. Describe the feature or idea you contributed
@@ -145,4 +147,26 @@ To become a beta tester:
 
 ---
 
-*Last updated: December 2025*
+*Last updated: February 2026*
+
+---
+
+---
+
+## Third-Party Attributions
+
+Third-party components used by WaddleBot that require attribution under their respective open-source licenses.
+
+---
+
+### AGPL-3.0 Licensed Components
+
+#### SearXNG
+
+| Field | Detail |
+|-------|--------|
+| **Project** | [https://github.com/searxng/searxng](https://github.com/searxng/searxng) |
+| **License** | AGPL-3.0 |
+| **Usage** | Self-hosted metasearch engine container, accessed via HTTP API for the Game Lookup sub-module (real-time web search for in-game data) |
+| **Modifications** | None (stock container image `searxng/searxng:latest`) |
+| **Source code** | Available at the project URL above |

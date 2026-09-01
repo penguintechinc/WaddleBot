@@ -1,14 +1,14 @@
-# WaddleBot Logging and Monitoring Documentation
+# Waddles Logging and Monitoring Documentation
 
 ## Overview
 
-WaddleBot implements comprehensive Authentication, Authorization, and Auditing (AAA) logging across all container modules to ensure security, compliance, and operational visibility. This document outlines the logging standards, implementation requirements, and monitoring strategies.
+Waddles implements comprehensive Authentication, Authorization, and Auditing (AAA) logging across all container modules to ensure security, compliance, and operational visibility. This document outlines the logging standards, implementation requirements, and monitoring strategies.
 
 ## Logging Requirements
 
 ### Universal Implementation
 
-**ALL WaddleBot container modules MUST implement comprehensive AAA logging.**
+**ALL Waddles container modules MUST implement comprehensive AAA logging.**
 
 ### Required Logging Outputs
 
@@ -155,7 +155,7 @@ from dataclasses import dataclass, asdict
 
 @dataclass
 class LogEvent:
-    """Structured log event for WaddleBot"""
+    """Structured log event for Waddles"""
     timestamp: str
     level: str
     module: str
@@ -173,8 +173,8 @@ class LogEvent:
     duration_ms: Optional[int] = None
     error_message: Optional[str] = None
 
-class WaddleBotLogger:
-    """Comprehensive logging system for WaddleBot modules"""
+class WaddlesLogger:
+    """Comprehensive logging system for Waddles modules"""
     
     def __init__(self, module_name: str, module_version: str):
         self.module_name = module_name
@@ -259,7 +259,7 @@ def require_permission(required_permission: str):
 #### ELK Stack Integration
 
 ```yaml
-# Filebeat configuration for WaddleBot logs
+# Filebeat configuration for Waddles logs
 filebeat.inputs:
 - type: log
   enabled: true
@@ -536,7 +536,7 @@ tail -f /var/log/waddlebotlog/*/*.log | grep ERROR
 
 ### Module Implementation
 
-- [ ] Implement WaddleBotLogger class
+- [ ] Implement WaddlesLogger class
 - [ ] Configure all five log categories (AUTH, AUTHZ, AUDIT, ERROR, SYSTEM)
 - [ ] Set up file rotation and retention
 - [ ] Implement decorator patterns for automatic logging
@@ -560,4 +560,4 @@ tail -f /var/log/waddlebotlog/*/*.log | grep ERROR
 - [ ] Establish incident response procedures
 - [ ] Schedule regular log review processes
 
-This comprehensive logging and monitoring system ensures WaddleBot maintains the highest standards of security, compliance, and operational visibility across all modules.
+This comprehensive logging and monitoring system ensures Waddles maintains the highest standards of security, compliance, and operational visibility across all modules.

@@ -1,14 +1,14 @@
-# WaddleBot Security Policy
+# Waddles Security Policy
 
 ## Overview
 
-WaddleBot is a critical infrastructure component for community management and chat automation. This document outlines our comprehensive security policy, vulnerability management process, and security update procedures to ensure the integrity, confidentiality, and availability of the platform and its users' data.
+Waddles is a critical infrastructure component for community management and chat automation. This document outlines our comprehensive security policy, vulnerability management process, and security update procedures to ensure the integrity, confidentiality, and availability of the platform and its users' data.
 
 ## 1. Vulnerability Disclosure & Reporting
 
 ### 1.1 Reporting Vulnerabilities
 
-We take security seriously and appreciate the security research community's efforts to help improve WaddleBot. If you discover a security vulnerability, please report it responsibly:
+We take security seriously and appreciate the security research community's efforts to help improve Waddles. If you discover a security vulnerability, please report it responsibly:
 
 **Reporting Channels:**
 - **Email**: security@waddlebot.io (preferred)
@@ -63,7 +63,7 @@ We take security seriously and appreciate the security research community's effo
 
 ### 2.1 Quarterly Security Reviews
 
-WaddleBot conducts comprehensive security reviews on a quarterly basis:
+Waddles conducts comprehensive security reviews on a quarterly basis:
 
 **Q1 Review (January-March)**
 - Dependency audit and updates
@@ -109,7 +109,7 @@ Critical vulnerabilities (CVSS >= 9.0) trigger emergency procedures:
 
 ### 3.1 Dependency Classification
 
-WaddleBot uses a mixed dependency strategy for optimal security and stability:
+Waddles uses a mixed dependency strategy for optimal security and stability:
 
 #### Security-Critical Packages (Pinned to Specific Versions)
 These packages are pinned to specific secure versions due to their critical security role:
@@ -357,16 +357,16 @@ jwt_keys:
 
 ## 7. Supported Versions
 
-WaddleBot maintains security support for:
+Waddles maintains security support for:
 
 - **Latest Release**: Full support (critical, high, medium, low vulnerabilities)
 - **Previous Major Release**: Security fixes only (critical, high vulnerabilities)
 - **Older Releases**: No support (encourage upgrades)
 
 **Version Support Example:**
-- WaddleBot v2.x: Full support
-- WaddleBot v1.x: Security fixes only
-- WaddleBot v0.x: No support
+- Waddles v2.x: Full support
+- Waddles v1.x: Security fixes only
+- Waddles v0.x: No support
 
 ## 8. Security Best Practices for Deployment
 
@@ -422,7 +422,7 @@ WaddleBot maintains security support for:
 
 ## 10. Compliance & Standards
 
-WaddleBot follows these security standards:
+Waddles follows these security standards:
 
 - **OWASP Top 10**: Mitigations for all items
 - **CWE Coverage**: Focus on CWE-89, CWE-79, CWE-200, CWE-306, CWE-798
@@ -431,7 +431,7 @@ WaddleBot follows these security standards:
 
 ## 11. Annual Security Review
 
-Every December, WaddleBot conducts a comprehensive security review:
+Every December, Waddles conducts a comprehensive security review:
 
 - **Coverage**: All systems, dependencies, and processes
 - **Assessment**: Vulnerability scans, penetration testing, code review

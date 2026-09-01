@@ -1,11 +1,11 @@
 # Getting Started Overview
 
-This section provides everything you need to get WaddleBot up and running in your environment. Whether you're setting up a development environment or deploying to production, we have guides to help you succeed.
+This section provides everything you need to get Waddles up and running in your environment. Whether you're setting up a development environment or deploying to production, we have guides to help you succeed.
 
 ## Choose Your Path
 
 === "🚀 Quick Start"
-    Perfect for trying out WaddleBot quickly:
+    Perfect for trying out Waddles quickly:
     
     - **Time**: 10-15 minutes
     - **Requirements**: Docker and Docker Compose
@@ -66,7 +66,7 @@ This section provides everything you need to get WaddleBot up and running in you
 
 ### Platform Prerequisites
 
-Before setting up WaddleBot, you'll need to create applications on the platforms you want to integrate:
+Before setting up Waddles, you'll need to create applications on the platforms you want to integrate:
 
 === "Discord"
     **Required:**
@@ -116,9 +116,9 @@ Use this flowchart to determine the best setup for your needs:
 
 ```mermaid
 flowchart TD
-    A[Starting WaddleBot Setup] --> B{What's your primary goal?}
+    A[Starting Waddles Setup] --> B{What's your primary goal?}
     
-    B -->|Try WaddleBot features| C[Development/Testing]
+    B -->|Try Waddles features| C[Development/Testing]
     B -->|Run for community| D[Production Use]
     B -->|Build modules| E[Module Development]
     
@@ -182,7 +182,7 @@ Set up community management:
     Most platforms (especially Twitch) require HTTPS endpoints for webhooks. For development, consider using ngrok or similar tools to expose your local server.
 
 !!! tip "Environment Variables"
-    WaddleBot uses environment variables extensively. Consider using a `.env` file or secret management system to organize your configuration.
+    Waddles uses environment variables extensively. Consider using a `.env` file or secret management system to organize your configuration.
 
 !!! note "Database Migrations"
     Each module manages its own database tables. Ensure your PostgreSQL user has CREATE TABLE permissions for automatic migrations.
@@ -192,4 +192,4 @@ Set up community management:
 - **Discord/Twitch/Slack Issues**: Check platform-specific documentation
 - **Setup Problems**: Review our [troubleshooting guide](deployment-guide.md#troubleshooting)
 - **Development Questions**: See [contributing guidelines](contributing.md)
-- **Bug Reports**: [GitHub Issues](https://github.com/WaddleBot/WaddleBot/issues)
+- **Bug Reports**: [GitHub Issues](https://github.com/Waddles/Waddles/issues)

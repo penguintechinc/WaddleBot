@@ -38,6 +38,7 @@ router.post(
   validators.array('fields', { min: 1 }),
   validators.text('view_visibility', { pattern: /^(public|registered|community|admins)$/, optional: true }),
   validators.text('submit_visibility', { pattern: /^(public|registered|community|admins)$/, optional: true }),
+  validators.text('results_visibility', { pattern: /^(community|registered|submitter_and_admins|admins)$/, optional: true }),
   validators.boolean('allow_anonymous', { optional: true }),
   validators.boolean('submit_once_per_user', { optional: true }),
   validateRequest,

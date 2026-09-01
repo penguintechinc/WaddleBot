@@ -1,1067 +1,255 @@
-# WaddleBot System Architecture
+# Waddles System Architecture
 
-**Version:** 1.0
-**Last Updated:** 2025-12-16
+**Architecture generation:** v3.0.x (alpha, `release/v3.0.X`)
+
+This is the reference architecture doc. For a quick orientation, see the [README](../README.md#architecture-8-containers).
+For the App Bundle authoring spec, see [`docs/plans/2026-08-31-app-bundle-sdk-design.md`](plans/2026-08-31-app-bundle-sdk-design.md).
 
 ## Table of Contents
 
-- [System Overview](#system-overview)
-- [Design Principles](#design-principles)
-- [Module Categories](#module-categories)
-- [Communication Patterns](#communication-patterns)
-- [Database Architecture](#database-architecture)
-- [Redis Architecture](#redis-architecture)
-- [Event Processing Flow](#event-processing-flow)
-- [High-Performance Features](#high-performance-features)
-- [Security & Authentication](#security--authentication)
-- [Horizontal Scaling](#horizontal-scaling)
-- [Technology Stack](#technology-stack)
+- [The 8 containers](#the-8-containers)
+- [Pipeline flow](#pipeline-flow)
+- [App Bundle model](#app-bundle-model)
+- [Distribution & control plane](#distribution--control-plane)
+- [Module ownership (SCCEMBS)](#module-ownership-sccembs)
+- [Feature flags & licensing](#feature-flags--licensing)
+- [Build status caveats](#build-status-caveats)
+- [Technology stack](#technology-stack)
 
 ---
 
-## System Overview
+## The 8 containers
 
-WaddleBot is a microservices-based chatbot platform that enables communities to interact with their members across Discord, Twitch, and Slack. The system uses event-driven architecture with a central router processing commands and coordinating between platform-specific collectors and feature-specific interaction modules.
+`svc-*` = pipeline/service containers; `hub-*` = hub. The marketplace is a **module inside
+hub-api**, not its own container.
 
-### Architecture Diagram
+| Container | Responsibility | Language | HTTP port | gRPC port |
+|---|---|---|---|---|
+| `svc-ingest` | Platform receivers + inbound webhooks; loads each activated bundle's `ingest` component | Python/Quart | 8200 | — |
+| `svc-process` | Event bus, command routing, workflow orchestration; bundles' `process` component | Python/Quart | 8201 | — |
+| `svc-action` | Outbound actions/interactions/3rd-party calls; bundles' `action` component + target adapters | Python/Quart | 8202 | — |
+| `svc-core` | Identity, security, credentials, entitlement — synchronous gRPC, every stage depends on it | Python/Quart | 8203 | 50203 |
+| `hub-api` | Admin, tenancy, marketplace, billing, AI routing, MCP — control plane | Python/Quart | 8204 | 50204 |
+| `hub-webui` | SPA assets, static-serve + `/api` proxy — the **only** Node container | Node/React + Express | 8205 | — |
+| `svc-presentation` | Core overlays (`full_screen`/`media`/`crawler`) + Music Station + bundles' `presentation` component | Python/Quart | 8207 | — |
+| `svc-streaming` | RTC + HLS/RTMP/AV1 record/forward/transcode control plane | Python today; Rust migration planned, not started | 8208 | 50208 |
 
-```mermaid
-graph TB
-    subgraph "External Platforms"
-        P1[Discord]
-        P2[Twitch]
-        P3[Slack]
-    end
+`svc-core` is synchronous gRPC, not a pipeline stage — every other container calls it directly for
+auth/entitlement checks rather than going through a Valkey queue, since those calls block the
+caller and can't tolerate queue latency.
 
-    subgraph "Trigger Layer - Collectors"
-        C1[Discord Module<br/>Port: 8003]
-        C2[Twitch Module<br/>Port: 8002]
-        C3[Slack Module<br/>Port: 8004]
-    end
+A ninth container, **`svc-rtc`** (Go, WebRTC/SFU via LiveKit, port 8206), still runs standalone.
+It is the design's absorption target into `svc-streaming` (RTC capability) but that merge has not
+happened — `svc-rtc` and `svc-streaming` are two containers today, gated independently in Helm.
 
-    subgraph "API Gateway"
-        K[Kong Gateway<br/>Unified Routing & Auth]
-    end
-
-    subgraph "Processing Layer - Core"
-        R[Router Module<br/>Port: 8000<br/>Command Processing]
-        M[Marketplace<br/>Port: 8001<br/>Module Management]
-        I[Identity Core<br/>Port: 8050<br/>User Auth]
-        L[Labels Core<br/>Label Management]
-    end
-
-    subgraph "Action Layer - Interaction Modules"
-        AI[AI Interaction<br/>Chat Responses]
-        AL[Alias System<br/>Command Shortcuts]
-        SH[Shoutouts<br/>User Highlights]
-        IN[Inventory<br/>Item Tracking]
-        CA[Calendar<br/>Event Management]
-        ME[Memories<br/>Quotes & URLs]
-        YT[YouTube Music<br/>Music Search]
-        SP[Spotify<br/>Music Control]
-    end
-
-    subgraph "Core Services"
-        BS[Browser Sources<br/>OBS Integration]
-        WS[WebSocket Service<br/>Real-time Updates]
-        HUB[Hub Module<br/>Web Dashboard]
-    end
-
-    subgraph "Data Layer"
-        PG[(PostgreSQL<br/>Primary + Replicas)]
-        RD[(Redis<br/>Cache + Sessions)]
-        S3[(S3 Storage<br/>Media Files)]
-    end
-
-    subgraph "External Services"
-        OBS[OBS Studio]
-        AWS[AWS Lambda]
-        OW[OpenWhisk]
-    end
-
-    P1 --> C1
-    P2 --> C2
-    P3 --> C3
-
-    C1 --> K
-    C2 --> K
-    C3 --> K
-
-    K --> R
-    K --> M
-    K --> I
-    K --> L
-    K --> HUB
-
-    R --> AI
-    R --> AL
-    R --> SH
-    R --> IN
-    R --> CA
-    R --> ME
-    R --> YT
-    R --> SP
-
-    AI --> BS
-    YT --> BS
-    SP --> BS
-
-    BS --> WS
-    WS --> OBS
-
-    R --> PG
-    R --> RD
-    I --> PG
-    I --> RD
-    L --> PG
-    M --> PG
-
-    R --> AWS
-    R --> OW
-```
-
-### System Components
-
-| Component | Purpose | Technology | Port |
-|-----------|---------|------------|------|
-| **Collectors** | Platform event ingestion | py4web, platform SDKs | 8002-8004 |
-| **Router** | Command processing & routing | py4web, Quart (async) | 8000 |
-| **Marketplace** | Module management | py4web | 8001 |
-| **Identity Core** | User authentication | py4web + Auth | 8050 |
-| **Interaction Modules** | Feature implementation | py4web, platform APIs | Various |
-| **Browser Sources** | OBS overlay integration | Flask, WebSocket | 8080 |
-| **Hub Module** | Web dashboard | Flask, Flask-Security | 8090 |
-
----
-
-## Design Principles
-
-### Microservices Architecture
-
-Each component runs as an independent service with well-defined APIs:
-
-- **Trigger Modules**: Platform-specific message and event collection (Discord, Twitch, Slack)
-- **Processing Layer**: Central business logic and command routing (Router, Marketplace)
-- **Action Modules**: Feature-specific functionality (AI, Music, Calendar, etc.)
-- **Core Services**: Shared infrastructure (Identity, Labels, Browser Sources)
-- **Admin Tools**: Management and monitoring interfaces (Hub Module)
-
-### Event-Driven Communication
-
-Components communicate through multiple protocols:
-
-- **REST APIs**: Kong API Gateway with unified routing and authentication
-- **Message Events**: Platform events processed through router with session tracking
-- **WebSocket**: Real-time updates for browser sources and live data
-- **Database**: Shared state via PostgreSQL with read replicas for performance
-
-### Horizontal Scalability
-
-Built for scale from day one:
-
-- **Container-based**: Docker containers with Kubernetes orchestration
-- **Database Scaling**: PostgreSQL with read replicas and connection pooling
-- **Caching Layer**: Redis with namespace separation for different use cases
-- **Load Balancing**: Kong API Gateway with rate limiting and traffic management
-- **Dynamic Assignment**: Coordination system for distributing workload across containers
-
----
-
-## Module Categories
-
-### Trigger Modules (Collectors)
-
-Platform-specific event collection modules that receive events from external platforms.
-
-| Platform | Module | Port | Event Types |
-|----------|--------|------|-------------|
-| **Discord** | discord_module | 8003 | Messages, reactions, joins, boosts, voice |
-| **Twitch** | twitch_module | 8002 | Chat, subs, follows, raids, bits, stream events |
-| **Slack** | slack_module | 8004 | Messages, reactions, joins, file shares |
-
-**Key Features:**
-- Platform SDK integration (py-cord, TwitchIO, slack-sdk)
-- Webhook/EventSub receivers
-- Event classification and normalization
-- Router forwarding with session tracking
-
-### Processing Modules (Core)
-
-Central processing layer handling command routing and business logic.
-
-| Module | Purpose | Key Features |
-|--------|---------|--------------|
-| **Router** | Command processing & routing | Multi-threading, rate limiting, caching, string matching |
-| **Marketplace** | Module management | Installation, versioning, subscriptions, router sync |
-| **Identity Core** | User authentication | Cross-platform linking, verification, API keys |
-| **Labels Core** | Community/user labeling | Tag management, label assignment, filtering |
-
-**Key Features:**
-- High-performance processing with ThreadPoolExecutor
-- Read replica support for database queries
-- Redis caching with TTL-based invalidation
-- Comprehensive permission checking
-
-### Action Modules (Interaction)
-
-Feature-specific modules that provide functionality to users.
-
-| Module | Purpose | Dependencies |
-|--------|---------|--------------|
-| **AI Interaction** | Chat responses with AI | Ollama/OpenAI/MCP |
-| **Alias System** | Linux-style command aliases | Router |
-| **Shoutouts** | User highlights with clips | Twitch API |
-| **Inventory** | Item tracking & checkout | Labels Core |
-| **Calendar** | Event management | Labels Core |
-| **Memories** | Quotes, URLs, reminders | Labels Core |
-| **YouTube Music** | Music search & display | YouTube API |
-| **Spotify** | Music control & display | Spotify API |
-
-**Key Features:**
-- Per-entity configuration and permissions
-- Multiple response types (chat, media, ticker, general)
-- Browser source integration for OBS
-- Session-based response tracking
-
-### Core Services
-
-Supporting infrastructure for advanced features.
-
-| Service | Purpose | Used By |
-|---------|---------|---------|
-| **Browser Sources** | OBS overlay integration | Music modules, general responses |
-| **WebSocket Service** | Real-time updates | Browser sources, live data |
-| **Hub Module** | Web dashboard | Community management, admin tasks |
-
----
-
-## Communication Patterns
-
-### REST API (Primary)
-
-**Kong API Gateway** provides unified routing:
+## Pipeline flow
 
 ```
-Platform → Collector → Kong → Router → Interaction Module
+ inbound                                                              outbound
+   │                                                                     ▲
+   ▼        ┌───────────────┐    ┌───────────────┐    ┌───────────────┐ │
+ svc-ingest │ Valkey stream │ svc-process │ Valkey │  svc-action  │─────┘
+   │  ────▶ └───────────────┘  ────▶       ────▶   └──────┬────────┘
+   │                                                       │ action target_type: overlay
+   │                                                ┌──────▼─────────┐
+   │                                                │ svc-presentation │
+   │                                                └──────────────────┘
+   │        ┌───────────────┐
+   └───────▶│ svc-streaming │ (independent path — RTC/broadcast, not ingest→process→action)
+            └───────────────┘
 ```
 
-- **Authentication**: Kong API Keys per service
-- **Rate Limiting**: Kong plugins with per-route limits
-- **Load Balancing**: Automatic load distribution
-- **Service Discovery**: Kong's service registry
+Each stage publishes onto the **next** stage's own Valkey stream — `process` never calls `action`
+directly, and `action` never blocks `process`. A slow or backed-up `action` handler only fills its
+own queue, spilling to a DLQ on overflow; `ingest` and `process` keep running.
 
-**Example Request Flow:**
-```json
-POST /api/router/process
-Headers:
-  X-Kong-Service-Name: twitch_module
-  Authorization: Bearer {API_KEY}
-Body:
-  {
-    "message_type": "chatMessage",
-    "entity_id": "twitch:channel:waddlebot",
-    "user_id": "123456",
-    "message": "!help",
-    "session_id": "sess_abc123"
-  }
-```
-
-### gRPC (Future)
-
-Planned for high-performance module communication:
-
-- **Protocol Buffers**: Strongly-typed message schemas
-- **Streaming**: Bidirectional streaming for real-time data
-- **Performance**: Lower latency than REST for module-to-module calls
-
-### WebSocket (Real-time)
-
-Browser Source Core uses WebSocket for live updates:
+**Isolation keys** — every stream, config, and state key is scoped per `(tenant, community,
+app_id, stage)`:
 
 ```
-Interaction Module → Router → Browser Source Core → WebSocket → OBS
+waddles:t:{tenant}:c:{community}:app:{app_id}:{ingest|process|action}
+waddles:t:{tenant}:c:{community}:app:{app_id}:cfg
+waddles:t:{tenant}:c:{community}:app:{app_id}:state
 ```
 
-**Connection Types:**
-- **Ticker Stream**: Scrolling text notifications
-- **Media Stream**: Music/video display with metadata
-- **General Stream**: HTML content, forms, alerts
+Tenant-wide activations (no specific community) use a literal `c:_tenant` segment so every key
+stays uniformly parseable. Consumer groups: `{app_id}:{stage}-group`.
 
-**Authentication:**
-- Token-based URLs: `wss://browser.waddlebot.com/{token}/ticker`
-- Per-community tokens for security
-- Read-only connections (no upstream messages)
-
----
-
-## Database Architecture
-
-### PostgreSQL (Primary Database)
-
-**Configuration:**
-- Primary database for writes
-- Read replicas for high-frequency queries (command lookups, permissions)
-- Connection pooling with ThreadPoolExecutor
-- Per-module table separation
-
-### Core Shared Tables
-
-#### Servers Table
-Tracks monitored platform channels across all collectors:
-
-```sql
-servers (
-    id,
-    owner,
-    platform,           -- 'twitch', 'discord', 'slack'
-    channel,
-    server_id,
-    is_active,
-    webhook_url,
-    config,             -- JSON configuration
-    last_activity,
-    created_at,
-    updated_at
-)
-```
-
-#### Entities Table
-Maps platform identifiers to WaddleBot entities:
-
-```sql
-entities (
-    id,
-    entity_id,          -- Unique WaddleBot entity identifier
-    platform,           -- 'twitch', 'discord', 'slack'
-    server_id,          -- Platform server/guild ID
-    channel_id,         -- Platform channel ID
-    owner,              -- Owner user ID
-    is_active,
-    config              -- JSON configuration
-)
-```
-
-### Router Tables
-
-#### Commands Table
-Command registration and routing:
-
-```sql
-commands (
-    id,
-    command,            -- Command name (e.g., 'help', 'stats')
-    prefix,             -- '!' for local, '#' for community
-    description,
-    location_url,       -- Module endpoint URL
-    location,           -- 'internal' for !, 'community' for #
-    type,               -- 'container', 'lambda', 'openwhisk', 'webhook'
-    method,             -- HTTP method
-    timeout,            -- Request timeout
-    auth_required,
-    rate_limit,         -- Requests per minute
-    is_active,
-    module_type,        -- 'trigger', 'action', 'core'
-    trigger_type,       -- 'command', 'event', 'both'
-    event_types,        -- JSON array of event types
-    priority,           -- Lower = higher priority
-    execution_mode      -- 'sequential', 'parallel'
-)
-```
-
-#### Command Executions Table
-Audit log for all command executions:
-
-```sql
-command_executions (
-    id,
-    execution_id,       -- Unique execution identifier
-    command_id,
-    entity_id,
-    user_id,
-    message_content,
-    parameters,         -- JSON parsed parameters
-    location_url,
-    request_payload,    -- JSON request
-    response_status,    -- HTTP status code
-    response_data,      -- JSON response
-    execution_time_ms,
-    error_message,
-    retry_count,
-    status              -- 'pending', 'success', 'failed'
-)
-```
-
-#### Coordination Table
-Dynamic server/channel assignment for horizontal scaling:
-
-```sql
-coordination (
-    id,
-    platform,
-    server_id,
-    channel_id,
-    entity_id,
-    claimed_by,         -- Container ID that claimed this entity
-    claimed_at,
-    status,             -- 'available', 'claimed', 'offline', 'error'
-    is_live,            -- Live stream status
-    viewer_count,
-    last_activity,
-    claim_expires,
-    heartbeat_interval,
-    priority,
-    created_at,
-    updated_at
-)
-```
-
-### Module-Specific Tables
-
-Each interaction module has dedicated tables for data isolation:
-
-- **Memories**: memories, reminders, memory_reactions, memory_categories
-- **Calendar**: events, event_attendees, event_reminders
-- **Inventory**: inventory_items, inventory_activity
-- **YouTube Music**: youtube_now_playing, youtube_search_cache, youtube_activity
-- **Spotify**: spotify_tokens, spotify_now_playing, spotify_search_cache
-
-### Database Optimization
-
-**Indexing:**
-- Primary keys on all `id` columns
-- Foreign key indexes for joins
-- Composite indexes on (community_id, entity_id, user_id)
-- Index on `is_active` flags
-
-**Connection Pooling:**
-- Separate pools for read and write operations
-- ThreadPoolExecutor for concurrent operations
-- Configurable pool sizes based on load
-
-**Caching:**
-- Redis caching for frequently accessed data
-- TTL-based cache invalidation
-- Thread-safe local caching with fallback
-
----
-
-## Redis Architecture
-
-### Database Separation Strategy
-
-WaddleBot uses Redis with namespace separation and database allocation:
+## App Bundle model
 
 ```
-DB 0: Caching & Sessions
-  - General application cache
-  - Session storage
-  - Eviction: allkeys-lru
-
-DB 1: Rate Limiting
-  - Rate limit counters (sorted sets)
-  - Cooldown tracking
-  - Eviction: volatile-ttl
-
-DB 2: Message Queues
-  - Redis Streams
-  - Dead letter queues
-  - Eviction: noeviction (prevent data loss)
-
-DB 3-15: Reserved for future use
+Core → Module → Feature → App (Bundle)
 ```
 
-### Namespace Strategy
-
-All keys follow consistent naming:
+An **App Bundle is the App** — not a grouping of Apps. It's `bundle.yaml` (the manifest) plus a
+`{config, spec, script}` directory per pipeline stage it implements:
 
 ```
-{product}:{use_case}:{module}:{entity}:{identifier}
-
-Examples:
-waddlebot:cache:router:commands:all
-waddlebot:rate_limit:router:user_123:!help
-waddlebot:session:router:sess_abc123
-waddlebot:stream:events
+giveaway-classic/
+├── bundle.yaml
+├── ingest/{handler.py, config.yaml, spec.yaml}
+├── process/{handler.py, config.yaml, spec.yaml}
+├── action/{handler.py, config.yaml, spec.yaml}
+└── presentation/                 # optional 4th component — no script, no queue hop
+    ├── overlay.html
+    ├── overlay.js
+    └── overlay.css
 ```
 
-### Use Cases
+A bundle may implement 1–4 components, omitting any it doesn't touch. `presentation` is not a
+pipeline stage: no `entrypoint`, no DLQ, no idempotency contract — it's a client-side HTML/JS
+overlay `svc-presentation` serves per-community at a `browser_source_path`, optionally reading a
+stream directly from its own JS for live data.
 
-#### 1. Caching (CacheManager)
-- **Namespace**: `waddlebot:cache:{module_name}:`
-- **Redis DB**: 0
-- **TTL**: 30s - 7200s (data type dependent)
-- **Examples**:
-  - Command definitions: 300s
-  - Entity permissions: 600s
-  - User balances: 30-60s
-  - Leaderboards: 60-300s
+### Execution models
 
-#### 2. Rate Limiting (RateLimiter)
-- **Namespace**: `waddlebot:rate_limit:{module_name}:`
-- **Redis DB**: 1
-- **Data Structure**: Sorted Sets (ZSET) for sliding window
-- **TTL**: Equal to window duration
-- **Examples**:
-  - `waddlebot:rate_limit:router:user_123:!help`
-  - `waddlebot:rate_limit:router:cooldown:user_456:!dice`
+| | Native | Third-party |
+|---|---|---|
+| Runs | In-process inside the stage-runner, loaded via `entrypoint` | Always a network hop — never in-process |
+| Stage scope | May span all 3 script stages | Exactly one stage per manifest block |
+| Transport | Direct function call | `webhook_push` (HMAC-SHA256 signed) or `rest_pull` (bearer/HMAC) |
+| Failure mode | Exception → DLQ | Timeout (default 5000ms) or non-2xx → DLQ |
 
-#### 3. Message Queue (MessageQueue)
-- **Namespace**: `waddlebot:stream:{stream_name}`
-- **Redis DB**: 2
-- **Data Structure**: Redis Streams (XADD/XREADGROUP)
-- **Persistence**: AOF (append-only file) enabled
-- **Examples**:
-  - `waddlebot:stream:events` - Main event stream
-  - `waddlebot:dlq:events` - Dead letter queue
+Community/third-party-authored **native** scripts are deferred until a real sandbox exists — today
+`native` execution is first-party-only.
 
-#### 4. Session Management
-- **Namespace**: `waddlebot:session:{module_name}:`
-- **Redis DB**: 0 (shares with cache)
-- **TTL**: 3600s (1 hour)
-- **Examples**:
-  - `waddlebot:session:router:sess_abc123`
+### Standardized action targets
 
-### Redis Configuration
+Every `action`-stage bundle declares one `target_type`; the platform provides one adapter per type,
+all implemented in `svc-action`:
 
-```yaml
-redis:
-  image: redis:7-alpine
-  command: >
-    redis-server
-    --requirepass ${REDIS_PASSWORD}
-    --appendonly yes
-    --maxmemory 512mb
-    --maxmemory-policy allkeys-lru
-    --databases 16
+| `target_type` | Adapter behavior |
+|---|---|
+| `webhook` | SSRF-guarded POST, HMAC-SHA256 signed |
+| `rest_api` | SSRF-guarded, configurable HTTP method |
+| `grpc_api` | Internal gRPC call |
+| `graphql_api` | GraphQL mutation/query |
+| `email` | Real SMTP via `aiosmtplib` |
+| `overlay` | SSRF-guarded push to `svc-presentation`, sub-surfaces `full_screen` / `media` / `crawler` |
+| `message_queue` | Valkey `PUBLISH` |
+
+Retries with exponential backoff on 5xx/network failures; **never** retries 401/403/other 4xx.
+Every dispatch is audit-logged (`action_dispatch_log`).
+
+### 3-tier lifecycle
+
+Strict subset invariant: `activated ⊆ available ⊆ installed`.
+
+| Tier | Scope | Table | Meaning |
+|---|---|---|---|
+| **Installed** | Global/platform | `app_catalog` | Which bundles exist on the platform at all |
+| **Available** | Tenant | `app_tenant_availability` | Which installed bundles a tenant may activate |
+| **Activated** | Community — a **set** | `app_activations` | Which available bundles a community has turned on |
+
+### Coexistence, not single-winner
+
+`resolve_apps(feature, tenant, community)` returns **every** enabled, activated bundle for a
+Feature — union, not narrowest-scope-wins. A community can run 4 giveaway bundles side by side;
+each gets its own isolated stream/config/state under the key scheme above. Conflicts are explicit:
+`incompatible_with` (symmetric — either side declaring it is enough) blocks co-activation at the
+`app_activations` write. The community must deactivate one bundle before the other can be turned
+on — mutual exclusion is a manual choice, never auto-resolved.
+
+## Distribution & control plane
+
+Three planes, each hitting a different DB tier for a different reason:
+
+| Plane | What | Who | DB tier |
+|---|---|---|---|
+| **Control (write)** | Install/uninstall/update a bundle | hub-api — sole writer to `app_catalog` | Primary |
+| **Code distribution (pull)** | `GET /api/v1/apps/installed?stage=X`, `GET /api/v1/apps/{app_id}/artifact` | Each stage-runner **polls** on an interval, fetches only changed `artifact_hash`es | hub-api API, not DB-direct |
+| **Routing (hot path)** | Which activated bundles fan out for `(tenant, community, feature)` on every event | Stage-runners read directly | **Read replica** — never hub-api, never primary |
+
+Polling (not push) means a restarting or newly-scaled-out runner self-heals to the current
+installed set on its own next poll — hub-api never needs to know a given replica exists. Routing
+reads are cached with a short TTL, invalidated on the stage-runner's own poll cycle.
+
+## Module ownership (SCCEMBS)
+
+7 product modules, each a Helm-toggleable grouping of default App Bundles
+(`modules.<name>.enabled`), plus Core (mandatory, no toggle):
+
+| Module | Owns |
+|---|---|
+| **Socials** | External social-media posts/responses/analytics (LinkedIn, X, Facebook, Instagram, TikTok) |
+| **Customers** | CRM — accounts, contacts, opportunities, cases |
+| **Community** | Forum, chat, virtual stages, polls, announcements, raffles |
+| **Event** | Calendar, ticketing |
+| **Marketing** | Campaigns, shortlinking, emailing |
+| **Bot** | Platform receivers, outbound actions, interaction commands |
+| **Streaming** | `svc-streaming` + hub-api's stream/calls/overlay/Music Station control plane |
+
+**Core** (always deployed, no module toggle, but its Features still tier-gate): identity, security,
+credentials, tenancy (the **community entity** — teams/OUs — lives here, not in the Community
+module), marketplace, token/billing, analytics, event bus.
+
+`KNOWN_MODULES` in `libs/flask_core/flask_core/app_manifest.py` carries the canonical SCCEMBS set
+plus two transitional aliases (`social`, `customer`, singular) kept because pre-migration Feature
+contracts still register under those names — a follow-up rename, not yet done.
+
+## Feature flags & licensing
+
+```
+MODULE global toggle (Helm: modules.<name>.enabled)
+        │
+PER-CAPABILITY PostHog flag  waddles.{module}.{feature}   (new flags default OFF)
+        │
+TIER gate (license entitlement: free / professional / enterprise)
 ```
 
----
-
-## Event Processing Flow
-
-### Complete Processing Pipeline
-
-```mermaid
-sequenceDiagram
-    participant P as Platform (Discord/Twitch/Slack)
-    participant C as Collector Module
-    participant K as Kong Gateway
-    participant R as Router Module
-    participant RD as Redis
-    participant PG as PostgreSQL
-    participant IM as Interaction Module
-    participant BS as Browser Source Core
-    participant OBS as OBS Studio
-
-    P->>C: Webhook/Event
-    C->>C: Classify message_type
-    C->>K: Forward to Router
-    K->>K: Authenticate & Rate Limit
-    K->>R: Route to Router
-    R->>R: Generate session_id
-    R->>RD: Store entity mapping
-
-    alt chatMessage
-        R->>R: Detect command prefix (! or #)
-        R->>PG: Query commands (read replica)
-        R->>R: Check string matches
-    else non-chat event
-        R->>PG: Query event-triggered modules
-    end
-
-    R->>PG: Check permissions
-    R->>RD: Check rate limits
-
-    alt Sequential Execution
-        loop For each module (priority order)
-            R->>IM: Execute module
-            IM->>IM: Process command
-            IM->>R: Return response
-        end
-    else Parallel Execution
-        par Module 1
-            R->>IM: Execute module
-        and Module 2
-            R->>IM: Execute module
-        and Module 3
-            R->>IM: Execute module
-        end
-    end
-
-    alt Browser Source Response
-        R->>BS: Route media/ticker/general
-        BS->>RD: Update current state
-        BS->>OBS: WebSocket push
-    end
-
-    R->>PG: Log execution
-    R->>C: Return result
-    C->>P: Send response
-```
-
-### Event Processing Steps
-
-1. **Message Reception**: Collector receives webhook/event from platform
-2. **Message Type Classification**: Determine type (chatMessage, subscription, follow, etc.)
-3. **Router Forwarding**: Send to router with entity context and message type
-4. **Session Creation**: Router generates session_id and caches entity mapping
-5. **Event-Based Processing**:
-   - **chatMessage**: Check for commands (`!` or `#` prefix) and string matches
-   - **Non-chat events**: Process reputation and event-triggered modules directly
-6. **Command Lookup**: Router queries commands table with read replica
-7. **String Matching**: Check message against patterns for moderation/auto-responses
-8. **Permission Check**: Verify entity has command/module enabled
-9. **Rate Limiting**: Check user/command/entity rate limits
-10. **Multiple Module Execution**:
-    - **Sequential**: Execute in priority order, wait for completion
-    - **Parallel**: Execute concurrently using ThreadPoolExecutor
-    - **Event-Triggered**: Execute modules configured for event types
-11. **Execution Routing**:
-    - `!` commands → Local container interaction modules
-    - `#` commands → Community Lambda/OpenWhisk functions
-    - String match actions → warn, block, commands, webhooks
-12. **Module Response Processing**: Collect responses (chat, media, ticker, general, form)
-13. **Browser Source Routing**: Route to browser source core for OBS integration
-14. **Session Validation**: Validate session_id matches entity_id
-15. **Response Handling**: Return result to collector for user response
-16. **Logging**: Record execution, metrics, usage stats
-
-### Message Types
-
-#### Command Types
-- **chatMessage**: User chat messages with `!` or `#` prefix commands
-- **slashCommand**: Platform slash commands (`/command`)
-
-#### Interaction Types
-- **interaction**: Generic interaction (button, modal, select)
-- **modal_submit**: Modal form submission
-- **button_click**: Button interaction
-- **select_menu**: Select menu option selection
-
-#### Subscription/Monetization Events
-- **subscription**, **gift_subscription**, **follow**, **donation**, **cheer**, **resub**
-
-#### Stream Events
-- **raid**, **host**, **stream_online**, **stream_offline**
-
-#### Member Events
-- **member_join**, **member_leave**, **voice_join**, **voice_leave**, **voice_time**, **boost**, **channel_join**
-
-#### Moderation Events
-- **ban**, **kick**, **timeout**, **warn**
-
-#### Other Events
-- **reaction**, **file_share**, **app_mention**
-
-### Command Architecture
-
-#### Slash Commands (`/`)
-- **Discord**: Native `/command` with autocomplete and ephemeral responses
-- **Slack**: `/waddlebot command` with Block Kit responses and modals
-- Rich UI: Modals, buttons, select menus, forms
-- Deferred responses for long operations (15 min timeout)
-
-#### Prefix Commands (`!` and `#`)
-
-**`!` (Local Container Modules)**
-- Fast container-to-container communication
-- Full control over execution environment
-- Stateful with persistent connections
-- Examples: `!help`, `!stats`, `!admin`, `!so`
-
-**`#` (Community Modules)**
-- Serverless execution (Lambda/OpenWhisk)
-- Automatic scaling for high demand
-- Stateless with cold start considerations
-- Examples: `#weather`, `#translate`, `#game`
-
----
-
-## High-Performance Features
-
-### Router Module Optimizations
-
-#### Multi-Threading
-- **ThreadPoolExecutor**: Configurable worker count (default: 10)
-- **Parallel Execution**: Process multiple commands simultaneously
-- **Async Operations**: Quart framework for async/await patterns
-- **Concurrent Database**: Thread-safe connection pooling
-
-#### Read Replicas
-- **Separate Read Connections**: Dedicated connections for command lookups
-- **Write to Primary**: All writes to primary database
-- **Load Distribution**: Distribute read load across replicas
-- **Query Types**: Command lookups, permission checks, entity queries
-
-#### Caching Strategy
-- **In-Memory Cache**: TTL-based caching with thread-safe locks
-- **Command Cache**: 300s TTL for command definitions
-- **Entity Cache**: 600s TTL for entity permissions
-- **Redis Integration**: Distributed caching across instances
-- **Cache Invalidation**: TTL-based and manual invalidation
-
-#### Rate Limiting
-- **Sliding Window Algorithm**: Track requests over time windows
-- **Granular Limiting**: Per-user, per-command, per-entity
-- **Redis Backend**: Sorted sets for efficient window tracking
-- **Background Cleanup**: Automatic cleanup of expired entries
-- **Configurable Limits**: Set limits per command, entity, or role
-
-#### Batch Processing
-- **Concurrent Event Processing**: Process up to 100 events simultaneously
-- **Bulk Operations**: Batch database operations
-- **Performance Optimization**: Reduce database round trips
-- **Transaction Support**: Atomic batch operations
-
-### String Matching System
-
-#### Pattern Matching
-- **Match Types**: exact, contains, word boundary, regex
-- **Case Sensitivity**: Configurable per pattern
-- **Compiled Regex**: Cached compiled patterns for performance
-- **Priority System**: Lower numbers = higher priority
-- **Wildcard Support**: `"*"` matches all text (for logging/analytics)
-
-#### Actions
-- **warn**: Send warning message to user
-- **block**: Block message and notify moderators
-- **command**: Execute specified command with parameters
-- **webhook**: Send to external webhook for processing
-
-#### Content Moderation
-- Automatic warning and blocking
-- Notification of moderators
-- Usage tracking and statistics
-- Entity-based rules
-
----
-
-## Security & Authentication
-
-### Authentication & Authorization
-
-#### Kong API Keys
-- Per-service authentication
-- API key management via Kong Admin
-- Rate limiting per API key
-- Key rotation support
-
-#### py4web Auth (Identity Core)
-- User session management
-- Cross-platform identity linking
-- OAuth integration with platforms
-- API key generation for programmatic access
-
-#### Role-Based Access Control (RBAC)
-- Per-community roles (owner, admin, moderator, user)
-- Permission inheritance
-- Entity-level permissions
-- Command-level permissions
-
-### Data Protection
-
-#### Webhook Signature Verification
-- HMAC-SHA256 for platform webhooks
-- Verify authenticity of incoming requests
-- Prevent replay attacks
-- Platform-specific signature formats
-
-#### Token Encryption
-- Secure storage of OAuth tokens
-- Encrypted at rest in database
-- Secure token refresh flows
-- Token expiration handling
-
-#### Rate Limiting
-- Per-user rate limits
-- Per-command rate limits
-- Per-entity rate limits
-- Configurable windows and thresholds
-
-#### Session Management
-- Redis-based session storage
-- TTL-based expiration (1 hour default)
-- Session validation on every request
-- Cross-module session tracking
-
-### Network Security
-
-#### TLS Termination
-- HTTPS/TLS at ingress level
-- Certificate management
-- Forward secrecy
-- Strong cipher suites
-
-#### Container Security
-- Non-root containers
-- Read-only filesystems where possible
-- Security-hardened images
-- Regular security updates
-
-#### Network Policies
-- Kubernetes network segmentation
-- Service-to-service encryption
-- Firewall rules
-- Ingress/egress controls
-
----
-
-## Horizontal Scaling
-
-### Coordination System
-
-Dynamic workload distribution across multiple collector instances:
-
-```mermaid
-graph LR
-    subgraph "Collector Container 1"
-        C1[Claims: Server A, B]
-    end
-    subgraph "Collector Container 2"
-        C2[Claims: Server C, D]
-    end
-    subgraph "Collector Container 3"
-        C3[Claims: Server E]
-    end
-
-    DB[(Coordination Table<br/>PostgreSQL)]
-
-    C1 --> DB
-    C2 --> DB
-    C3 --> DB
-
-    DB --> C1
-    DB --> C2
-    DB --> C3
-```
-
-#### Dynamic Assignment
-- **Automatic Claiming**: Containers claim available servers/channels
-- **Race-Condition Safe**: Atomic claiming using database locks
-- **Load Balancing**: Distribute workload evenly
-- **Auto-Discovery**: New containers automatically find work
-
-#### Load Distribution
-- **Configurable Limits**: Each container claims up to MAX_CLAIMS (default: 5)
-- **Priority-Based**: Prioritize live streams and high activity
-- **Even Distribution**: Balanced workload across containers
-- **Resource Optimization**: Adjust claims based on container load
-
-#### Live Stream Priority
-- **Live Status Tracking**: Track stream online/offline status
-- **Viewer Count**: Monitor audience size
-- **Activity Levels**: Track message frequency
-- **Dynamic Prioritization**: Prioritize active entities
-
-#### Claim Management
-
-**Atomic Claims:**
-- Database transaction locks
-- Race-condition safe claiming
-- Conflict resolution
-
-**Checkin System:**
-- 5-minute checkin interval (default)
-- Claim maintenance with each checkin
-- Activity reporting during checkin
-
-**Timeout and Cleanup:**
-- 6-minute threshold for claim expiration
-- 1-minute grace period
-- Automatic cleanup of expired claims
-
-#### Platform Support
-
-**Discord/Slack:**
-- Server-based claims (servers with multiple channels)
-- Hierarchical structure (Server → Channel)
-- Monitor all channels within claimed servers
-
-**Twitch:**
-- Channel-based claims (individual channels)
-- Flat structure (no server hierarchy)
-- Direct channel monitoring
-
-### Kubernetes Scaling
-
-#### Horizontal Pod Autoscaling (HPA)
-```yaml
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: router-hpa
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: router
-  minReplicas: 2
-  maxReplicas: 10
-  metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: Utilization
-        averageUtilization: 70
-  - type: Resource
-    resource:
-      name: memory
-      target:
-        type: Utilization
-        averageUtilization: 80
-```
-
-#### Database Scaling
-- **Read Replicas**: Multiple replicas for read queries
-- **Connection Pooling**: Per-service connection pools
-- **Query Optimization**: Indexed queries and prepared statements
-- **Caching**: Redis caching for hot data
-
----
-
-## Technology Stack
-
-### Backend Framework
-- **py4web**: Modern Python web framework for all modules
-- **Quart**: Async Python framework for router (async/await)
-- **Flask**: Traditional WSGI for browser sources and hub
-- **Python 3.12**: Modern Python with type hints
-
-### Database & Caching
-- **PostgreSQL 15**: Primary database with read replica support
-- **Redis 7**: Caching, sessions, rate limiting, message queues
-- **S3-compatible Storage**: Media file storage (optional)
-
-### API Gateway & Orchestration
-- **Kong**: API Gateway for unified routing and authentication
-- **Docker**: Containerization for all services
-- **Kubernetes**: Container orchestration and scaling
-
-### Platform Integrations
-- **py-cord**: Discord bot framework with slash commands
-- **TwitchIO**: Twitch chat and EventSub integration
-- **slack-sdk**: Slack Events API and slash commands
-- **OAuth 2.0**: Secure platform authentication
-
-### External Execution
-- **AWS Lambda**: Serverless execution for community modules
-- **Apache OpenWhisk**: Open source serverless alternative
-- **WebSocket**: Real-time communication for browser sources
-
-### Development Tools
-- **ThreadPoolExecutor**: Concurrent processing
-- **Gunicorn/Uvicorn**: WSGI/ASGI servers
-- **pytest**: Unit and integration testing
-- **black**: Code formatting
-- **flake8**: Code linting
-
----
-
-## Module Response System
-
-### Response Types
-
-Interaction modules can return multiple response types:
-
-#### Chat Response
-```json
-{
-  "session_id": "sess_abc123",
-  "success": true,
-  "response_action": "chat",
-  "chat_message": "Response text to user"
-}
-```
-
-#### Media Response (Music/Video)
-```json
-{
-  "session_id": "sess_abc123",
-  "success": true,
-  "response_action": "media",
-  "media_type": "music",
-  "media_url": "https://youtube.com/watch?v=...",
-  "response_data": {
-    "title": "Song Title",
-    "artist": "Artist Name",
-    "album": "Album Name",
-    "duration": "3:45",
-    "thumbnail_url": "https://...",
-    "service": "youtube"
-  }
-}
-```
-
-#### Ticker Response (Scrolling Text)
-```json
-{
-  "session_id": "sess_abc123",
-  "success": true,
-  "response_action": "ticker",
-  "ticker_text": "Scrolling message text",
-  "ticker_duration": 10,
-  "response_data": {
-    "priority": "high",
-    "style": "info"
-  }
-}
-```
-
-#### General Response (HTML/Forms)
-```json
-{
-  "session_id": "sess_abc123",
-  "success": true,
-  "response_action": "general",
-  "response_data": {
-    "content_type": "html",
-    "content": "<div>Custom HTML content</div>",
-    "duration": 15
-  }
-}
-```
-
-### Browser Source Integration
-
-Browser Source Core provides OBS overlay integration:
-
-**Three Source Types:**
-1. **Ticker**: Scrolling text with priority queue
-2. **Media**: Music/video display with album art and progress
-3. **General**: Flexible HTML content, forms, announcements
-
-**Features:**
-- Transparent backgrounds for OBS compositing
-- WebSocket updates for real-time data
-- Token-based security per community
-- Configurable display duration
-- Responsive design for different scene sizes
-
-**URL Format:**
-```
-https://browser.waddlebot.com/{token}/ticker
-https://browser.waddlebot.com/{token}/media
-https://browser.waddlebot.com/{token}/general
-```
-
----
-
-## Summary
-
-WaddleBot's architecture is designed for:
-
-- **Scalability**: Horizontal scaling with coordination system and Kubernetes
-- **Performance**: Multi-threading, read replicas, caching, batch processing
-- **Reliability**: Event-driven architecture with retry logic and error handling
-- **Security**: Multi-layer authentication, encryption, rate limiting
-- **Extensibility**: Microservices design with marketplace for community modules
-- **Observability**: Comprehensive logging, metrics, and monitoring
-
-The system handles events from multiple platforms, processes them through a high-performance routing layer, executes appropriate actions through interaction modules, and delivers responses back to users and OBS via browser sources.
-
-For detailed information on specific topics:
-- Event Processing: `docs/architecture/event-processing.md`
-- Database Schema: `docs/architecture/database-schema.md`
-- Redis Architecture: `docs/architecture/redis-architecture.md`
-- Shared Patterns: `docs/architecture/shared-patterns.md`
+A Feature is available iff **both** gates pass. Unreachable license/flag server degrades to the
+last-known cached value — never fails open on a flag it has never seen. Entitlement resolution
+order: community → tenant (narrowest first).
+
+**License-bypass domains** (`libs/flask_core/flask_core/entitlement.py`) skip the license gate
+only — the PostHog flag gate always still runs — matched against the **full hostname** via
+`fnmatch` (never a substring check, so `waddles.penguintech.cloud.attacker.com` cannot spoof
+`*.penguintech.cloud`). Bypass resolves to a **depth**:
+
+| Host pattern | Depth | Why |
+|---|---|---|
+| `penguincloud.io`, `*.penguincloud.io`, `penguintech.cloud`, `*.penguintech.cloud` | `global_community` | PenguinTech's own pre-prod SaaS (alpha/beta/gamma) — every tier, including per-community Enterprise features, must be exercisable pre-prod |
+| `waddles.app`, `*.waddles.app` | `global` | The product's own prod domain — individual communities still pay for community-scoped entitlement |
+| Anything else | `none` | Validated against `license.penguintech.io` |
+
+## Build status caveats
+
+Read this before assuming a container is production-ready:
+
+- **App code is real** for `svc-ingest`, `svc-process`, `svc-action`, `svc-presentation`,
+  `svc-streaming`, `hub-api`, and `hub-webui` — each has a working `app.py`/`runner.py`, tests, and
+  its own `Dockerfile`.
+- **Helm chart wiring lags the code**: every pipeline container's Deployment template still pins
+  `image:` to a shared placeholder base digest (`pipeline.pythonBaseImage` /
+  `pipeline.nodeBaseImage` in `values.yaml`) — no CI build publishes a per-container image yet.
+- **`svc-core` is the exception** — no consolidated container exists. Identity, security, and
+  credential logic still run as three separate module services (`core/identity_core_module`,
+  `core/security_core_module`, `core/credential_manager_module`); `svc-core.yaml` is a Helm
+  skeleton with no backing app code.
+- **The 8-container Helm templates coexist with ~31 legacy per-module Deployments** carried over
+  from v2.2.x (router, per-platform collectors, action-platforms, etc.) — nothing has been deleted.
+  The legacy set still serves most live functionality during cutover. Full 31→8 mapping:
+  [`k8s/helm/waddlebot/PIPELINE_MAPPING.md`](../k8s/helm/waddlebot/PIPELINE_MAPPING.md).
+- **`svc-streaming` fronts external engines**, it does not implement its own media transport: an
+  internal RTMP/AV1 transcode proxy and LiveKit (SFU) sit behind it today. A native Rust data
+  plane is a documented future direction (`docs/plans/2026-08-31-svc-streaming-design.md`), not
+  shipped.
+- **Music Station**: the presentation layer (player, overlay, live SSE push to OBS) and the
+  YouTube/Spotify provider resolvers (normalized `Track` model, `hub_api/services/music_providers/`)
+  are real. Per-source `ingest` bundles, a shared `process`-stage queue manager, and SoundCloud
+  support are not yet built — the presentation layer reads an existing queue key format directly.
+
+## Technology stack
+
+**Backend:** Python 3.13, Quart (async), PostgreSQL, Valkey
+**Frontend:** React 18, Vite, TailwindCSS v4 (`hub-webui`)
+**Infrastructure:** Docker, Kubernetes (Helm v3), GitHub Actions
+**AI/LLM:** Ollama (free-local), OpenAI/Anthropic (BYOK), premium-metered local models
+**Storage:** PostgreSQL, MinIO (S3), Qdrant (vectors)
+
+## See also
+
+- [`docs/plans/2026-08-31-app-bundle-sdk-design.md`](plans/2026-08-31-app-bundle-sdk-design.md) — full bundle authoring spec
+- [`docs/plans/2026-08-31-v3-sccembs-program-plan.md`](plans/2026-08-31-v3-sccembs-program-plan.md) — program roadmap and phase history
+- [`docs/architecture/core-boundary.md`](architecture/core-boundary.md) — per-file module-ownership evidence
+- [`k8s/helm/waddlebot/PIPELINE_MAPPING.md`](../k8s/helm/waddlebot/PIPELINE_MAPPING.md) — legacy container → pipeline container mapping

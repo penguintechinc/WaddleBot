@@ -2,7 +2,7 @@
 
 ## Overview
 
-Phase 6 represents the advanced feature set that elevates WaddleBot from a solid multi-platform chatbot into a comprehensive community management platform with AI-powered moderation, modern API capabilities, cross-platform calendar sync, and sophisticated engagement systems.
+Phase 6 represents the advanced feature set that elevates Waddles from a solid multi-platform chatbot into a comprehensive community management platform with AI-powered moderation, modern API capabilities, cross-platform calendar sync, and sophisticated engagement systems.
 
 **Timeline**: 8-12 weeks (after Phases 1-5)
 **Complexity**: High
@@ -96,7 +96,7 @@ identity_2fa_secrets              # TOTP secrets (encrypted)
 ##### 4. Community Templates
 - **Onboarding Templates**: Pre-configured welcome messages, rules, role assignments
 - **Configuration Presets**: Gaming community, podcast, education, business
-- **Import/Export**: Share community configurations between WaddleBot instances
+- **Import/Export**: Share community configurations between Waddles instances
 - **Best Practices Library**: Curated templates from successful communities
 
 #### Technical Implementation
@@ -1032,9 +1032,9 @@ Enhance the existing calendar module with platform synchronization, recurring ev
 #### Discord Events API Integration
 
 **Discord Events**: Discord has native scheduled events
-- Create Discord event when WaddleBot event created
+- Create Discord event when Waddles event created
 - Sync RSVP status bidirectionally
-- Update/delete Discord event when WaddleBot event changes
+- Update/delete Discord event when Waddles event changes
 
 ```python
 # calendar_interaction_module/services/platform_sync/discord_sync.py
@@ -1044,7 +1044,7 @@ from typing import Optional, Dict, Any
 
 class DiscordEventSync:
     """
-    Sync WaddleBot calendar events with Discord scheduled events.
+    Sync Waddles calendar events with Discord scheduled events.
 
     Discord API: https://discord.com/developers/docs/resources/guild-scheduled-event
     """
@@ -1067,7 +1067,7 @@ class DiscordEventSync:
         try:
             guild = await self.client.fetch_guild(int(guild_id))
 
-            # Map WaddleBot event to Discord event
+            # Map Waddles event to Discord event
             scheduled_event = await guild.create_scheduled_event(
                 name=event['title'],
                 description=event['description'][:1000] if event['description'] else None,
@@ -1078,7 +1078,7 @@ class DiscordEventSync:
                 privacy_level=discord.PrivacyLevel.guild_only
             )
 
-            # Store Discord event ID in WaddleBot database
+            # Store Discord event ID in Waddles database
             await self.dal.execute(
                 "UPDATE calendar_events SET discord_event_id = $1, sync_status = 'synced' WHERE id = $2",
                 [str(scheduled_event.id), event['id']]
@@ -1102,13 +1102,13 @@ class DiscordEventSync:
             return None
 
     async def sync_rsvps(self, event_id: int, discord_event_id: str):
-        """Sync RSVP status from Discord to WaddleBot"""
+        """Sync RSVP status from Discord to Waddles"""
         try:
             # Get Discord event and interested users
             scheduled_event = await self.client.fetch_scheduled_event(discord_event_id)
             users = await scheduled_event.fetch_users(limit=1000)
 
-            # Map Discord users to WaddleBot users via identity_core_module
+            # Map Discord users to Waddles users via identity_core_module
             for user in users:
                 hub_user_id = await self._get_hub_user_id(user.id, 'discord')
                 if hub_user_id:
@@ -1131,7 +1131,7 @@ class DiscordEventSync:
             self.logger.error(f"Failed to sync Discord RSVPs: {e}", event_id=event_id)
 
     async def _get_hub_user_id(self, discord_user_id: str, platform: str) -> Optional[int]:
-        """Look up WaddleBot hub_user_id from platform identity"""
+        """Look up Waddles hub_user_id from platform identity"""
         rows = await self.dal.execute(
             "SELECT hub_user_id FROM identity_links WHERE platform = $1 AND platform_user_id = $2",
             [platform, discord_user_id]
@@ -1142,8 +1142,8 @@ class DiscordEventSync:
 #### Twitch Stream Schedule Integration
 
 **Twitch Schedule API**: Twitch has stream schedule segments
-- Sync WaddleBot events to Twitch schedule
-- Display upcoming streams in WaddleBot calendar
+- Sync Waddles events to Twitch schedule
+- Display upcoming streams in Waddles calendar
 
 ```python
 # calendar_interaction_module/services/platform_sync/twitch_sync.py
@@ -1153,7 +1153,7 @@ from typing import Optional, Dict, Any
 
 class TwitchScheduleSync:
     """
-    Sync WaddleBot calendar events with Twitch stream schedule.
+    Sync Waddles calendar events with Twitch stream schedule.
 
     Twitch API: https://dev.twitch.tv/docs/api/reference#create-channel-stream-schedule-segment
     """
@@ -1762,7 +1762,7 @@ class ICalExportService:
         Returns: iCal file content (string)
         """
         cal = Calendar()
-        cal.add('prodid', '-//WaddleBot//Calendar//EN')
+        cal.add('prodid', '-//Waddles//Calendar//EN')
         cal.add('version', '2.0')
         cal.add('x-wr-calname', f'{community_name} Events')
         cal.add('x-wr-timezone', 'UTC')
@@ -1787,7 +1787,7 @@ class ICalExportService:
             if event_data.get('is_recurring') and event_data.get('recurring_pattern'):
                 event.add('rrule', event_data['recurring_pattern'])
 
-            # Add URL to WaddleBot event page
+            # Add URL to Waddles event page
             event.add('url', f'https://hub.waddlebot.com/events/{event_data["event_uuid"]}')
 
             # Organizer
@@ -2743,7 +2743,7 @@ CREATE INDEX idx_abuse_flags ON loyalty_abuse_flags(community_id, user_id, flagg
 - **Mitigation**: Query depth/complexity limits, cost analysis, caching
 
 **Platform API Rate Limits** (Medium Impact, High Probability)
-- **Risk**: Discord/Twitch/Slack APIs rate limit WaddleBot
+- **Risk**: Discord/Twitch/Slack APIs rate limit Waddles
 - **Mitigation**: Respect rate limits, implement backoff, queue syncs
 
 **Recurring Event Bugs** (High Impact, Low Probability)
@@ -2768,7 +2768,7 @@ CREATE INDEX idx_abuse_flags ON loyalty_abuse_flags(community_id, user_id, flagg
 
 ## Conclusion
 
-Phase 6 represents advanced features that differentiate WaddleBot in the market. While complex, these features provide significant value:
+Phase 6 represents advanced features that differentiate Waddles in the market. While complex, these features provide significant value:
 
 - **ML Bot Detection**: Automated moderation reduces workload
 - **GraphQL API**: Modern, flexible API for integrations
@@ -2789,4 +2789,4 @@ Each feature should be developed with:
 - Documentation and examples
 - Backward compatibility
 
-This phase transforms WaddleBot into a comprehensive community management platform ready for scale and differentiation in a competitive market.
+This phase transforms Waddles into a comprehensive community management platform ready for scale and differentiation in a competitive market.

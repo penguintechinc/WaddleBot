@@ -5,6 +5,8 @@ import LiveStreamGrid from '../../components/streams/LiveStreamGrid';
 import LeaderboardCard from '../../components/leaderboard/LeaderboardCard';
 import BotScoreBadge from '../../components/BotScoreBadge';
 import BotScoreCard from '../../components/BotScoreCard';
+import CommunityStatsWidget from '../../components/dashboard/CommunityStatsWidget';
+import QuickActionsWidget from '../../components/dashboard/QuickActionsWidget';
 import { MegaphoneIcon, MapPinIcon } from '@heroicons/react/24/outline';
 
 function CommunityDashboard() {
@@ -323,20 +325,15 @@ function CommunityDashboard() {
             </div>
           )}
 
-          {/* Quick Links */}
-          <div className="card">
-            <div className="card-header">
-              <h2 className="font-semibold text-sky-100">Quick Links</h2>
-            </div>
-            <div className="p-2">
-              <Link
-                to={`/dashboard/community/${id}/settings`}
-                className="block px-4 py-2 text-sm text-navy-300 hover:bg-navy-800 hover:text-sky-300 rounded-lg transition-colors"
-              >
-                Community Settings
-              </Link>
-            </div>
-          </div>
+          {/* Community Stats */}
+          <CommunityStatsWidget
+            community={data?.community}
+            recentActivity={data?.recentActivity}
+            streams={streams}
+          />
+
+          {/* Quick Actions — curated shortcuts not in sidebar */}
+          <QuickActionsWidget id={id} />
         </div>
       </div>
     </div>

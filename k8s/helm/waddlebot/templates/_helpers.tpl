@@ -345,3 +345,38 @@ cert-manager.io/cluster-issuer: {{ .Values.ingress.certManager.issuer.name }}
 cert-manager.io/issuer: {{ .Values.ingress.certManager.issuer.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+DB Migration initContainer
+Runs database migrations before the application container starts.
+Uses advisory locking to handle concurrent pod startup safely.
+Usage: {{- include "waddlebot.dbMigrateInitContainer" . | nindent 6 }}
+*/}}
+{{- define "waddlebot.dbMigrateInitContainer" -}}
+- name: db-migrate
+  image: "{{ .Values.global.imageRegistry }}/migrations:{{ .Values.global.imageTag }}"
+  imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+  env:
+  - name: DATABASE_URL
+    valueFrom:
+      secretKeyRef:
+        name: {{ include "waddlebot.fullname" . }}-secrets
+        key: DATABASE_URL
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
+    limits:
+      cpu: "200m"
+      memory: "128Mi"
+{{- end }}
+
+{{/*
+Image pull secrets
+*/}}
+{{- define "waddlebot.imagePullSecrets" -}}
+{{- with .Values.global.imagePullSecrets }}
+imagePullSecrets:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- end }}

@@ -26,7 +26,7 @@ export async function generateSelfSignedCertificate(options) {
     commonName,
     altNames = [],
     validityDays = 365,
-    organization = 'WaddleBot',
+    organization = 'Waddles',
     country = 'US'
   } = options;
 

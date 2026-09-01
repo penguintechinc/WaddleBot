@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS memories_quotes (
 
     -- Full-text search index
     search_vector tsvector GENERATED ALWAYS AS (
-        to_tsvector('english', coalesce(quote_text, '') || ' ' || coalesce(author_username, '') || ' ' || coalesce(category, ''))
+        immutable_to_tsvector('english'::regconfig, coalesce(quote_text, '') || ' ' || coalesce(author_username, '') || ' ' || coalesce(category, ''))
     ) STORED
 );
 
@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS memories_bookmarks (
 
     -- Full-text search index
     search_vector tsvector GENERATED ALWAYS AS (
-        to_tsvector('english', coalesce(title, '') || ' ' || coalesce(description, '') || ' ' || coalesce(array_to_string(tags, ' '), ''))
+        immutable_to_tsvector('english'::regconfig, coalesce(title, '') || ' ' || coalesce(description, '') || ' ' || coalesce(immutable_array_to_string(tags, ' '::text), ''))
     ) STORED
 );
 

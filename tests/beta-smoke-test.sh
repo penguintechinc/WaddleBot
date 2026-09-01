@@ -1,5 +1,5 @@
 #!/bin/bash
-# WaddleBot Beta Smoke Test
+# Waddles Beta Smoke Test
 # Validates API endpoints and frontend accessibility after deployment
 #
 # IMPORTANT: This test MUST pass after deployment to beta cluster.
@@ -49,7 +49,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 echo "========================================"
-echo "WaddleBot Beta Smoke Test"
+echo "Waddles Beta Smoke Test"
 echo "========================================"
 echo ""
 echo "Target: $BASE_URL"
@@ -95,15 +95,15 @@ test_endpoint() {
 
     if [ "$actual_status" = "$expected_status" ]; then
         echo -e "${GREEN}  [PASS]${NC} $name ($method $endpoint) -> $actual_status"
-        ((PASSED++))
+        PASSED=$((PASSED + 1))
         return 0
     elif [ "$actual_status" = "000" ]; then
         echo -e "${RED}  [FAIL]${NC} $name ($method $endpoint) -> Connection failed (timeout or unreachable)"
-        ((FAILED++))
+        FAILED=$((FAILED + 1))
         return 1
     else
         echo -e "${RED}  [FAIL]${NC} $name ($method $endpoint) -> Expected $expected_status, got $actual_status"
-        ((FAILED++))
+        FAILED=$((FAILED + 1))
         return 1
     fi
 }
@@ -146,19 +146,19 @@ test_not_404() {
 
     if [ "$actual_status" = "404" ]; then
         echo -e "${RED}  [FAIL]${NC} $name ($method $endpoint) -> 404 NOT FOUND (endpoint missing!)"
-        ((FAILED++))
+        FAILED=$((FAILED + 1))
         return 1
     elif [ "$actual_status" = "000" ]; then
         echo -e "${RED}  [FAIL]${NC} $name ($method $endpoint) -> Connection failed"
-        ((FAILED++))
+        FAILED=$((FAILED + 1))
         return 1
     elif [ "$actual_status" = "500" ] || [ "$actual_status" = "502" ] || [ "$actual_status" = "503" ]; then
         echo -e "${YELLOW}  [WARN]${NC} $name ($method $endpoint) -> Server error $actual_status (check logs)"
-        ((WARNINGS++))
+        WARNINGS=$((WARNINGS + 1))
         return 0
     else
         echo -e "${GREEN}  [PASS]${NC} $name ($method $endpoint) -> $actual_status"
-        ((PASSED++))
+        PASSED=$((PASSED + 1))
         return 0
     fi
 }
@@ -168,7 +168,7 @@ echo "1. Frontend Accessibility"
 echo "----------------------------------------"
 
 # Test frontend loads
-test_endpoint "Homepage loads" "GET" "/" "200"
+test_endpoint "Homepage loads" "GET" "/" "200" || true
 
 echo ""
 echo "----------------------------------------"
@@ -176,11 +176,11 @@ echo "2. Public API Endpoints"
 echo "----------------------------------------"
 
 # These endpoints should exist and NOT return 404
-test_not_404 "Signup settings" "GET" "/api/v1/signup-settings"
-test_not_404 "Cookie policy" "GET" "/api/v1/cookie/policy"
-test_not_404 "Cookie consent" "GET" "/api/v1/cookie"
-test_not_404 "Platform stats" "GET" "/api/v1/stats"
-test_not_404 "Public communities" "GET" "/api/v1/communities"
+test_not_404 "Signup settings" "GET" "/api/v1/signup-settings" || true
+test_not_404 "Cookie policy" "GET" "/api/v1/cookie/policy" || true
+test_not_404 "Cookie consent" "GET" "/api/v1/cookie" || true
+test_not_404 "Platform stats" "GET" "/api/v1/platform/stats" || true
+test_not_404 "Public communities" "GET" "/api/v1/communities" || true
 
 echo ""
 echo "----------------------------------------"
@@ -188,18 +188,17 @@ echo "3. Authentication Endpoints"
 echo "----------------------------------------"
 
 # Auth endpoints - should exist (may return 400/401 but NOT 404)
-test_not_404 "Login endpoint" "POST" "/api/v1/auth/login" '{"email":"test@test.com","password":"test"}'
-test_not_404 "Register endpoint" "POST" "/api/v1/auth/register" '{"email":"test@test.com","password":"test123"}'
-test_not_404 "Current user" "GET" "/api/v1/auth/me"
+test_not_404 "Login endpoint" "POST" "/api/v1/auth/login" '{"email":"test@test.com","password":"test"}' || true
+test_not_404 "Register endpoint" "POST" "/api/v1/auth/register" '{"email":"test@test.com","password":"test123"}' || true
+test_not_404 "Current user" "GET" "/api/v1/auth/me" || true
 
 echo ""
 echo "----------------------------------------"
 echo "4. Health Endpoints"
 echo "----------------------------------------"
 
-# Health check endpoint (if exists)
-test_endpoint "API health" "GET" "/api/v1/health" "200" 2>/dev/null || \
-    echo -e "${YELLOW}  [SKIP]${NC} Health endpoint not configured"
+# Health check endpoint (at /health, not /api/v1/health)
+test_endpoint "API health" "GET" "/health" "200" || true
 
 echo ""
 echo "========================================"

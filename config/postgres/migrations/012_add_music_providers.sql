@@ -1,6 +1,6 @@
 -- Migration 012: Add Music Provider Configuration System
 -- Description: Implements multi-provider music system with support for Spotify, YouTube, SoundCloud, Pretzel, Epidemic, StreamBeats, Monstercat, and Icecast
--- Author: WaddleBot Team
+-- Author: Waddles Team
 -- Date: 2025-12-15
 
 -- =============================================================================
@@ -316,10 +316,13 @@ BEGIN
     -- Move next queued item to playing
     UPDATE music_queue
     SET status = 'playing', position = 0
-    WHERE community_id = p_community_id
-      AND status = 'queued'
-    ORDER BY position ASC, votes DESC, created_at ASC
-    LIMIT 1
+    WHERE id = (
+        SELECT id FROM music_queue
+        WHERE community_id = p_community_id
+          AND status = 'queued'
+        ORDER BY position ASC, votes DESC, created_at ASC
+        LIMIT 1
+    )
     RETURNING id INTO v_next_track;
 
     -- Update positions for remaining queue items

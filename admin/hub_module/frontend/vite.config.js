@@ -16,4 +16,23 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: false,
   },
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/test/setup.js'],
+    coverage: {
+      provider: 'v8',
+      include: [
+        'src/components/dashboard/CommunityStatsWidget.jsx',
+        'src/components/dashboard/QuickActionsWidget.jsx',
+        'src/layouts/DashboardLayout.jsx',
+      ],
+      thresholds: {
+        statements: 90,
+        branches: 90,
+        functions: 90,
+        lines: 90,
+      },
+    },
+  },
 });

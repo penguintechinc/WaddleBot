@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS vendor_submissions (
     -- Payment Information
     payment_method VARCHAR(50) NOT NULL CHECK (payment_method IN ('paypal', 'stripe', 'check', 'bank_transfer', 'other')),
     payment_details JSONB NOT NULL DEFAULT '{}',
-    processor_fee_disclaimer TEXT DEFAULT 'Processor fees will be deducted by payment processors (e.g., PayPal, Stripe). These fees are not charged by WaddleBot and are passed directly to the processor.',
+    processor_fee_disclaimer TEXT DEFAULT 'Processor fees will be deducted by payment processors (e.g., PayPal, Stripe). These fees are not charged by Waddles and are passed directly to the processor.',
 
     -- Submission Status
     status VARCHAR(50) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'under-review', 'approved', 'rejected', 'suspended')),

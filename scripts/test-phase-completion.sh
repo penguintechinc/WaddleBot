@@ -5,7 +5,7 @@
 set -e
 
 echo "========================================="
-echo "WaddleBot Phase Completion Test"
+echo "Waddles Phase Completion Test"
 echo "========================================="
 echo ""
 

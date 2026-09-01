@@ -2,7 +2,7 @@
 
 ## Overview
 
-The WaddleBot Hub Module is configured through environment variables, configuration files, and Docker. This document covers all configuration options for both backend and frontend components.
+The Waddles Hub Module is configured through environment variables, configuration files, and Docker. This document covers all configuration options for both backend and frontend components.
 
 ---
 
@@ -493,7 +493,7 @@ app.use(sanitizeBody);  // Sanitizes all string inputs
 
 ### Service URLs
 
-The hub module integrates with other WaddleBot services:
+The hub module integrates with other Waddles services:
 
 | Service | Environment Variable | Default URL |
 |---------|---------------------|-------------|

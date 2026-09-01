@@ -9,6 +9,42 @@ import { logger } from '../utils/logger.js';
 // Get loyalty module URL from environment
 const LOYALTY_API_URL = process.env.LOYALTY_API_URL || 'http://loyalty-interaction:8032';
 
+// Default config returned when loyalty service is unavailable
+const DEFAULT_LOYALTY_CONFIG = {
+  currency_name: 'Points',
+  currency_symbol: '$',
+  currency_emoji: '\uD83E\uDE99',
+  chat_enabled: false,
+  chat_rate: 0.5,
+  chat_cooldown: 30,
+  follow_enabled: false,
+  follow_rate: 100,
+  subscription_enabled: false,
+  subscription_rate: 500,
+  subscription_t2_multiplier: 2.0,
+  subscription_t3_multiplier: 3.0,
+  gift_subscription_enabled: false,
+  gift_rate: 300,
+  raid_enabled: false,
+  raid_rate: 200,
+  cheer_enabled: false,
+  cheer_per_100bits: 100,
+  donation_enabled: false,
+  donation_per_dollar: 100,
+  gambling_enabled: false,
+  min_bet: 10,
+  max_bet: 10000,
+  slots_enabled: false,
+  coinflip_enabled: false,
+  roulette_enabled: false,
+  duels_enabled: false,
+  min_wager: 10,
+  max_wager: 5000,
+  duel_timeout: 5,
+  gear_enabled: false,
+  gear_drops_enabled: false,
+};
+
 /**
  * Helper function to proxy requests to loyalty module
  */
@@ -32,12 +68,29 @@ async function proxyToLoyalty(path, options = {}) {
 
     return data;
   } catch (err) {
+    // Connection refused = loyalty module not deployed (e.g. in beta)
+    if (err.cause?.code === 'ECONNREFUSED' || err.message?.includes('fetch failed')) {
+      return { success: true, unavailable: true, message: 'Loyalty module not available' };
+    }
     logger.error('Loyalty module proxy error', {
       path,
       error: err.message,
     });
     throw err;
   }
+}
+
+/**
+ * Proxy a GET request, returning defaults when loyalty module is unavailable.
+ * Merges the defaults into the unavailable response so the frontend
+ * always receives the expected data shape.
+ */
+async function proxyGetOrDefault(path, defaults = {}) {
+  const data = await proxyToLoyalty(path, { method: 'GET' });
+  if (data.unavailable) {
+    return { success: true, unavailable: true, ...defaults };
+  }
+  return data;
 }
 
 // ===== Currency Configuration =====
@@ -49,11 +102,10 @@ async function proxyToLoyalty(path, options = {}) {
 export async function getConfig(req, res, next) {
   try {
     const communityId = parseInt(req.params.communityId, 10);
-
-    const data = await proxyToLoyalty(`/api/v1/admin/${communityId}/loyalty/config`, {
-      method: 'GET',
-    });
-
+    const data = await proxyGetOrDefault(
+      `/api/v1/admin/${communityId}/loyalty/config`,
+      { config: DEFAULT_LOYALTY_CONFIG }
+    );
     res.json(data);
   } catch (err) {
     next(err);
@@ -97,12 +149,10 @@ export async function getLeaderboard(req, res, next) {
       limit: req.query.limit || '25',
       offset: req.query.offset || '0',
     });
-
-    const data = await proxyToLoyalty(
+    const data = await proxyGetOrDefault(
       `/api/v1/admin/${communityId}/loyalty/leaderboard?${queryParams}`,
-      { method: 'GET' }
+      { users: [], pagination: { total: 0, page: 1, limit: 25 } }
     );
-
     res.json(data);
   } catch (err) {
     next(err);
@@ -171,11 +221,10 @@ export async function wipeAllCurrency(req, res, next) {
 export async function getStats(req, res, next) {
   try {
     const communityId = parseInt(req.params.communityId, 10);
-
-    const data = await proxyToLoyalty(`/api/v1/admin/${communityId}/loyalty/stats`, {
-      method: 'GET',
-    });
-
+    const data = await proxyGetOrDefault(
+      `/api/v1/admin/${communityId}/loyalty/stats`,
+      { stats: { total_users: 0, total_currency: 0, average_balance: 0 } }
+    );
     res.json(data);
   } catch (err) {
     next(err);
@@ -200,8 +249,7 @@ export async function getGiveaways(req, res, next) {
     const queryString = queryParams.toString();
     const path = `/api/v1/admin/${communityId}/loyalty/giveaways${queryString ? `?${queryString}` : ''}`;
 
-    const data = await proxyToLoyalty(path, { method: 'GET' });
-
+    const data = await proxyGetOrDefault(path, { giveaways: [] });
     res.json(data);
   } catch (err) {
     next(err);
@@ -241,12 +289,10 @@ export async function getGiveawayEntries(req, res, next) {
   try {
     const communityId = parseInt(req.params.communityId, 10);
     const giveawayId = parseInt(req.params.giveawayId, 10);
-
-    const data = await proxyToLoyalty(
+    const data = await proxyGetOrDefault(
       `/api/v1/admin/${communityId}/loyalty/giveaways/${giveawayId}/entries`,
-      { method: 'GET' }
+      { entries: [] }
     );
-
     res.json(data);
   } catch (err) {
     next(err);
@@ -320,12 +366,10 @@ export async function endGiveaway(req, res, next) {
 export async function getGamesConfig(req, res, next) {
   try {
     const communityId = parseInt(req.params.communityId, 10);
-
-    const data = await proxyToLoyalty(
+    const data = await proxyGetOrDefault(
       `/api/v1/admin/${communityId}/loyalty/games/config`,
-      { method: 'GET' }
+      { config: { slots_enabled: false, coinflip_enabled: false, roulette_enabled: false, min_bet: 10, max_bet: 10000 } }
     );
-
     res.json(data);
   } catch (err) {
     next(err);
@@ -366,12 +410,10 @@ export async function updateGamesConfig(req, res, next) {
 export async function getGamesStats(req, res, next) {
   try {
     const communityId = parseInt(req.params.communityId, 10);
-
-    const data = await proxyToLoyalty(
+    const data = await proxyGetOrDefault(
       `/api/v1/admin/${communityId}/loyalty/games/stats`,
-      { method: 'GET' }
+      { stats: { total_games: 0, total_wagered: 0, total_payouts: 0 } }
     );
-
     res.json(data);
   } catch (err) {
     next(err);
@@ -394,11 +436,10 @@ export async function getRecentGames(req, res, next) {
       queryParams.set('gameType', req.query.gameType);
     }
 
-    const data = await proxyToLoyalty(
+    const data = await proxyGetOrDefault(
       `/api/v1/admin/${communityId}/loyalty/games/recent?${queryParams}`,
-      { method: 'GET' }
+      { games: [] }
     );
-
     res.json(data);
   } catch (err) {
     next(err);
@@ -414,12 +455,10 @@ export async function getRecentGames(req, res, next) {
 export async function getGearCategories(req, res, next) {
   try {
     const communityId = parseInt(req.params.communityId, 10);
-
-    const data = await proxyToLoyalty(
+    const data = await proxyGetOrDefault(
       `/api/v1/admin/${communityId}/loyalty/gear/categories`,
-      { method: 'GET' }
+      { categories: [] }
     );
-
     res.json(data);
   } catch (err) {
     next(err);
@@ -443,8 +482,7 @@ export async function getGearItems(req, res, next) {
     const queryString = queryParams.toString();
     const path = `/api/v1/admin/${communityId}/loyalty/gear/items${queryString ? `?${queryString}` : ''}`;
 
-    const data = await proxyToLoyalty(path, { method: 'GET' });
-
+    const data = await proxyGetOrDefault(path, { items: [] });
     res.json(data);
   } catch (err) {
     next(err);
@@ -541,12 +579,10 @@ export async function deleteGearItem(req, res, next) {
 export async function getGearStats(req, res, next) {
   try {
     const communityId = parseInt(req.params.communityId, 10);
-
-    const data = await proxyToLoyalty(
+    const data = await proxyGetOrDefault(
       `/api/v1/admin/${communityId}/loyalty/gear/stats`,
-      { method: 'GET' }
+      { stats: { total_items: 0, total_sold: 0, total_revenue: 0 } }
     );
-
     res.json(data);
   } catch (err) {
     next(err);

@@ -68,12 +68,12 @@ class OAuthManager:
             scopes=token_row.scopes,
         )
 
-        # Check if token is expired or about to expire (within 5 minutes)
-        if token_row.expires_at:
-            expires_soon = datetime.utcnow() + timedelta(minutes=5)
-            if token_row.expires_at <= expires_soon:
-                logger.info(f"Token expired/expiring for channel: {channel_id}, refreshing")
-                credentials = self._refresh_token(channel_id, credentials)
+        # Check if token is expired or about to expire (within 5 minutes).
+        # Treat NULL expires_at as already expired — always refresh.
+        expires_soon = datetime.utcnow() + timedelta(minutes=5)
+        if token_row.expires_at is None or token_row.expires_at <= expires_soon:
+            logger.info(f"Token expired/expiring for channel: {channel_id}, refreshing")
+            credentials = self._refresh_token(channel_id, credentials)
 
         return credentials
 
@@ -93,11 +93,15 @@ class OAuthManager:
         try:
             credentials.refresh(Request())
 
-            # Update database with new token
+            # Update database with new token.
+            # Also persist refresh_token — Google may rotate it on each refresh.
+            # google-auth preserves the old value when Google does not rotate it,
+            # so credentials.refresh_token is always safe to use here.
             self.db(
                 self.db.youtube_oauth_tokens.channel_id == channel_id
             ).update(
                 access_token=credentials.token,
+                refresh_token=credentials.refresh_token,
                 expires_at=credentials.expiry,
                 updated_at=datetime.utcnow(),
             )

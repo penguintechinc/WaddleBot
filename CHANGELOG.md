@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-04-10
+
+### Added
+- Microservice consolidation: 51 containers reduced to 22 via blueprint aggregation (Quart apps combining related modules)
+- 8 new consolidated service directories under `services/` (action-platforms, action-serverless, core-community, core-data, core-identity, interactive-gaming, interactive-media, interactive-productivity, interactive-social, trigger-streaming, trigger-webhooks)
+- Vendor portal enhancements: user dropdown menu, vendor modules/analytics/settings pages (#105)
+- Vendor discount codes: full CRUD API with atomic redemption, management UI with filters and pagination (#102)
+- Vendor analytics dashboard: sales metrics, install time-series, discount code performance, CSV export (#104)
+- Custom raffle sounds: per-community sound upload (mp3/ogg/wav), message templates with variable substitution (#111)
+- GitHub Issues sync: bidirectional support ticket ↔ GitHub issue sync, AES-256-GCM token encryption, webhook signature verification (#106)
+- AI knowledge base: pgvector embeddings for multi-source indexing (GitHub repos, URLs, text), confidence-scored ticket suggestions via Ollama (#107)
+- 4 new PostgreSQL migrations (064–067): discount codes, raffle sounds, GitHub sync, AI knowledge
+- Microsoft Teams trigger module with Adaptive Card support
+
+### Changed
+- Consolidated service architecture from individual module containers to grouped service containers
+- E2E test infrastructure: centralized fixtures, shared helpers, global setup with auto-seeding
+
+### Fixed
+- Multiple service startup crashes resolved during beta deployment
+- DAL URL format and botbuilder import issues
+- Blueprint name collisions in interactive-gaming
+- CI/CD workflow path detection for services/ directory
+
 ## [1.0.0] - 2025-12-16
 
 ### Added
@@ -155,4 +179,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-For more information about WaddleBot, please refer to the project documentation and contribution guidelines.
+For more information about Waddles, please refer to the project documentation and contribution guidelines.

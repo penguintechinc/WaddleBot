@@ -1,4 +1,4 @@
-# WaddleBot Infrastructure - PostgreSQL and Redis
+# Waddles Infrastructure - PostgreSQL and Redis
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -55,7 +55,7 @@ spec:
     spec:
       containers:
         - name: postgres
-          image: postgres:15-alpine
+          image: postgres:15-bookworm@sha256:b395c9b05a57a43c079691104bc8468ea336a42e6148f44095e66d0c056cdd1c
           ports:
             - containerPort: 5432
           env:
@@ -118,7 +118,7 @@ spec:
     spec:
       containers:
         - name: redis
-          image: redis:7-alpine
+          image: valkey/valkey:8-bookworm@sha256:fea8b3e67b15729d4bb70589eb03367bab9ad1ee89c876f54327fc7c6e618571
           command:
             - redis-server
             - --requirepass

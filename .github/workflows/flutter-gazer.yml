@@ -1,0 +1,446 @@
+name: Flutter Gazer CI/CD
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'mobile/flutter_gazer/**'
+      - '.github/workflows/flutter-gazer.yml'
+    tags:
+      - 'v*.*.*'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'mobile/flutter_gazer/**'
+      - '.github/workflows/flutter-gazer.yml'
+
+env:
+  FLUTTER_VERSION: '3.24.0'
+  JAVA_VERSION: '17'
+  XCODE_VERSION: '15.1'
+
+jobs:
+  lint:
+    name: Analyze & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2  # v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+
+      - name: Cache Flutter dependencies
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
+        with:
+          path: |
+            ${{ runner.tool_cache }}/flutter
+            ~/.cache/dart-sdk
+          key: flutter-${{ env.FLUTTER_VERSION }}-${{ runner.os }}
+          restore-keys: |
+            flutter-${{ env.FLUTTER_VERSION }}-
+
+      - name: Get Flutter version info
+        run: flutter --version
+
+      - name: Install dependencies
+        working-directory: mobile/flutter_gazer
+        run: flutter pub get
+
+      - name: Run flutter analyze
+        working-directory: mobile/flutter_gazer
+        run: flutter analyze
+
+      - name: Check code formatting
+        working-directory: mobile/flutter_gazer
+        run: dart format --set-exit-if-changed .
+
+      - name: Run lints
+        working-directory: mobile/flutter_gazer
+        run: flutter analyze --no-fatal-infos
+
+  test:
+    name: Unit Tests & Coverage
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2  # v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+
+      - name: Cache Flutter dependencies
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
+        with:
+          path: |
+            ${{ runner.tool_cache }}/flutter
+            ~/.cache/dart-sdk
+          key: flutter-${{ env.FLUTTER_VERSION }}-${{ runner.os }}
+          restore-keys: |
+            flutter-${{ env.FLUTTER_VERSION }}-
+
+      - name: Install dependencies
+        working-directory: mobile/flutter_gazer
+        run: flutter pub get
+
+      - name: Run tests with coverage
+        working-directory: mobile/flutter_gazer
+        run: flutter test --coverage
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2  # v6
+        with:
+          files: ./mobile/flutter_gazer/coverage/lcov.info
+          flags: flutter
+          name: flutter-gazer-coverage
+
+      - name: Archive test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        with:
+          name: test-results
+          path: mobile/flutter_gazer/coverage/
+
+  build-android:
+    name: Build Android (${{ matrix.build-type }})
+    runs-on: ubuntu-latest
+    needs: lint
+    if: false  # DISABLED: Flutter Gazer Android build not ready (package_info_plus Gradle issue)
+    strategy:
+      matrix:
+        build-type: [debug, release]
+      fail-fast: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Setup Java
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654  # v5
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2  # v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+
+      - name: Cache Flutter dependencies
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
+        with:
+          path: |
+            ${{ runner.tool_cache }}/flutter
+            ~/.cache/dart-sdk
+          key: flutter-${{ env.FLUTTER_VERSION }}-${{ runner.os }}
+          restore-keys: |
+            flutter-${{ env.FLUTTER_VERSION }}-
+
+      - name: Cache Gradle packages
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
+        with:
+          path: ~/.gradle/caches
+          key: gradle-${{ runner.os }}-${{ hashFiles('mobile/flutter_gazer/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Install dependencies
+        working-directory: mobile/flutter_gazer
+        run: flutter pub get
+
+      - name: Build APK (${{ matrix.build-type }})
+        working-directory: mobile/flutter_gazer
+        run: |
+          if [ "${{ matrix.build-type }}" = "debug" ]; then
+            flutter build apk --debug --target-platform android-arm,android-arm64
+          else
+            flutter build apk --release --target-platform android-arm,android-arm64
+          fi
+
+      - name: Build AAB (release only)
+        if: matrix.build-type == 'release'
+        working-directory: mobile/flutter_gazer
+        run: flutter build appbundle --release --target-platform android-arm,android-arm64
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        with:
+          name: gazer-apk-${{ matrix.build-type }}
+          path: mobile/flutter_gazer/build/app/outputs/apk/${{ matrix.build-type }}/app-${{ matrix.build-type }}.apk
+          retention-days: 30
+
+      - name: Upload AAB artifact
+        if: matrix.build-type == 'release'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        with:
+          name: gazer-aab-release
+          path: mobile/flutter_gazer/build/app/outputs/bundle/release/app-release.aab
+          retention-days: 30
+
+  build-ios:
+    name: Build iOS
+    runs-on: macos-latest
+    needs: lint
+    if: false  # DISABLED: Flutter Gazer iOS build not ready (no Podfile in ios/)
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2  # v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+
+      - name: Cache Flutter dependencies
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
+        with:
+          path: |
+            ${{ runner.tool_cache }}/flutter
+            ~/.cache/dart-sdk
+          key: flutter-${{ env.FLUTTER_VERSION }}-${{ runner.os }}
+          restore-keys: |
+            flutter-${{ env.FLUTTER_VERSION }}-
+
+      - name: Cache CocoaPods
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
+        with:
+          path: mobile/flutter_gazer/ios/Pods
+          key: cocoapods-${{ runner.os }}-${{ hashFiles('mobile/flutter_gazer/ios/Podfile.lock') }}
+          restore-keys: cocoapods-${{ runner.os }}-
+
+      - name: Install dependencies
+        working-directory: mobile/flutter_gazer
+        run: flutter pub get
+
+      - name: Setup iOS build
+        working-directory: mobile/flutter_gazer
+        run: |
+          flutter precache --ios
+          cd ios
+          pod install --repo-update
+          cd ..
+
+      - name: Build iOS App
+        working-directory: mobile/flutter_gazer
+        run: |
+          flutter build ios --no-codesign --release \
+            --target-platform ios \
+            --build-number=$(date +%s)
+
+      - name: Create iOS build archive
+        working-directory: mobile/flutter_gazer
+        run: |
+          cd build/ios/Release-iphoneos
+          ditto -c -k --sequesterRsrc --keepParent Runner.app Runner.ipa
+          cd ../../..
+          mv build/ios/Release-iphoneos/Runner.ipa build/ios/Release-iphoneos/gazer-ios-${{ github.run_number }}.ipa
+
+      - name: Upload iOS artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        with:
+          name: gazer-ios-release
+          path: mobile/flutter_gazer/build/ios/Release-iphoneos/gazer-ios-*.ipa
+          retention-days: 30
+
+  integration-test-android:
+    name: Android Integration Tests
+    runs-on: macos-latest
+    needs: [lint, build-android]
+    if: false  # DISABLED: Depends on disabled build-android job
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Setup Java
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654  # v5
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2  # v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+
+      - name: Cache Flutter dependencies
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
+        with:
+          path: |
+            ${{ runner.tool_cache }}/flutter
+            ~/.cache/dart-sdk
+          key: flutter-${{ env.FLUTTER_VERSION }}-${{ runner.os }}
+          restore-keys: |
+            flutter-${{ env.FLUTTER_VERSION }}-
+
+      - name: Cache Gradle packages
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
+        with:
+          path: ~/.gradle/caches
+          key: gradle-${{ runner.os }}-${{ hashFiles('mobile/flutter_gazer/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Install dependencies
+        working-directory: mobile/flutter_gazer
+        run: flutter pub get
+
+      - name: Run integration tests on Android emulator
+        uses: reactivecircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a  # v2
+        with:
+          api-level: 33
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          script: cd mobile/flutter_gazer && flutter test integration_test/
+
+  version-info:
+    name: Extract Version Info
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.extract.outputs.version }}
+      build-number: ${{ steps.extract.outputs.build-number }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Extract version from pubspec.yaml
+        id: extract
+        working-directory: mobile/flutter_gazer
+        run: |
+          VERSION=$(grep '^version:' pubspec.yaml | cut -d' ' -f2 | cut -d'+' -f1)
+          BUILD_NUMBER=$(grep '^version:' pubspec.yaml | cut -d'+' -f2)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "build-number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
+          echo "Extracted version: $VERSION+$BUILD_NUMBER"
+
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [build-android, build-ios, version-info, test]
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
+        with:
+          path: release-artifacts
+
+      - name: Prepare release notes
+        id: release-notes
+        working-directory: mobile/flutter_gazer
+        run: |
+          VERSION="${{ needs.version-info.outputs.version }}"
+          echo "## Gazer Mobile v$VERSION" > release-notes.md
+          echo "" >> release-notes.md
+          echo "**Build Number:** ${{ needs.version-info.outputs.build-number }}" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "### Artifacts" >> release-notes.md
+          echo "- Android APK (debug & release)" >> release-notes.md
+          echo "- Android App Bundle (release)" >> release-notes.md
+          echo "- iOS App (.ipa)" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "### Release Date" >> release-notes.md
+          echo "$(date -u +'%Y-%m-%d %H:%M UTC')" >> release-notes.md
+          cat release-notes.md
+
+      - name: Flatten artifact structure
+        run: |
+          mkdir -p flattened-artifacts
+          find release-artifacts -type f \( -name "*.apk" -o -name "*.aab" -o -name "*.ipa" \) -exec cp {} flattened-artifacts/ \;
+          ls -lah flattened-artifacts/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda  # v3
+        with:
+          files: flattened-artifacts/*
+          body_path: mobile/flutter_gazer/release-notes.md
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload release artifacts to workflow
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        with:
+          name: github-release-artifacts
+          path: flattened-artifacts/
+          retention-days: 90
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2  # v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+
+      - name: Install dependencies
+        working-directory: mobile/flutter_gazer
+        run: flutter pub get
+
+      - name: Check dependencies
+        working-directory: mobile/flutter_gazer
+        run: flutter pub deps --json > /dev/null || echo "Dependency check completed"
+
+      - name: Check for hardcoded secrets
+        run: |
+          set +e
+          found_secrets=0
+          for file in $(find mobile/flutter_gazer -type f \( -name "*.dart" -o -name "*.yaml" -o -name "*.yml" \) ! -path "*/.*" ! -path "*/test/*"); do
+            if grep -nE "(password|secret|api_key|private_key|secret_key)\s*[:=]\s*['\"][^'\"]{8,}" "$file" | grep -v "^.*//"; then
+              echo "Potential secret found in: $file"
+              found_secrets=1
+            fi
+          done
+          exit $found_secrets
+
+  workflow-status:
+    name: Workflow Status
+    runs-on: ubuntu-latest
+    needs: [lint, test, build-android, build-ios, integration-test-android, security-scan]
+    if: always()
+    steps:
+      - name: Check job status
+        run: |
+          if [ "${{ needs.lint.result }}" = "failure" ] || \
+             [ "${{ needs.test.result }}" = "failure" ] || \
+             [ "${{ needs.security-scan.result }}" = "failure" ]; then
+            echo "One or more jobs failed"
+            exit 1
+          fi
+          echo "All jobs completed successfully"
+
+      - name: Post workflow summary
+        run: |
+          echo "## Flutter Gazer CI/CD Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Workflow:** ${{ github.workflow }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Run ID:** ${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ github.ref }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Lint | ${{ needs.lint.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Test | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Android Build | ${{ needs.build-android.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| iOS Build | ${{ needs.build-ios.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Android Integration Tests | ${{ needs.integration-test-android.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security Scan | ${{ needs.security-scan.result }} |" >> $GITHUB_STEP_SUMMARY

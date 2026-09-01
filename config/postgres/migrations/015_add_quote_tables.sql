@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS quotes (
 
     -- Full-text search index
     search_vector tsvector GENERATED ALWAYS AS (
-        to_tsvector('english', coalesce(quote_text, '') || ' ' || coalesce(context, '') || ' ' || coalesce(array_to_string(tags, ' '), ''))
+        immutable_to_tsvector('english'::regconfig, coalesce(quote_text, '') || ' ' || coalesce(context, '') || ' ' || coalesce(immutable_array_to_string(tags, ' '::text), ''))
     ) STORED
 );
 

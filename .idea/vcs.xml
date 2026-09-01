@@ -2,11 +2,7 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/Waddlebot-GwMgr" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/Waddlebot-GwMgr/app/WaddlebotLibs" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/chat" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/libs" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/listener" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/sdk" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/sdk/libs" vcs="Git" />
   </component>

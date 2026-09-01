@@ -35,10 +35,42 @@ function AdminShoutouts() {
   const [newCreator, setNewCreator] = useState({ platform: 'twitch', username: '' });
   const [addingCreator, setAddingCreator] = useState(false);
 
+  // History tab state
+  const [history, setHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState(null);
+  const [historyFilterFrom, setHistoryFilterFrom] = useState('');
+  const [historyFilterTo, setHistoryFilterTo] = useState('');
+  const [historyFilterType, setHistoryFilterType] = useState('');
+
   useEffect(() => {
     fetchConfig();
     fetchCreators();
   }, [communityId]);
+
+  useEffect(() => {
+    if (activeTab === 'history') {
+      fetchHistory();
+    }
+  }, [activeTab, communityId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function fetchHistory() {
+    setHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      const params = {};
+      if (historyFilterFrom) params.from = historyFilterFrom;
+      if (historyFilterTo) params.to = historyFilterTo;
+      if (historyFilterType) params.type = historyFilterType;
+      const res = await adminApi.getShoutoutHistory(communityId, params);
+      setHistory(res.data?.history || res.data?.shoutouts || []);
+    } catch (err) {
+      setHistoryError('Failed to load shoutout history.');
+      console.error(err);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
 
   async function fetchConfig() {
     setLoading(true);
@@ -193,6 +225,16 @@ function AdminShoutouts() {
           }`}
         >
           Creator List ({creators.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('history')}
+          className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'history'
+              ? 'border-gold-400 text-gold-400'
+              : 'border-transparent text-navy-400 hover:text-sky-300'
+          }`}
+        >
+          History
         </button>
       </div>
 
@@ -525,6 +567,106 @@ function AdminShoutouts() {
                   </div>
                 ))}
               </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'history' && (
+        <div className="space-y-4">
+          {/* Filters */}
+          <div className="card p-4">
+            <div className="flex flex-wrap gap-4 items-end">
+              <div>
+                <label className="block text-xs text-navy-400 mb-1">From</label>
+                <input
+                  type="date"
+                  value={historyFilterFrom}
+                  onChange={(e) => setHistoryFilterFrom(e.target.value)}
+                  className="input text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-navy-400 mb-1">To</label>
+                <input
+                  type="date"
+                  value={historyFilterTo}
+                  onChange={(e) => setHistoryFilterTo(e.target.value)}
+                  className="input text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-navy-400 mb-1">Type</label>
+                <select
+                  value={historyFilterType}
+                  onChange={(e) => setHistoryFilterType(e.target.value)}
+                  className="input text-sm"
+                >
+                  <option value="">All Types</option>
+                  <option value="text">Text (!so)</option>
+                  <option value="visual">Visual</option>
+                  <option value="auto">Auto</option>
+                  <option value="manual">Manual</option>
+                </select>
+              </div>
+              <button onClick={fetchHistory} className="btn btn-secondary text-sm">
+                Apply Filters
+              </button>
+              <button
+                onClick={() => {
+                  setHistoryFilterFrom('');
+                  setHistoryFilterTo('');
+                  setHistoryFilterType('');
+                  setTimeout(fetchHistory, 0);
+                }}
+                className="text-navy-400 hover:text-sky-300 text-sm transition-colors"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+
+          {/* History Table */}
+          <div className="card overflow-hidden">
+            {historyLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gold-400" />
+              </div>
+            ) : historyError ? (
+              <div className="p-6 text-red-400 text-sm">{historyError}</div>
+            ) : history.length === 0 ? (
+              <div className="p-12 text-center text-navy-400">No shoutout history found.</div>
+            ) : (
+              <table>
+                <thead>
+                  <tr>
+                    <th>Target</th>
+                    <th>Type</th>
+                    <th>Triggered By</th>
+                    <th>Platform</th>
+                    <th>Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map((entry) => (
+                    <tr key={entry.id}>
+                      <td className="font-medium text-sky-100">{entry.targetUsername || entry.target_username || '—'}</td>
+                      <td>
+                        <span className="badge bg-navy-700 text-navy-300 border border-navy-600 capitalize">
+                          {entry.shoutoutType || entry.type || '—'}
+                        </span>
+                      </td>
+                      <td className="text-navy-400 text-sm">{entry.triggeredBy || entry.triggered_by || '—'}</td>
+                      <td className="text-navy-400 text-sm capitalize">{entry.platform || '—'}</td>
+                      <td className="text-navy-500 text-sm">
+                        {entry.createdAt || entry.created_at
+                          ? new Date(entry.createdAt || entry.created_at).toLocaleString()
+                          : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             )}
           </div>
         </div>

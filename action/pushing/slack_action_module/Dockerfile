@@ -1,7 +1,7 @@
 # Slack Action Module Dockerfile
 # Python 3.12 container for pushing actions to Slack
 
-FROM python:3.12-slim
+FROM python:3.13-slim-bookworm@sha256:f13a6b7565175da40695e8109f64cbc4d2e65f4c9ef2e3b321c3a44fa3c06fe7
 
 # Set working directory
 WORKDIR /app

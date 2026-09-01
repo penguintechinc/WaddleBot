@@ -1,5 +1,5 @@
 """
-Expression Engine for WaddleBot Workflow System
+Expression Engine for Waddles Workflow System
 
 This module provides safe evaluation of workflow expressions with:
 - Variable substitution from workflow context

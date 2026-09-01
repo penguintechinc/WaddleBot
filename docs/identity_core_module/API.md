@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Identity Core Module provides unified cross-platform identity management for WaddleBot. It supports both REST API (via Quart) and gRPC services for identity linking, user authentication, and platform integration.
+The Identity Core Module provides unified cross-platform identity management for Waddles. It supports both REST API (via Quart) and gRPC services for identity linking, user authentication, and platform integration.
 
 **Module Version:** 2.0.0
 **Module Name:** identity_core_module
@@ -667,7 +667,7 @@ Identity service health check.
 
 ### Proto File
 
-Located at: `/home/penguin/code/WaddleBot/libs/grpc_protos/identity.proto`
+Located at: `/home/penguin/code/Waddles/libs/grpc_protos/identity.proto`
 
 ---
 

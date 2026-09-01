@@ -1,5 +1,10 @@
 name: Build Container (Reusable)
 
+# Reusable workflow for building multi-arch container images.
+# Strategy: build amd64 and arm64 on native runners in parallel,
+# then merge into a single multi-arch OCI manifest.
+# This eliminates QEMU emulation overhead for arm64 (3-5x speedup).
+
 on:
   workflow_call:
     inputs:
@@ -30,14 +35,13 @@ jobs:
       is_release: ${{ steps.version.outputs.is_release }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
         with:
           fetch-depth: 2
 
       - name: Determine version and suffix
         id: version
         run: |
-          # Read version from .version file
           if [ -f .version ]; then
             VERSION=$(cat .version | tr -d '[:space:]')
           else
@@ -53,70 +57,125 @@ jobs:
             IS_RELEASE="false"
           fi
 
-          # Determine suffix based on branch and release status
           if [ "$IS_RELEASE" = "true" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            # Version release on main: no suffix, plus 'latest' tag
             echo "suffix=" >> $GITHUB_OUTPUT
             echo "is_release=true" >> $GITHUB_OUTPUT
-            echo "Building RELEASE: v${VERSION} and latest"
-          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            # Main branch, not a release: -beta suffix
+          elif [[ "${{ github.ref }}" == refs/heads/v* ]]; then
             echo "suffix=-beta" >> $GITHUB_OUTPUT
             echo "is_release=false" >> $GITHUB_OUTPUT
-            echo "Building BETA: v${VERSION}-beta"
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "suffix=-gamma" >> $GITHUB_OUTPUT
+            echo "is_release=false" >> $GITHUB_OUTPUT
           else
-            # Non-main branch: -alpha suffix
             echo "suffix=-alpha" >> $GITHUB_OUTPUT
             echo "is_release=false" >> $GITHUB_OUTPUT
-            echo "Building ALPHA: v${VERSION}-alpha"
           fi
 
-  build-and-push:
-    name: Build and Push Container
-    runs-on: ubuntu-latest
+  # Build each platform in parallel on native runners
+  build-platform:
+    name: Build (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     needs: determine-version
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a  # v4
+        if: matrix.platform == 'linux/arm64' && matrix.runner == 'ubuntu-latest'
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd  # v4
 
       - name: Log in to Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121  # v4
+        if: github.event_name != 'pull_request' && github.event_name != 'merge_group'
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ inputs.module_name }}
-          tags: |
-            type=raw,value=${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}
-            type=raw,value=latest,enable=${{ needs.determine-version.outputs.is_release == 'true' }}
+      - name: Extract architecture suffix
+        id: arch
+        run: |
+          if [ "${{ matrix.platform }}" = "linux/amd64" ]; then
+            echo "suffix=amd64" >> $GITHUB_OUTPUT
+          else
+            echo "suffix=arm64" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+      - name: Build and push image (${{ matrix.platform }})
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f  # v7
         with:
           context: .
           file: ./${{ inputs.module_path }}/Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          platforms: linux/amd64,linux/arm64
-          cache-from: type=gha,scope=${{ inputs.module_name }}
-          cache-to: type=gha,mode=max,scope=${{ inputs.module_name }}
+          push: ${{ github.event_name != 'pull_request' && github.event_name != 'merge_group' }}
+          load: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && matrix.platform == 'linux/amd64' }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ inputs.module_name }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}-${{ steps.arch.outputs.suffix }}
+          platforms: ${{ matrix.platform }}
+          cache-from: type=gha,scope=${{ inputs.module_name }}-${{ steps.arch.outputs.suffix }}
+          cache-to: type=gha,mode=max,scope=${{ inputs.module_name }}-${{ steps.arch.outputs.suffix }}
           build-args: |
             MODULE_NAME=${{ inputs.module_name }}
             MODULE_PORT=${{ inputs.module_port }}
 
-      - name: Build summary
+  # Merge amd64 + arm64 into a single multi-arch OCI index manifest
+  merge:
+    name: Merge Multi-Arch Manifest
+    runs-on: ubuntu-latest
+    needs: [determine-version, build-platform]
+    if: github.event_name != 'pull_request' && github.event_name != 'merge_group'
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd  # v4
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121  # v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push multi-arch manifest
+        env:
+          VERSION: ${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}
+          IS_RELEASE: ${{ needs.determine-version.outputs.is_release }}
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ inputs.module_name }}
         run: |
-          echo "## Build Complete: ${{ inputs.module_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Image:** \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ inputs.module_name }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Tags:** \`${{ steps.meta.outputs.tags }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** \`${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}\`" >> $GITHUB_STEP_SUMMARY
+          docker buildx imagetools create \
+            -t "${IMAGE}:${VERSION}" \
+            "${IMAGE}:${VERSION}-amd64" \
+            "${IMAGE}:${VERSION}-arm64"
+
+          if [ "$IS_RELEASE" = "true" ]; then
+            docker buildx imagetools create \
+              -t "${IMAGE}:latest" \
+              "${IMAGE}:${VERSION}-amd64" \
+              "${IMAGE}:${VERSION}-arm64"
+          fi
+
+          echo "## Build Complete: ${{ inputs.module_name }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Image:** \`${IMAGE}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Tag:** \`${VERSION}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Platforms:** linux/amd64, linux/arm64" >> "$GITHUB_STEP_SUMMARY"
+
+      # CRA (EU Cyber Resilience Act): SBOM per built image. Generate +
+      # upload only for now — not a gating step until a policy is defined.
+      - name: Generate SBOM (SPDX)
+        id: sbom
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26  # v0.24.2
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ inputs.module_name }}:${{ needs.determine-version.outputs.version }}${{ needs.determine-version.outputs.suffix }}
+          format: spdx-json
+          output-file: sbom-${{ inputs.module_name }}.spdx.json
+          upload-artifact: true
+          upload-artifact-retention: 90

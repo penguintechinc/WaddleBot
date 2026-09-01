@@ -1,24 +1,27 @@
-# WaddleBot Helm Chart - Beta Cluster Values
+# Waddles Helm Chart - Beta Cluster Values
 # This file overrides default values for beta cluster deployment
 # Usage: helm upgrade --install waddlebot . -f values.yaml -f values-beta.yaml
 
 # Global settings for beta cluster
 global:
-  imageRegistry: "registry-dal2.penguintech.io/waddlebot"
+  imageRegistry: "ghcr.io/penguintechinc/waddlebot"
   imageTag: "latest"
   imagePullPolicy: Always
+  imagePullSecrets:
+    - name: ghcr-pull-secret
+  corsOrigin: "https://hub.waddlebot.io,https://waddlebot.io,https://waddles.penguintech.cloud,https://waddlebot.penguintech.cloud,http://localhost:3000,http://localhost:5173"
 
 # Infrastructure - Enable core services in beta
 infrastructure:
   postgresql:
     enabled: true
-    image: postgres:16-alpine
+    image: postgres:16-bookworm@sha256:a0fd72825431f4b7fd3f9d5def9f370b9c22012f1a9e37ece1a5749b95333fb7
     persistence:
       size: 10Gi
       storageClass: "longhorn"
   redis:
     enabled: true
-    image: redis:7-alpine
+    image: valkey/valkey:8-bookworm@sha256:fea8b3e67b15729d4bb70589eb03367bab9ad1ee89c876f54327fc7c6e618571
     persistence:
       size: 2Gi
       storageClass: "longhorn"
@@ -29,34 +32,73 @@ infrastructure:
   qdrant:
     enabled: false
 
+# PostHog stays OFF by default in beta too — flip on deliberately per
+# release. When enabled, secrets MUST come from a pre-created Secret, never
+# inline:
+#   kubectl -n waddlebot create secret generic posthog-secrets \
+#     --from-literal=SECRET_KEY="$(openssl rand -hex 32)" \
+#     --from-literal=POSTGRES_PASSWORD="$(openssl rand -hex 16)" \
+#     --from-literal=CLICKHOUSE_PASSWORD=
+# then: --set posthog.enabled=true --set posthog.existingSecret=posthog-secrets
+posthog:
+  enabled: false
+  existingSecret: "posthog-secrets"
+  web:
+    replicas: 1
+    resources:
+      requests: { cpu: "250m", memory: "512Mi" }
+      limits: { cpu: "1000m", memory: "1Gi" }
+  worker:
+    replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "384Mi" }
+      limits: { cpu: "500m", memory: "768Mi" }
+  postgres:
+    storage: 10Gi
+  clickhouse:
+    storage: 20Gi
+  kafka:
+    storage: 10Gi
+
 # Module image overrides - use registry image names
 modules:
   # Router
   router:
     image: router
+    replicas: 1
 
   # Hub
   hub:
     image: hub-api
+    replicas: 1
+    env:
+      RATE_LIMIT_MAX_REQUESTS: "300"     # 3× default; E2E suite generates bursts
+      RATE_LIMIT_WINDOW_MS: "60000"      # Keep 60s window unchanged
 
   hubWebui:
     image: hub-webui
+    replicas: 1
 
   # Core Modules
   identityCore:
     image: core-identity
+    replicas: 1
 
   labelsCore:
     image: core-labels
+    replicas: 1
 
   browserSource:
     image: core-browser-source
+    replicas: 1
 
   reputation:
     image: core-reputation
+    replicas: 1
 
   community:
     image: core-community
+    replicas: 1
 
   aiResearcher:
     image: ai-researcher
@@ -69,49 +111,102 @@ modules:
 
   moduleRtc:
     image: core-module-rtc
+    replicas: 1
+    autoscaling:
+      minReplicas: 1
+      maxReplicas: 1
 
   # Collectors/Triggers
   collectors:
     twitch:
-      image: trigger-twitch
+      image: collector-twitch
+      replicas: 1
     discord:
-      image: trigger-discord
+      image: collector-discord
+      replicas: 1
     slack:
-      image: trigger-slack
+      image: collector-slack
+      replicas: 1
     youtubeLive:
-      image: trigger-youtube
+      image: collector-youtube
     kick:
-      image: trigger-kick
+      image: collector-kick
 
   # Interactive Modules
   interactive:
     ai:
       image: interactive-ai
+      replicas: 1
     alias:
       image: interactive-alias
+      replicas: 1
     shoutout:
       image: interactive-shoutout
+      replicas: 1
     inventory:
       image: interactive-inventory
+      replicas: 1
     calendar:
       image: interactive-calendar
+      replicas: 1
     memories:
       image: interactive-memories
+      replicas: 1
     youtubeMusic:
       image: interactive-youtube-music
     spotify:
       image: interactive-spotify
     loyalty:
       image: interactive-loyalty
+      replicas: 1
+    translate:
+      enabled: true
+      name: translate-interaction
+      image: interactive-translate
+      replicas: 1
+    lfg:
+      image: interactive-lfg
+      replicas: 1
+    clip:
+      image: interactive-clip
+      replicas: 1
+    serverStatus:
+      image: interactive-server-status
+      replicas: 1
+    serverManager:
+      image: interactive-server-manager
+      replicas: 1
+
+  # Core - missing modules
+  analytics:
+    image: core-analytics
+    replicas: 1
+  security:
+    image: core-security
+    replicas: 1
+  workflow:
+    image: core-workflow
+    replicas: 1
+  credentialManager:
+    image: core-credential-manager
+    replicas: 1
+
+  # Marketplace Module
+  marketplace:
+    image: marketplace
+    replicas: 1
 
   # Platform Action Modules
   platformActions:
     discord:
       image: action-discord
+      replicas: 1
     slack:
       image: action-slack
+      replicas: 1
     twitch:
       image: action-twitch
+      replicas: 1
     youtube:
       image: action-youtube
 
@@ -122,11 +217,12 @@ sharedEnv:
   MINIO_ENDPOINT: "infra-minio:9000"
   QDRANT_HOST: "infra-qdrant"
   ROUTER_URL: "http://waddlebot-router:8000"
-  HUB_URL: "http://waddlebot-hub:8060"
+  HUB_URL: "http://waddlebot-hub-api:8060"
+  OAUTH_CALLBACK_BASE_URL: "https://waddles.penguintech.cloud"
 
-# Ingress - using Cloudflare wildcard certificate
+# Ingress - disabled in favour of Cilium Gateway API HTTPRoute
 ingress:
-  enabled: true
+  enabled: false
   className: nginx
   annotations:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
@@ -135,36 +231,179 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
   hosts:
-    - host: waddlebot.penguintech.io
-      paths:
+    - host: waddlebot.penguintech.cloud
+      paths: &api-paths
+        # WebSocket
         - path: /socket.io
           pathType: Prefix
           service: hub-api
           port: 8060
-        - path: /api
+
+        # Hub API routes
+        - path: /api/v1/public
           pathType: Prefix
           service: hub-api
           port: 8060
-        - path: /
+        - path: /api/v1/auth
           pathType: Prefix
-          service: hub-webui
-          port: 80
-        - path: /api/router
+          service: hub-api
+          port: 8060
+        - path: /api/v1/user
+          pathType: Prefix
+          service: hub-api
+          port: 8060
+        - path: /api/v1/community
+          pathType: Prefix
+          service: hub-api
+          port: 8060
+        - path: /api/v1/communities
+          pathType: Prefix
+          service: hub-api
+          port: 8060
+        - path: /api/v1/admin
+          pathType: Prefix
+          service: hub-api
+          port: 8060
+        - path: /api/v1/platform
+          pathType: Prefix
+          service: hub-api
+          port: 8060
+        - path: /api/v1/superadmin
+          pathType: Prefix
+          service: hub-api
+          port: 8060
+        - path: /api/v1/cookie
+          pathType: Prefix
+          service: hub-api
+          port: 8060
+        - path: /api/v1/signup-settings
+          pathType: Prefix
+          service: hub-api
+          port: 8060
+        - path: /api/v1/internal
+          pathType: Prefix
+          service: hub-api
+          port: 8060
+
+        # Router
+        - path: /api/v1/router
           pathType: Prefix
           service: router
           port: 8000
-        - path: /api/video-proxy
+
+        # Core modules
+        - path: /api/v1/identity
           pathType: Prefix
-          service: video-proxy
-          port: 8092
-        - path: /api/engagement
+          service: identity-core
+          port: 8050
+        - path: /api/v1/labels
           pathType: Prefix
-          service: engagement
-          port: 8091
-        - path: /api/rtc
+          service: labels-core
+          port: 8023
+        - path: /api/v1/reputation
           pathType: Prefix
-          service: module-rtc
-          port: 8093
+          service: reputation
+          port: 8021
+        - path: /api/v1/community-core
+          pathType: Prefix
+          service: community
+          port: 8020
+
+        # Interactive modules
+        - path: /api/v1/ai
+          pathType: Prefix
+          service: ai-interaction
+          port: 8005
+        - path: /api/v1/ai-researcher
+          pathType: Prefix
+          service: ai-researcher
+          port: 8070
+        - path: /api/v1/alias
+          pathType: Prefix
+          service: alias-interaction
+          port: 8010
+        - path: /api/v1/shoutout
+          pathType: Prefix
+          service: shoutout-interaction
+          port: 8011
+        - path: /api/v1/inventory
+          pathType: Prefix
+          service: inventory-interaction
+          port: 8024
+        - path: /api/v1/calendar
+          pathType: Prefix
+          service: calendar-interaction
+          port: 8030
+        - path: /api/v1/memories
+          pathType: Prefix
+          service: memories-interaction
+          port: 8031
+        - path: /api/v1/loyalty
+          pathType: Prefix
+          service: loyalty-interaction
+          port: 8032
+        - path: /api/v1/youtube-music
+          pathType: Prefix
+          service: youtube-music
+          port: 8025
+        - path: /api/v1/spotify
+          pathType: Prefix
+          service: spotify-interaction
+          port: 8026
+
+        # Marketplace standalone service (specific paths before hub-api catch-all)
+        - path: /api/v1/marketplace/catalog
+          pathType: Prefix
+          service: marketplace
+          port: 8100
+        - path: /api/v1/marketplace/communities
+          pathType: Prefix
+          service: marketplace
+          port: 8100
+        - path: /api/v1/marketplace/vendor
+          pathType: Prefix
+          service: marketplace
+          port: 8100
+        - path: /api/v1/marketplace/admin
+          pathType: Prefix
+          service: marketplace
+          port: 8100
+        - path: /api/v1/marketplace/premium
+          pathType: Prefix
+          service: marketplace
+          port: 8100
+        - path: /api/v1/marketplace/payments
+          pathType: Prefix
+          service: marketplace
+          port: 8100
+        - path: /api/v1/marketplace/webhooks
+          pathType: Prefix
+          service: marketplace
+          port: 8100
+        - path: /api/v1/marketplace/internal
+          pathType: Prefix
+          service: marketplace
+          port: 8100
+        - path: /api/v1/marketplace
+          pathType: Prefix
+          service: hub-api
+          port: 8060
+
+        # Platform webhook receivers
+        - path: /api/messages
+          pathType: Prefix
+          service: teams-collector
+          port: 8008
+        - path: /api/v1/mattermost/webhook
+          pathType: Prefix
+          service: mattermost-collector
+          port: 8009
+        - path: /api/v1/googlechat/webhook
+          pathType: Prefix
+          service: googlechat-collector
+          port: 8012
+
+        # Existing webhook receivers
         - path: /webhooks/twitch
           pathType: Prefix
           service: twitch-collector
@@ -177,7 +416,156 @@ ingress:
           pathType: Prefix
           service: slack-collector
           port: 8004
+
+        # Frontend catch-all (must be last)
+        - path: /
+          pathType: Prefix
+          service: hub-webui
+          port: 80
+
+    - host: waddles.penguintech.cloud
+      paths: *api-paths
   tls:
-    - secretName: penguintech-wildcard-tls
+    - secretName: penguintech-cloud-wildcard-tls
       hosts:
-        - waddlebot.penguintech.io
+        - waddlebot.penguintech.cloud
+        - waddles.penguintech.cloud
+
+# HTTPRoute (Cilium Gateway API) — replaces nginx ingress
+# WebSocket is native in HTTPRoute; 3600s timeout preserves long-lived WS connections.
+# Service names follow waddlebot Helm convention: waddlebot-{service}
+httproute:
+  enabled: false  # Routes split into k8s/httproute-{hub,modules,misc}.yaml (>16 rules exceeds HTTPRoute limit)
+  gatewayName: shared
+  gatewayNamespace: gateway
+  hostnames:
+    - "waddlebot.penguintech.cloud"
+    - "waddles.penguintech.cloud"
+  rules:
+    # WebSocket + Hub API routes (3600s timeout for long-lived WS connections)
+    - path: /socket.io
+      service: "waddlebot-hub-api"
+      port: 8060
+      timeoutSeconds: 3600
+    - path: /api/v1/public
+      service: "waddlebot-hub-api"
+      port: 8060
+      timeoutSeconds: 3600
+    - path: /api/v1/auth
+      service: "waddlebot-hub-api"
+      port: 8060
+      timeoutSeconds: 3600
+    - path: /api/v1/user
+      service: "waddlebot-hub-api"
+      port: 8060
+      timeoutSeconds: 3600
+    - path: /api/v1/community
+      service: "waddlebot-hub-api"
+      port: 8060
+      timeoutSeconds: 3600
+    - path: /api/v1/communities
+      service: "waddlebot-hub-api"
+      port: 8060
+      timeoutSeconds: 3600
+    - path: /api/v1/admin
+      service: "waddlebot-hub-api"
+      port: 8060
+      timeoutSeconds: 3600
+    - path: /api/v1/platform
+      service: "waddlebot-hub-api"
+      port: 8060
+      timeoutSeconds: 3600
+    - path: /api/v1/superadmin
+      service: "waddlebot-hub-api"
+      port: 8060
+      timeoutSeconds: 3600
+    - path: /api/v1/cookie
+      service: "waddlebot-hub-api"
+      port: 8060
+      timeoutSeconds: 3600
+    - path: /api/v1/signup-settings
+      service: "waddlebot-hub-api"
+      port: 8060
+      timeoutSeconds: 3600
+    - path: /api/v1/internal
+      service: "waddlebot-hub-api"
+      port: 8060
+      timeoutSeconds: 3600
+    # Router
+    - path: /api/v1/router
+      service: "waddlebot-router"
+      port: 8000
+    # Core modules (updated to current service names)
+    - path: /api/v1/identity
+      service: "waddlebot-core-identity"
+      port: 8050
+    - path: /api/v1/community-core
+      service: "waddlebot-core-community"
+      port: 8020
+    # Interactive modules (updated to current service names)
+    - path: /api/v1/ai
+      service: "waddlebot-interactive-ai"
+      port: 8005
+    - path: /api/v1/ai-researcher
+      service: "waddlebot-ai-researcher"
+      port: 8070
+    - path: /api/v1/alias
+      service: "waddlebot-interactive-social"
+      port: 8010
+    - path: /api/v1/calendar
+      service: "waddlebot-interactive-productivity"
+      port: 8030
+    - path: /api/v1/loyalty
+      service: "waddlebot-interactive-loyalty"
+      port: 8032
+    # Marketplace (specific paths before hub-api catch-all)
+    - path: /api/v1/marketplace/catalog
+      service: "waddlebot-marketplace"
+      port: 8100
+    - path: /api/v1/marketplace/communities
+      service: "waddlebot-marketplace"
+      port: 8100
+    - path: /api/v1/marketplace/vendor
+      service: "waddlebot-marketplace"
+      port: 8100
+    - path: /api/v1/marketplace/admin
+      service: "waddlebot-marketplace"
+      port: 8100
+    - path: /api/v1/marketplace/premium
+      service: "waddlebot-marketplace"
+      port: 8100
+    - path: /api/v1/marketplace/payments
+      service: "waddlebot-marketplace"
+      port: 8100
+    - path: /api/v1/marketplace/webhooks
+      service: "waddlebot-marketplace"
+      port: 8100
+    - path: /api/v1/marketplace/internal
+      service: "waddlebot-marketplace"
+      port: 8100
+    - path: /api/v1/marketplace
+      service: "waddlebot-hub-api"
+      port: 8060
+      timeoutSeconds: 3600
+    # Webhook receivers
+    - path: /webhooks/twitch
+      service: "waddlebot-twitch-collector"
+      port: 8002
+    - path: /webhooks/discord
+      service: "waddlebot-discord-collector"
+      port: 8003
+    - path: /webhooks/slack
+      service: "waddlebot-slack-collector"
+      port: 8004
+    # Frontend catch-all (must be last)
+    - path: /
+      service: "waddlebot-hub-webui"
+      port: 80
+
+# Network Policies — enabled in beta for namespace isolation
+networkPolicy:
+  enabled: true
+
+spire:
+  enabled: true
+  environment: "beta"

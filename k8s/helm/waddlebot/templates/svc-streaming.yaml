@@ -1,0 +1,135 @@
+# v3.0.x — REAL control plane + real ffmpeg data plane (Streaming module). See
+# docs/plans/2026-08-31-svc-streaming-design.md for the target-state design (Rust control
+# plane, build-vs-external-media-engine decision at §8.1, still genuinely open). This build is
+# a deliberate, documented scope choice for a working alpha demo: Python/Quart control plane
+# (own DB tables, migration 078) + a real `ffmpeg` subprocess as the data plane (`services/
+# ffmpeg_engine.py`) — not the external MarchProxy/LiveKit fronting the design doc describes,
+# because neither exists in this repo/environment to front. The Rust data-plane migration
+# remains a documented follow-up (see the PR that landed this container).
+#
+# ffmpeg PULLS from a caller-supplied source_url (HLS/RTMP) and fans out to N forward targets
+# — this pod never listens on an RTMP/WebRTC media port itself, so only the control REST/gRPC
+# ports are declared here: no privileged port, no hostNetwork/hostPort, no NET_ADMIN/NET_RAW.
+# (gRPC port is reserved/declared, matching every other pipeline-stage container's shape —
+# this build's control surface is REST-only; a gRPC surface is follow-up work.)
+#
+# Gated solely on `pipeline.svcStreaming.enabled`, same single-condition gate as
+# svc-presentation.yaml — NOT on a `modules.streaming.enabled` toggle (that module doesn't
+# exist in `modules.*` yet; adding it is out of scope here). svc-rtc.yaml / video_proxy_module
+# are UNTOUCHED — this is a new, additional container, not a replacement (design spec §6's
+# absorption of both remains staged/future work).
+#
+# Base image still pinned to the shared `pipeline.pythonBaseImage` placeholder digest — no CI
+# build exists for svc-streaming yet (same posture every other freshly-built core/svc_*
+# container in this chart is in today, e.g. svc-presentation.yaml's own header comment).
+# `core/svc_streaming/Dockerfile` is real (installs ffmpeg via apt, hash-pinned pip deps,
+# rootless `USER appuser`) but not yet wired into CI image publishing.
+{{- if .Values.pipeline.svcStreaming.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "waddlebot.fullname" . }}-svc-streaming
+  labels:
+    {{- include "waddlebot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: svc-streaming
+spec:
+  replicas: {{ .Values.pipeline.svcStreaming.replicas }}
+  selector:
+    matchLabels:
+      {{- include "waddlebot.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: svc-streaming
+  template:
+    metadata:
+      labels:
+        {{- include "waddlebot.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: svc-streaming
+    spec:
+      serviceAccountName: {{ include "waddlebot.serviceAccountName" . }}
+      {{- include "waddlebot.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - name: svc-streaming
+        # PLACEHOLDER — no CI-built image exists yet for svc-streaming; pinned to the repo's
+        # shared Python base digest rather than inventing one or using a mutable tag. Replace
+        # with a real `ghcr.io/.../svc-streaming` tag once CI publishes one for
+        # `core/svc_streaming/Dockerfile` (the Dockerfile itself is real, not a placeholder).
+        image: "{{ .Values.pipeline.pythonBaseImage }}"
+        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 10 }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.pipeline.svcStreaming.port }}
+          protocol: TCP
+        - name: grpc
+          containerPort: {{ .Values.pipeline.svcStreaming.grpcPort }}
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: {{ include "waddlebot.fullname" . }}-config
+        - secretRef:
+            name: {{ include "waddlebot.fullname" . }}-secrets
+        env:
+        - name: MODULE_NAME
+          value: "svc-streaming"
+        - name: PIPELINE_STAGE
+          value: "streaming"
+        - name: MODULE_PORT
+          value: {{ .Values.pipeline.svcStreaming.port | quote }}
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          {{- toYaml .Values.pipeline.svcStreaming.resources | nindent 10 }}
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        # Real recording output target for `record_enabled` streams (`services/
+        # ffmpeg_engine.py::ensure_recordings_dir`, `Config.recordings_dir`) — emptyDir today
+        # (pod-lifetime only); MinIO/object-store upload of finished segments is documented
+        # follow-up (design spec §8.5), not done here.
+        - name: recordings
+          mountPath: /var/lib/svc-streaming/recordings
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: recordings
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "waddlebot.fullname" . }}-svc-streaming
+  labels:
+    {{- include "waddlebot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: svc-streaming
+spec:
+  type: ClusterIP
+  ports:
+  - port: {{ .Values.pipeline.svcStreaming.port }}
+    targetPort: http
+    protocol: TCP
+    name: http
+  - port: {{ .Values.pipeline.svcStreaming.grpcPort }}
+    targetPort: grpc
+    protocol: TCP
+    name: grpc
+  selector:
+    {{- include "waddlebot.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: svc-streaming
+{{- end }}

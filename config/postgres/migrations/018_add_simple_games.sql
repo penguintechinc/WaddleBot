@@ -1,7 +1,7 @@
 -- Migration 018: Add Simple Games Tables
 -- Description: Implements simple luck-based games (Dice, RPS, 8-Ball)
 --              with betting, cooldown tracking, and statistics
--- Author: WaddleBot Team
+-- Author: Waddles Team
 -- Date: 2025-12-16
 
 -- =============================================================================
@@ -121,15 +121,13 @@ COMMENT ON COLUMN loyalty_simple_game_cooldowns.cooldown_until IS
 
 -- Indexes for loyalty_simple_game_cooldowns
 CREATE INDEX IF NOT EXISTS idx_simple_cooldowns_active
-ON loyalty_simple_game_cooldowns(community_id, platform, platform_user_id, game_type)
-WHERE cooldown_until > NOW();
+ON loyalty_simple_game_cooldowns(community_id, platform, platform_user_id, game_type);
 
 COMMENT ON INDEX idx_simple_cooldowns_active IS
     'Efficient lookup of active cooldowns for a user';
 
 CREATE INDEX IF NOT EXISTS idx_simple_cooldowns_expired
-ON loyalty_simple_game_cooldowns(community_id)
-WHERE cooldown_until <= NOW();
+ON loyalty_simple_game_cooldowns(community_id);
 
 COMMENT ON INDEX idx_simple_cooldowns_expired IS
     'Efficient cleanup of expired cooldowns';

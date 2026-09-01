@@ -18,6 +18,9 @@ router.use(requireAuth);
 // User's communities
 router.get('/my', communityController.getMyCommunities);
 
+// Create community (any authenticated user)
+router.post('/create', communityController.createCommunity);
+
 // Join requests
 router.get('/join-requests', communityController.getMyJoinRequests);
 router.delete('/join-requests/:requestId', communityController.cancelJoinRequest);

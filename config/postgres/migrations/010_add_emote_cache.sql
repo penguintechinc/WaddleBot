@@ -1,6 +1,6 @@
 -- Migration 010: Add Emote Cache for Translation Pre-Processing
 -- Description: Stores platform emotes for token preservation during translation
--- Author: WaddleBot Team
+-- Author: Waddles Team
 -- Date: 2025-12-15
 
 -- =============================================================================
@@ -28,8 +28,7 @@ ON emote_cache(platform, channel_id, emote_code);
 
 -- Index for cache cleanup (expired entries)
 CREATE INDEX IF NOT EXISTS idx_emote_cache_expiry
-ON emote_cache(expires_at)
-WHERE expires_at < NOW();
+ON emote_cache(expires_at);
 
 -- Partial index for global emotes (channel_id is NULL)
 CREATE INDEX IF NOT EXISTS idx_emote_cache_global
@@ -82,8 +81,7 @@ CREATE INDEX IF NOT EXISTS idx_ai_decision_lookup
 ON ai_translation_decision_cache(pattern_hash, platform);
 
 CREATE INDEX IF NOT EXISTS idx_ai_decision_expiry
-ON ai_translation_decision_cache(expires_at)
-WHERE expires_at < NOW();
+ON ai_translation_decision_cache(expires_at);
 
 COMMENT ON TABLE ai_translation_decision_cache IS
     'Cache for AI decisions about translating uncertain patterns';

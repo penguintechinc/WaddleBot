@@ -1,38 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { superAdminApi } from '../../services/api';
 import { Search, Plus, Edit2, Trash2, Eye, EyeOff, Star, Download, Package } from 'lucide-react';
-import { FormModalBuilder } from '@penguin/react_libs';
-
-// WaddleBot theme colors matching the existing UI
-const waddlebotColors = {
-  modalBackground: 'bg-navy-800',
-  headerBackground: 'bg-navy-800',
-  footerBackground: 'bg-navy-800',
-  overlayBackground: 'bg-black bg-opacity-50',
-  titleText: 'text-gold-400',
-  labelText: 'text-gray-400',
-  descriptionText: 'text-gray-500',
-  errorText: 'text-red-400',
-  buttonText: 'text-navy-900',
-  fieldBackground: 'bg-navy-700',
-  fieldBorder: 'border-navy-600',
-  fieldText: 'text-white',
-  fieldPlaceholder: 'placeholder-gray-500',
-  focusRing: 'focus:ring-sky-500',
-  focusBorder: 'focus:border-sky-500',
-  primaryButton: 'bg-gold-500',
-  primaryButtonHover: 'hover:bg-gold-600',
-  secondaryButton: 'bg-navy-700',
-  secondaryButtonHover: 'hover:bg-navy-600',
-  secondaryButtonBorder: 'border-navy-600',
-  activeTab: 'text-gold-400',
-  activeTabBorder: 'border-gold-500',
-  inactiveTab: 'text-gray-400',
-  inactiveTabHover: 'hover:text-gray-300 hover:border-navy-500',
-  tabBorder: 'border-navy-700',
-  errorTabText: 'text-red-400',
-  errorTabBorder: 'border-red-500',
-};
+import { FormModalBuilder } from '@penguintechinc/react-libs';
+import { WADDLES_GOLD_COLORS } from '../../theme/waddlebotTheme';
 
 export default function SuperAdminModuleRegistry() {
   const [modules, setModules] = useState([]);
@@ -52,7 +22,7 @@ export default function SuperAdminModuleRegistry() {
     displayName: '',
     description: '',
     version: '1.0.0',
-    author: 'WaddleBot',
+    author: 'Waddles',
     category: 'general',
     iconUrl: '',
     isCore: false,
@@ -197,8 +167,8 @@ export default function SuperAdminModuleRegistry() {
       type: 'text',
       label: 'Author',
       required: true,
-      defaultValue: 'WaddleBot',
-      placeholder: 'e.g., WaddleBot',
+      defaultValue: 'Waddles',
+      placeholder: 'e.g., Waddles',
     },
     {
       name: 'category',
@@ -472,7 +442,8 @@ export default function SuperAdminModuleRegistry() {
           submitButtonText="Create"
           cancelButtonText="Cancel"
           width="lg"
-          colors={waddlebotColors}
+          themeMode="dark"
+          colors={WADDLES_GOLD_COLORS}
         />
 
         {/* Edit Module Modal */}
@@ -488,7 +459,8 @@ export default function SuperAdminModuleRegistry() {
           submitButtonText="Update"
           cancelButtonText="Cancel"
           width="lg"
-          colors={waddlebotColors}
+          themeMode="dark"
+          colors={WADDLES_GOLD_COLORS}
         />
       </div>
     </div>

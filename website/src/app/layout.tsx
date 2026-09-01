@@ -13,19 +13,19 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "WaddleBot - Multi-Platform Chat Bot System",
+  title: "Waddles - Multi-Platform Chat Bot System",
   description: "A modular, microservices architecture chat bot system for Discord, Twitch, and Slack communities. Built with Python, py4web, and Kubernetes for scalability.",
   keywords: ["chatbot", "discord", "twitch", "slack", "microservices", "python", "kubernetes", "community management"],
-  authors: [{ name: "WaddleBot Team" }],
+  authors: [{ name: "Waddles Team" }],
   openGraph: {
-    title: "WaddleBot - Multi-Platform Chat Bot System",
+    title: "Waddles - Multi-Platform Chat Bot System",
     description: "A modular, microservices architecture chat bot system for Discord, Twitch, and Slack communities.",
     type: "website",
-    siteName: "WaddleBot",
+    siteName: "Waddles",
   },
   twitter: {
     card: "summary_large_image",
-    title: "WaddleBot - Multi-Platform Chat Bot System",
+    title: "Waddles - Multi-Platform Chat Bot System",
     description: "A modular, microservices architecture chat bot system for Discord, Twitch, and Slack communities.",
   },
 };

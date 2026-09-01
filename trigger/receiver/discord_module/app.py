@@ -6,7 +6,7 @@ import asyncio
 import os
 import sys
 
-from quart import Quart, Blueprint
+from quart import Quart, Blueprint, request, jsonify
 
 from flask_core import (  # noqa: E402
     setup_aaa_logging, init_database, async_endpoint, success_response,
@@ -104,6 +104,31 @@ async def bot_guilds():
     return success_response({"guilds": guilds, "count": len(guilds)})
 
 
+internal_bp = Blueprint('internal', __name__, url_prefix='/internal')
+
+
+@internal_bp.route('/relay', methods=['POST'])
+async def internal_relay():
+    """Receive relayed messages from hub and send to Discord channels"""
+    if not discord_bot or not discord_bot.bot.is_ready():
+        return jsonify({"success": False, "error": "Bot not connected"}), 503
+
+    data = await request.get_json()
+    channel_id = data.get('platformChannelId')
+    content = data.get('content', {})
+    author = data.get('author', {})
+    message_type = data.get('messageType', 'message')
+
+    if not channel_id:
+        return jsonify({"success": False, "error": "platformChannelId required"}), 400
+
+    ok = await discord_bot.send_to_channel(channel_id, content, author, message_type)
+    if ok:
+        return jsonify({"success": True})
+    return jsonify({"success": False, "error": "Failed to send"}), 500
+
+
+app.register_blueprint(internal_bp)
 app.register_blueprint(api_bp)
 
 if __name__ == '__main__':

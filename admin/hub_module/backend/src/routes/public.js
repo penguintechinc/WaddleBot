@@ -13,6 +13,9 @@ const router = Router();
 // Platform statistics
 router.get('/stats', publicController.getStats);
 
+// Spotlighted communities (top active, excludes support type)
+router.get('/communities/spotlighted', publicController.getSpotlightedCommunities);
+
 // Communities
 router.get('/communities',
   validators.pagination(),
@@ -44,5 +47,8 @@ router.get('/marketplace/modules',
 );
 router.get('/marketplace/modules/:id', publicController.getMarketplaceModule);
 router.get('/marketplace/categories', publicController.getMarketplaceCategories);
+
+// Global announcement banner (public, no auth)
+router.get('/banner', publicController.getBanner);
 
 export default router;

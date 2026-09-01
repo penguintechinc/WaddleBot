@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { superAdminApi } from '../../services/api';
+import { getPlatformIcon, getPlatformColor, getPlatformLabel, getAllPlatformOptions } from '../../utils/platformConfig';
 
 function SuperAdminCommunities() {
   const [communities, setCommunities] = useState([]);
@@ -85,7 +86,7 @@ function SuperAdminCommunities() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold gradient-text">Manage Communities</h1>
-        <Link to="/superadmin/communities/new" className="btn btn-primary">
+        <Link to="/communities/create" className="btn btn-primary">
           + Create Community
         </Link>
       </div>
@@ -106,11 +107,13 @@ function SuperAdminCommunities() {
             className="input w-40"
           >
             <option value="">All Platforms</option>
-            <option value="discord">Discord</option>
-            <option value="twitch">Twitch</option>
-            <option value="slack">Slack</option>
-            <option value="youtube">YouTube</option>
-            <option value="kick">KICK</option>
+            {getAllPlatformOptions()
+              .filter((p) => p.id !== 'hub')
+              .map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.icon} {p.label}
+                </option>
+              ))}
           </select>
           <select
             value={isActive}
@@ -140,6 +143,7 @@ function SuperAdminCommunities() {
               <th>Platform</th>
               <th>Owner</th>
               <th>Members</th>
+              <th>Plan</th>
               <th>Status</th>
               <th>Created</th>
               <th className="text-right">Actions</th>
@@ -148,13 +152,13 @@ function SuperAdminCommunities() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7} className="p-8 text-center">
+                <td colSpan={8} className="p-8 text-center">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gold-400 mx-auto"></div>
                 </td>
               </tr>
             ) : communities.length === 0 ? (
               <tr>
-                <td colSpan={7} className="p-8 text-center text-navy-400">
+                <td colSpan={8} className="p-8 text-center text-navy-400">
                   No communities found
                 </td>
               </tr>
@@ -166,20 +170,25 @@ function SuperAdminCommunities() {
                     <div className="text-sm text-navy-400">{community.name}</div>
                   </td>
                   <td>
-                    <span className={`badge ${
-                      community.platform === 'discord' ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' :
-                      community.platform === 'twitch' ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' :
-                      community.platform === 'youtube' ? 'bg-red-500/20 text-red-300 border border-red-500/30' :
-                      community.platform === 'kick' ? 'bg-green-500/20 text-green-300 border border-green-500/30' :
-                      'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                    }`}>
-                      {community.platform}
+                    <span className={`badge border ${getPlatformColor(community.platform)}`}>
+                      {getPlatformIcon(community.platform)} {getPlatformLabel(community.platform)}
                     </span>
                   </td>
                   <td>
                     {community.ownerName || <span className="text-navy-500">Unassigned</span>}
                   </td>
                   <td>{community.memberCount}</td>
+                  <td>
+                    {community.isPremium ? (
+                      <span className="badge badge-gold border border-gold-500/40 text-gold-300">
+                        ⭐ Premium
+                      </span>
+                    ) : (
+                      <span className="badge badge-gray text-navy-400">
+                        Standard
+                      </span>
+                    )}
+                  </td>
                   <td>
                     <span className={`badge ${
                       community.isActive ? 'badge-green' : 'badge-red'
@@ -280,6 +289,8 @@ function EditCommunityModal({ community, onClose, onSave }) {
     description: community.description || '',
     isActive: community.isActive,
     isPublic: community.isPublic,
+    isPremium: community.isPremium || false,
+    seatLimit: community.seatLimit ?? '',
   });
   const [saving, setSaving] = useState(false);
 
@@ -316,7 +327,7 @@ function EditCommunityModal({ community, onClose, onSave }) {
                 rows={3}
               />
             </div>
-            <div className="flex gap-4">
+            <div className="flex gap-4 flex-wrap">
               <label className="flex items-center gap-2 text-sky-200">
                 <input
                   type="checkbox"
@@ -335,6 +346,26 @@ function EditCommunityModal({ community, onClose, onSave }) {
                 />
                 <span className="text-sm">Public</span>
               </label>
+              <label className="flex items-center gap-2 text-gold-300">
+                <input
+                  type="checkbox"
+                  checked={form.isPremium}
+                  onChange={(e) => setForm({ ...form, isPremium: e.target.checked })}
+                  className="w-4 h-4 rounded bg-navy-800 border-navy-600"
+                />
+                <span className="text-sm">⭐ Premium Community</span>
+              </label>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-sky-200 mb-1">Seat Limit</label>
+              <input
+                type="number"
+                value={form.seatLimit}
+                onChange={(e) => setForm({ ...form, seatLimit: e.target.value })}
+                className="input w-full"
+                placeholder="Leave blank for unlimited"
+                min="1"
+              />
             </div>
           </div>
           <div className="p-6 border-t border-navy-700 flex justify-end gap-3">

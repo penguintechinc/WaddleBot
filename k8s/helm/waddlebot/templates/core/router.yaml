@@ -20,8 +20,11 @@ spec:
         app.kubernetes.io/component: router
     spec:
       serviceAccountName: {{ include "waddlebot.serviceAccountName" . }}
+      {{- include "waddlebot.imagePullSecrets" . | nindent 6 }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+      {{- include "waddlebot.dbMigrateInitContainer" . | nindent 6 }}
       containers:
       - name: router
         image: "{{ .Values.global.imageRegistry }}/{{ .Values.modules.router.image }}:{{ .Values.modules.router.imageTag | default .Values.global.imageTag }}"
@@ -69,8 +72,12 @@ spec:
         volumeMounts:
         - name: logs
           mountPath: /var/log/waddlebotlog
+        - name: tmp
+          mountPath: /tmp
       volumes:
       - name: logs
+        emptyDir: {}
+      - name: tmp
         emptyDir: {}
 ---
 apiVersion: v1

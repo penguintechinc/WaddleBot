@@ -7,7 +7,7 @@ from dataclasses import dataclass, asdict
 logger = logging.getLogger(__name__)
 
 
-@dataclass
+@dataclass(slots=True)
 class CommandInfo:
     """Command registration information"""
     command: str
@@ -40,14 +40,25 @@ class CommandRegistry:
     async def _load_commands(self):
         """Load all registered commands from database"""
         try:
-            # Load from database
+            # For marketplace: prefixed commands, join marketplace_modules to verify module is active
+            # module_name format: 'marketplace:{moduleId}'
+            # This ensures we don't load commands from suspended or deleted marketplace modules
             result = self.dal.executesql(
                 """SELECT c.command, c.module_name, m.url as module_url,
                           c.description, c.usage, c.category, c.permission_level,
                           c.is_enabled, c.cooldown_seconds, c.community_id
                    FROM commands c
                    LEFT JOIN hub_modules m ON m.name = c.module_name
-                   WHERE c.is_active = true""",
+                   LEFT JOIN marketplace_modules mm ON (
+                       c.module_name LIKE 'marketplace:%' AND
+                       mm.id = CAST(SPLIT_PART(c.module_name, ':', 2) AS INTEGER) AND
+                       mm.deleted_at IS NULL
+                   )
+                   WHERE c.is_active = true
+                   AND (
+                       c.module_name NOT LIKE 'marketplace:%' OR
+                       (mm.status = 'approved' AND mm.id IS NOT NULL)
+                   )""",
                 []
             )
 
