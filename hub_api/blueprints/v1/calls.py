@@ -49,6 +49,7 @@ from dataclasses import dataclass
 from typing import Any, cast
 
 from flask_core.authz import require_scope
+from flask_core.feature_flags import feature_enabled
 from flask_core.tenancy import get_tenant_context, tenant_middleware
 from quart import Blueprint, current_app, request
 from quart_schema import validate_request
@@ -56,7 +57,7 @@ from quart_schema import validate_request
 from services import community_access
 from services.calls_proxy import CallsProxyClient
 from services.current_user import get_current_user_id
-from services.errors import ApiError
+from services.errors import ApiError, payment_required
 from services.event_calendar_proxy import ProxyResult
 
 calls_admin_bp = Blueprint("v1_calls_admin", __name__, url_prefix="/api/v1/admin")
@@ -65,6 +66,10 @@ member_voice_bp = Blueprint("v1_member_voice", __name__, url_prefix="/api/v1/com
 SCOPE_READ = "streaming.calls:read"
 SCOPE_WRITE = "streaming.calls:write"
 SCOPE_ADMIN = "streaming.calls:admin"
+
+#: Two-gate Feature flag -- `libs/streaming_module/features.py`'s
+#: `streaming.rtc` Feature contract, free tier.
+FEATURE_STREAMING_RTC = "waddles.streaming.rtc"
 
 _proxy_client = CallsProxyClient()
 
@@ -172,6 +177,10 @@ async def get_call_rooms(community_id: int) -> Any:
     """Get all call rooms for a community (admin)."""
     try:
         await _require_admin(community_id)
+        ctx = get_tenant_context(request)
+        assert ctx is not None  # nosec B101 -- tenant_middleware guarantees this
+        if not await feature_enabled(FEATURE_STREAMING_RTC, tenant=ctx.tenant_slug):
+            raise payment_required("Calls / RTC is not enabled for this plan")
     except ApiError as exc:
         return _err(exc)
     return await _list_rooms(community_id)

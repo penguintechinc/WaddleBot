@@ -28,7 +28,8 @@ from dataclasses import dataclass
 from typing import Any, cast
 
 from flask_core.api_utils import error_response
-from flask_core.tenancy import tenant_middleware
+from flask_core.feature_flags import feature_enabled
+from flask_core.tenancy import get_tenant_context, tenant_middleware
 from quart import Blueprint, current_app, request
 from quart_schema import validate_request, validate_response
 
@@ -36,11 +37,15 @@ from services import music_service as svc
 from services.community_authz import authorize_community
 from services.current_user import get_optional_current_user_id
 from services.dto_response import jsonify_dto
-from services.errors import ApiError, bad_request
+from services.errors import ApiError, bad_request, payment_required
 from services.music_service import MusicProviderDTO, MusicSettingsDTO, RadioStationDTO
 from services.schema import bind_streaming_tables
 
 music_bp = Blueprint("v1_music", __name__, url_prefix="/api/v1/admin")
+
+#: Two-gate Feature flag -- `libs/streaming_module/features.py`'s
+#: `streaming.music_station` Feature contract, free tier.
+FEATURE_STREAMING_MUSIC_STATION = "waddles.streaming.music_station"
 
 
 def _dal() -> tuple[Any, Any]:
@@ -178,6 +183,10 @@ async def get_music_settings(
     async_dal, dal = _dal()
     try:
         await authorize_community(request, async_dal, dal, community_id=community_id, admin=True)
+        ctx = get_tenant_context(request)
+        assert ctx is not None  # nosec B101 -- tenant_middleware guarantees this
+        if not await feature_enabled(FEATURE_STREAMING_MUSIC_STATION, tenant=ctx.tenant_slug):
+            raise payment_required("The Music Station is not enabled for this plan")
         settings = await svc.get_music_settings(async_dal, dal, community_id=community_id)
     except ApiError as exc:
         return _err(exc)

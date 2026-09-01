@@ -17,6 +17,7 @@ from dataclasses import asdict
 
 from flask_core.api_utils import auth_required
 from flask_core.authz import require_scope
+from flask_core.feature_flags import feature_enabled
 from flask_core.tenancy import get_tenant_context, tenant_middleware
 from quart import Blueprint, current_app, request
 
@@ -39,6 +40,10 @@ from services.community_inventory import (
 
 inventory_bp = Blueprint("v1_community_inventory", __name__, url_prefix="/api/v1/admin")
 
+#: Two-gate Feature flag -- `libs/community_module/features.py`'s
+#: `community.inventory` Feature contract, Professional tier.
+FEATURE_COMMUNITY_INVENTORY = "waddles.community.inventory"
+
 
 def _tenant_ok(community_id: int) -> bool:
     ctx = get_tenant_context(request)
@@ -54,6 +59,10 @@ def _tenant_ok(community_id: int) -> bool:
 @require_scope("community.inventory:read")  # type: ignore[untyped-decorator]
 async def list_items_route(community_id: int) -> tuple[dict[str, object], int]:
     """`GET /api/v1/admin/<id>/inventory/items`."""
+    ctx = get_tenant_context(request)
+    assert ctx is not None  # nosec B101
+    if not await feature_enabled(FEATURE_COMMUNITY_INVENTORY, tenant=ctx.tenant_slug):
+        return api_error("Community inventory requires a Professional plan or higher", 402)
     if not _tenant_ok(community_id):
         return api_error("Community not found", status_code=404)
     items = list_items(current_app.config["dal"], community_id)

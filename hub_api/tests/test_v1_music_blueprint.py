@@ -22,11 +22,13 @@ a cross-tenant IDOR); reverted, green again.
 from __future__ import annotations
 
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 from quart import Quart
 from quart_schema import QuartSchema
 
+import blueprints.v1.music as music_module
 from blueprints.v1.music import music_bp
 from config import HubAPIConfig
 from tests.conftest import TENANT_SLUG, make_user_token, make_user_token_with_roles
@@ -69,6 +71,14 @@ def app(streaming_db: Any) -> Quart:
 @pytest.fixture
 def client(app: Quart) -> Any:
     return app.test_client()
+
+
+@pytest.fixture(autouse=True)
+def _feature_enabled_default_on(monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
+    """Default the `streaming.music_station` two-gate Feature flag ON for this file's tests."""
+    stub = AsyncMock(return_value=True)
+    monkeypatch.setattr(music_module, "feature_enabled", stub)
+    return stub
 
 
 def _tenant_id(db: Any) -> int:

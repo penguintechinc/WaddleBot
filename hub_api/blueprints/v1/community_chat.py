@@ -29,6 +29,7 @@ auto-discovery -- no edit to `routers/v1.py` needed.
 from __future__ import annotations
 
 from flask_core.authz import require_scope
+from flask_core.feature_flags import feature_enabled
 from flask_core.tenancy import get_tenant_context, tenant_middleware
 from quart import Blueprint, current_app, request
 from quart_schema import validate_response
@@ -43,6 +44,10 @@ from services.community_common import api_error, community_in_tenant
 
 chat_bp = Blueprint("v1_community_chat", __name__, url_prefix="/api/v1/community")
 
+#: Two-gate Feature flag (license tier AND PostHog) -- `libs/community_module/
+#: features.py`'s `community.chat` Feature contract, free tier.
+FEATURE_COMMUNITY_CHAT = "waddles.community.chat"
+
 
 @chat_bp.route("/<int:community_id>/chat/history", methods=["GET"])
 @tenant_middleware  # type: ignore[untyped-decorator]
@@ -52,6 +57,8 @@ async def chat_history(community_id: int) -> ChatHistoryResponse | tuple[dict[st
     """`GET /api/v1/community/<id>/chat/history` -- paginated message history."""
     ctx = get_tenant_context(request)
     assert ctx is not None  # nosec B101 -- tenant_middleware guarantees this
+    if not await feature_enabled(FEATURE_COMMUNITY_CHAT, tenant=ctx.tenant_slug):
+        return api_error("Community chat is not enabled for this plan", 402)
     dal = current_app.config["dal"]
     if not community_in_tenant(dal, community_id, ctx):
         return api_error("Community not found", status_code=404)

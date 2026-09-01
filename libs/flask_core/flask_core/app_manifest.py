@@ -34,9 +34,11 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, Mapping, Optional, Tuple
 
-# Modules table in the design doc: Bot, Social, Marketing, Customer -- the
-# 4 product Modules, each independently toggleable as a Helm deployment
-# grouping (values.yaml `modules.<name>.enabled`). The remaining namespaces
+# SCCEMBS product modules (docs/plans/2026-08-31-v3-sccembs-program-plan.md
+# §1.1/§9 P4) -- 7 modules, each independently toggleable as a Helm
+# deployment grouping (values.yaml `modules.<name>.enabled`): Socials,
+# Customers, Community, Event, Marketing, Bot, Streaming. This is P4's
+# "migrate KNOWN_MODULES to SCCEMBS" step. The remaining namespaces
 # (analytics, video_proxy, auth, compliance, integrations, tenancy, core)
 # are Core/platform capability namespaces: always deployed (no Helm toggle
 # of their own -- Core ships with every install), but their *Features*
@@ -44,11 +46,32 @@ from typing import Any, Dict, Mapping, Optional, Tuple
 # flask_core.entitlement / feature_flags.feature_enabled). Single source of
 # truth: feature_contract.py imports this set rather than re-declaring it,
 # so App and Feature validation can never drift onto two different lists.
+#
+# "social"/"customer" (singular) are pre-P4 aliases, NOT part of the
+# SCCEMBS taxonomy: `social_module`/`customer_module`'s already-registered
+# Feature contracts (9 + 5, landed pre-P4) still declare `module="social"`/
+# `module="customer"` -- dropping those strings here would break every one
+# of those registrations at import time (parse_feature_contract's
+# REASON_UNKNOWN_MODULE), violating P4's own "don't break existing
+# registrations" exit-gate condition. Kept additively as a transitional
+# alias pair; renaming social_module/customer_module onto socials/customers
+# (and retiring these two aliases) is a follow-up, scoped separately from
+# this taxonomy-alignment change to avoid an unscoped rename touching live
+# gates outside flask_core/hub_api (action/interactive/quote_interaction_
+# module, welcome_interaction_module also key off `waddles.social.*`).
 KNOWN_MODULES = frozenset({
-    "bot",
-    "social",
+    # SCCEMBS product modules (canonical, P4)
+    "socials",
+    "customers",
+    "community",
+    "event",
     "marketing",
+    "bot",
+    "streaming",
+    # Legacy product-module aliases -- see docstring above.
+    "social",
     "customer",
+    # Core/platform namespaces (always deployed, no Helm module toggle)
     "analytics",
     "video_proxy",
     "auth",
