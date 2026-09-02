@@ -81,6 +81,11 @@ modules:
     env:
       RATE_LIMIT_MAX_REQUESTS: "300"     # 3× default; E2E suite generates bursts
       RATE_LIMIT_WINDOW_MS: "60000"      # Keep 60s window unchanged
+      # Stricter, separate tier for login/token/passkey -- see
+      # hub_api/services/rate_limiting.py. 3× its own 10/60s default,
+      # matching this file's standard-tier "3x default" headroom above.
+      RATE_LIMIT_AUTH_MAX_REQUESTS: "30"
+      RATE_LIMIT_AUTH_WINDOW_MS: "60000"
 
   hubWebui:
     image: hub-webui

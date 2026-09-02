@@ -344,3 +344,43 @@ class TestPrivilegeEscalationRegression:
         assert response.status_code == 200
         body = await response.get_json()
         assert "granted" in body["message"]
+
+
+class TestListLimitIsBounded:
+    """gh security-review HIGH: `?limit=` was unbounded at this route.
+
+    `list_users` had its own defense-in-depth already (`user_management_
+    service.py::list_users` re-clamps `limit = min(100, max(1, limit))`
+    before it ever reaches a query, and `PaginationDTO`'s own construction
+    independently re-clamps the *displayed* value too) -- routing through
+    `services/pagination.py::parse_limit()` here closes the route-level
+    gap for consistency with every other list endpoint, not because this
+    one specific endpoint was independently exploitable end-to-end. The
+    genuinely-exploitable case (no clamp anywhere else in the call chain)
+    is `services/community_inventory.py::get_audit_log`'s raw
+    parameterized SQL -- see `tests/test_community_inventory.py::
+    TestListCheckoutsAuditAndSummary::test_audit_log_limit_query_param_is_
+    capped_before_reaching_raw_sql` for that endpoint's real fail-first
+    proof, and `tests/test_pagination.py` for `parse_limit()`'s own
+    unit-level fail-first proof.
+    """
+
+    async def test_absurd_limit_query_param_is_capped_not_passed_through(self, client: Any) -> None:
+        response = await client.get(
+            "/api/v1/superadmin/users?limit=999999", headers=_admin_headers()
+        )
+        assert response.status_code == 200
+        body = await response.get_json()
+        assert body["pagination"]["limit"] == 100
+
+    async def test_negative_limit_query_param_is_clamped_to_minimum(self, client: Any) -> None:
+        response = await client.get("/api/v1/superadmin/users?limit=-5", headers=_admin_headers())
+        assert response.status_code == 200
+        body = await response.get_json()
+        assert body["pagination"]["limit"] == 1
+
+    async def test_reasonable_limit_query_param_passes_through_unchanged(self, client: Any) -> None:
+        response = await client.get("/api/v1/superadmin/users?limit=10", headers=_admin_headers())
+        assert response.status_code == 200
+        body = await response.get_json()
+        assert body["pagination"]["limit"] == 10

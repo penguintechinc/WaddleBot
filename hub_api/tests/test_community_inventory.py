@@ -573,6 +573,53 @@ class TestListCheckoutsAuditAndSummary:
         )
         assert len((await no_match.get_json())["log"]) == 0
 
+    async def test_audit_log_limit_query_param_is_capped_before_reaching_raw_sql(
+        self, client: Any, auth_headers: Any, community_db: Any, monkeypatch: Any
+    ) -> None:
+        """Security-review HIGH: `get_audit_log()`'s raw SQL has no `LIMIT` clamp of its own.
+
+        Every other list endpoint's service function re-clamps `limit`
+        server-side even if the route somehow passed an unbounded value
+        (`min(100, max(1, limit))`, see e.g. `user_management_service.py`).
+        `get_audit_log()` does not -- it interpolates `limit` straight into
+        a parameterized `LIMIT $n` (`services/community_inventory.py`), so
+        `blueprints/v1/community_inventory.py::audit_log_route`'s own
+        `parse_limit()` call is the ONLY bound in this endpoint's entire
+        call chain. Asserting the raw SQL boundary itself, not just the
+        route, since that's where an unbounded value would have actually
+        landed.
+
+        Fail-first proof (executed, not narrated): reverted
+        `audit_log_route`'s `limit = parse_limit(...)` back to the pre-fix
+        `limit = request.args.get("limit", default=50, type=int)` --
+        this test went red (captured `limit=999999`, unbounded, reaching
+        `get_audit_log`); reverted to `parse_limit`, green again.
+        """
+        import blueprints.v1.community_inventory as inventory_bp_module
+
+        dal, community_id = community_db
+        # Same test-only schema patch as `test_audit_log_with_filters` above
+        # -- `get_audit_log()`'s raw SQL joins on `il.performed_by_user_id`,
+        # a column `ensure_community_tables()`'s sqlite:memory test binding
+        # doesn't create (irrelevant in production; real Postgres already
+        # has it). Needed here too since `community_db` is function-scoped.
+        dal.executesql("ALTER TABLE inventory_log ADD COLUMN performed_by_user_id INTEGER")
+        captured: dict[str, Any] = {}
+        real_get_audit_log = inventory_bp_module.get_audit_log
+
+        def _spy_get_audit_log(*args: Any, **kwargs: Any) -> Any:
+            captured["limit"] = kwargs.get("limit")
+            return real_get_audit_log(*args, **kwargs)
+
+        monkeypatch.setattr(inventory_bp_module, "get_audit_log", _spy_get_audit_log)
+
+        response = await client.get(
+            f"/api/v1/admin/{community_id}/inventory/log?limit=999999",
+            headers=auth_headers(scope="community.inventory:read"),
+        )
+        assert response.status_code == 200
+        assert captured["limit"] == 100
+
 
 class TestAvailableItems:
     async def test_available_without_search(

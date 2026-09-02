@@ -163,7 +163,11 @@ patches:
       kind: Ingress
       name: waddlebot-ingress
 
-  # Raise hub-api rate limit for beta (E2E test burst headroom)
+  # Raise hub-api rate limit for beta (E2E test burst headroom). Adds the
+  # auth-tier (login/token/passkey) env vars alongside the existing
+  # standard-tier bump -- see the alpha overlay's matching patch for the
+  # full rationale (hub_api/services/rate_limiting.py now actually reads
+  # these for the first time).
   - patch: |-
       - op: add
         path: /spec/template/spec/containers/0/env/-
@@ -174,6 +178,16 @@ patches:
         path: /spec/template/spec/containers/0/env/-
         value:
           name: RATE_LIMIT_WINDOW_MS
+          value: "60000"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: RATE_LIMIT_AUTH_MAX_REQUESTS
+          value: "30"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: RATE_LIMIT_AUTH_WINDOW_MS
           value: "60000"
     target:
       kind: Deployment

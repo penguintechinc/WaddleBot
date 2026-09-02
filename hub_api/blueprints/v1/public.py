@@ -35,6 +35,7 @@ from quart_schema import validate_response
 from config import HubAPIConfig
 from services import public_service as svc
 from services.errors import ApiError
+from services.pagination import parse_limit
 
 public_bp = Blueprint("v1_public", __name__, url_prefix="/api/v1/public")
 #: `GET /api/v1/signup-settings` -- Node's `routes/index.js` top-level alias
@@ -423,7 +424,7 @@ async def list_communities() -> ListCommunitiesResponse | tuple[dict[str, object
     except ApiError as exc:
         return _err(exc)
     page = int(request.args.get("page", "1"))
-    limit = int(request.args.get("limit", "12"))
+    limit = parse_limit(request.args.get("limit"), default=12)
     rows, total, total_pages = await svc.list_communities(
         async_dal, dal, ctx, page=page, limit=limit
     )
@@ -480,7 +481,7 @@ async def get_community(community_id: int) -> GetCommunityResponse | tuple[dict[
 async def get_live_streams() -> LiveStreamsResponse:
     """Get live streams."""
     async_dal, dal = _dal()
-    limit = int(request.args.get("limit", "20"))
+    limit = parse_limit(request.args.get("limit"), default=20)
     rows = await svc.get_live_streams(async_dal, dal, limit=limit)
     return LiveStreamsResponse(
         success=True,
@@ -567,7 +568,7 @@ async def get_marketplace_modules() -> MarketplaceModulesResponse:
     """Get marketplace modules."""
     async_dal, dal = _dal()
     page = int(request.args.get("page", "1"))
-    limit = int(request.args.get("limit", "25"))
+    limit = parse_limit(request.args.get("limit"), default=25)
     search = request.args.get("search", "")
     category = request.args.get("category")
 

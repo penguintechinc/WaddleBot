@@ -25,6 +25,7 @@ from services import superadmin_service as svc
 from services.current_user import get_current_user_id
 from services.dto_response import jsonify_dto
 from services.errors import ApiError
+from services.pagination import parse_limit
 
 superadmin_bp = Blueprint("v1_superadmin_platform", __name__, url_prefix="/api/v1/superadmin")
 
@@ -446,7 +447,7 @@ async def list_communities() -> CommunitiesResponse:
     """List all communities (cross-tenant)."""
     async_dal, dal = _dal()
     page = int(request.args.get("page", "1"))
-    limit = int(request.args.get("limit", "25"))
+    limit = parse_limit(request.args.get("limit"), default=25)
     search = request.args.get("search", "")
     platform = request.args.get("platform")
     is_active_param = request.args.get("isActive")
@@ -630,7 +631,7 @@ async def get_all_modules() -> ModulesResponse:
     """List all modules (including unpublished)."""
     async_dal, dal = _dal()
     page = int(request.args.get("page", "1"))
-    limit = int(request.args.get("limit", "25"))
+    limit = parse_limit(request.args.get("limit"), default=25)
     search = request.args.get("search", "")
     category = request.args.get("category")
     is_published_param = request.args.get("isPublished")
@@ -786,7 +787,7 @@ async def list_tenants() -> TenantsResponse:
     """List all tenants."""
     async_dal, dal = _dal()
     page = int(request.args.get("page", "1"))
-    limit = int(request.args.get("limit", "25"))
+    limit = parse_limit(request.args.get("limit"), default=25)
     search = request.args.get("search", "")
     rows, total, total_pages = await svc.list_tenants(
         async_dal, dal, page=page, limit=limit, search=search

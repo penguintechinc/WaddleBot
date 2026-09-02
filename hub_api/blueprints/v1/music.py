@@ -39,6 +39,7 @@ from services.current_user import get_optional_current_user_id
 from services.dto_response import jsonify_dto
 from services.errors import ApiError, bad_request, payment_required
 from services.music_service import MusicProviderDTO, MusicSettingsDTO, RadioStationDTO
+from services.pagination import parse_limit
 from services.schema import bind_streaming_tables
 
 music_bp = Blueprint("v1_music", __name__, url_prefix="/api/v1/admin")
@@ -287,7 +288,7 @@ async def get_radio_stations(
     try:
         await authorize_community(request, async_dal, dal, community_id=community_id, admin=True)
         page = int(request.args.get("page", "1"))
-        limit = int(request.args.get("limit", "25"))
+        limit = parse_limit(request.args.get("limit"), default=25)
         stations, page, limit, total = await svc.get_radio_stations(
             async_dal, dal, community_id=community_id, page=page, limit=limit
         )
