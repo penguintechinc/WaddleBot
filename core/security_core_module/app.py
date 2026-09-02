@@ -1,22 +1,27 @@
-"""
-Security Core Module - Main Application
+"""Security Core Module - Main Application.
 
 Provides spam detection, content filtering, warnings, and cross-platform moderation.
 """
-import sys
-import os
 import asyncio
+import os
+import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'libs'))
-
-from quart import Quart, Blueprint, request, jsonify
-from flask_core import (
-    setup_aaa_logging,
-    init_database,
-    success_response,
-    error_response,
-    create_health_blueprint,
+sys.path.insert(
+    0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'libs')
 )
+
+from flask_core import (
+    bind_community_read_tables,
+    create_health_blueprint,
+    error_response,
+    init_database,
+    install_community_scoped_auth,
+    setup_aaa_logging,
+    success_response,
+    verify_service_key,
+)
+from quart import Blueprint, Quart, request
+
 from config import Config
 
 # Create Quart app
@@ -29,6 +34,35 @@ app.register_blueprint(health_bp)
 # API blueprints
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1/security')
 internal_bp = Blueprint('internal', __name__, url_prefix='/api/v1/internal')
+
+# SECURITY (C6, A01 -- BOLA/unauthenticated access): every api_bp route is
+# tenant + community-membership scoped, not just tenant-scoped -- a caller
+# holding any valid tenant JWT could otherwise read/write ANY community's
+# warnings, blocked words, and moderation log by supplying an arbitrary
+# `community_id` in the URL. Registered once for the whole blueprint (not
+# per-route) so a route added later can't ship without this check by
+# omission -- see flask_core.community_access module docstring. Mutating
+# verbs (POST/PUT/PATCH/DELETE) require community-admin; GET requires only
+# active membership -- flask_core's DEFAULT_ADMIN_METHODS.
+install_community_scoped_auth(api_bp)
+
+
+@internal_bp.before_request
+async def _require_internal_service_key():
+    """Gate every internal_bp (service-to-service) route on X-Service-Key.
+
+    SECURITY (C6): these three routes (`check`, `warn`, `sync-action`) had
+    ZERO authentication -- any caller reaching this service's network
+    address could inject fabricated moderation events. `verify_service_key`
+    is the same constant-time, fail-closed-if-unconfigured helper already
+    used elsewhere in this codebase for internal service-to-service calls
+    (flask_core.auth.verify_service_key) -- not a per-user JWT, since these
+    endpoints carry no caller identity, only a `community_id` in the body.
+    """
+    provided = request.headers.get('X-Service-Key', '')
+    if not verify_service_key(provided, Config.SERVICE_API_KEY):
+        return error_response("Unauthorized: invalid service key", 401)
+    return None
 
 # Logger setup
 logger = setup_aaa_logging(Config.MODULE_NAME, Config.MODULE_VERSION)
@@ -51,13 +85,24 @@ async def startup():
     try:
         # Initialize database
         dal = init_database(Config.DATABASE_URL)
-        app.config['dal'] = dal
+        # SECURITY (C6): `async_dal` (this AsyncDAL wrapper, for
+        # `.select_async()`/etc) and `dal` (the real pydal DAL it proxies
+        # attribute access to, for `dal(query)` calls and `define_table`)
+        # are stored under the SAME two config keys `flask_core.
+        # install_community_scoped_auth`/`community_access` expect --
+        # matches `core/svc_streaming/app.py`'s established convention.
+        app.config['async_dal'] = dal
+        app.config['dal'] = dal.dal
+        # Read-only tenants/communities/community_members subset this
+        # service's community-scoped authz needs -- owned by hub-api's own
+        # migrations, never created here (migrate=False).
+        bind_community_read_tables(app.config['dal'], migrate=Config.DB_MIGRATE)
         logger.system("Database initialized", result="SUCCESS")
 
         # Import services
+        from services.content_filter import ContentFilter
         from services.security_service import SecurityService
         from services.spam_detector import SpamDetector
-        from services.content_filter import ContentFilter
         from services.warning_manager import WarningManager
 
         # Initialize services
@@ -87,11 +132,11 @@ async def shutdown():
 @api_bp.route('/status', methods=['GET'])
 async def get_status():
     """Get module status."""
-    return jsonify(success_response({
+    return success_response({
         'module': Config.MODULE_NAME,
         'version': Config.MODULE_VERSION,
         'status': 'healthy'
-    }))
+    })
 
 
 @api_bp.route('/<int:community_id>/config', methods=['GET'])
@@ -99,10 +144,10 @@ async def get_config(community_id: int):
     """Get security configuration for community."""
     try:
         config = await security_service.get_config(community_id)
-        return jsonify(success_response(config))
+        return success_response(config)
     except Exception as e:
         logger.error(f"Failed to get config: {e}", community_id=community_id)
-        return jsonify(error_response(str(e), 500))
+        return error_response(str(e), 500)
 
 
 @api_bp.route('/<int:community_id>/config', methods=['PUT'])
@@ -111,16 +156,15 @@ async def update_config(community_id: int):
     try:
         data = await request.get_json()
         config = await security_service.update_config(community_id, data)
-        return jsonify(success_response(config))
+        return success_response(config)
     except Exception as e:
         logger.error(f"Failed to update config: {e}", community_id=community_id)
-        return jsonify(error_response(str(e), 500))
+        return error_response(str(e), 500)
 
 
 @api_bp.route('/<int:community_id>/warnings', methods=['GET'])
 async def get_warnings(community_id: int):
-    """
-    List all warnings for community.
+    """List all warnings for community.
 
     Query params:
     - status: active, expired, all (default: active)
@@ -133,16 +177,15 @@ async def get_warnings(community_id: int):
         limit = int(request.args.get('limit', 25))
 
         warnings = await warning_manager.get_warnings(community_id, status, page, limit)
-        return jsonify(success_response(warnings))
+        return success_response(warnings)
     except Exception as e:
         logger.error(f"Failed to get warnings: {e}", community_id=community_id)
-        return jsonify(error_response(str(e), 500))
+        return error_response(str(e), 500)
 
 
 @api_bp.route('/<int:community_id>/warnings', methods=['POST'])
 async def issue_manual_warning(community_id: int):
-    """
-    Issue manual warning.
+    """Issue manual warning.
 
     Expected payload:
     {
@@ -161,16 +204,15 @@ async def issue_manual_warning(community_id: int):
             warning_reason=data['warning_reason'],
             issued_by=data.get('issued_by')
         )
-        return jsonify(success_response(warning))
+        return success_response(warning)
     except Exception as e:
         logger.error(f"Failed to issue warning: {e}", community_id=community_id)
-        return jsonify(error_response(str(e), 500))
+        return error_response(str(e), 500)
 
 
 @api_bp.route('/<int:community_id>/warnings/<int:warning_id>', methods=['DELETE'])
 async def revoke_warning(community_id: int, warning_id: int):
-    """
-    Revoke warning.
+    """Revoke warning.
 
     Expected payload:
     {
@@ -185,16 +227,15 @@ async def revoke_warning(community_id: int, warning_id: int):
             revoked_by=data.get('revoked_by'),
             revoke_reason=data.get('revoke_reason')
         )
-        return jsonify(success_response(result))
+        return success_response(result)
     except Exception as e:
         logger.error(f"Failed to revoke warning: {e}", warning_id=warning_id)
-        return jsonify(error_response(str(e), 500))
+        return error_response(str(e), 500)
 
 
 @api_bp.route('/<int:community_id>/filter-matches', methods=['GET'])
 async def get_filter_matches(community_id: int):
-    """
-    View filter match log.
+    """View filter match log.
 
     Query params:
     - page: page number (default: 1)
@@ -205,16 +246,15 @@ async def get_filter_matches(community_id: int):
         limit = int(request.args.get('limit', 50))
 
         matches = await content_filter.get_filter_matches(community_id, page, limit)
-        return jsonify(success_response(matches))
+        return success_response(matches)
     except Exception as e:
         logger.error(f"Failed to get filter matches: {e}", community_id=community_id)
-        return jsonify(error_response(str(e), 500))
+        return error_response(str(e), 500)
 
 
 @api_bp.route('/<int:community_id>/blocked-words', methods=['POST'])
 async def add_blocked_words(community_id: int):
-    """
-    Add blocked words.
+    """Add blocked words.
 
     Expected payload:
     {
@@ -224,16 +264,15 @@ async def add_blocked_words(community_id: int):
     try:
         data = await request.get_json()
         result = await content_filter.add_blocked_words(community_id, data['words'])
-        return jsonify(success_response(result))
+        return success_response(result)
     except Exception as e:
         logger.error(f"Failed to add blocked words: {e}", community_id=community_id)
-        return jsonify(error_response(str(e), 500))
+        return error_response(str(e), 500)
 
 
 @api_bp.route('/<int:community_id>/blocked-words', methods=['DELETE'])
 async def remove_blocked_words(community_id: int):
-    """
-    Remove blocked words.
+    """Remove blocked words.
 
     Expected payload:
     {
@@ -243,16 +282,15 @@ async def remove_blocked_words(community_id: int):
     try:
         data = await request.get_json()
         result = await content_filter.remove_blocked_words(community_id, data['words'])
-        return jsonify(success_response(result))
+        return success_response(result)
     except Exception as e:
         logger.error(f"Failed to remove blocked words: {e}", community_id=community_id)
-        return jsonify(error_response(str(e), 500))
+        return error_response(str(e), 500)
 
 
 @api_bp.route('/<int:community_id>/moderation-log', methods=['GET'])
 async def get_moderation_log(community_id: int):
-    """
-    View moderation actions log.
+    """View moderation actions log.
 
     Query params:
     - page: page number (default: 1)
@@ -263,10 +301,10 @@ async def get_moderation_log(community_id: int):
         limit = int(request.args.get('limit', 50))
 
         actions = await security_service.get_moderation_log(community_id, page, limit)
-        return jsonify(success_response(actions))
+        return success_response(actions)
     except Exception as e:
         logger.error(f"Failed to get moderation log: {e}", community_id=community_id)
-        return jsonify(error_response(str(e), 500))
+        return error_response(str(e), 500)
 
 
 # ============================================================================
@@ -275,8 +313,7 @@ async def get_moderation_log(community_id: int):
 
 @internal_bp.route('/check', methods=['POST'])
 async def check_message():
-    """
-    Check message against filters (real-time).
+    """Check message against filters (real-time).
 
     Expected payload:
     {
@@ -312,33 +349,32 @@ async def check_message():
 
         # Determine action
         if is_spam:
-            return jsonify(success_response({
+            return success_response({
                 'allowed': False,
                 'blocked_reason': 'spam_detected',
                 'action_taken': 'warn'
-            }))
+            })
 
         if is_filtered:
-            return jsonify(success_response({
+            return success_response({
                 'allowed': False,
                 'blocked_reason': 'content_filtered',
                 'matched_pattern': matched_pattern,
                 'action_taken': 'delete'
-            }))
+            })
 
-        return jsonify(success_response({
+        return success_response({
             'allowed': True
-        }))
+        })
 
     except Exception as e:
         logger.error(f"Failed to check message: {e}")
-        return jsonify(error_response(str(e), 500))
+        return error_response(str(e), 500)
 
 
 @internal_bp.route('/warn', methods=['POST'])
 async def issue_automated_warning():
-    """
-    Issue automated warning.
+    """Issue automated warning.
 
     Expected payload:
     {
@@ -360,16 +396,15 @@ async def issue_automated_warning():
             warning_reason=data['warning_reason'],
             trigger_message=data.get('trigger_message')
         )
-        return jsonify(success_response(warning))
+        return success_response(warning)
     except Exception as e:
         logger.error(f"Failed to issue automated warning: {e}")
-        return jsonify(error_response(str(e), 500))
+        return error_response(str(e), 500)
 
 
 @internal_bp.route('/sync-action', methods=['POST'])
 async def sync_moderation_action():
-    """
-    Sync moderation action across platforms.
+    """Sync moderation action across platforms.
 
     Expected payload:
     {
@@ -393,10 +428,10 @@ async def sync_moderation_action():
             moderator_id=data.get('moderator_id'),
             sync_to_platforms=data.get('sync_to_platforms', [])
         )
-        return jsonify(success_response(result))
+        return success_response(result)
     except Exception as e:
         logger.error(f"Failed to sync moderation action: {e}")
-        return jsonify(error_response(str(e), 500))
+        return error_response(str(e), 500)
 
 
 # Register blueprints

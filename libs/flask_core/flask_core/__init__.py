@@ -46,6 +46,16 @@ from .authz import (
     require_scope,
     has_required_scopes,
 )
+from .community_access import (
+    CallerIdentityError,
+    CommunityAccessError,
+    DEFAULT_ADMIN_METHODS,
+    bind_shared_read_tables as bind_community_read_tables,
+    decode_caller_user_id,
+    install_community_scoped_auth,
+    require_admin as require_community_admin,
+    require_member as require_community_member,
+)
 from .datamodels import (
     CommandRequest,
     CommandResult,
@@ -194,6 +204,15 @@ __all__ = [
     # Scope Enforcement (HTTP layer)
     "require_scope",
     "has_required_scopes",
+    # Community-scoped authorization (BOLA/IDOR fix for community_id)
+    "CallerIdentityError",
+    "CommunityAccessError",
+    "DEFAULT_ADMIN_METHODS",
+    "bind_community_read_tables",
+    "decode_caller_user_id",
+    "install_community_scoped_auth",
+    "require_community_admin",
+    "require_community_member",
     # Datamodels
     "CommandRequest",
     "CommandResult",

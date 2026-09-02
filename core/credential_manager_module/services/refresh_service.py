@@ -23,6 +23,7 @@ import redis.asyncio as aioredis
 import httpx
 
 from .oauth_handlers import OAuthRefreshError, get_handler
+from .token_crypto import decrypt_if_needed, encrypt_value
 
 logger = logging.getLogger(__name__)
 
@@ -164,7 +165,7 @@ class RefreshService:
                     id, platform, integration_type, community_id,
                     user_id, access_token, refresh_token, client_id,
                     client_secret, token_type, expires_at, scopes,
-                    config_data
+                    config_data, is_encrypted
                 FROM platform_integrations
                 WHERE is_active = TRUE
                   AND refresh_token IS NOT NULL
@@ -176,12 +177,30 @@ class RefreshService:
 
         refreshed = 0
         for row in rows:
-            success = await self._refresh_token(dict(row))
+            success = await self._refresh_token(self._decrypt_integration(dict(row)))
             if success:
                 refreshed += 1
 
         self._total_refreshed += refreshed
         return refreshed
+
+    @staticmethod
+    def _decrypt_integration(integration: dict) -> dict:
+        """Decrypt `access_token`/`refresh_token`/`client_secret` on a freshly-fetched row.
+
+        SECURITY (HIGH): these fields are AES-256-GCM ciphertext at rest
+        for every row this service has refreshed since this fix landed
+        (`_update_tokens` below sets `is_encrypted = TRUE` on write); rows
+        pre-dating the fix carry `is_encrypted = FALSE`/NULL and pass
+        through unchanged (`token_crypto.decrypt_if_needed`'s own
+        backward-compat contract). The plaintext values live only in this
+        in-memory dict for the duration of one refresh attempt -- never
+        logged, never re-serialized as-is.
+        """
+        is_encrypted = bool(integration.get("is_encrypted"))
+        for field in ("access_token", "refresh_token", "client_secret"):
+            integration[field] = decrypt_if_needed(integration.get(field), is_encrypted=is_encrypted)
+        return integration
 
     async def _refresh_token(self, integration: dict) -> bool:
         """Refresh a single integration's OAuth token."""
@@ -286,6 +305,14 @@ class RefreshService:
                 else scope_str
             )
 
+        # SECURITY (HIGH): encrypt before persisting -- these UPDATE
+        # parameters are the plaintext values fetched from the OAuth
+        # provider's refresh response; only their ciphertext ever reaches
+        # the database. `is_encrypted = TRUE` marks this row for
+        # `_decrypt_integration()` on its next read.
+        encrypted_access_token = encrypt_value(new_tokens["access_token"])
+        encrypted_refresh_token = encrypt_value(new_tokens["refresh_token"])
+
         async with self._pool.acquire() as conn:
             await conn.execute("""
                 UPDATE platform_integrations
@@ -294,11 +321,12 @@ class RefreshService:
                     token_type = $3,
                     expires_at = $4,
                     scopes = $5,
+                    is_encrypted = TRUE,
                     updated_at = NOW()
                 WHERE id = $6
             """,
-                new_tokens["access_token"],
-                new_tokens["refresh_token"],
+                encrypted_access_token,
+                encrypted_refresh_token,
                 new_tokens.get("token_type", "Bearer"),
                 expires_at,
                 scopes,

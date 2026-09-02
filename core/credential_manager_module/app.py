@@ -14,6 +14,7 @@ import asyncio
 import logging
 import sys
 
+from flask_core.authz import require_scope
 from quart import Quart, jsonify
 
 from .config import Config
@@ -85,8 +86,21 @@ async def health() -> tuple:
 
 
 @app.route("/api/v1/credentials/status")
+@require_scope("credentials:admin")  # type: ignore[untyped-decorator]
 async def credential_status() -> tuple:
-    """Return status of all tracked platform integrations."""
+    """Return status of all tracked platform integrations.
+
+    SECURITY (C6, A01): this endpoint had ZERO authentication -- any
+    caller reaching the service's network address could enumerate every
+    tracked OAuth integration's refresh status/error state. Not
+    tenant/community-scoped (this service manages platform-wide OAuth
+    credentials via `asyncpg`, no pydal `dal`/tenant table), so
+    `require_scope` alone (no `tenant_middleware`) is the right layer --
+    same JWT-only verification `core/svc_streaming/openapi/routes.py`
+    uses for its own `require_scope`-only doc route. `*:admin`
+    (SCOPE_BUNDLES `global.admin`) covers `credentials:admin` via the
+    established wildcard-resource convention.
+    """
     if not refresh_service:
         return jsonify({"error": "Service not initialized"}), 503
 
@@ -95,8 +109,16 @@ async def credential_status() -> tuple:
 
 
 @app.route("/api/v1/credentials/refresh-now", methods=["POST"])
+@require_scope("credentials:admin")  # type: ignore[untyped-decorator]
 async def force_refresh() -> tuple:
-    """Force an immediate credential refresh cycle."""
+    """Force an immediate credential refresh cycle.
+
+    SECURITY (C6, A01): this endpoint had ZERO authentication -- any
+    caller reaching the service's network address could trigger OAuth
+    refresh cycles (and their downstream rate-limit/quota consumption) at
+    will. See `credential_status`'s own docstring for the scope-only
+    rationale.
+    """
     if not refresh_service:
         return jsonify({"error": "Service not initialized"}), 503
 

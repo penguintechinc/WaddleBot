@@ -32,6 +32,11 @@ class Config:
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
     SECRET_KEY = require_secret_key()
     SERVICE_API_KEY = os.getenv('SERVICE_API_KEY', '')
+    # Whether to issue CREATE TABLE DDL for the read-only tenants/
+    # communities/community_members subset `flask_core.
+    # bind_community_read_tables` binds for community-scoped authz.
+    # Prod NEVER migrates these -- owned by hub-api's own migrations.
+    DB_MIGRATE = os.getenv('DB_MIGRATE', 'false').strip().lower() in {'1', 'true', 'yes', 'on'}
 
     # Redis Configuration (for credential refresh notifications)
     REDIS_URL: str = os.getenv('REDIS_URL', '')

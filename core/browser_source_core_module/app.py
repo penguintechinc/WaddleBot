@@ -17,6 +17,7 @@ from config import Config  # noqa: E402
 from flask_core import (  # noqa: E402
     async_endpoint, create_health_blueprint, init_database,
     setup_aaa_logging, success_response)
+from flask_core.auth import verify_service_key  # noqa: E402
 from proto import browser_source_pb2_grpc  # noqa: E402
 from services.grpc_handler import BrowserSourceServiceServicer  # noqa: E402
 from services.overlay_service import OverlayService  # noqa: E402
@@ -65,11 +66,14 @@ async def receive_caption():
     """Receive caption from router (internal service-to-service)"""
     from config import Config
 
-    # Validate service key
-    service_key = request.headers.get('X-Service-Key')
-    if hasattr(Config, 'SERVICE_API_KEY') and Config.SERVICE_API_KEY:
-        if service_key != Config.SERVICE_API_KEY:
-            return {"error": "Unauthorized"}, 401
+    # SECURITY (C6): the previous `if hasattr(...) and Config.SERVICE_API_KEY:`
+    # check SKIPPED validation entirely (fail-OPEN) whenever SERVICE_API_KEY
+    # was unset/misconfigured -- a misconfiguration silently left this
+    # endpoint unauthenticated. `verify_service_key` fails CLOSED (rejects
+    # when unconfigured) and uses a constant-time comparison.
+    service_key = request.headers.get('X-Service-Key', '')
+    if not verify_service_key(service_key, Config.SERVICE_API_KEY):
+        return {"error": "Unauthorized"}, 401
 
     data = await request.get_json()
     community_id = data.get('community_id')

@@ -21,6 +21,7 @@ import jwt
 from pydal import DAL, Field
 
 from flask_core.auth import DEFAULT_TENANT_SLUG
+from flask_core.community_access import bind_shared_read_tables, install_community_scoped_auth
 from flask_core.feature_flags import feature_enabled
 
 from config import Config
@@ -87,8 +88,53 @@ db = DAL(
     config.DATABASE_URL,
     folder="databases",
     pool_size=config.DB_POOL_SIZE,
-    migrate_enabled=False,
+    # `migrate_enabled` is a DAL-level ceiling -- False blocks migration
+    # for every table regardless of any per-`define_table` `migrate=`
+    # argument. Every business table below still passes its own explicit
+    # `migrate=False` (unchanged prod behavior); this only needs to be
+    # `config.DB_MIGRATE`-controlled so `bind_shared_read_tables`'s own
+    # `migrate=` argument (for the community-scoped-authz tables) can take
+    # effect in tests against a throwaway sqlite DB.
+    migrate_enabled=config.DB_MIGRATE,
 )
+
+
+class _SyncDalAsyncAdapter:
+    """Minimal `.select_async()` shim over this module's own sync `db`.
+
+    `install_community_scoped_auth`/`community_access` are written against
+    `flask_core.database.AsyncDAL`'s async interface; this module predates
+    that convention and calls pydal synchronously throughout (a pre-
+    existing, separate issue, out of scope here). Rather than rewriting
+    this module's DB layer, this adapter runs the one query
+    `community_access` needs (`Set.select(*fields)`) in a worker thread --
+    real async, just not `flask_core.database.AsyncDAL`.
+    """
+
+    def __init__(self, sync_dal) -> None:  # noqa: ANN001
+        self.dal = sync_dal
+
+    async def select_async(self, query_set, *fields):  # noqa: ANN001, ANN201
+        return await asyncio.to_thread(
+            query_set.select, *fields
+        ) if fields else await asyncio.to_thread(query_set.select)
+
+
+# SECURITY (C6, A01 -- unauthenticated access): every route on `app`
+# (`/api/v1/polls`, `/api/v1/forms`, ...) had ZERO tenant/auth enforcement
+# on GET routes, and the module-local `require_auth` decorator on the
+# write routes referenced `config.JWT_SECRET_KEY`, an attribute that was
+# never defined on `Config` -- every "protected" write crashed with
+# AttributeError before ever checking a token (fail-open in effect: no
+# request was ever actually authenticated). Standardized on the same
+# `SECRET_KEY`-based JWT + tenant check every other core service uses
+# (`flask_core.community_access`), applied once for the whole `app` since
+# this module registers routes directly rather than via a `Blueprint`;
+# `/health` stays exempt for K8s liveness/readiness probes.
+app.config["dal"] = db
+app.config["async_dal"] = _SyncDalAsyncAdapter(db)
+bind_shared_read_tables(db, migrate=config.DB_MIGRATE)
+install_community_scoped_auth(app, exempt_paths=frozenset({"/health"}))
 
 
 def init_database():
@@ -186,7 +232,12 @@ def init_database():
 # JWT Auth
 def verify_jwt_token(token: str) -> Optional[Dict[str, Any]]:
     try:
-        return jwt.decode(token, config.JWT_SECRET_KEY, algorithms=[config.JWT_ALGORITHM])
+        # SECURITY (C6): was `config.JWT_SECRET_KEY`, an attribute never
+        # defined on `Config` -- every call crashed with AttributeError
+        # before ever checking a token. `Config.JWT_SECRET` is the field
+        # that's actually defined and validated (`Config.validate()`
+        # requires it).
+        return jwt.decode(token, config.JWT_SECRET, algorithms=[config.JWT_ALGORITHM])
     except jwt.ExpiredSignatureError:
         return None
     except jwt.InvalidTokenError:
