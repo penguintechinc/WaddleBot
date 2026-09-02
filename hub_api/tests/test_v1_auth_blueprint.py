@@ -29,6 +29,7 @@ import pytest
 from quart import Quart
 from quart_schema import QuartSchema
 
+from app import bridge_session_cookie_to_bearer
 from blueprints.v1.auth import auth_bp
 from config import HubAPIConfig
 from services import oauth_service
@@ -76,6 +77,31 @@ def app(auth_db: Any) -> Quart:
 @pytest.fixture
 def client(app: Quart) -> Any:
     return app.test_client()
+
+
+@pytest.fixture
+def bridged_app(auth_db: Any) -> Quart:
+    """Same as `app` above, plus `app.py`'s cookie->bearer bridge hook.
+
+    Isolated into its own fixture rather than added to `app` directly --
+    every other test class in this file authenticates purely via an
+    explicit `Authorization` header and should keep proving that path
+    works with nothing else in play; only `TestSessionCookieBridgeEndToEnd`
+    below needs the hook registered.
+    """
+    quart_app = Quart(__name__)
+    QuartSchema(quart_app)
+    quart_app.register_blueprint(auth_bp)
+    quart_app.config["dal"] = auth_db.dal
+    quart_app.config["async_dal"] = auth_db
+    quart_app.config["HUB_API_CONFIG"] = _test_config()
+    quart_app.before_request(bridge_session_cookie_to_bearer)
+    return quart_app
+
+
+@pytest.fixture
+def bridged_client(bridged_app: Quart) -> Any:
+    return bridged_app.test_client()
 
 
 def _seed_settings(auth_db: Any, **settings: str) -> None:
@@ -314,6 +340,73 @@ class TestRefresh:
         assert body["token"] and body["token"] != token
 
 
+class TestSessionCookie:
+    """security.md C4 fix -- the session JWT is no longer localStorage-only.
+
+    Every token-issuing route also sets the `wb_session` HttpOnly cookie
+    (`services/session_cookie.py`); `logout` clears it. The cookie-as-
+    bearer-token bridge (`app.py`'s `before_request` hook) is NOT exercised
+    here -- this file's `app` fixture registers only `auth_bp`, not the
+    full `create_app()` -- see `tests/test_app_factory.py::
+    TestSessionCookieBridgesToBearerAuth` for that end-to-end path.
+    """
+
+    @staticmethod
+    def _cookie_attrs(response: Any) -> str:
+        for raw in response.headers.getlist("Set-Cookie"):
+            if raw.startswith("wb_session="):
+                return raw
+        raise AssertionError("wb_session cookie not set")
+
+    async def test_login_sets_httponly_secure_samesite_lax_cookie(
+        self, client: Any, auth_db: Any
+    ) -> None:
+        _seed_user(auth_db, email="dana@example.com", password="correcthorse")
+        response = await client.post(
+            "/api/v1/auth/login",
+            json={"email": "dana@example.com", "password": "correcthorse"},
+        )
+        assert response.status_code == 200
+        cookie = self._cookie_attrs(response)
+        assert "HttpOnly" in cookie
+        assert "Secure" in cookie
+        assert "SameSite=Lax" in cookie
+        assert "Path=/" in cookie
+        body = await response.get_json()
+        # Cookie value carries the same session JWT the body still returns
+        # (see services/session_cookie.py's docstring for why the body
+        # field is kept rather than ripped out of the wire contract).
+        assert body["token"] in cookie
+
+    async def test_refresh_rotates_the_cookie(self, client: Any, auth_db: Any) -> None:
+        user_id = _seed_user(auth_db)
+        token = make_user_token(user_id=user_id, tenant=TENANT_SLUG)
+        auth_db.dal.hub_sessions.insert(
+            session_token=token,
+            user_id=user_id,
+            is_active=True,
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
+            created_at=datetime.now(UTC),
+        )
+        auth_db.dal.commit()
+        response = await client.post(
+            "/api/v1/auth/refresh", headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        body = await response.get_json()
+        cookie = self._cookie_attrs(response)
+        assert body["token"] in cookie
+        assert token not in cookie
+
+    async def test_logout_clears_the_cookie(self, client: Any) -> None:
+        response = await client.post("/api/v1/auth/logout")
+        assert response.status_code == 200
+        cookie = self._cookie_attrs(response)
+        # delete_cookie() -- empty value, immediately-expired Max-Age.
+        assert cookie.startswith("wb_session=;") or "wb_session=" in cookie.split(";")[0]
+        assert "Max-Age=0" in cookie or "expires=" in cookie.lower()
+
+
 class TestTenantLoginInfo:
     async def test_unknown_tenant_is_404(self, client: Any) -> None:
         response = await client.get("/api/v1/auth/tenant/no-such-tenant")
@@ -436,6 +529,34 @@ class TestOAuthExchangeCodeHandoff:
         body = await exchange_response.get_json()
         assert body == {"success": True, "token": "real-jwt-value"}
 
+    async def test_exchange_also_sets_the_httponly_session_cookie(
+        self, client: Any, monkeypatch: Any
+    ) -> None:
+        """security.md C4: `/exchange` must also deliver the cookie, not just the body.
+
+        The frontend no longer persists the session JWT to localStorage,
+        so the OAuth flow's `/exchange` response has to carry it as the
+        HttpOnly cookie too.
+        """
+        _patch_oauth_callback(monkeypatch, token="cookie-jwt-value")
+        callback_response = await client.get(
+            "/api/v1/auth/oauth/discord/callback",
+            query_string={"code": "platform-auth-code", "state": "s"},
+        )
+        code = callback_response.headers["Location"].split("code=")[1]
+
+        exchange_response = await client.post("/api/v1/auth/exchange", json={"code": code})
+        cookies = [
+            raw
+            for raw in exchange_response.headers.getlist("Set-Cookie")
+            if raw.startswith("wb_session=")
+        ]
+        assert len(cookies) == 1
+        assert "cookie-jwt-value" in cookies[0]
+        assert "HttpOnly" in cookies[0]
+        assert "Secure" in cookies[0]
+        assert "SameSite=Lax" in cookies[0]
+
     async def test_exchange_code_is_single_use(self, client: Any, monkeypatch: Any) -> None:
         _patch_oauth_callback(monkeypatch, token="one-time-jwt")
         callback_response = await client.get(
@@ -468,3 +589,45 @@ class TestOAuthExchangeCodeHandoff:
             "/api/v1/auth/exchange", json={"code": "expired-exchange-code"}
         )
         assert response.status_code == 400
+
+
+class TestSessionCookieBridgeEndToEnd:
+    """Full round-trip proof of security.md's C4 fix, browser-SPA-shaped.
+
+    Login purely through the wire contract the frontend actually uses --
+    the session JWT is read only from the cookie the server set, an
+    `Authorization` header is never sent by hand -- see `bridged_client`'s
+    own docstring for why this needs its own app/client fixtures rather
+    than the file's default `app`/`client`.
+    """
+
+    async def test_login_then_me_authenticates_via_cookie_alone(
+        self, bridged_client: Any, auth_db: Any
+    ) -> None:
+        _seed_user(auth_db, email="frank@example.com", password="correcthorse")
+        login_response = await bridged_client.post(
+            "/api/v1/auth/login",
+            json={"email": "frank@example.com", "password": "correcthorse"},
+        )
+        assert login_response.status_code == 200
+
+        # No Authorization header set below -- only whatever cookie jar
+        # `bridged_client` already carries from the login response above.
+        me_response = await bridged_client.get("/api/v1/auth/me")
+        assert me_response.status_code == 200
+        body = await me_response.get_json()
+        assert body["user"]["email"] == "frank@example.com"
+
+    async def test_logout_then_me_is_unauthenticated_again(
+        self, bridged_client: Any, auth_db: Any
+    ) -> None:
+        _seed_user(auth_db, email="grace@example.com", password="correcthorse")
+        await bridged_client.post(
+            "/api/v1/auth/login",
+            json={"email": "grace@example.com", "password": "correcthorse"},
+        )
+        await bridged_client.post("/api/v1/auth/logout")
+
+        me_response = await bridged_client.get("/api/v1/auth/me")
+        body = await me_response.get_json()
+        assert body["user"] is None

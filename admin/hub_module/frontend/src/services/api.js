@@ -1,38 +1,25 @@
 import axios from 'axios';
 
+// SECURITY (security.md C4 / OWASP A07): the session JWT lives ONLY in the
+// HttpOnly `wb_session` cookie hub-api sets on login/OAuth-exchange/refresh
+// (hub_api/services/session_cookie.py) — never in localStorage, never
+// readable via `document.cookie`. A single XSS payload anywhere in this SPA
+// used to be able to exfiltrate the whole session by reading localStorage;
+// there is now nothing here for it to read. `withCredentials: true` makes
+// axios send that cookie automatically; the browser attaches it to every
+// same-origin request regardless, but this keeps the client explicit and
+// correct if VITE_API_URL ever points elsewhere. hub-api's own CSRF
+// mitigation is the cookie's `SameSite=Lax` attribute (no double-submit
+// token needed — see services/session_cookie.py's docstring), so no
+// X-XSRF-TOKEN handling belongs here either.
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '',
   timeout: 30000,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
 });
-
-// Request interceptor to add auth token and CSRF token
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-
-    // Add CSRF token for state-changing requests (double-submit cookie pattern).
-    // The backend skips CSRF when a Bearer token is present, but the login
-    // endpoint has no Bearer token yet — so we must send X-XSRF-TOKEN there.
-    if (!['get', 'head', 'options'].includes((config.method || '').toLowerCase())) {
-      const csrfToken = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('XSRF-TOKEN='))
-        ?.split('=')[1];
-      if (csrfToken) {
-        config.headers['X-XSRF-TOKEN'] = csrfToken;
-      }
-    }
-
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
 
 // Response interceptor for error handling
 api.interceptors.response.use(
@@ -40,22 +27,19 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // Handle 401 errors (token expired)
+    // Handle 401 errors (session expired) — hub-api rotates the session
+    // cookie on a successful /refresh; the browser stores the new cookie
+    // automatically from the Set-Cookie response header, so the retried
+    // request needs nothing attached by hand.
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
       try {
         const response = await api.post('/api/v1/auth/refresh');
         if (response.data.success) {
-          localStorage.setItem('token', response.data.token);
-          originalRequest.headers.Authorization = `Bearer ${response.data.token}`;
-          // Notify any socket connections that the token has changed so they
-          // can update their auth and reconnect with the new token.
-          window.dispatchEvent(new CustomEvent('token-refreshed', { detail: { token: response.data.token } }));
           return api(originalRequest);
         }
       } catch (refreshError) {
-        localStorage.removeItem('token');
         window.location.href = '/login';
         return Promise.reject(refreshError);
       }

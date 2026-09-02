@@ -15,7 +15,7 @@ from typing import Any
 import pytest
 from quart import Quart
 
-from app import create_app
+from app import bridge_session_cookie_to_bearer, create_app
 from config import HubAPIConfig
 
 
@@ -96,3 +96,47 @@ class TestVersionedRoutersMounted:
             client = app.test_client()
             response = await client.get("/api/v2/core/platform/default/status")
             assert response.status_code == 401
+
+
+class TestSessionCookieBridgeWiredIntoRealApp:
+    """security.md C4 fix -- `app.py`'s cookie->bearer bridge is actually mounted.
+
+    The full round-trip proof (login sets the cookie, a *second* request
+    carrying only that cookie -- no `Authorization` header anywhere --
+    reaches an authenticated route) lives in `tests/test_v1_auth_blueprint.py::
+    TestSessionCookieBridgeEndToEnd`: that file's `auth_db` fixture runs
+    real (`migrate=True`) tables, while this file's `create_app()` binds
+    with `migrate=False` (production: schema owned by SQL migrations --
+    see `services/schema.py::bind_auth_tables`), so a login here has no
+    `hub_users` table to actually query against. This class instead
+    proves the hook is wired into the real app object `create_app()`
+    returns, and exercises the two request paths that never touch the DB
+    at all (no auth present; an explicit, invalid bearer header).
+    """
+
+    def test_bridge_is_registered_as_an_app_wide_before_request_hook(self, app: Quart) -> None:
+        # Quart keys `before_request_funcs` by blueprint name; `None` is
+        # the app-wide (no-blueprint) scope `app.before_request()` used.
+        hooks = app.before_request_funcs.get(None, [])
+        assert bridge_session_cookie_to_bearer in hooks
+
+    async def test_authenticated_request_without_cookie_or_header_is_unauthenticated(
+        self, app: Quart
+    ) -> None:
+        async with app.test_app():
+            client = app.test_client()
+            response = await client.get("/api/v1/auth/me")
+            assert response.status_code == 200
+            body = await response.get_json()
+            assert body["user"] is None
+
+    async def test_explicit_bearer_header_still_wins_over_no_cookie(self, app: Quart) -> None:
+        """The bridge is additive -- an existing Authorization caller is untouched."""
+        async with app.test_app():
+            client = app.test_client()
+            response = await client.post(
+                "/api/v1/auth/refresh", headers={"Authorization": "Bearer not-a-real-token"}
+            )
+            # Rejected on the token's own merits (invalid), never silently
+            # swapped for a (nonexistent) cookie -- proves header precedence.
+            assert response.status_code in (400, 401)

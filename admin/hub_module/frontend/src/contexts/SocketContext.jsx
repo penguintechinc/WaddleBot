@@ -4,24 +4,33 @@
  */
 import { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { io } from 'socket.io-client';
+import { useAuth } from './AuthContext';
 
 const SocketContext = createContext(null);
 
 export function SocketProvider({ children }) {
+  const { isAuthenticated } = useAuth();
   const [socket, setSocket] = useState(null);
   const [connected, setConnected] = useState(false);
   const socketRef = useRef(null);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-
-    if (!token) {
+    // SECURITY (security.md C4): the session JWT lives only in the HttpOnly
+    // `wb_session` cookie — this page can't read it into an `auth: {token}`
+    // handshake payload (that is the point). `withCredentials: true` makes
+    // the socket.io handshake (both the initial HTTP request and any
+    // polling fallback) send that cookie the same way axios does; the
+    // server reads it from the handshake instead of `socket.handshake.
+    // auth.token`. Gate the connection attempt on `isAuthenticated` (from
+    // AuthContext's own `/me` check) rather than a token we can no longer
+    // see client-side.
+    if (!isAuthenticated) {
       return;
     }
 
     // Create socket connection
     const newSocket = io(import.meta.env.VITE_API_URL || window.location.origin, {
-      auth: { token },
+      withCredentials: true,
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionDelay: 1000,
@@ -58,14 +67,17 @@ export function SocketProvider({ children }) {
 
     setSocket(newSocket);
 
-    // Cleanup on unmount
+    // Cleanup on unmount, or when auth state flips (login/logout) --
+    // reconnects the socket with the new cookie-derived identity.
     return () => {
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
       }
+      setSocket(null);
+      setConnected(false);
     };
-  }, []);
+  }, [isAuthenticated]);
 
   const value = {
     socket,

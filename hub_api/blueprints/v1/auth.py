@@ -34,6 +34,11 @@ from services import auth_service, oauth_service, passkey_service
 from services.current_user import get_current_user_id, get_optional_current_user_id
 from services.dto_response import jsonify_dto
 from services.errors import ApiError
+from services.session_cookie import (
+    clear_session_cookie_after_request,
+    issue_session_cookie,
+    set_session_cookie,
+)
 
 auth_bp = Blueprint("v1_auth", __name__, url_prefix="/api/v1/auth")
 
@@ -405,9 +410,10 @@ async def register(data: RegisterRequest) -> tuple[Any, int]:
             202,
         )
     assert result is not None  # nosec B101 - register() always returns a result when not requiring verification
-    return jsonify_dto(
+    response, status = jsonify_dto(
         RegisterSuccessResponse(success=True, token=result.token, user=_login_user_dto(result))
     )
+    return set_session_cookie(response, result.token), status
 
 
 @auth_bp.route("/verify-email", methods=["GET"])
@@ -422,7 +428,7 @@ async def verify_email() -> tuple[Any, int]:
         result = await auth_service.verify_email(async_dal, dal, _cfg(), token=token)
     except ApiError as exc:
         return _err(exc)
-    return jsonify_dto(
+    response, status = jsonify_dto(
         RegisterSuccessResponse(
             success=True,
             message="Email verified successfully",
@@ -430,6 +436,7 @@ async def verify_email() -> tuple[Any, int]:
             user=_login_user_dto(result),
         )
     )
+    return set_session_cookie(response, result.token), status
 
 
 @dataclass(slots=True, frozen=True)
@@ -483,6 +490,7 @@ async def login(
         )
     except ApiError as exc:
         return _err(exc)
+    issue_session_cookie(result.token)
     return LoginResponse(success=True, token=result.token, user=_login_user_dto(result))
 
 
@@ -500,6 +508,7 @@ async def admin_login(
         )
     except ApiError as exc:
         return _err(exc)
+    issue_session_cookie(result.token)
     return AdminLoginResponse(
         success=True,
         token=result.token,
@@ -528,6 +537,7 @@ async def temp_password_login(
         )
     except ApiError as exc:
         return _err(exc)
+    issue_session_cookie(result.token)
     return TempPasswordLoginResponse(
         success=True, token=result.token, requiresOAuthLink=result.requires_oauth_link
     )
@@ -572,6 +582,7 @@ async def refresh() -> RefreshResponse | tuple[dict[str, object], int]:
         new_token = await auth_service.refresh_token(async_dal, dal, _cfg(), token=token or "")
     except ApiError as exc:
         return _err(exc)
+    issue_session_cookie(new_token)
     return RefreshResponse(success=True, token=new_token)
 
 
@@ -583,6 +594,7 @@ async def logout() -> SimpleSuccessResponse:
     auth_header = request.headers.get("Authorization", "")
     token = auth_header[7:] if auth_header.startswith("Bearer ") else None
     await auth_service.logout(async_dal, dal, token=token)
+    clear_session_cookie_after_request()
     return SimpleSuccessResponse(success=True)
 
 
@@ -748,6 +760,7 @@ async def exchange_oauth_code(
         token = await oauth_service.redeem_oauth_exchange_code(async_dal, dal, code=data.code)
     except ApiError as exc:
         return _err(exc)
+    issue_session_cookie(token)
     return ExchangeCodeResponse(success=True, token=token)
 
 
@@ -838,6 +851,7 @@ async def passkey_login_finish(
         )
     except ApiError as exc:
         return _err(exc)
+    issue_session_cookie(token)
     return PasskeyLoginFinishResponse(
         success=True,
         token=token,

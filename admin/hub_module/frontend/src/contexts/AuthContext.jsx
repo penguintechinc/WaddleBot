@@ -12,14 +12,15 @@ export function AuthProvider({ children }) {
   const [error, setError] = useState(null);
   const lastFetchedAt = useRef(null);
 
-  // Check for existing session on mount
+  // SECURITY (security.md C4): the session JWT lives only in the HttpOnly
+  // `wb_session` cookie hub-api sets on login/OAuth-exchange/refresh — this
+  // page has no way to read it (that is the point: an XSS payload can't
+  // either). There is no client-side signal for "a session cookie might
+  // exist", so every mount unconditionally asks the server via `/me`,
+  // which already handles "not logged in" as a normal `{user: null}`
+  // response rather than an error.
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      fetchCurrentUser();
-    } else {
-      setLoading(false);
-    }
+    fetchCurrentUser();
   }, []);
 
   const fetchCurrentUser = async () => {
@@ -29,15 +30,16 @@ export function AuthProvider({ children }) {
         setUser(response.data.user);
         lastFetchedAt.current = Date.now();
       } else {
-        localStorage.removeItem('token');
+        setUser(null);
       }
     } catch (err) {
-      console.error('Failed to fetch user:', err);
-      // Only clear token on auth errors (401/403). Transient errors like
-      // 429 rate limiting or network failures should not log the user out.
+      console.error('[AuthContext] Failed to fetch current user');
+      // Only clear the client's user state on auth errors (401/403).
+      // Transient errors like 429 rate limiting or network failures should
+      // not log the user out.
       const status = err.response?.status;
       if (status === 401 || status === 403) {
-        localStorage.removeItem('token');
+        setUser(null);
       }
     } finally {
       setLoading(false);
@@ -50,9 +52,6 @@ export function AuthProvider({ children }) {
    * unless force=true is passed.
    */
   const refreshUser = useCallback(async (force = false) => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
-
     const now = Date.now();
     if (!force && lastFetchedAt.current && (now - lastFetchedAt.current) < USER_STALE_THRESHOLD_MS) {
       return; // Data is still fresh
@@ -78,7 +77,8 @@ export function AuthProvider({ children }) {
       setError(null);
       const response = await api.post('/api/v1/auth/login', { email, password });
       if (response.data.success) {
-        localStorage.setItem('token', response.data.token);
+        // The session JWT arrived as an HttpOnly cookie (hub-api's
+        // Set-Cookie on this same response) — nothing to persist client-side.
         setUser(response.data.user);
         return response.data;
       }
@@ -110,7 +110,6 @@ export function AuthProvider({ children }) {
         if (response.data.requiresVerification) {
           return { requiresVerification: true, message: response.data.message };
         }
-        localStorage.setItem('token', response.data.token);
         setUser(response.data.user);
         return response.data;
       }
@@ -127,7 +126,6 @@ export function AuthProvider({ children }) {
       setError(null);
       const response = await api.post('/api/v1/auth/admin', { username, password });
       if (response.data.success) {
-        localStorage.setItem('token', response.data.token);
         setUser(response.data.user);
         return response.data;
       }
@@ -143,7 +141,6 @@ export function AuthProvider({ children }) {
       setError(null);
       const response = await api.post('/api/v1/auth/temp-password', { identifier, password });
       if (response.data.success) {
-        localStorage.setItem('token', response.data.token);
         await fetchCurrentUser();
         return response.data;
       }
@@ -162,7 +159,8 @@ export function AuthProvider({ children }) {
     // proxy/access logs, browser history, and the Referer header).
     const response = await api.post('/api/v1/auth/exchange', { code });
     if (response.data.success && response.data.token) {
-      localStorage.setItem('token', response.data.token);
+      // The exchange response also set the HttpOnly session cookie —
+      // nothing to persist client-side, just pick up the resulting session.
       await fetchCurrentUser();
     }
   }, []);
@@ -170,10 +168,11 @@ export function AuthProvider({ children }) {
   const logout = useCallback(async () => {
     try {
       await api.post('/api/v1/auth/logout');
-    } catch (err) {
-      console.error('Logout error:', err);
+    } catch {
+      console.error('[AuthContext] Logout request failed');
     } finally {
-      localStorage.removeItem('token');
+      // hub-api clears the session cookie on /logout regardless of outcome
+      // above; always clear the client's own view of the session too.
       setUser(null);
     }
   }, []);
@@ -181,11 +180,12 @@ export function AuthProvider({ children }) {
   const refreshToken = useCallback(async () => {
     try {
       const response = await api.post('/api/v1/auth/refresh');
-      if (response.data.success) {
-        localStorage.setItem('token', response.data.token);
+      if (!response.data.success) {
+        logout();
       }
-    } catch (err) {
-      console.error('Token refresh failed:', err);
+      // hub-api rotates the session cookie on success — nothing to persist.
+    } catch {
+      console.error('[AuthContext] Token refresh failed');
       logout();
     }
   }, [logout]);
