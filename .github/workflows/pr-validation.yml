@@ -43,30 +43,20 @@ jobs:
       # hub_api, libs/* (flask_core + every SCCEMBS module library), and
       # every core/svc_* stage-runner container each ship their own
       # hash-pinned requirements.txt -- none of these are satisfied by
-      # identity_core_module's requirements alone. Each hash-pinned file is
-      # installed as its own separate `pip install --require-hashes` call:
-      # pip's --require-hashes rejects editable installs and unhashed specs
-      # in the *same* invocation, and the per-service lockfiles legitimately
-      # disagree on some transitive pins (e.g. hub_api pins pydal==20260520.0,
-      # svc_action pins pydal==20241204.1) -- a single combined `-r a -r b`
-      # call would hard-error on that disagreement. Installing sequentially
-      # lets each later step upgrade/downgrade shared deps to its own pin,
-      # which is what every subproject's own test suite is verified against.
+      # identity_core_module's requirements alone. scripts/ci/install-unit-test-deps.sh
+      # is the single source of truth for the sequential per-package install
+      # order (see that script for why a single combined install call
+      # doesn't work); make test-unit also runs it, so local and CI installs
+      # never drift out of sync.
       - name: Install test dependencies
-        run: |
-          python -m pip install --disable-pip-version-check \
-            -r core/identity_core_module/requirements.txt \
-            -e libs/flask_core
-          python -m pip install --disable-pip-version-check --require-hashes -r hub_api/requirements.txt
-          python -m pip install --disable-pip-version-check --require-hashes -r core/svc_action/requirements.txt
-          python -m pip install --disable-pip-version-check --require-hashes -r core/svc_ingest/requirements.txt
-          python -m pip install --disable-pip-version-check --require-hashes -r core/svc_presentation/requirements.txt
-          python -m pip install --disable-pip-version-check --require-hashes -r core/svc_process/requirements.txt
-          python -m pip install --disable-pip-version-check --require-hashes -r core/svc_streaming/requirements.txt
+        env:
+          PYTHON_BIN: python
+        run: scripts/ci/install-unit-test-deps.sh
 
       - name: Run unit tests
         env:
           PYTHON_BIN: python
+          SKIP_UNIT_TEST_DEPS_INSTALL: "1"
         run: make test-unit
 
   marketplace-refunds:

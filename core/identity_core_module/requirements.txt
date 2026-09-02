@@ -10,9 +10,23 @@ httpx>=0.27.0,<0.28.0
 # Environment
 python-dotenv>=1.0.0
 
-# gRPC contract generation and runtime
-grpcio>=1.67.0,<1.77.0
-grpcio-tools>=1.67.0,<1.77.0
+# gRPC runtime. Must track libs/flask_core/requirements.in's grpcio pin --
+# this module and flask_core are installed together (see
+# scripts/ci/install-unit-test-deps.sh) and flask_core's grpc_tls.py (added
+# in 951cac19, gRPC transport TLS) requires grpcio>=1.83.0,<1.84.0. A
+# looser/older pin here makes the combined install unresolvable (grpcio<1.77
+# vs flask_core's grpcio>=1.83 has no overlap) and breaks `make test-unit`
+# at the dependency-install step.
+grpcio>=1.83.0,<1.84.0
+
+# grpcio-tools (protoc codegen) intentionally NOT listed here: it is a
+# dev-only, manually-invoked stub-generation tool (`python -m
+# grpc_tools.protoc`), never imported by any runtime/test code in this
+# module (verified: no `grpc_tools` import outside this comment), and every
+# grpcio-tools release matching grpcio>=1.83 requires protobuf>=7.35, which
+# hard-conflicts with flask_core's protobuf<7.0 pin (needed for OTel 1.39
+# compatibility). Regenerate stubs from an isolated venv/container instead
+# of the shared test environment.
 
 # Development
 pytest>=7.4.0

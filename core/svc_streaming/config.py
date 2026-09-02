@@ -77,6 +77,15 @@ class Config:
     #: True to get real DDL against an ephemeral sqlite file.
     db_migrate: bool
 
+    #: Same `VALKEY_URL`/`REDIS_URL` convention `core/svc_presentation/
+    #: config.py` and `core/svc_action/config.py` both read -- required by
+    #: `install_rate_limiting(app, ..., redis_url=cfg.valkey_url)` in
+    #: `app.py`. Was missing from this dataclass (svc-streaming's own
+    #: docstring notes it mirrors svc_presentation's config shape), which
+    #: made every `Config.from_env()` call raise `AttributeError` at
+    #: `app.py:76` before this fix -- the app never actually started.
+    valkey_url: str | None
+
     hub_api_url: str
     #: Shared HMAC secret used to verify inbound bearer JWTs -- same
     #: env var / default every other Quart service in this repo reads
@@ -143,6 +152,7 @@ class Config:
             db_migrate=(
                 os.getenv("DB_MIGRATE", "false").strip().lower() in {"1", "true", "yes", "on"}
             ),
+            valkey_url=os.getenv("VALKEY_URL") or os.getenv("REDIS_URL") or None,
             hub_api_url=os.getenv("HUB_API_URL", "http://hub-api:8204"),
             jwt_secret_key=require_secret_key(),
             ffmpeg_binary=os.getenv("FFMPEG_BINARY", "ffmpeg"),

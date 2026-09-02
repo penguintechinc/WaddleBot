@@ -14,14 +14,14 @@ log_fail() { echo -e "${RED}[FAIL]${NC} $*"; }
 log_info "Running unit tests"
 cd "$REPO_ROOT"
 
-# Tests import repository packages directly. The environment running this script
-# must install the module dependencies (including pytest/pytest-asyncio and the
-# identity module requirements); flask_core is loaded from its local source tree.
-# See scripts/ci/install-unit-test-deps.sh (and .github/workflows/pr-validation.yml)
-# for the full set of `-r requirements.txt` installs this gate depends on --
-# hub_api, libs/flask_core, and every core/svc_* container each carry their own
-# hash-pinned requirements.txt and are NOT satisfied by the legacy
-# identity_core_module requirements alone.
+# Tests import repository packages directly. hub_api, libs/flask_core, and
+# every core/svc_* container each carry their own hash-pinned
+# requirements.txt and are NOT satisfied by the legacy identity_core_module
+# requirements alone -- scripts/ci/install-unit-test-deps.sh installs every
+# one of them, sequentially, before pytest ever runs (see that script for
+# why a single combined install call doesn't work). Skip with
+# SKIP_UNIT_TEST_DEPS_INSTALL=1 if the caller has already provisioned the
+# environment (e.g. a container image built with these deps baked in).
 export PYTHONPATH="$REPO_ROOT:$REPO_ROOT/core:$REPO_ROOT/libs/flask_core${PYTHONPATH:+:$PYTHONPATH}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 
@@ -29,6 +29,11 @@ command -v "$PYTHON_BIN" >/dev/null 2>&1 || {
     echo "Required Python executable not found: $PYTHON_BIN" >&2
     exit 127
 }
+
+if [ "${SKIP_UNIT_TEST_DEPS_INSTALL:-0}" != "1" ]; then
+    log_info "Installing unit test dependencies (per-package, see scripts/ci/install-unit-test-deps.sh)"
+    PYTHON_BIN="$PYTHON_BIN" "$REPO_ROOT/scripts/ci/install-unit-test-deps.sh"
+fi
 
 TOTAL_PASSED=0
 run_suite() {

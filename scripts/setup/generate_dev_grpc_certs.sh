@@ -31,7 +31,12 @@ if ! command -v openssl >/dev/null 2>&1; then
 fi
 
 mkdir -p "${CERT_DIR}"
-chmod 700 "${CERT_DIR}"
+# 755, not 700: this dir is bind-mounted read-only into containers running
+# as `appuser` (a different UID than the host user generating these certs).
+# A 700 directory blocks traversal for any non-owner UID regardless of the
+# files' own permissions inside it -- see the matching *.key chmod below for
+# why the files themselves are 644 too.
+chmod 755 "${CERT_DIR}"
 
 # Every compose service/container name known to run or dial a gRPC server,
 # both spellings where router_module's Config defaults disagree with the
@@ -86,7 +91,13 @@ openssl x509 -req \
   -out "${CERT_DIR}/client.crt"
 
 rm -f "${CERT_DIR}"/*.csr "${CERT_DIR}/ca.srl"
-chmod 600 "${CERT_DIR}"/*.key
+# 644, not 600: these are bind-mounted read-only into containers running as
+# `appuser` (a different UID than the host user that generated them), so a
+# owner-only 600 key is unreadable inside the container and every gRPC
+# server/client fails TLS setup at startup. Dev-only, disposable CA (see
+# header comment) -- world-readable key files are an acceptable tradeoff
+# here and must never be replicated for a real/production CA.
+chmod 644 "${CERT_DIR}"/*.key
 chmod 644 "${CERT_DIR}"/*.crt
 
 echo "[grpc-dev-certs] done: $(ls "${CERT_DIR}")"
