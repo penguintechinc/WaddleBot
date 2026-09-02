@@ -5,6 +5,8 @@ from typing import Optional, Tuple
 import grpc
 from grpc import aio
 
+from services.grpc_auth_interceptor import AuthInterceptor, require_auth
+
 logger = logging.getLogger(__name__)
 
 
@@ -34,6 +36,8 @@ class ActionServiceServicer:
         Returns:
             SendMessageResponse
         """
+        await require_auth(context)
+
         try:
             result = await self.service.send_message(
                 channel_id=request.channel_id,
@@ -64,6 +68,8 @@ class ActionServiceServicer:
         Returns:
             SendEphemeralResponse
         """
+        await require_auth(context)
+
         try:
             result = await self.service.send_ephemeral(
                 channel_id=request.channel_id,
@@ -95,6 +101,8 @@ class ActionServiceServicer:
         Returns:
             AddReactionResponse
         """
+        await require_auth(context)
+
         try:
             result = await self.service.add_reaction(
                 message_id=request.message_id,
@@ -124,6 +132,8 @@ class ActionServiceServicer:
         Returns:
             RemoveReactionResponse
         """
+        await require_auth(context)
+
         try:
             result = await self.service.remove_reaction(
                 message_id=request.message_id,
@@ -153,6 +163,8 @@ class ActionServiceServicer:
         Returns:
             CreateChannelResponse
         """
+        await require_auth(context)
+
         try:
             result = await self.service.create_channel(
                 channel_name=request.channel_name,
@@ -184,6 +196,8 @@ class ActionServiceServicer:
         Returns:
             GetActionHistoryResponse
         """
+        await require_auth(context)
+
         try:
             result = await self.service.get_action_history(
                 limit=request.limit,
@@ -231,7 +245,7 @@ async def create_grpc_server(
     """
     try:
         # Create gRPC server
-        server = aio.server()
+        server = aio.server(interceptors=[AuthInterceptor()])
 
         # Add servicer to server
         servicer = ActionServiceServicer(service)

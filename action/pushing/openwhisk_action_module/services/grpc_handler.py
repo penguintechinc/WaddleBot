@@ -6,7 +6,7 @@ import json
 import logging
 import uuid
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 import grpc
 from concurrent import futures
@@ -15,6 +15,7 @@ from concurrent import futures
 # from proto import openwhisk_action_pb2, openwhisk_action_pb2_grpc
 
 from services.openwhisk_service import OpenWhiskService
+from services.grpc_auth_interceptor import AuthInterceptor, require_auth
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,8 @@ class OpenWhiskActionServicer:
         Returns:
             InvokeActionResponse proto message
         """
+        await require_auth(context)
+
         namespace = request.namespace
         action_name = request.action_name
         blocking = request.blocking
@@ -116,6 +119,8 @@ class OpenWhiskActionServicer:
         Returns:
             InvokeActionAsyncResponse proto message
         """
+        await require_auth(context)
+
         namespace = request.namespace
         action_name = request.action_name
 
@@ -175,6 +180,8 @@ class OpenWhiskActionServicer:
         Returns:
             InvokeSequenceResponse proto message
         """
+        await require_auth(context)
+
         namespace = request.namespace
         sequence_name = request.sequence_name
 
@@ -237,6 +244,8 @@ class OpenWhiskActionServicer:
         Returns:
             InvokeWebActionResponse proto message
         """
+        await require_auth(context)
+
         namespace = request.namespace
         package_name = request.package_name
         action_name = request.action_name
@@ -310,6 +319,8 @@ class OpenWhiskActionServicer:
         Returns:
             FireTriggerResponse proto message
         """
+        await require_auth(context)
+
         namespace = request.namespace
         trigger_name = request.trigger_name
 
@@ -367,6 +378,8 @@ class OpenWhiskActionServicer:
         Returns:
             GetActivationResponse proto message
         """
+        await require_auth(context)
+
         namespace = request.namespace
         activation_id = request.activation_id
 
@@ -420,6 +433,8 @@ class OpenWhiskActionServicer:
         Returns:
             ListActionsResponse proto message
         """
+        await require_auth(context)
+
         namespace = request.namespace
         limit = request.limit if request.limit > 0 else 30
         skip = request.skip if request.skip >= 0 else 0
@@ -459,10 +474,26 @@ class OpenWhiskActionServicer:
 class GrpcServer:
     """gRPC server wrapper."""
 
-    def __init__(self, servicer: OpenWhiskActionServicer, port: int):
-        """Initialize gRPC server."""
+    def __init__(
+        self,
+        servicer: OpenWhiskActionServicer,
+        port: int,
+        interceptors: Optional[list[grpc.aio.ServerInterceptor]] = None,
+    ):
+        """Initialize gRPC server.
+
+        Args:
+            servicer: OpenWhiskActionServicer instance.
+            port: gRPC server port.
+            interceptors: Server interceptors; defaults to a fresh
+                ``AuthInterceptor`` so the server never starts unauthenticated
+                once the generated protobuf wiring below is completed.
+        """
         self.servicer = servicer
         self.port = port
+        self.interceptors: list[grpc.aio.ServerInterceptor] = (
+            interceptors if interceptors is not None else [AuthInterceptor()]
+        )
         self.server = None
 
     async def start(self):
@@ -472,7 +503,7 @@ class GrpcServer:
         logger.info(f"Starting gRPC server on port {self.port}")
 
         # In production, would be:
-        # self.server = grpc.aio.server()
+        # self.server = grpc.aio.server(interceptors=self.interceptors)
         # openwhisk_action_pb2_grpc.add_OpenWhiskActionServiceServicer_to_server(
         #     self.servicer, self.server
         # )

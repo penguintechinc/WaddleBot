@@ -19,3 +19,8 @@ psycopg2-binary>=2.9.10
 python-dotenv>=1.2.2
 requests>=2.33.0
 setuptools>=83.0.0
+
+# Testing
+pytest>=9.0.3
+pytest-asyncio>=0.23.0
+pytest-cov==4.1.0

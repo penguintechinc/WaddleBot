@@ -20,6 +20,7 @@ except ImportError:
     slack_action_pb2_grpc = None
 
 from services.slack_service import SlackService
+from services.grpc_auth_interceptor import AuthInterceptor
 
 
 logger = logging.getLogger(__name__)
@@ -403,7 +404,10 @@ def create_grpc_server(slack_service: SlackService, port: int, max_workers: int 
         logger.error("Proto files not generated. Run: python -m grpc_tools.protoc")
         return None
 
-    server = grpc.aio.server(futures.ThreadPoolExecutor(max_workers=max_workers))
+    server = grpc.aio.server(
+        futures.ThreadPoolExecutor(max_workers=max_workers),
+        interceptors=[AuthInterceptor()],
+    )
 
     servicer = SlackActionServicer(slack_service)
     slack_action_pb2_grpc.add_SlackActionServiceServicer_to_server(servicer, server)

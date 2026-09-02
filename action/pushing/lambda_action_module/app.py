@@ -23,6 +23,7 @@ from quart import Quart, jsonify, request
 
 from config import Config
 from services.lambda_service import LambdaService
+from services.grpc_auth_interceptor import AuthInterceptor
 from services.grpc_handler import LambdaActionServicer
 
 # Configure logging
@@ -339,7 +340,10 @@ async def get_function_config_rest(function_name: str):
 
 async def serve_grpc():
     """Start gRPC server"""
-    server = grpc.aio.server(futures.ThreadPoolExecutor(max_workers=10))
+    server = grpc.aio.server(
+        futures.ThreadPoolExecutor(max_workers=10),
+        interceptors=[AuthInterceptor()],
+    )
     lambda_action_pb2_grpc.add_LambdaActionServicer_to_server(
         LambdaActionServicer(lambda_service), server
     )

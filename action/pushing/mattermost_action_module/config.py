@@ -28,6 +28,9 @@ class Config:
 
     # JWT/Auth configuration
     JWT_SECRET = os.getenv('JWT_SECRET', 'your-secret-key-change-in-production')
+    JWT_ALGORITHM = os.getenv('JWT_ALGORITHM', 'HS256')
+    # Service identities permitted to call this module's gRPC servicer.
+    ALLOWED_SERVICES = os.getenv('ALLOWED_SERVICES', 'router_module').split(',')
 
     # Logging configuration
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')

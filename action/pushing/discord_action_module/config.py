@@ -43,6 +43,10 @@ class Config:
     )
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRATION_SECONDS: int = int(os.getenv("JWT_EXPIRATION_SECONDS", "3600"))
+    # Service identities permitted to call this module's gRPC servicer.
+    ALLOWED_SERVICES: list[str] = os.getenv(
+        "ALLOWED_SERVICES", "router_module"
+    ).split(",")
 
     # Module Information
     MODULE_NAME: str = "discord_action_module"

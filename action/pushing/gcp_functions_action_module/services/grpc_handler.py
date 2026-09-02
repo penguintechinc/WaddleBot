@@ -12,6 +12,7 @@ import grpc
 
 from config import Config
 from services.gcp_functions_service import GCPFunctionsService
+from services.grpc_auth_interceptor import AuthInterceptor
 
 # Import generated proto files (will be generated during Docker build)
 try:
@@ -347,17 +348,33 @@ class GCPFunctionsActionServicer:
 class GrpcServer:
     """gRPC server wrapper."""
 
-    def __init__(self, servicer: GCPFunctionsActionServicer, port: int):
-        """Initialize gRPC server."""
+    def __init__(
+        self,
+        servicer: GCPFunctionsActionServicer,
+        port: int,
+        interceptors: Optional[list[grpc.aio.ServerInterceptor]] = None,
+    ):
+        """Initialize gRPC server.
+
+        Args:
+            servicer: GCPFunctionsActionServicer instance.
+            port: gRPC server port.
+            interceptors: Server interceptors; defaults to a fresh
+                ``AuthInterceptor`` so the server never starts unauthenticated.
+        """
         self.servicer = servicer
         self.port = port
+        self.interceptors: list[grpc.aio.ServerInterceptor] = (
+            interceptors if interceptors is not None else [AuthInterceptor()]
+        )
         self.server: Optional[grpc.aio.Server] = None
 
     async def start(self):
         """Start gRPC server."""
         try:
             self.server = grpc.aio.server(
-                futures.ThreadPoolExecutor(max_workers=Config.MAX_WORKERS)
+                futures.ThreadPoolExecutor(max_workers=Config.MAX_WORKERS),
+                interceptors=self.interceptors,
             )
 
             gcp_functions_action_pb2_grpc.add_GCPFunctionsActionServiceServicer_to_server(

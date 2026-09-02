@@ -20,6 +20,7 @@ except ImportError:
     teams_action_pb2_grpc = None
 
 from services.teams_service import TeamsService
+from services.grpc_auth_interceptor import AuthInterceptor
 
 
 logger = logging.getLogger(__name__)
@@ -208,7 +209,10 @@ def create_grpc_server(teams_service: TeamsService, port: int, max_workers: int 
         logger.error("Proto files not generated. Run: python -m grpc_tools.protoc")
         return None
 
-    server = grpc.aio.server(futures.ThreadPoolExecutor(max_workers=max_workers))
+    server = grpc.aio.server(
+        futures.ThreadPoolExecutor(max_workers=max_workers),
+        interceptors=[AuthInterceptor()],
+    )
 
     servicer = TeamsActionServicer(teams_service)
     teams_action_pb2_grpc.add_TeamsActionServiceServicer_to_server(servicer, server)
