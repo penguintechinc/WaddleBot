@@ -7,3 +7,8 @@ boto3>=1.34.0
 pyjwt>=2.8.0
 psycopg2-binary>=2.9.0
 setuptools>=83.0.0
+
+# Testing
+pytest>=9.0.3
+pytest-asyncio>=0.23.0
+pytest-cov==4.1.0

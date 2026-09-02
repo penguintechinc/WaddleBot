@@ -20,6 +20,7 @@ except ImportError:
     googlechat_action_pb2_grpc = None
 
 from services.googlechat_service import GoogleChatService
+from services.grpc_auth_interceptor import AuthInterceptor
 
 
 logger = logging.getLogger(__name__)
@@ -175,7 +176,10 @@ def create_grpc_server(googlechat_service: GoogleChatService, port: int, max_wor
         logger.error("Proto files not generated. Run: python -m grpc_tools.protoc")
         return None
 
-    server = grpc.aio.server(futures.ThreadPoolExecutor(max_workers=max_workers))
+    server = grpc.aio.server(
+        futures.ThreadPoolExecutor(max_workers=max_workers),
+        interceptors=[AuthInterceptor()],
+    )
 
     servicer = GoogleChatActionServicer(googlechat_service)
     googlechat_action_pb2_grpc.add_GoogleChatActionServiceServicer_to_server(servicer, server)

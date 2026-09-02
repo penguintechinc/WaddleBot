@@ -59,6 +59,9 @@ try:
     from lambda_action_module.config import Config as LambdaConfig
     from lambda_action_module.services.lambda_service import LambdaService
     from lambda_action_module.services.grpc_handler import LambdaActionServicer
+    from lambda_action_module.services.grpc_auth_interceptor import (
+        AuthInterceptor as LambdaAuthInterceptor,
+    )
     from lambda_action_module.app import verify_jwt as lambda_verify_jwt
     from penguin_dal import DAL
 
@@ -167,6 +170,9 @@ try:
     from openwhisk_action_module.services.openwhisk_service import OpenWhiskService
     from openwhisk_action_module.services.auth_service import AuthService
     from openwhisk_action_module.services.grpc_handler import OpenWhiskActionServicer
+    from openwhisk_action_module.services.grpc_auth_interceptor import (
+        AuthInterceptor as OpenWhiskAuthInterceptor,
+    )
 
     openwhisk_enabled = True
     openwhisk_service = OpenWhiskService()
@@ -257,6 +263,9 @@ try:
     from gcp_functions_action_module.services.gcp_functions_service import GCPFunctionsService
     from gcp_functions_action_module.services.auth_service import AuthService as GCPAuthService
     from gcp_functions_action_module.services.grpc_handler import GCPFunctionsActionServicer
+    from gcp_functions_action_module.services.grpc_auth_interceptor import (
+        AuthInterceptor as GCPAuthInterceptor,
+    )
 
     gcp_enabled = True
     gcp_service = GCPFunctionsService()
@@ -377,7 +386,10 @@ async def start_grpc_servers():
         try:
             async def serve_lambda_grpc():
                 from lambda_action_module.grpc_proto import lambda_action_pb2_grpc
-                server = grpc.aio.server(futures.ThreadPoolExecutor(max_workers=10))
+                server = grpc.aio.server(
+                    futures.ThreadPoolExecutor(max_workers=10),
+                    interceptors=[LambdaAuthInterceptor()],
+                )
                 lambda_action_pb2_grpc.add_LambdaActionServicer_to_server(
                     LambdaActionServicer(lambda_service), server
                 )
@@ -397,7 +409,8 @@ async def start_grpc_servers():
                 from openwhisk_action_module.services.grpc_handler import GrpcServer
                 grpc_server = GrpcServer(
                     OpenWhiskActionServicer(openwhisk_service),
-                    50052
+                    50052,
+                    interceptors=[OpenWhiskAuthInterceptor()],
                 )
                 await grpc_server.start()
                 logger.info("Starting OpenWhisk gRPC server on 0.0.0.0:50052")
@@ -416,7 +429,8 @@ async def start_grpc_servers():
                 from gcp_functions_action_module.services.grpc_handler import GrpcServer
                 grpc_server = GrpcServer(
                     GCPFunctionsActionServicer(gcp_service),
-                    50053
+                    50053,
+                    interceptors=[GCPAuthInterceptor()],
                 )
                 await grpc_server.start()
                 logger.info("Starting GCP gRPC server on 0.0.0.0:50053")

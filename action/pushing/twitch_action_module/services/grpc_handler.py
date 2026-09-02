@@ -14,6 +14,7 @@ from concurrent import futures
 # from proto import twitch_action_pb2, twitch_action_pb2_grpc
 
 from services.twitch_service import TwitchService
+from services.grpc_auth_interceptor import AuthInterceptor, require_auth
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,8 @@ class TwitchActionServicer:
         Returns:
             ActionResponse proto message
         """
+        await require_auth(context)
+
         action_id = str(uuid.uuid4())
         action_type = request.action_type
         broadcaster_id = request.broadcaster_id
@@ -109,6 +112,8 @@ class TwitchActionServicer:
         Returns:
             BatchActionResponse proto message
         """
+        await require_auth(context)
+
         actions = request.actions
         total_count = len(actions)
 
@@ -149,6 +154,8 @@ class TwitchActionServicer:
         Returns:
             StatusResponse proto message
         """
+        await require_auth(context)
+
         action_id = request.action_id
 
         # For now, just return completed status

@@ -53,6 +53,11 @@ class Config:
         "MODULE_SECRET_KEY",
         "youtube_action_secret_key_change_me_in_production"
     )
+    JWT_ALGORITHM: str = "HS256"
+    # Service identities permitted to call this module's gRPC servicer.
+    ALLOWED_SERVICES: list[str] = os.getenv(
+        "ALLOWED_SERVICES", "router_module"
+    ).split(",")
 
     # Performance Settings
     MAX_WORKERS: int = int(os.getenv("MAX_WORKERS", "20"))

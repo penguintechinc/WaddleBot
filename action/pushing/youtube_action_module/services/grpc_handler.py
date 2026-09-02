@@ -12,6 +12,7 @@ import grpc
 from proto import youtube_action_pb2, youtube_action_pb2_grpc
 
 from services.youtube_service import YouTubeService
+from services.grpc_auth_interceptor import AuthInterceptor
 from config import Config
 
 
@@ -394,7 +395,7 @@ class GRPCServer:
         self._executor = ThreadPoolExecutor(
             max_workers=Config.MAX_WORKERS, thread_name_prefix="youtube-api"
         )
-        self.server = grpc.aio.server()
+        self.server = grpc.aio.server(interceptors=[AuthInterceptor()])
 
         servicer = YouTubeActionServicer(self.youtube_service, self._executor)
         youtube_action_pb2_grpc.add_YouTubeActionServicer_to_server(

@@ -23,6 +23,7 @@ from quart import Quart, jsonify, request
 
 from config import Config
 from services.discord_service import DiscordService
+from services.grpc_auth_interceptor import AuthInterceptor
 from services.grpc_handler import DiscordActionServicer
 
 # Configure logging
@@ -397,7 +398,10 @@ async def timeout_user_rest():
 
 async def serve_grpc():
     """Start gRPC server"""
-    server = grpc.aio.server(futures.ThreadPoolExecutor(max_workers=10))
+    server = grpc.aio.server(
+        futures.ThreadPoolExecutor(max_workers=10),
+        interceptors=[AuthInterceptor()],
+    )
     discord_action_pb2_grpc.add_DiscordActionServicer_to_server(
         DiscordActionServicer(discord_service), server
     )

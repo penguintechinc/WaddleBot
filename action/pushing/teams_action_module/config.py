@@ -42,6 +42,10 @@ class Config:
     MODULE_SECRET_KEY: str = os.getenv("MODULE_SECRET_KEY", "")
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRY_SECONDS: int = 3600
+    # Service identities permitted to call this module's gRPC servicer.
+    ALLOWED_SERVICES: list[str] = os.getenv(
+        "ALLOWED_SERVICES", "router_module"
+    ).split(",")
 
     # Module Information
     MODULE_NAME: str = "teams_action_module"
