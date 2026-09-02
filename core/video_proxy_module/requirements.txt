@@ -11,8 +11,16 @@ protobuf>=5.29.6
 pydal==20241111.1
 psycopg2-binary==2.9.12
 
+# Rate limiting (security.md A04) -- Valkey/Redis client for services/rate_limiting.py
+redis==5.0.1
+
 # HTTP Client
 aiohttp>=3.13.4
+# services/license_service.py imports httpx directly -- was missing from
+# this file entirely (pre-existing gap, unrelated to this change: any
+# `from services...` import already transitively fails without it, since
+# services/__init__.py eagerly imports license_service).
+httpx==0.27.2
 
 # Authentication & Security
 pyjwt>=2.13.0

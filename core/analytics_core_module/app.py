@@ -16,6 +16,7 @@ from flask_core import (
     success_response,
     error_response,
     create_health_blueprint,
+    install_rate_limiting,
 )
 from config import Config
 
@@ -25,6 +26,12 @@ app = Quart(__name__)
 # Health blueprint
 health_bp = create_health_blueprint(Config.MODULE_NAME, Config.MODULE_VERSION)
 app.register_blueprint(health_bp)
+
+# SECURITY (A04): every route below had zero rate limiting. Shared global
+# before_request hook (flask_core.http_rate_limit, extracted from hub_api's
+# own gh security PR #255 fix) -- one call site covers every route present
+# or future, not a per-route decorator that a new route could ship without.
+install_rate_limiting(app, namespace=Config.MODULE_NAME)
 
 # API blueprints
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1/analytics')

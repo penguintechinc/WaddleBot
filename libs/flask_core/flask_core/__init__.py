@@ -77,6 +77,11 @@ from .api_utils import (
 )
 from .cache import CacheManager, create_cache_manager
 from .rate_limiter import RateLimiter, RateLimitExceeded, create_rate_limiter
+from .http_rate_limit import (
+    DEFAULT_EXEMPT_PATHS,
+    RATE_LIMITER_CONFIG_KEY,
+    install_rate_limiting,
+)
 from .message_queue import MessageQueue, Message, create_message_queue
 from .stream_pipeline import StreamPipeline, StreamEvent, create_stream_pipeline
 from .circuit_breaker import (
@@ -241,6 +246,9 @@ __all__ = [
     "RateLimiter",
     "RateLimitExceeded",
     "create_rate_limiter",
+    "DEFAULT_EXEMPT_PATHS",
+    "RATE_LIMITER_CONFIG_KEY",
+    "install_rate_limiting",
     # Message Queue
     "MessageQueue",
     "Message",

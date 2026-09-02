@@ -21,6 +21,7 @@ from flask_core import (  # noqa: E402
     error_response,
     init_database,
     install_community_scoped_auth,
+    install_rate_limiting,
     setup_aaa_logging,
     success_response,
 )
@@ -40,6 +41,11 @@ logger = setup_aaa_logging(Config.MODULE_NAME, Config.MODULE_VERSION)
 # blueprint so a route added later can't ship without this check by
 # omission -- see flask_core.community_access module docstring.
 install_community_scoped_auth(api_bp)
+
+# SECURITY (A04): every api_bp route had zero rate limiting -- shared
+# global before_request hook, see flask_core.http_rate_limit module
+# docstring.
+install_rate_limiting(app, namespace=Config.MODULE_NAME)
 
 dal = None
 

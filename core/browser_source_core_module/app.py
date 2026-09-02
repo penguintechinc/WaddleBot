@@ -16,7 +16,7 @@ from quart import Blueprint, Quart, request, websocket  # noqa: E402
 from config import Config  # noqa: E402
 from flask_core import (  # noqa: E402
     async_endpoint, create_health_blueprint, init_database,
-    setup_aaa_logging, success_response)
+    install_rate_limiting, setup_aaa_logging, success_response)
 from flask_core.auth import verify_service_key  # noqa: E402
 from proto import browser_source_pb2_grpc  # noqa: E402
 from services.grpc_handler import BrowserSourceServiceServicer  # noqa: E402
@@ -30,6 +30,11 @@ app = Quart(__name__)
 # Register health/metrics endpoints
 health_bp = create_health_blueprint(Config.MODULE_NAME, Config.MODULE_VERSION)
 app.register_blueprint(health_bp)
+
+# SECURITY (A04): every route below (status, internal caption ingest,
+# overlay serving) had zero rate limiting -- shared global before_request
+# hook, see flask_core.http_rate_limit module docstring.
+install_rate_limiting(app, namespace=Config.MODULE_NAME)
 
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
 logger = setup_aaa_logging(Config.MODULE_NAME, Config.MODULE_VERSION)

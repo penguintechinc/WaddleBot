@@ -16,6 +16,7 @@ from flask_core import (
     error_response,
     init_database,
     install_community_scoped_auth,
+    install_rate_limiting,
     setup_aaa_logging,
     success_response,
     verify_service_key,
@@ -45,6 +46,11 @@ internal_bp = Blueprint('internal', __name__, url_prefix='/api/v1/internal')
 # verbs (POST/PUT/PATCH/DELETE) require community-admin; GET requires only
 # active membership -- flask_core's DEFAULT_ADMIN_METHODS.
 install_community_scoped_auth(api_bp)
+
+# SECURITY (A04): every route on `app` (api_bp, internal_bp) had zero rate
+# limiting -- shared global before_request hook, see
+# flask_core.http_rate_limit module docstring.
+install_rate_limiting(app, namespace=Config.MODULE_NAME)
 
 
 @internal_bp.before_request

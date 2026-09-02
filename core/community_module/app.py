@@ -9,7 +9,7 @@ from quart import Quart, Blueprint
 
 from flask_core import (  # noqa: E402
     setup_aaa_logging, init_database, async_endpoint, success_response,
-    create_health_blueprint
+    create_health_blueprint, install_rate_limiting
 )
 from config import Config  # noqa: E402
 
@@ -20,6 +20,10 @@ app = Quart(__name__)
 # Register health/metrics endpoints
 health_bp = create_health_blueprint(Config.MODULE_NAME, Config.MODULE_VERSION)
 app.register_blueprint(health_bp)
+
+# SECURITY (A04): shared global before_request rate-limit hook -- see
+# flask_core.http_rate_limit module docstring.
+install_rate_limiting(app, namespace=Config.MODULE_NAME)
 
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
 logger = setup_aaa_logging(Config.MODULE_NAME, Config.MODULE_VERSION)

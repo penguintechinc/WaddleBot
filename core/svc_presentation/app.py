@@ -21,7 +21,12 @@ from __future__ import annotations
 
 import asyncio
 
-from flask_core import create_health_blueprint, init_database, setup_aaa_logging
+from flask_core import (
+    create_health_blueprint,
+    init_database,
+    install_rate_limiting,
+    setup_aaa_logging,
+)
 from quart import Quart
 
 from blueprints import register_blueprints
@@ -42,6 +47,11 @@ def create_app(config: Config | None = None) -> Quart:
 
     app.register_blueprint(create_health_blueprint(cfg.module_name, cfg.module_version))
     register_blueprints(app)
+
+    # SECURITY (A04): every overlay/music-station/SSE route had zero rate
+    # limiting -- shared global before_request hook, see
+    # flask_core.http_rate_limit module docstring.
+    install_rate_limiting(app, namespace=cfg.module_name, redis_url=cfg.valkey_url)
 
     @app.before_serving
     async def startup() -> None:

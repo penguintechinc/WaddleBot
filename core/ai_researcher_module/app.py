@@ -17,9 +17,11 @@ from flask_core import (  # noqa: E402
     setup_aaa_logging,
     init_database,
     async_endpoint,
+    auth_required,
     success_response,
     error_response,
     create_health_blueprint,
+    install_rate_limiting,
 )
 from config import Config  # noqa: E402
 
@@ -50,6 +52,14 @@ app = cors(app, allow_origin="*")
 # Register health/metrics endpoints
 health_bp = create_health_blueprint(Config.MODULE_NAME, Config.MODULE_VERSION)
 app.register_blueprint(health_bp)
+
+# SECURITY (A04): only the /research /ask /recall /summarize command
+# endpoints had rate limiting (per-command, via services/rate_limiter.py
+# below) -- every other route here (status, firehose ingest, admin config,
+# insights, anomalies, sentiment, behavior profiles, bot detection) had
+# none. This is the same global-hook fix hub_api applied for its own 449
+# endpoints (gh security PR #255), shared via flask_core.
+install_rate_limiting(app, namespace=Config.MODULE_NAME, redis_url=Config.REDIS_URL)
 
 # API Blueprints
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
@@ -251,6 +261,7 @@ async def status():
 
 @researcher_bp.route('/research', methods=['POST'])
 @async_endpoint
+@auth_required
 async def research():
     """
     Process !or/research command - perform web research on a topic.
@@ -299,6 +310,7 @@ async def research():
 
 @researcher_bp.route('/ask', methods=['POST'])
 @async_endpoint
+@auth_required
 async def ask():
     """
     Process !or/ask command - ask a question with context awareness.
@@ -347,6 +359,7 @@ async def ask():
 
 @researcher_bp.route('/recall', methods=['POST'])
 @async_endpoint
+@auth_required
 async def recall():
     """
     Process !or/recall command - recall memories from mem0.
@@ -395,6 +408,7 @@ async def recall():
 
 @researcher_bp.route('/summarize', methods=['POST'])
 @async_endpoint
+@auth_required
 async def summarize():
     """
     Process !or/summarize command - summarize recent conversation or stream.
@@ -557,6 +571,7 @@ async def stream_end():
 
 @researcher_bp.route('/context/<int:community_id>')
 @async_endpoint
+@auth_required
 async def get_context(community_id: int):
     """
     Get current conversation context for a community.
@@ -606,6 +621,7 @@ async def get_context(community_id: int):
 
 @researcher_bp.route('/memory/<int:community_id>')
 @async_endpoint
+@auth_required
 async def get_memory(community_id: int):
     """
     Get mem0 memories for a community.
@@ -645,6 +661,7 @@ async def get_memory(community_id: int):
 
 @admin_bp.route('/<int:community_id>/ai-insights')
 @async_endpoint
+@auth_required
 async def get_ai_insights(community_id: int):
     """
     Get AI-generated insights for the community.
@@ -705,6 +722,7 @@ async def get_ai_insights(community_id: int):
 
 @admin_bp.route('/<int:community_id>/ai-researcher/config', methods=['GET'])
 @async_endpoint
+@auth_required
 async def get_researcher_config(community_id: int):
     """Get AI Researcher configuration for a community."""
     try:
@@ -759,6 +777,7 @@ async def get_researcher_config(community_id: int):
 
 @admin_bp.route('/<int:community_id>/ai-researcher/config', methods=['PUT'])
 @async_endpoint
+@auth_required
 async def update_researcher_config(community_id: int):
     """
     Update AI Researcher configuration.
@@ -853,6 +872,7 @@ async def update_researcher_config(community_id: int):
 
 @researcher_bp.route('/<int:community_id>/insights', methods=['GET'])
 @async_endpoint
+@auth_required
 async def get_insights(community_id: int):
     """
     Get previously generated insights for a community.
@@ -918,6 +938,7 @@ async def get_insights(community_id: int):
 
 @researcher_bp.route('/<int:community_id>/insights/generate', methods=['POST'])
 @async_endpoint
+@auth_required
 async def generate_insights(community_id: int):
     """
     Generate new AI-powered community insights.
@@ -968,6 +989,7 @@ async def generate_insights(community_id: int):
 
 @researcher_bp.route('/<int:community_id>/anomalies', methods=['GET'])
 @async_endpoint
+@auth_required
 async def get_anomalies(community_id: int):
     """
     Get detected anomalies for a community.
@@ -1002,6 +1024,7 @@ async def get_anomalies(community_id: int):
 
 @researcher_bp.route('/<int:community_id>/anomalies/<int:anomaly_id>/acknowledge', methods=['POST'])
 @async_endpoint
+@auth_required
 async def acknowledge_anomaly(community_id: int, anomaly_id: int):
     """
     Mark an anomaly as acknowledged.
@@ -1053,6 +1076,7 @@ async def acknowledge_anomaly(community_id: int, anomaly_id: int):
 
 @researcher_bp.route('/<int:community_id>/sentiment', methods=['GET'])
 @async_endpoint
+@auth_required
 async def get_sentiment(community_id: int):
     """
     Get sentiment analysis for a community.
@@ -1093,6 +1117,7 @@ async def get_sentiment(community_id: int):
 
 @researcher_bp.route('/<int:community_id>/user/<platform>/<user_id>/profile', methods=['GET'])
 @async_endpoint
+@auth_required
 async def get_user_profile(community_id: int, platform: str, user_id: str):
     """
     Get behavior profile for a specific user.
@@ -1156,6 +1181,7 @@ async def get_user_profile(community_id: int, platform: str, user_id: str):
 
 @researcher_bp.route('/<int:community_id>/users/profiles', methods=['GET'])
 @async_endpoint
+@auth_required
 async def get_community_profiles(community_id: int):
     """
     Get behavior profiles for all users in a community.
@@ -1187,6 +1213,7 @@ async def get_community_profiles(community_id: int):
 
 @admin_bp.route('/<int:community_id>/bot-detection')
 @async_endpoint
+@auth_required
 async def get_bot_detection(community_id: int):
     """
     Get bot detection results for the community.

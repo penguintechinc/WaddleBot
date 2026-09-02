@@ -28,9 +28,13 @@ from typing import Callable
 from flask_core import (
     success_response,
     error_response,
-    paginate_response,
     async_endpoint,
     auth_required,
+    tenant_middleware,
+    get_tenant_context,
+    require_community_admin,
+    require_community_member,
+    CommunityAccessError,
 )
 from services.workflow_service import (
     WorkflowService,
@@ -39,6 +43,10 @@ from services.workflow_service import (
     WorkflowPermissionException,
 )
 from services.license_service import LicenseValidationException
+from services.community_scope import (
+    WorkflowCommunityNotFoundError,
+    resolve_workflow_community_id,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -51,6 +59,43 @@ workflow_api = Blueprint('workflow_api', __name__, url_prefix='/api/v1/workflows
 def get_workflow_service() -> WorkflowService:
     """Get workflow service from app context."""
     return current_app.config.get('workflow_service')
+
+
+async def _authorize_community(
+    workflow_id: str, user_id: int, *, admin_required: bool
+) -> int:
+    """Resolve the workflow's REAL `community_id` and require caller membership/admin of it.
+
+    SECURITY (A01, BOLA/IDOR -- deferred from gh security PR #260): never
+    trusts a client-supplied `community_id` for authorization -- resolves
+    the workflow's own DB row instead (see `services/community_scope.py`).
+    Returns the resolved `community_id` so callers can pass the
+    authoritative value into `WorkflowService` instead of whatever (if
+    anything) the client supplied.
+
+    Raises:
+        WorkflowCommunityNotFoundError: `workflow_id` doesn't exist (404).
+        CallerIdentityError: bearer token missing a usable subject (401).
+        CommunityAccessError: caller isn't a member/admin of the resolved
+            community (403).
+    """
+    # `workflow_service.dal` (Postgres-only raw SQL, `workflows` table) and
+    # `current_app.config['dal']` (pydal query objects, `communities`/
+    # `community_members`/`tenants` tables) are the SAME underlying pydal
+    # `DAL` in production (see app.py's `dal`/`async_dal` split) -- fetched
+    # separately here (rather than assumed identical) so this stays correct
+    # even where they legitimately differ (e.g. tests). `require_community_
+    # admin`/`require_community_member` separately need something with
+    # `.select_async()`, which is `app.config['async_dal']` (the `AsyncDAL`
+    # wrapper over the same DB).
+    workflow_dal = get_workflow_service().dal
+    shared_dal = current_app.config.get('dal')
+    async_dal = current_app.config.get('async_dal')
+    community_id = await resolve_workflow_community_id(workflow_dal, workflow_id)
+    ctx = get_tenant_context(request)
+    check = require_community_admin if admin_required else require_community_member
+    await check(async_dal, shared_dal, request, ctx, community_id=community_id, user_id=user_id)
+    return community_id
 
 
 def handle_workflow_errors(f: Callable) -> Callable:
@@ -85,6 +130,28 @@ def handle_workflow_errors(f: Callable) -> Callable:
                 message=e.message,
                 status_code=404,
                 error_code="WORKFLOW_NOT_FOUND"
+            )
+        except WorkflowCommunityNotFoundError as e:
+            return error_response(
+                message=str(e),
+                status_code=404,
+                error_code="WORKFLOW_NOT_FOUND"
+            )
+        except CommunityAccessError as e:
+            # SECURITY (A01): caller isn't a member/admin of the workflow's
+            # REAL community -- see `_authorize_community` above.
+            logger.warning(
+                f"Community access denied: {e.message}",
+                extra={
+                    "event_type": "AUTHZ",
+                    "action": f.__name__,
+                    "result": "FORBIDDEN"
+                }
+            )
+            return error_response(
+                message=e.message,
+                status_code=403,
+                error_code="COMMUNITY_ACCESS_DENIED"
             )
         except WorkflowPermissionException as e:
             return error_response(
@@ -130,6 +197,7 @@ def handle_workflow_errors(f: Callable) -> Callable:
 
 @workflow_api.route('', methods=['POST'])
 @async_endpoint
+@tenant_middleware
 @auth_required
 @handle_workflow_errors
 async def create_workflow():
@@ -175,6 +243,23 @@ async def create_workflow():
     entity_id = int(data['entity_id'])
     community_id = int(data['community_id'])
 
+    # SECURITY (A01, BOLA/IDOR -- deferred from gh security PR #260): the
+    # target `community_id` is entirely client-supplied for a create --
+    # unlike the other routes below there is no existing workflow row to
+    # resolve it from, so it must be verified directly. Previously NOTHING
+    # checked the caller was even a member of this community before this
+    # fix; a valid JWT from any tenant/community was sufficient to create a
+    # workflow under an arbitrary `community_id`.
+    ctx = get_tenant_context(request)
+    await require_community_admin(
+        current_app.config.get('async_dal'),
+        current_app.config.get('dal'),
+        request,
+        ctx,
+        community_id=community_id,
+        user_id=user_id,
+    )
+
     # Get license key if provided
     license_key = data.get('license_key')
 
@@ -201,6 +286,7 @@ async def create_workflow():
 
 @workflow_api.route('', methods=['GET'])
 @async_endpoint
+@tenant_middleware
 @auth_required
 @handle_workflow_errors
 async def list_workflows():
@@ -234,6 +320,24 @@ async def list_workflows():
     # Optional filters
     community_id = request.args.get('community_id')
     community_id = int(community_id) if community_id else None
+
+    # SECURITY (A01): if a `community_id` filter is supplied, the caller
+    # must actually be a member of it -- otherwise it's a free probe for
+    # "does this workflow-bearing community exist / how many workflows does
+    # it have" against communities the caller has no relationship to. No
+    # filter at all is unaffected (the underlying entity/permission-scoped
+    # query in `WorkflowService.list_workflows` already bounds the result
+    # to what the caller can see).
+    if community_id is not None:
+        ctx = get_tenant_context(request)
+        await require_community_member(
+            current_app.config.get('async_dal'),
+            current_app.config.get('dal'),
+            request,
+            ctx,
+            community_id=community_id,
+            user_id=user_id,
+        )
 
     status = request.args.get('status')
     search = request.args.get('search')
@@ -291,6 +395,7 @@ async def list_workflows():
 
 @workflow_api.route('/<workflow_id>', methods=['GET'])
 @async_endpoint
+@tenant_middleware
 @auth_required
 @handle_workflow_errors
 async def get_workflow(workflow_id: str):
@@ -313,8 +418,10 @@ async def get_workflow(workflow_id: str):
     user_info = request.current_user
     user_id = int(user_info['user_id'])
 
-    community_id = request.args.get('community_id')
-    community_id = int(community_id) if community_id else None
+    # SECURITY (A01): resolves the workflow's REAL community_id and
+    # requires membership of it -- any client-supplied `community_id` query
+    # param is ignored for authorization (see `_authorize_community`).
+    community_id = await _authorize_community(workflow_id, user_id, admin_required=False)
 
     workflow_service = get_workflow_service()
     workflow = await workflow_service.get_workflow(
@@ -332,6 +439,7 @@ async def get_workflow(workflow_id: str):
 
 @workflow_api.route('/<workflow_id>', methods=['PUT'])
 @async_endpoint
+@tenant_middleware
 @auth_required
 @handle_workflow_errors
 async def update_workflow(workflow_id: str):
@@ -366,8 +474,10 @@ async def update_workflow(workflow_id: str):
     if not data:
         raise ValueError("Request body is required")
 
-    community_id = data.get('community_id')
-    community_id = int(community_id) if community_id else None
+    # SECURITY (A01): resolves the workflow's REAL community_id and
+    # requires community-admin of it -- any client-supplied `community_id`
+    # in the body is ignored for authorization (see `_authorize_community`).
+    community_id = await _authorize_community(workflow_id, user_id, admin_required=True)
 
     workflow_service = get_workflow_service()
     workflow = await workflow_service.update_workflow(
@@ -389,6 +499,7 @@ async def update_workflow(workflow_id: str):
 
 @workflow_api.route('/<workflow_id>', methods=['DELETE'])
 @async_endpoint
+@tenant_middleware
 @auth_required
 @handle_workflow_errors
 async def delete_workflow(workflow_id: str):
@@ -411,8 +522,9 @@ async def delete_workflow(workflow_id: str):
     user_info = request.current_user
     user_id = int(user_info['user_id'])
 
-    community_id = request.args.get('community_id')
-    community_id = int(community_id) if community_id else None
+    # SECURITY (A01): resolves the workflow's REAL community_id and
+    # requires community-admin of it -- see `_authorize_community`.
+    community_id = await _authorize_community(workflow_id, user_id, admin_required=True)
 
     workflow_service = get_workflow_service()
     result = await workflow_service.delete_workflow(
@@ -433,6 +545,7 @@ async def delete_workflow(workflow_id: str):
 
 @workflow_api.route('/<workflow_id>/publish', methods=['POST'])
 @async_endpoint
+@tenant_middleware
 @auth_required
 @handle_workflow_errors
 async def publish_workflow(workflow_id: str):
@@ -458,10 +571,12 @@ async def publish_workflow(workflow_id: str):
     user_info = request.current_user
     user_id = int(user_info['user_id'])
 
-    data = await request.get_json() or {}
+    await request.get_json() or {}
 
-    community_id = data.get('community_id')
-    community_id = int(community_id) if community_id else None
+    # SECURITY (A01): resolves the workflow's REAL community_id and
+    # requires community-admin of it -- any client-supplied `community_id`
+    # in the body is ignored for authorization (see `_authorize_community`).
+    community_id = await _authorize_community(workflow_id, user_id, admin_required=True)
 
     workflow_service = get_workflow_service()
     workflow = await workflow_service.publish_workflow(
@@ -482,6 +597,7 @@ async def publish_workflow(workflow_id: str):
 
 @workflow_api.route('/<workflow_id>/validate', methods=['POST'])
 @async_endpoint
+@tenant_middleware
 @auth_required
 @handle_workflow_errors
 async def validate_workflow(workflow_id: str):
@@ -512,6 +628,13 @@ async def validate_workflow(workflow_id: str):
     """
     user_info = request.current_user
     user_id = int(user_info['user_id'])
+
+    # SECURITY (A01): this route previously had NO permission check at
+    # all beyond `auth_required` -- any authenticated user (any tenant,
+    # any community) could validate any workflow by UUID and see its
+    # structure/errors. Requires membership of the workflow's REAL
+    # community (see `_authorize_community`).
+    await _authorize_community(workflow_id, user_id, admin_required=False)
 
     workflow_service = get_workflow_service()
     validation_result = await workflow_service.validate_workflow(

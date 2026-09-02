@@ -14,6 +14,7 @@ import asyncio
 import logging
 import sys
 
+from flask_core import install_rate_limiting
 from flask_core.authz import require_scope
 from quart import Quart, jsonify
 
@@ -29,6 +30,21 @@ logger = logging.getLogger(__name__)
 app = Quart(__name__)
 refresh_service: RefreshService | None = None
 _shutdown_event = asyncio.Event()
+
+# SECURITY (A04): `/api/v1/credentials/*` had zero rate limiting -- these
+# routes trigger OAuth refresh cycles and expose integration status, so
+# they get the stricter auth tier (a caller who obtains valid
+# `credentials:admin` scope still shouldn't be able to hammer them
+# unboundedly). Shared global before_request hook, see
+# flask_core.http_rate_limit module docstring.
+install_rate_limiting(
+    app,
+    namespace=Config.MODULE_NAME,
+    redis_url=Config.REDIS_URL,
+    auth_path_prefixes=("/api/v1/credentials",),
+    auth_max_requests=20,
+    auth_window_seconds=60,
+)
 
 
 @app.before_serving

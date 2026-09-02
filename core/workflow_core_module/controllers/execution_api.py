@@ -29,6 +29,11 @@ from flask_core import (
     error_response,
     async_endpoint,
     auth_required,
+    tenant_middleware,
+    get_tenant_context,
+    require_community_admin,
+    require_community_member,
+    CommunityAccessError,
 )
 from services.workflow_engine import (
     WorkflowEngine,
@@ -37,6 +42,11 @@ from services.workflow_engine import (
     NodeExecutionException,
 )
 from services.permission_service import PermissionService
+from services.community_scope import (
+    WorkflowCommunityNotFoundError,
+    resolve_execution_community_id,
+    resolve_workflow_community_id,
+)
 from models.execution import ExecutionStatus, ExecutionContext
 
 
@@ -65,6 +75,51 @@ def get_permission_service() -> PermissionService:
 def get_dal():
     """Get database access layer from app context."""
     return current_app.config.get('dal')
+
+
+async def _authorize_workflow_community(
+    workflow_id: str, user_id: int, *, admin_required: bool
+) -> int:
+    """Resolve a workflow's REAL `community_id` and require caller membership/admin of it.
+
+    SECURITY (A01, BOLA/IDOR -- deferred from gh security PR #260): mirrors
+    `controllers/workflow_api.py::_authorize_community` -- never trusts a
+    client-supplied `community_id` for authorization. See that module's
+    docstring for the full rationale.
+    """
+    # `workflow_service.dal` (Postgres-only raw SQL, `workflows` table) and
+    # `get_dal()` (pydal query objects, `communities`/`community_members`/
+    # `tenants` tables) are the SAME underlying pydal `DAL` in production
+    # (see `workflow_core_module/app.py`'s `dal`/`async_dal` split) --
+    # fetched separately so this stays correct even where they legitimately
+    # differ (e.g. tests).
+    workflow_dal = get_workflow_service().dal
+    shared_dal = get_dal()
+    async_dal = current_app.config.get('async_dal')
+    community_id = await resolve_workflow_community_id(workflow_dal, workflow_id)
+    ctx = get_tenant_context(request)
+    check = require_community_admin if admin_required else require_community_member
+    await check(async_dal, shared_dal, request, ctx, community_id=community_id, user_id=user_id)
+    return community_id
+
+
+async def _authorize_execution_community(
+    execution_id: str, user_id: int, *, admin_required: bool
+) -> int:
+    """Resolve an execution's owning workflow's REAL `community_id` and require caller access.
+
+    SECURITY (A01): `get_execution_details` and `cancel_execution` had NO
+    permission check at all beyond `auth_required` -- any authenticated
+    user (any tenant/community) could view or cancel any execution by UUID.
+    """
+    workflow_dal = get_workflow_service().dal
+    shared_dal = get_dal()
+    async_dal = current_app.config.get('async_dal')
+    community_id = await resolve_execution_community_id(workflow_dal, execution_id)
+    ctx = get_tenant_context(request)
+    check = require_community_admin if admin_required else require_community_member
+    await check(async_dal, shared_dal, request, ctx, community_id=community_id, user_id=user_id)
+    return community_id
 
 
 def handle_execution_errors(f: Callable) -> Callable:
@@ -112,6 +167,28 @@ def handle_execution_errors(f: Callable) -> Callable:
                 status_code=400,
                 error_code="BAD_REQUEST"
             )
+        except WorkflowCommunityNotFoundError as e:
+            return error_response(
+                message=str(e),
+                status_code=404,
+                error_code="WORKFLOW_NOT_FOUND"
+            )
+        except CommunityAccessError as e:
+            # SECURITY (A01): caller isn't a member/admin of the workflow's
+            # or execution's REAL community.
+            logger.warning(
+                f"Community access denied: {e.message}",
+                extra={
+                    "event_type": "AUTHZ",
+                    "action": f.__name__,
+                    "result": "FORBIDDEN"
+                }
+            )
+            return error_response(
+                message=e.message,
+                status_code=403,
+                error_code="COMMUNITY_ACCESS_DENIED"
+            )
         except PermissionError as e:
             logger.warning(
                 f"Permission denied: {str(e)}",
@@ -151,6 +228,7 @@ def handle_execution_errors(f: Callable) -> Callable:
 
 @execution_api.route('/<workflow_id>/execute', methods=['POST'])
 @async_endpoint
+@tenant_middleware
 @auth_required
 @handle_execution_errors
 async def execute_workflow(workflow_id: str):
@@ -197,12 +275,18 @@ async def execute_workflow(workflow_id: str):
 
     data = await request.get_json() or {}
 
-    # Validate required fields
-    community_id = data.get('community_id')
-    if not community_id:
-        raise ValueError("Field 'community_id' is required")
-
-    community_id = int(community_id)
+    # SECURITY (A01, BOLA/IDOR -- deferred from gh security PR #260): the
+    # previous `community_id = int(data['community_id'])` was entirely
+    # client-supplied and passed straight into `check_permission` as
+    # advisory context -- a caller could pass a `community_id` they hold no
+    # membership in and still trigger execution if any other permission
+    # branch happened to pass. Resolves the workflow's REAL `community_id`
+    # from the database and requires at least active membership of it
+    # first; `check_permission`'s fine-grained `can_execute` check below
+    # still gates the actual execute action.
+    community_id = await _authorize_workflow_community(
+        workflow_id, user_id, admin_required=False
+    )
 
     # Get services
     workflow_service = get_workflow_service()
@@ -309,6 +393,7 @@ async def execute_workflow(workflow_id: str):
 
 @execution_api.route('/executions/<execution_id>', methods=['GET'])
 @async_endpoint
+@tenant_middleware
 @auth_required
 @handle_execution_errors
 async def get_execution_details(execution_id: str):
@@ -362,6 +447,13 @@ async def get_execution_details(execution_id: str):
     user_info = request.current_user
     user_id = int(user_info['user_id'])
 
+    # SECURITY (A01): this route had NO permission check at all beyond
+    # `auth_required` -- any authenticated user (any tenant/community)
+    # could view any execution's full state (including node input/output
+    # data) by UUID. Requires membership of the execution's owning
+    # workflow's REAL community.
+    await _authorize_execution_community(execution_id, user_id, admin_required=False)
+
     # Get query parameters
     include_logs = request.args.get('include_logs', 'true').lower() == 'true'
     include_metrics = request.args.get('include_metrics', 'false').lower() == 'true'
@@ -414,6 +506,7 @@ async def get_execution_details(execution_id: str):
 
 @execution_api.route('/executions/<execution_id>/cancel', methods=['POST'])
 @async_endpoint
+@tenant_middleware
 @auth_required
 @handle_execution_errors
 async def cancel_execution(execution_id: str):
@@ -442,6 +535,13 @@ async def cancel_execution(execution_id: str):
     """
     user_info = request.current_user
     user_id = int(user_info['user_id'])
+
+    # SECURITY (A01): this route had NO permission check at all beyond
+    # `auth_required` -- any authenticated user (any tenant/community)
+    # could cancel any running execution by UUID. Cancelling is mutating,
+    # so requires community-admin of the execution's owning workflow's REAL
+    # community.
+    await _authorize_execution_community(execution_id, user_id, admin_required=True)
 
     workflow_engine = get_workflow_engine()
 
@@ -488,6 +588,7 @@ async def cancel_execution(execution_id: str):
 
 @execution_api.route('/<workflow_id>/executions', methods=['GET'])
 @async_endpoint
+@tenant_middleware
 @auth_required
 @handle_execution_errors
 async def list_workflow_executions(workflow_id: str):
@@ -545,12 +646,15 @@ async def list_workflow_executions(workflow_id: str):
     user_info = request.current_user
     user_id = int(user_info['user_id'])
 
-    # Get query parameters
-    community_id = request.args.get('community_id')
-    if not community_id:
-        raise ValueError("Query parameter 'community_id' is required")
-
-    community_id = int(community_id)
+    # SECURITY (A01, BOLA/IDOR -- deferred from gh security PR #260): the
+    # `community_id` query param was entirely client-supplied and passed
+    # straight into `check_permission` as advisory context. Resolves the
+    # workflow's REAL `community_id` from the database instead and requires
+    # at least active membership of it; `check_permission`'s fine-grained
+    # `can_view` check below still gates the actual list action.
+    community_id = await _authorize_workflow_community(
+        workflow_id, user_id, admin_required=False
+    )
 
     # Optional filters
     status_filter = request.args.get('status')
@@ -707,6 +811,7 @@ async def list_workflow_executions(workflow_id: str):
 
 @execution_api.route('/<workflow_id>/test', methods=['POST'])
 @async_endpoint
+@tenant_middleware
 @auth_required
 @handle_execution_errors
 async def test_workflow(workflow_id: str):
@@ -775,12 +880,13 @@ async def test_workflow(workflow_id: str):
 
     data = await request.get_json() or {}
 
-    # Validate required fields
-    community_id = data.get('community_id')
-    if not community_id:
-        raise ValueError("Field 'community_id' is required")
-
-    community_id = int(community_id)
+    # SECURITY (A01, BOLA/IDOR -- deferred from gh security PR #260): see
+    # `execute_workflow`'s identical fix above -- resolves the workflow's
+    # REAL `community_id` rather than trusting the client-supplied body
+    # field.
+    community_id = await _authorize_workflow_community(
+        workflow_id, user_id, admin_required=False
+    )
 
     # Get services
     workflow_service = get_workflow_service()
