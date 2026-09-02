@@ -7,6 +7,7 @@ import grpc
 import jwt
 
 from config import Config
+from flask_core.grpc_tls import secure_channel
 
 logger = logging.getLogger(__name__)
 
@@ -62,9 +63,9 @@ class GrpcClientManager:
                     ('grpc.http2.max_pings_without_data', 0),
                 ]
 
-                channel = grpc.aio.insecure_channel(host, options=options)
+                channel = secure_channel(host, options=options)
                 self._channels[module_name] = channel
-                logger.info(f"Created gRPC channel to {module_name} at {host}")
+                logger.info(f"Created gRPC channel (TLS) to {module_name} at {host}")
 
             return self._channels[module_name]
 

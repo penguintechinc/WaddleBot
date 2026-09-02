@@ -1038,9 +1038,9 @@ class CommandProcessor:
     async def _get_translate_stub(self):
         """Lazy-initialise gRPC channel and stub for translate_interaction_module."""
         if self._translate_stub is None:
-            import grpc
             from proto_clients.translate_interaction_pb2_grpc import TranslateInteractionStub
-            self._translate_channel = grpc.aio.insecure_channel(Config.TRANSLATE_GRPC_HOST)
+            from flask_core.grpc_tls import secure_channel
+            self._translate_channel = secure_channel(Config.TRANSLATE_GRPC_HOST)
             self._translate_stub = TranslateInteractionStub(self._translate_channel)
         return self._translate_stub
 

@@ -386,15 +386,20 @@ async def start_grpc_servers():
         try:
             async def serve_lambda_grpc():
                 from lambda_action_module.grpc_proto import lambda_action_pb2_grpc
+                from lambda_action_module.services.grpc_tls import (
+                    bind_secure_port,
+                    default_server_options,
+                )
                 server = grpc.aio.server(
                     futures.ThreadPoolExecutor(max_workers=10),
                     interceptors=[LambdaAuthInterceptor()],
+                    options=default_server_options(),
                 )
                 lambda_action_pb2_grpc.add_LambdaActionServicer_to_server(
                     LambdaActionServicer(lambda_service), server
                 )
-                server.add_insecure_port("0.0.0.0:50051")
-                logger.info("Starting Lambda gRPC server on 0.0.0.0:50051")
+                bind_secure_port(server, "0.0.0.0:50051")
+                logger.info("Starting Lambda gRPC server (TLS) on 0.0.0.0:50051")
                 await server.start()
                 await server.wait_for_termination()
 

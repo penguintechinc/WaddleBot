@@ -65,6 +65,7 @@ def _run_grpc_server(
         grpc_port: Port for gRPC server
     """
     import grpc
+    from flask_core.grpc_tls import bind_secure_port, default_server_options
 
     try:
         import workflow_pb2_grpc
@@ -86,17 +87,17 @@ def _run_grpc_server(
         grpc_service = WorkflowGrpcService(handler)
 
         # Create gRPC server
-        server = grpc.aio.server()
+        server = grpc.aio.server(options=default_server_options())
         workflow_pb2_grpc.add_WorkflowServiceServicer_to_server(
             grpc_service,
             server
         )
 
         # Add port and start
-        server.add_insecure_port(f"[::]:{grpc_port}")
+        bind_secure_port(server, f"[::]:{grpc_port}")
 
         logger.system(
-            f"Starting gRPC server on port {grpc_port}",
+            f"Starting gRPC server (TLS) on port {grpc_port}",
             action="grpc_startup"
         )
 

@@ -380,6 +380,12 @@ services:
       REDIS_KEY_PREFIX: "router:"
       JWT_SECRET: ${JWT_SECRET:-changeme_jwt_secret}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # Client only -- core-router dials every action/core module's gRPC server.
+      GRPC_TLS_CA_PATH: /certs/grpc/ca.crt
+      GRPC_TLS_CLIENT_CERT_PATH: /certs/grpc/client.crt
+      GRPC_TLS_CLIENT_KEY_PATH: /certs/grpc/client.key
+    volumes:
+      - ./certs/grpc-dev:/certs/grpc:ro
     networks:
       - waddlebot-internal
     depends_on:
@@ -1029,8 +1035,14 @@ services:
       OVERLAY_KEY_GRACE_PERIOD_MINUTES: ${OVERLAY_KEY_GRACE_PERIOD_MINUTES:-5}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       RELEASE_MODE: ${RELEASE_MODE:-false}
+      GRPC_TLS_CERT_PATH: /certs/grpc/server.crt
+      GRPC_TLS_KEY_PATH: /certs/grpc/server.key
+      GRPC_TLS_CA_PATH: /certs/grpc/ca.crt
+      GRPC_TLS_REQUIRE_CLIENT_CERT: "true"
     ports:
       - "8027:8027"  # Browser sources need direct access from OBS
+    volumes:
+      - ./certs/grpc-dev:/certs/grpc:ro
     networks:
       - waddlebot-public
       - waddlebot-internal
@@ -1060,6 +1072,12 @@ services:
       REDIS_KEY_PREFIX: "identity:"
       ROUTER_API_URL: http://core-router:8000
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      GRPC_TLS_CERT_PATH: /certs/grpc/server.crt
+      GRPC_TLS_KEY_PATH: /certs/grpc/server.key
+      GRPC_TLS_CA_PATH: /certs/grpc/ca.crt
+      GRPC_TLS_REQUIRE_CLIENT_CERT: "true"
+    volumes:
+      - ./certs/grpc-dev:/certs/grpc:ro
     networks:
       - waddlebot-internal
     depends_on:
@@ -1137,6 +1155,15 @@ services:
       LICENSE_SERVER_URL: ${LICENSE_SERVER_URL:-}
       RELEASE_MODE: ${RELEASE_MODE:-false}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # Server (own gRPC servicer) + client (module_executor dials other modules)
+      GRPC_TLS_CERT_PATH: /certs/grpc/server.crt
+      GRPC_TLS_KEY_PATH: /certs/grpc/server.key
+      GRPC_TLS_CA_PATH: /certs/grpc/ca.crt
+      GRPC_TLS_REQUIRE_CLIENT_CERT: "true"
+      GRPC_TLS_CLIENT_CERT_PATH: /certs/grpc/client.crt
+      GRPC_TLS_CLIENT_KEY_PATH: /certs/grpc/client.key
+    volumes:
+      - ./certs/grpc-dev:/certs/grpc:ro
     networks:
       - waddlebot-internal
     depends_on:
@@ -1203,6 +1230,12 @@ services:
       ROUTER_API_URL: http://core-router:8000
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       RELEASE_MODE: ${RELEASE_MODE:-false}
+      GRPC_TLS_CERT_PATH: /certs/grpc/server.crt
+      GRPC_TLS_KEY_PATH: /certs/grpc/server.key
+      GRPC_TLS_CA_PATH: /certs/grpc/ca.crt
+      GRPC_TLS_REQUIRE_CLIENT_CERT: "true"
+    volumes:
+      - ./certs/grpc-dev:/certs/grpc:ro
     networks:
       - waddlebot-internal
     depends_on:
@@ -1296,6 +1329,12 @@ services:
       DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
       MODULE_SECRET_KEY: ${MODULE_SECRET_KEY:-changeme_module_secret}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      GRPC_TLS_CERT_PATH: /certs/grpc/server.crt
+      GRPC_TLS_KEY_PATH: /certs/grpc/server.key
+      GRPC_TLS_CA_PATH: /certs/grpc/ca.crt
+      GRPC_TLS_REQUIRE_CLIENT_CERT: "true"
+    volumes:
+      - ./certs/grpc-dev:/certs/grpc:ro
     networks:
       - waddlebot-internal
     depends_on:
@@ -1324,6 +1363,12 @@ services:
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
       MODULE_SECRET_KEY: ${MODULE_SECRET_KEY:-changeme_module_secret}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      GRPC_TLS_CERT_PATH: /certs/grpc/server.crt
+      GRPC_TLS_KEY_PATH: /certs/grpc/server.key
+      GRPC_TLS_CA_PATH: /certs/grpc/ca.crt
+      GRPC_TLS_REQUIRE_CLIENT_CERT: "true"
+    volumes:
+      - ./certs/grpc-dev:/certs/grpc:ro
     networks:
       - waddlebot-internal
     depends_on:
@@ -1383,6 +1428,12 @@ services:
       YOUTUBE_CLIENT_SECRET: ${YOUTUBE_CLIENT_SECRET:-}
       MODULE_SECRET_KEY: ${MODULE_SECRET_KEY:-changeme_module_secret}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      GRPC_TLS_CERT_PATH: /certs/grpc/server.crt
+      GRPC_TLS_KEY_PATH: /certs/grpc/server.key
+      GRPC_TLS_CA_PATH: /certs/grpc/ca.crt
+      GRPC_TLS_REQUIRE_CLIENT_CERT: "true"
+    volumes:
+      - ./certs/grpc-dev:/certs/grpc:ro
     networks:
       - waddlebot-internal
     depends_on:
@@ -1575,6 +1626,12 @@ services:
       AWS_LAMBDA_ROLE_ARN: ${AWS_LAMBDA_ROLE_ARN:-}
       MODULE_SECRET_KEY: ${MODULE_SECRET_KEY:-changeme_module_secret}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      GRPC_TLS_CERT_PATH: /certs/grpc/server.crt
+      GRPC_TLS_KEY_PATH: /certs/grpc/server.key
+      GRPC_TLS_CA_PATH: /certs/grpc/ca.crt
+      GRPC_TLS_REQUIRE_CLIENT_CERT: "true"
+    volumes:
+      - ./certs/grpc-dev:/certs/grpc:ro
     networks:
       - waddlebot-internal
     depends_on:
@@ -1606,6 +1663,12 @@ services:
       GCP_SERVICE_ACCOUNT_EMAIL: ${GCP_SERVICE_ACCOUNT_EMAIL:-}
       MODULE_SECRET_KEY: ${MODULE_SECRET_KEY:-changeme_module_secret}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      GRPC_TLS_CERT_PATH: /certs/grpc/server.crt
+      GRPC_TLS_KEY_PATH: /certs/grpc/server.key
+      GRPC_TLS_CA_PATH: /certs/grpc/ca.crt
+      GRPC_TLS_REQUIRE_CLIENT_CERT: "true"
+    volumes:
+      - ./certs/grpc-dev:/certs/grpc:ro
     networks:
       - waddlebot-internal
     depends_on:

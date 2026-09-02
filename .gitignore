@@ -186,6 +186,9 @@ config/kong/ssl/*.key
 config/kong/ssl/*.crt
 config/kong/ssl/*.pem
 
+# Dev-only gRPC transport TLS certs (generate_dev_grpc_certs.sh), never committed
+certs/grpc-dev/
+
 # Node.js
 node_modules/
 

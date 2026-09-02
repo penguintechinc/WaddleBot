@@ -23,6 +23,7 @@ from quart import Quart, jsonify, request
 from config import Config
 from proto import translate_interaction_pb2_grpc
 from services.grpc_handler import TranslateInteractionServicer
+from grpc_tls import bind_secure_port, default_server_options
 from services.translation_service import TranslationService
 
 # Logging setup — create log dir if needed
@@ -198,15 +199,16 @@ async def cache_cleanup():
 async def start_grpc_server():
     """Run gRPC server (called concurrently with Quart)."""
     server = grpc.aio.server(
-        futures.ThreadPoolExecutor(max_workers=Config.GRPC_MAX_WORKERS)
+        futures.ThreadPoolExecutor(max_workers=Config.GRPC_MAX_WORKERS),
+        options=default_server_options(),
     )
     translate_interaction_pb2_grpc.add_TranslateInteractionServicer_to_server(
         TranslateInteractionServicer(translation_service, dal),
         server,
     )
-    server.add_insecure_port(f"{Config.HOST}:{Config.GRPC_PORT}")
+    bind_secure_port(server, f"{Config.HOST}:{Config.GRPC_PORT}")
     await server.start()
-    logger.info(f"gRPC server listening on port {Config.GRPC_PORT}")
+    logger.info(f"gRPC server (TLS) listening on port {Config.GRPC_PORT}")
     await server.wait_for_termination()
 
 

@@ -503,11 +503,14 @@ class GrpcServer:
         logger.info(f"Starting gRPC server on port {self.port}")
 
         # In production, would be:
-        # self.server = grpc.aio.server(interceptors=self.interceptors)
+        # from services.grpc_tls import bind_secure_port, default_server_options
+        # self.server = grpc.aio.server(
+        #     interceptors=self.interceptors, options=default_server_options()
+        # )
         # openwhisk_action_pb2_grpc.add_OpenWhiskActionServiceServicer_to_server(
         #     self.servicer, self.server
         # )
-        # self.server.add_insecure_port(f'[::]:{self.port}')
+        # bind_secure_port(self.server, f'[::]:{self.port}')  # TLS -- never add_insecure_port
         # await self.server.start()
 
         logger.info(f"gRPC server started on port {self.port}")

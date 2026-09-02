@@ -69,9 +69,10 @@ async def startup():
             import grpc
             from grpc import aio
             from identity_core_module.services.grpc_handler import IdentityServiceServicer
+            from flask_core.grpc_tls import default_server_options
 
             servicer = IdentityServiceServicer(dal=dal, logger=logger)
-            grpc_server = aio.server()
+            grpc_server = aio.server(options=default_server_options())
             logger.system(f"gRPC server initialized (will listen on 0.0.0.0:{IdentityConfig.GRPC_PORT})")
 
             # Start gRPC server in background
@@ -130,9 +131,11 @@ async def startup():
 async def _start_grpc_server(server, logger):
     """Start the gRPC server."""
     try:
-        server.add_insecure_port(f"0.0.0.0:{IdentityConfig.GRPC_PORT}")
+        from flask_core.grpc_tls import bind_secure_port
+
+        bind_secure_port(server, f"0.0.0.0:{IdentityConfig.GRPC_PORT}")
         await server.start()
-        logger.system(f"gRPC server started on 0.0.0.0:{IdentityConfig.GRPC_PORT}", action="grpc_startup")
+        logger.system(f"gRPC server started (TLS) on 0.0.0.0:{IdentityConfig.GRPC_PORT}", action="grpc_startup")
         await server.wait_for_termination()
     except Exception as e:
         logger.error(f"gRPC server error: {str(e)}")
