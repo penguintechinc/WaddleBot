@@ -23,9 +23,17 @@ token is present, else per-client-IP -- crucially IP-based for the
 pre-auth `POST /api/v1/auth/login` itself, which is exactly the
 brute-force surface this needs to bound. Health probes (`/health`,
 `/healthz`) are exempt so K8s liveness/readiness never 429s.
+
+Client-IP resolution (`_client_ip()`) never trusts `X-Forwarded-For`'s
+left-most (client-suppliable) hop by default -- see its own docstring
+and `HubAPIConfig.trusted_proxy_hops` for why an unconditional
+left-most-hop read is a rate-limit-bucket-selection bypass, not just an
+inaccurate IP.
 """
 
 from __future__ import annotations
+
+import ipaddress
 
 from flask_core.api_utils import error_response
 from flask_core.rate_limiter import RateLimiter
@@ -55,15 +63,53 @@ _EXEMPT_PATHS: frozenset[str] = frozenset({"/health", "/healthz"})
 RATE_LIMITER_CONFIG_KEY = "rate_limiter"
 
 
-def _client_ip() -> str:
-    """Best-effort client IP: first `X-Forwarded-For` hop, else the ASGI peer addr."""
+def _client_ip(trusted_proxy_hops: int) -> str:
+    """Client IP for rate-limit bucketing -- never trusts a client-controlled header alone.
+
+    `X-Forwarded-For` is entirely client-suppliable in the general case
+    (nothing stops a raw client from setting it to anything before it
+    ever reaches a proxy) -- trusting the left-most, client-supplied hop
+    unconditionally lets an attacker pick their own bucket by rotating
+    the header, bypassing the auth-tier brute-force limit entirely.
+
+    `trusted_proxy_hops` (`HubAPIConfig.trusted_proxy_hops`, default 0 --
+    operators must opt in per deployment to match their actual ingress
+    topology) is the number of proxies between the client and hub-api
+    that are known to always append their own observed peer address
+    rather than blindly trust/pass through whatever's already in the
+    header. With N trusted hops, each of the N right-most entries was
+    appended by one of those proxies (infra addresses, not useful); the
+    entry at `hops[-N]` is the one the FIRST (outermost) trusted proxy
+    appended -- its direct observation of the real client's address,
+    unaffected by anything the client itself prepended further left.
+
+    Falls back to `request.remote_addr` (the actual ASGI socket peer --
+    always accurate, but is the last proxy's address rather than the
+    client's whenever hub-api sits behind one at all) when
+    `trusted_proxy_hops` is 0, the header is absent, there aren't enough
+    hops present to index, or the chosen value doesn't even parse as an
+    IP address.
+    """
+    if trusted_proxy_hops <= 0:
+        return request.remote_addr or "unknown"
+
     forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.remote_addr or "unknown"
+    if not forwarded:
+        return request.remote_addr or "unknown"
+
+    hops = [hop.strip() for hop in forwarded.split(",")]
+    if trusted_proxy_hops > len(hops):
+        return request.remote_addr or "unknown"
+
+    candidate = hops[-trusted_proxy_hops]
+    try:
+        ipaddress.ip_address(candidate)
+    except ValueError:
+        return request.remote_addr or "unknown"
+    return candidate
 
 
-def _rate_limit_identifier() -> str:
+def _rate_limit_identifier(trusted_proxy_hops: int) -> str:
     """Per-user identifier when authenticated, else per-IP.
 
     A valid bearer token buckets by `sub` (id) so one legitimate user
@@ -75,7 +121,7 @@ def _rate_limit_identifier() -> str:
     user_id = get_optional_current_user_id(request)
     if user_id is not None:
         return f"user:{user_id}"
-    return f"ip:{_client_ip()}"
+    return f"ip:{_client_ip(trusted_proxy_hops)}"
 
 
 def _is_auth_tier(path: str) -> bool:
@@ -115,7 +161,7 @@ def install_rate_limiting(app: Quart, cfg: HubAPIConfig) -> RateLimiter:
         # bucket for the same identifier never share/collide state --
         # a user hammering /api/v1/auth/refresh shouldn't burn down
         # their standard-tier budget for everything else, or vice versa.
-        key = f"{tier_label}:{_rate_limit_identifier()}"
+        key = f"{tier_label}:{_rate_limit_identifier(cfg.trusted_proxy_hops)}"
 
         allowed = await limiter.check_rate_limit(key, limit, window)
         if allowed:

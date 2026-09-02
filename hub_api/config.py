@@ -194,6 +194,19 @@ class HubAPIConfig:
     rate_limit_auth_max_requests: int = 10
     rate_limit_auth_window_seconds: int = 60
 
+    # `services/rate_limiting.py::_client_ip()`'s trust boundary for
+    # `X-Forwarded-For` -- 0 (default, fail-closed) means don't trust the
+    # header at all, bucket on `request.remote_addr` only. `X-Forwarded-
+    # For` is client-suppliable in the general case (a raw client hitting
+    # hub-api directly, or any hop that doesn't strictly append-only, can
+    # put anything in it); trusting an arbitrary hop unconditionally lets
+    # a caller pick their own rate-limit bucket, bypassing the auth-tier
+    # brute-force limit by rotating the header. >0 means hub-api sits
+    # behind exactly that many trusted proxies (each known to append
+    # rather than blindly relay) -- operators set this to match their
+    # actual ingress chain; it is never inferred automatically.
+    trusted_proxy_hops: int = 0
+
     # security.md Input Validation -- server-side upper bound on every
     # client-suppliable `?limit=` page-size param. Read by
     # `services/pagination.py::parse_limit()`, the shared helper every
@@ -266,5 +279,6 @@ class HubAPIConfig:
             rate_limit_auth_window_seconds=max(
                 1, int(os.getenv("RATE_LIMIT_AUTH_WINDOW_MS", "60000")) // 1000
             ),
+            trusted_proxy_hops=max(0, int(os.getenv("TRUSTED_PROXY_HOPS", "0"))),
             api_max_page_size=int(os.getenv("API_MAX_PAGE_SIZE", "100")),
         )

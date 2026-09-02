@@ -24,6 +24,7 @@ from quart import Quart
 
 from app import create_app
 from config import HubAPIConfig
+from services.rate_limiting import _client_ip
 
 
 def _test_config(**overrides: Any) -> HubAPIConfig:
@@ -153,3 +154,88 @@ class TestAuthTierIsStricter:
             # ...but a standard-tier route from the same client is unaffected.
             standard = await client.get("/api/v2/core/platform/default/status")
             assert standard.status_code == 401
+
+
+class TestClientIpSpoofResistance:
+    """Security-review HIGH: `X-Forwarded-For` must never pick its own rate-limit bucket.
+
+    Fail-first proof (executed, not narrated): reverted `_client_ip()` to
+    its pre-fix form (`request.headers.get("X-Forwarded-For", "").split(
+    ",")[0].strip() or request.remote_addr`, unconditionally trusting the
+    left-most/client-suppliable hop) -- `test_spoofed_x_forwarded_for_
+    does_not_bypass_auth_tier_limit_by_default` went red (each rotated
+    header value got its own fresh bucket, so all 3 requests returned 400
+    instead of the 3rd being 429); restored the `trusted_proxy_hops`-gated
+    version, green again.
+    """
+
+    async def test_spoofed_x_forwarded_for_does_not_bypass_auth_tier_limit_by_default(
+        self, app_auth_tier: Quart
+    ) -> None:
+        """`trusted_proxy_hops` defaults to 0 -- the header is not trusted at all.
+
+        A caller rotating `X-Forwarded-For` on every request (the actual
+        attack: pick a fresh header value to land in a fresh bucket) must
+        still hit the same bucket, keyed on the ASGI peer address, and
+        still trip the limit on the 3rd request exactly like the
+        no-header case in `TestAuthTierIsStricter` above.
+        """
+        async with app_auth_tier.test_app():
+            client = app_auth_tier.test_client()
+            statuses = []
+            for i in range(3):
+                response = await client.post(
+                    "/api/v1/auth/login",
+                    json={},
+                    headers={"X-Forwarded-For": f"10.0.0.{i}"},
+                )
+                statuses.append(response.status_code)
+
+            assert statuses[:2] == [400, 400]
+            assert statuses[2] == 429
+
+    async def test_trusted_proxy_hops_zero_ignores_header_entirely(
+        self, app_standard_tier: Quart
+    ) -> None:
+        async with app_standard_tier.test_request_context(
+            "/", headers={"X-Forwarded-For": "203.0.113.9, 10.0.0.1"}
+        ):
+            assert _client_ip(trusted_proxy_hops=0) == "unknown"
+
+    async def test_trusted_proxy_hops_selects_hop_from_the_right_not_client_supplied_left(
+        self, app_standard_tier: Quart
+    ) -> None:
+        """2 trusted hops -- `hops[-2]` is the real client IP the first trusted proxy saw.
+
+        Chain: `<attacker-spoofed>, <real-client-ip>, <proxy1-ip>` -- the
+        attacker fully controls the left-most entry; `hops[-2]` (the
+        *second* trusted proxy appends `hops[-1]`, the *first* trusted
+        proxy appends `hops[-2]`) is the value that matters.
+        """
+        async with app_standard_tier.test_request_context(
+            "/",
+            headers={"X-Forwarded-For": "9.9.9.9, 198.51.100.7, 10.0.0.1"},
+        ):
+            assert _client_ip(trusted_proxy_hops=2) == "198.51.100.7"
+
+    async def test_malformed_candidate_hop_falls_back_to_remote_addr(
+        self, app_standard_tier: Quart
+    ) -> None:
+        async with app_standard_tier.test_request_context(
+            "/", headers={"X-Forwarded-For": "not-an-ip, 10.0.0.1"}
+        ):
+            assert _client_ip(trusted_proxy_hops=2) == "unknown"
+
+    async def test_fewer_hops_than_configured_falls_back_to_remote_addr(
+        self, app_standard_tier: Quart
+    ) -> None:
+        async with app_standard_tier.test_request_context(
+            "/", headers={"X-Forwarded-For": "198.51.100.7"}
+        ):
+            assert _client_ip(trusted_proxy_hops=3) == "unknown"
+
+    async def test_missing_header_falls_back_to_remote_addr_even_when_hops_configured(
+        self, app_standard_tier: Quart
+    ) -> None:
+        async with app_standard_tier.test_request_context("/"):
+            assert _client_ip(trusted_proxy_hops=2) == "unknown"
