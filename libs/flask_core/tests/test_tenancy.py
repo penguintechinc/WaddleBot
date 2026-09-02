@@ -19,6 +19,7 @@ from pydal import DAL, Field
 
 from flask_core.auth import (
     DEFAULT_TENANT_SLUG,
+    SCOPE_BUNDLES,
     TENANT_CLAIM_MIGRATION_CUTOFF,
     create_jwt_token,
     setup_default_roles,
@@ -219,3 +220,23 @@ class TestScopeBundles:
         setup_default_roles(db)
         names = [r.name for r in db(db.auth_role).select()]
         assert len(names) == len(set(names))
+
+    def test_tenant_bundle_never_grants_platform_only_users_admin_scope(self):
+        """Regression (C3, A01/BOLA): `users:admin` is reserved for platform-wide
+        super-admin gates (hub_api's `/api/v1/superadmin/users/*`,
+        `platform_config.py`, `analytics.py`, `marketplace_admin_review.py`,
+        `cookie_consent.py`, `marketplace_modules.py` -- all documented as
+        "granted exactly when hub_users.is_super_admin is true"). Before this
+        fix, `SCOPE_BUNDLES["tenant"]["admin"]` also granted this identical
+        literal, so any tenant owner's JWT satisfied those platform-only gates
+        and could self-promote to platform super admin via
+        `assign_super_admin_role`. Narrower levels must restrict what a
+        broader level granted, never expand it -- this is the direct
+        regression guard on that invariant, independent of any one blueprint.
+        """
+        for bundle_name, scopes in SCOPE_BUNDLES["tenant"].items():
+            assert "users:admin" not in scopes, (
+                f"SCOPE_BUNDLES['tenant']['{bundle_name}'] grants the platform-only "
+                "'users:admin' scope -- this reopens the C3 tenant-owner-to-"
+                "platform-super-admin privilege escalation"
+            )

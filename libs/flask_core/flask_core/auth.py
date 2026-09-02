@@ -447,10 +447,29 @@ SCOPE_BUNDLES: Dict[str, Dict[str, List[str]]] = {
         'viewer': ['*:read'],
     },
     'tenant': {
+        # SECURITY (C3, A01/BOLA fix): this bundle must NEVER include
+        # 'users:admin' -- that literal is reserved for platform-wide
+        # super-admin gates (hub_api's `/api/v1/superadmin/users/*`,
+        # `platform_config.py`, `analytics.py`, `marketplace_admin_review.py`,
+        # `cookie_consent.py`, `marketplace_modules.py` -- every one of them
+        # documented as "granted exactly when hub_users.is_super_admin is
+        # true"). It briefly duplicated 'global'['admin']'s literal here,
+        # so `auth_service.create_session_token`'s tenant-owner bundle grant
+        # let ANY tenant owner satisfy those platform-only
+        # `require_scope("users:admin")` gates and self-promote to platform
+        # super admin -- narrower levels must restrict what a broader level
+        # granted, never expand it (this bundle's own module docstring,
+        # docs/plans/2026-08-26-v3-scbm-apps-design.md's scoping ladder).
+        # Legitimate tenant-scoped admin/role management already has its own
+        # correctly-scoped surface: `blueprints/v1/tenant.py`'s
+        # `require_scope("tenant:admin")` routes (get/add/remove tenant
+        # admins), unaffected by this fix. Regression test:
+        # `test_tenancy.py::TestScopeBundles::
+        # test_tenant_bundle_never_grants_platform_only_users_admin_scope`.
         'admin': [
             'tenant:read', 'tenant:write', 'tenant:admin', 'tenant:delete',
             'community:create', 'community:delete', 'billing:read', 'billing:write',
-            'settings:write', 'users:admin',
+            'settings:write',
         ],
         'maintainer': [
             'tenant:read', 'tenant:write', 'community:create',

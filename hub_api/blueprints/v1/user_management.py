@@ -289,8 +289,9 @@ async def assign_super_admin_role(
     """Assign super admin role."""
     async_dal, dal = _dal()
     try:
+        caller_id = get_current_user_id(request)
         changed = await svc.assign_super_admin_role(
-            async_dal, dal, user_id=user_id, grant=data.grant
+            async_dal, dal, user_id=user_id, grant=data.grant, caller_id=caller_id
         )
     except ApiError as exc:
         return _err(exc)
