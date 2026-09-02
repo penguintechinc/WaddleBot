@@ -17,10 +17,22 @@ from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta, timezone
 import jwt
+import os
 import secrets
 import logging
 
 logger = logging.getLogger(__name__)
+
+#: Default `iss`/`aud` claims (security.md JWT Claims: both mandatory on
+#: every token). Every flask_core-based service verifies tokens with
+#: `verify_jwt_token()` against the same shared HS256 `SECRET_KEY` --
+#: there is one platform-wide issuer and one platform-wide audience, not a
+#: distinct value per one of the ~47 services, so both default to a fixed
+#: constant rather than requiring every caller to supply a per-service
+#: value just to keep minting tokens. Overridable via env for deployments
+#: that split identity issuance from token consumption.
+DEFAULT_JWT_ISSUER = os.getenv("JWT_ISSUER", "waddlebot")
+DEFAULT_JWT_AUDIENCE = os.getenv("JWT_AUDIENCE", "waddlebot-services")
 
 #: Slug of the tenant every pre-Task-0.4 token and every single-tenant
 #: (Free/Professional, capped) deployment resolves to. Matches
@@ -200,7 +212,10 @@ def create_jwt_token(
     secret_key: str,
     tenant: str,
     scope: str = "",
-    expiration_hours: int = 24
+    expiration_hours: int = 24,
+    teams: list[str] | None = None,
+    issuer: str = DEFAULT_JWT_ISSUER,
+    audience: str = DEFAULT_JWT_AUDIENCE,
 ) -> str:
     """
     Create JWT token for user authentication.
@@ -221,6 +236,12 @@ def create_jwt_token(
             downstream scope checks always see an explicit claim to parse
             rather than a missing key.
         expiration_hours: Token expiration in hours
+        teams: Team/OU slugs the subject belongs to (security.md JWT
+            Claims). Empty list by default -- like `scope`, always present
+            in the payload rather than omitted when the caller has no team
+            data to attach yet.
+        issuer: `iss` claim; defaults to `DEFAULT_JWT_ISSUER`.
+        audience: `aud` claim; defaults to `DEFAULT_JWT_AUDIENCE`.
 
     Returns:
         JWT token string
@@ -244,6 +265,9 @@ def create_jwt_token(
         'roles': roles,
         'tenant': tenant,
         'scope': scope,
+        'teams': teams if teams is not None else [],
+        'iss': issuer,
+        'aud': audience,
         'iat': now,
         'exp': expiration,
         'type': 'access'
@@ -256,7 +280,13 @@ def create_jwt_token(
     return token
 
 
-def verify_jwt_token(token: str, secret_key: str) -> Optional[Dict[str, Any]]:
+def verify_jwt_token(
+    token: str,
+    secret_key: str,
+    *,
+    issuer: str = DEFAULT_JWT_ISSUER,
+    audience: str = DEFAULT_JWT_AUDIENCE,
+) -> Optional[Dict[str, Any]]:
     """
     Verify and decode JWT token.
 
@@ -267,17 +297,50 @@ def verify_jwt_token(token: str, secret_key: str) -> Optional[Dict[str, Any]]:
     fallback is time-bounded, not a permanent bypass: a claim missing on a
     token issued after the cutoff is rejected outright.
 
+    Also rejects a token whose `iss`/`aud` claim is PRESENT but does not
+    match `issuer`/`audience` (security.md JWT Claims; cross-service replay
+    / audience-confusion). Absence of either claim alone is not rejected --
+    mirroring the bounded tenant-claim handling above, a token minted before
+    `create_jwt_token()` started emitting `iss`/`aud` still verifies (it
+    naturally drains out within the JWT's max-24h lifetime rather than
+    requiring a second timed migration cutoff).
+
     Args:
         token: JWT token string
         secret_key: JWT secret key
+        issuer: Expected `iss` claim.
+        audience: Expected `aud` claim.
 
     Returns:
         Decoded token payload (always carrying a `tenant` key on success),
-        or None if invalid, expired, or missing a mandatory tenant claim
-        past the migration cutoff.
+        or None if invalid, expired, missing a mandatory claim, or carrying
+        a mismatched `iss`/`aud`.
     """
     try:
-        payload = jwt.decode(token, secret_key, algorithms=['HS256'])
+        # verify_aud=False: PyJWT auto-rejects a payload that carries a
+        # non-empty `aud` claim when `audience=` isn't passed to decode()
+        # -- every token minted after this fix always carries one. The
+        # explicit mismatch check below (not PyJWT's built-in one) is what
+        # lets an `aud`-less legacy token still verify.
+        payload = jwt.decode(
+            token, secret_key, algorithms=['HS256'], options={'verify_aud': False}
+        )
+
+        # Required-claims enforcement (security.md JWT Claims): a token
+        # missing `sub`/`iat`/`exp` previously reached the exp comparison
+        # below and raised an uncaught KeyError (a 500, not a clean 401/403)
+        # instead of failing closed here.
+        for required_claim in ('sub', 'iat', 'exp'):
+            if required_claim not in payload:
+                logger.error(
+                    f"JWT missing mandatory claim '{required_claim}' -- rejecting",
+                    extra={
+                        'event_type': 'AUTH',
+                        'action': 'verify_jwt_token',
+                        'result': 'FAILURE'
+                    }
+                )
+                return None
 
         # Check expiration. Timezone-aware on both sides -- the previous
         # `fromtimestamp(exp) < utcnow()` compared local-time-interpreted
@@ -288,6 +351,30 @@ def verify_jwt_token(token: str, secret_key: str) -> Optional[Dict[str, Any]]:
         # broken expiry check undermines everything else in this function.
         if datetime.fromtimestamp(payload['exp'], tz=timezone.utc) < datetime.now(timezone.utc):
             logger.warning("JWT token expired")
+            return None
+
+        token_iss = payload.get('iss')
+        if token_iss is not None and token_iss != issuer:
+            logger.error(
+                f"JWT issuer mismatch (got {token_iss!r}, expected {issuer!r}) -- rejecting",
+                extra={
+                    'event_type': 'AUTH',
+                    'action': 'verify_jwt_token',
+                    'result': 'FAILURE'
+                }
+            )
+            return None
+
+        token_aud = payload.get('aud')
+        if token_aud is not None and token_aud != audience:
+            logger.error(
+                f"JWT audience mismatch (got {token_aud!r}, expected {audience!r}) -- rejecting",
+                extra={
+                    'event_type': 'AUTH',
+                    'action': 'verify_jwt_token',
+                    'result': 'FAILURE'
+                }
+            )
             return None
 
         if not payload.get('tenant'):

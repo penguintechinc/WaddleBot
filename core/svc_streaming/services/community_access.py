@@ -18,10 +18,10 @@ status/associated-channels lookups.
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
 from flask_core.auth import verify_jwt_token
+from flask_core.secrets import require_secret_key
 from flask_core.tenancy import TenantContext, tenant_scoped
 from quart import Request
 
@@ -40,7 +40,7 @@ def _is_super_admin(request: Request) -> bool:
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         return False
-    secret_key = os.getenv("SECRET_KEY", "change-me-in-production")
+    secret_key = require_secret_key()
     payload = verify_jwt_token(auth_header[7:], secret_key)
     if payload is None:
         return False
@@ -130,7 +130,7 @@ def decode_caller_user_id(request: Request) -> int:
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         raise unauthorized("Authentication required")
-    secret_key = os.getenv("SECRET_KEY", "change-me-in-production")
+    secret_key = require_secret_key()
     payload = verify_jwt_token(auth_header[7:], secret_key)
     if payload is None:
         raise unauthorized("Invalid or expired token")

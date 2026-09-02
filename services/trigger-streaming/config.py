@@ -10,6 +10,8 @@ import os
 from dataclasses import dataclass
 from urllib.parse import quote_plus as _quote_plus
 
+from flask_core.secrets import require_secret_key
+
 
 @dataclass
 class Config:
@@ -33,7 +35,7 @@ class Config:
 
     # Security
     SERVICE_API_KEY = os.getenv('SERVICE_API_KEY', '')
-    JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'development-secret-key')
+    JWT_SECRET_KEY = require_secret_key('JWT_SECRET_KEY', default='development-secret-key')
     JWT_ALGORITHM = os.getenv('JWT_ALGORITHM', 'HS256')
 
     # Logging

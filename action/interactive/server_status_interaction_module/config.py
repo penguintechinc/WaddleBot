@@ -2,6 +2,7 @@
 import os
 
 from dotenv import load_dotenv
+from flask_core.secrets import require_secret_key
 
 load_dotenv()
 
@@ -21,8 +22,7 @@ class Config:
         'http://router-service:8000/api/v1/router'
     )
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
-    SECRET_KEY = os.getenv('SECRET_KEY', 'change-me-in-production')
-
+    SECRET_KEY = require_secret_key()
     # Status polling defaults
     DEFAULT_POLL_INTERVAL_MINUTES = int(
         os.getenv('DEFAULT_POLL_INTERVAL_MINUTES', '5')

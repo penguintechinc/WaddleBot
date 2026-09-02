@@ -25,7 +25,6 @@ data scoping.
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass
 from functools import wraps
 from typing import Any, Optional
@@ -33,6 +32,7 @@ from typing import Any, Optional
 from pydal.objects import Field, Query, Table
 
 from .auth import DEFAULT_TENANT_SLUG, verify_jwt_token
+from .secrets import require_secret_key
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +158,7 @@ def tenant_middleware(f):
             return error_response("Authentication required", status_code=401)
 
         token = auth_header[7:]
-        secret_key = os.getenv("SECRET_KEY", "change-me-in-production")
+        secret_key = require_secret_key()
         payload = verify_jwt_token(token, secret_key)
         if payload is None:
             return error_response("Invalid or expired token", status_code=401)

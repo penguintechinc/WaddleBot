@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 
 from dotenv import load_dotenv
+from flask_core.secrets import require_secret_key
 
 load_dotenv()
 
@@ -31,7 +32,7 @@ class Config:
     RUNNER_TENANT_SLUG = os.getenv("RUNNER_TENANT_SLUG", "global")
     RUNNER_COMMUNITY_ID = _optional_int(os.getenv("RUNNER_COMMUNITY_ID"))
 
-    SECRET_KEY = os.getenv("SECRET_KEY", "change-me-in-production")
+    SECRET_KEY = require_secret_key()
     JWT_SCOPE = "distribution:read"
 
     VALKEY_URL = os.getenv("VALKEY_URL", "redis://localhost:6379/0")

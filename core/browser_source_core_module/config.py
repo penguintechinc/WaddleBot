@@ -5,6 +5,7 @@ import threading
 from typing import Optional
 
 from dotenv import load_dotenv
+from flask_core.secrets import require_secret_key
 
 load_dotenv()
 
@@ -31,14 +32,11 @@ class Config:  # noqa: E302
         'http://router-service:8000/api/v1/router'
     )
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
-    SECRET_KEY = os.getenv(
-        'SECRET_KEY',
-        'change-me-in-production'
-    )
-    MODULE_SECRET_KEY = os.getenv(
-        'MODULE_SECRET_KEY',
-        os.getenv('SECRET_KEY', 'change-me-in-production')
-    )
+    SECRET_KEY = require_secret_key()
+    # Falls back to the already-fail-closed SECRET_KEY above rather than
+    # its own placeholder -- one call to require_secret_key() per process
+    # is enough to prove a real secret is configured.
+    MODULE_SECRET_KEY = os.getenv('MODULE_SECRET_KEY') or SECRET_KEY
     JWT_ALGORITHM = 'HS256'
 
     # Redis Configuration (for credential refresh notifications)

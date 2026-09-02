@@ -5,6 +5,7 @@ import threading
 from typing import Optional
 
 from dotenv import load_dotenv
+from flask_core.secrets import require_secret_key
 
 load_dotenv()
 
@@ -65,8 +66,8 @@ class Config:
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
 
     # Security
-    SECRET_KEY = os.getenv('SECRET_KEY', 'change-me-in-production')
-    API_KEY = os.getenv('API_KEY', 'change-me-in-production')
+    SECRET_KEY = require_secret_key()
+    API_KEY = require_secret_key('API_KEY')
 
     # APScheduler Configuration
     SCHEDULER_TIMEZONE = os.getenv('SCHEDULER_TIMEZONE', 'UTC')

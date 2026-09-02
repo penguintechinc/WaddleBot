@@ -528,6 +528,7 @@ services:
       TWITCH_CLIENT_SECRET: ${TWITCH_CLIENT_SECRET:-}
       TWITCH_WEBHOOK_SECRET: ${TWITCH_WEBHOOK_SECRET:-}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      RELEASE_MODE: ${RELEASE_MODE:-false}
     networks:
       - waddlebot-internal
     depends_on:
@@ -554,6 +555,7 @@ services:
       DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
       DISCORD_APPLICATION_ID: ${DISCORD_APPLICATION_ID:-}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      RELEASE_MODE: ${RELEASE_MODE:-false}
     networks:
       - waddlebot-internal
     depends_on:
@@ -580,6 +582,7 @@ services:
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
       SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET:-}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      RELEASE_MODE: ${RELEASE_MODE:-false}
     networks:
       - waddlebot-internal
     depends_on:
@@ -608,6 +611,7 @@ services:
       YOUTUBE_CLIENT_SECRET: ${YOUTUBE_CLIENT_SECRET:-}
       YOUTUBE_WEBHOOK_CALLBACK_URL: ${YOUTUBE_WEBHOOK_CALLBACK_URL:-}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      RELEASE_MODE: ${RELEASE_MODE:-false}
     networks:
       - waddlebot-internal
     depends_on:
@@ -635,6 +639,7 @@ services:
       KICK_CLIENT_SECRET: ${KICK_CLIENT_SECRET:-}
       KICK_WEBHOOK_SECRET: ${KICK_WEBHOOK_SECRET:-}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      RELEASE_MODE: ${RELEASE_MODE:-false}
     networks:
       - waddlebot-internal
     depends_on:
@@ -670,6 +675,7 @@ services:
       WADDLEAI_BASE_URL: ${WADDLEAI_BASE_URL:-}
       WADDLEAI_API_KEY: ${WADDLEAI_API_KEY:-}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      RELEASE_MODE: ${RELEASE_MODE:-false}
       HYPERCORN_WORKERS: ${HYPERCORN_WORKERS:-4}
     networks:
       - waddlebot-internal
@@ -696,6 +702,7 @@ services:
       SECRETS_PATH: /secrets/db-passwords
       ROUTER_API_URL: http://core-router:8000
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      RELEASE_MODE: ${RELEASE_MODE:-false}
     networks:
       - waddlebot-internal
     depends_on:
@@ -720,6 +727,7 @@ services:
       SECRETS_PATH: /secrets/db-passwords
       ROUTER_API_URL: http://core-router:8000
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      RELEASE_MODE: ${RELEASE_MODE:-false}
     networks:
       - waddlebot-internal
     depends_on:
@@ -744,6 +752,7 @@ services:
       SECRETS_PATH: /secrets/db-passwords
       ROUTER_API_URL: http://core-router:8000
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      RELEASE_MODE: ${RELEASE_MODE:-false}
     networks:
       - waddlebot-internal
     depends_on:
@@ -768,6 +777,7 @@ services:
       SECRETS_PATH: /secrets/db-passwords
       ROUTER_API_URL: http://core-router:8000
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      RELEASE_MODE: ${RELEASE_MODE:-false}
     networks:
       - waddlebot-internal
     depends_on:
@@ -792,6 +802,7 @@ services:
       SECRETS_PATH: /secrets/db-passwords
       ROUTER_API_URL: http://core-router:8000
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      RELEASE_MODE: ${RELEASE_MODE:-false}
     networks:
       - waddlebot-internal
     depends_on:
@@ -818,6 +829,7 @@ services:
       BROWSER_SOURCE_API_URL: http://core-browser-source:8027
       YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      RELEASE_MODE: ${RELEASE_MODE:-false}
     networks:
       - waddlebot-internal
     depends_on:
@@ -846,6 +858,7 @@ services:
       SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID:-}
       SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET:-}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      RELEASE_MODE: ${RELEASE_MODE:-false}
     networks:
       - waddlebot-internal
     depends_on:
@@ -900,6 +913,7 @@ services:
       ROUTER_API_URL: http://core-router:8000
       SERVICE_API_KEY: ${SERVICE_API_KEY:-changeme_service_key}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      RELEASE_MODE: ${RELEASE_MODE:-false}
     networks:
       - waddlebot-internal
     depends_on:
@@ -926,6 +940,7 @@ services:
       ROUTER_API_URL: http://core-router:8000
       SERVICE_API_KEY: ${SERVICE_API_KEY:-changeme_service_key}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      RELEASE_MODE: ${RELEASE_MODE:-false}
     networks:
       - waddlebot-internal
     depends_on:
@@ -953,6 +968,7 @@ services:
       TWITCH_MODULE_URL: http://action-twitch:8072
       SERVICE_API_KEY: ${SERVICE_API_KEY:-changeme_service_key}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      RELEASE_MODE: ${RELEASE_MODE:-false}
     networks:
       - waddlebot-internal
     depends_on:
@@ -984,6 +1000,7 @@ services:
       REDIS_KEY_PREFIX: "labels:"
       ROUTER_API_URL: http://core-router:8000
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      RELEASE_MODE: ${RELEASE_MODE:-false}
     networks:
       - waddlebot-internal
     depends_on:
@@ -1011,6 +1028,7 @@ services:
       OVERLAY_BASE_URL: ${OVERLAY_BASE_URL:-http://localhost:8027}
       OVERLAY_KEY_GRACE_PERIOD_MINUTES: ${OVERLAY_KEY_GRACE_PERIOD_MINUTES:-5}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      RELEASE_MODE: ${RELEASE_MODE:-false}
     ports:
       - "8027:8027"  # Browser sources need direct access from OBS
     networks:
@@ -1078,6 +1096,7 @@ services:
       GAME_LOOKUP_ENABLED: ${GAME_LOOKUP_ENABLED:-true}
       SEARXNG_URL: ${SEARXNG_URL:-http://infra-searxng:8080}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      RELEASE_MODE: ${RELEASE_MODE:-false}
     networks:
       - waddlebot-internal
     depends_on:
@@ -1154,6 +1173,7 @@ services:
       SECRETS_PATH: /secrets/db-passwords
       ROUTER_API_URL: http://core-router:8000
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      RELEASE_MODE: ${RELEASE_MODE:-false}
     networks:
       - waddlebot-internal
     depends_on:
@@ -1182,6 +1202,7 @@ services:
       SECRETS_PATH: /secrets/db-passwords
       ROUTER_API_URL: http://core-router:8000
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      RELEASE_MODE: ${RELEASE_MODE:-false}
     networks:
       - waddlebot-internal
     depends_on:
@@ -1207,6 +1228,7 @@ services:
       REDIS_URL: redis://analytics:${REDIS_ANALYTICS_PASSWORD:-changeme}@infra-redis:6379/0
       REDIS_KEY_PREFIX: "analytics:"
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      RELEASE_MODE: ${RELEASE_MODE:-false}
     networks:
       - waddlebot-internal
     depends_on:
@@ -1238,6 +1260,7 @@ services:
       REDIS_KEY_PREFIX: "security:"
       REPUTATION_API_URL: http://core-reputation:8021
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      RELEASE_MODE: ${RELEASE_MODE:-false}
     networks:
       - waddlebot-internal
     depends_on:
@@ -1431,6 +1454,7 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET:-changeme_jwt_secret}
       MODULE_SECRET_KEY: ${MODULE_SECRET_KEY:-changeme_module_secret}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      RELEASE_MODE: ${RELEASE_MODE:-false}
     networks:
       - waddlebot-internal
     depends_on:

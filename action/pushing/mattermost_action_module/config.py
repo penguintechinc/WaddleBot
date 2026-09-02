@@ -1,8 +1,48 @@
 import os
 import logging
+import sys
 from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
+
+#: Placeholder secret values that must never sign a token in production
+#: (C1 security fix, A02:2021/CWE-798). This module has no flask_core
+#: dependency (standalone action-pushing service -- see requirements.in),
+#: so it cannot import `flask_core.secrets.require_secret_key()` and
+#: duplicates the same small fail-closed check locally instead.
+_KNOWN_PLACEHOLDER_SECRETS = frozenset({'your-secret-key-change-in-production', ''})
+
+
+def _require_secret_key(env_var: str, default: str) -> str:
+    """Read `env_var`, failing closed if unset/placeholder outside pytest/dev.
+
+    Mirrors `flask_core.secrets.require_secret_key()`'s posture: a live
+    pytest process or an explicit dev/local/test `ENVIRONMENT`/
+    `WADDLEBOT_ENV`/`NODE_ENV` is never production; `RELEASE_MODE=true` (or
+    an unset/unrecognized environment) is treated as production and fails
+    closed on a placeholder value.
+    """
+    value = os.getenv(env_var, default)
+    if 'pytest' in sys.modules:
+        return value
+    release_mode = os.environ.get('RELEASE_MODE')
+    if release_mode is not None:
+        prod = release_mode.strip().lower() != 'false'
+    else:
+        env = (
+            os.environ.get('WADDLEBOT_ENV')
+            or os.environ.get('ENVIRONMENT')
+            or os.environ.get('NODE_ENV')
+            or ''
+        ).strip().lower()
+        prod = env not in {'development', 'dev', 'local', 'test', 'testing'}
+    if prod and value in _KNOWN_PLACEHOLDER_SECRETS:
+        raise RuntimeError(
+            f'{env_var} is unset or still the insecure default in a production-like '
+            f'environment -- refusing to start. Set {env_var} to a unique, randomly '
+            'generated secret.'
+        )
+    return value
 
 
 class Config:
@@ -27,7 +67,7 @@ class Config:
     GRPC_PORT = int(os.getenv('GRPC_PORT', '50058'))
 
     # JWT/Auth configuration
-    JWT_SECRET = os.getenv('JWT_SECRET', 'your-secret-key-change-in-production')
+    JWT_SECRET = _require_secret_key('JWT_SECRET', 'your-secret-key-change-in-production')
     JWT_ALGORITHM = os.getenv('JWT_ALGORITHM', 'HS256')
     # Service identities permitted to call this module's gRPC servicer.
     ALLOWED_SERVICES = os.getenv('ALLOWED_SERVICES', 'router_module').split(',')

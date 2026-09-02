@@ -14,16 +14,19 @@ startup and never mutated.
 Two field names deliberately mirror `flask_core` verbatim rather than
 inventing a hub-api-local name: `secret_key` reads `SECRET_KEY` (not
 `JWT_SECRET_KEY`) because `flask_core.tenancy.tenant_middleware` and
-`flask_core.authz.require_scope` both call `os.getenv("SECRET_KEY", ...)`
-directly at request time -- a differently-named env var here would leave
-those decorators silently falling back to the
-`"change-me-in-production"` default. Likewise `posthog_api_key`/
-`posthog_host` mirror `flask_core.entitlement`'s own `POSTHOG_API_KEY`/
-`POSTHOG_HOST` lookups. Config.from_env() exists so hub-api's own code
-(logging, health blueprint naming, OpenAPI info) has one place to read
-these from, while flask_core's decorators keep reading the environment
-directly -- documented here rather than re-plumbed through app.config to
-avoid a second, driftable source of truth.
+`flask_core.authz.require_scope` both call `flask_core.secrets.
+require_secret_key()` directly at request time -- a differently-named env
+var here would leave those decorators reading a different (or unset)
+value than `HubAPIConfig.secret_key`. `require_secret_key()` fails closed
+(raises `InsecureSecretError`) rather than silently falling back to the
+`"change-me-in-production"` placeholder when running in a production-like
+environment (C1, security audit) -- see `flask_core.secrets` module docs.
+Likewise `posthog_api_key`/`posthog_host` mirror `flask_core.entitlement`'s
+own `POSTHOG_API_KEY`/`POSTHOG_HOST` lookups. Config.from_env() exists so
+hub-api's own code (logging, health blueprint naming, OpenAPI info) has
+one place to read these from, while flask_core's decorators keep reading
+the environment directly -- documented here rather than re-plumbed
+through app.config to avoid a second, driftable source of truth.
 """
 
 from __future__ import annotations
@@ -31,6 +34,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from urllib.parse import quote_plus
+
+from flask_core.secrets import require_secret_key
 
 #: DB_TYPE values this config understands (backend-database.md Database
 #: Support Matrix minus MariaDB Galera, which is not yet in hub-api's plan).
@@ -248,7 +253,7 @@ class HubAPIConfig:
             db_pool_size=int(os.getenv("DB_POOL_SIZE", "10")),
             db_max_retries=int(os.getenv("DB_MAX_RETRIES", "5")),
             db_retry_delay=int(os.getenv("DB_RETRY_DELAY", "5")),
-            secret_key=os.getenv("SECRET_KEY", "change-me-in-production"),
+            secret_key=require_secret_key(),
             jwt_algorithm=os.getenv("JWT_ALGORITHM", "HS256"),
             default_tenant_slug=os.getenv("DEFAULT_TENANT_SLUG", "global"),
             posthog_api_key=os.getenv("POSTHOG_API_KEY") or os.getenv("POSTHOG_KEY"),

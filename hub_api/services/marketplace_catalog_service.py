@@ -44,12 +44,12 @@ Node's logged-out browsing contract.
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
 from flask_core.auth import DEFAULT_TENANT_SLUG, verify_jwt_token
+from flask_core.secrets import require_secret_key
 
 from services.errors import ApiError, bad_request, conflict, not_found
 from services.schema import bind_marketplace_catalog_tables
@@ -90,7 +90,7 @@ def visible_tenant_ids(dal: Any, request: Any) -> frozenset[int]:
     auth_header = request.headers.get("Authorization")
     if auth_header and auth_header.startswith("Bearer "):
         token = auth_header[7:]
-        secret_key = os.getenv("SECRET_KEY", "change-me-in-production")
+        secret_key = require_secret_key()
         payload = verify_jwt_token(token, secret_key)
         if payload:
             tenant_slug = payload.get("tenant")

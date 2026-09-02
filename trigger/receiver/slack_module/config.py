@@ -5,6 +5,7 @@ import threading
 from typing import Optional
 
 from dotenv import load_dotenv
+from flask_core.secrets import require_secret_key
 
 load_dotenv()
 
@@ -28,8 +29,7 @@ class Config:
         'http://router-service:8000/api/v1/router'
     )
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
-    SECRET_KEY = os.getenv('SECRET_KEY', 'change-me-in-production')
-
+    SECRET_KEY = require_secret_key()
     # Slack Bot Configuration
     SLACK_BOT_TOKEN = os.getenv('SLACK_BOT_TOKEN', '')
     SLACK_SIGNING_SECRET = os.getenv('SLACK_SIGNING_SECRET', '')

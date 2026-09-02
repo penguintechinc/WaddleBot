@@ -16,6 +16,36 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+#: Placeholder `SECRET_KEY` values that must never sign a token in
+#: production (C1 security fix, A02:2021/CWE-798).
+_KNOWN_PLACEHOLDER_SECRETS = frozenset({'change-me-in-production', ''})
+
+
+def _require_secret_key() -> str:
+    """Fail closed on an unset/placeholder `SECRET_KEY` when `RELEASE_MODE=true`.
+
+    This file is a standalone vendored copy of `flask_core.api_utils`
+    (`services/core-community/libs/flask_core`), not the shared
+    `libs/flask_core` package used elsewhere in this repo, so it cannot
+    import `flask_core.secrets.require_secret_key()` and instead
+    duplicates the same fail-closed check against this service's own
+    `RELEASE_MODE` convention (`config.py`'s `RELEASE_MODE = os.getenv(
+    'RELEASE_MODE', 'false').lower() == 'true'`). Previously this decorator
+    silently accepted `'change-me-in-production'` as a valid HS256 signing
+    key -- a publicly known key forges tokens for every request this
+    decorator protects.
+    """
+    value = os.getenv('SECRET_KEY', 'change-me-in-production')
+    release_mode = os.getenv('RELEASE_MODE', 'false').strip().lower() == 'true'
+    if release_mode and value in _KNOWN_PLACEHOLDER_SECRETS:
+        raise RuntimeError(
+            "SECRET_KEY is unset or still the insecure default with RELEASE_MODE=true -- "
+            "refusing to verify tokens against a publicly known key. Set SECRET_KEY to a "
+            "unique, randomly generated secret."
+        )
+    return value
+
+
 # Metrics storage for Prometheus format
 _metrics = {
     'requests_total': 0,
@@ -373,7 +403,6 @@ def auth_required(f: Callable) -> Callable:
     @wraps(f)
     async def decorated_function(*args, **kwargs):
         from .auth import verify_jwt_token, verify_api_key_async
-        import os
 
         # Get token from Authorization header
         auth_header = request.headers.get('Authorization')
@@ -384,7 +413,7 @@ def auth_required(f: Callable) -> Callable:
         # Try JWT token first
         if auth_header and auth_header.startswith('Bearer '):
             token = auth_header[7:]  # Remove 'Bearer ' prefix
-            secret_key = os.getenv('SECRET_KEY', 'change-me-in-production')
+            secret_key = _require_secret_key()
             payload = verify_jwt_token(token, secret_key)
 
             if payload:

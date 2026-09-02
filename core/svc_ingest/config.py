@@ -18,6 +18,7 @@ from __future__ import annotations
 import os
 
 from dotenv import load_dotenv
+from flask_core.secrets import require_secret_key
 
 load_dotenv()
 
@@ -52,7 +53,7 @@ class Config:
     # Shared HS256 secret -- mirrors flask_core.tenancy/authz's own
     # os.getenv("SECRET_KEY", "change-me-in-production") fallback exactly,
     # so a token minted here verifies against hub-api's own decorators.
-    SECRET_KEY = os.getenv("SECRET_KEY", "change-me-in-production")
+    SECRET_KEY = require_secret_key()
     JWT_SCOPE = "distribution:read"
 
     VALKEY_URL = os.getenv("VALKEY_URL", "redis://localhost:6379/0")
