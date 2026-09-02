@@ -189,6 +189,12 @@ convention = "google"
 # guard is the WHERE-guarded UPDATE in token_billing_service.py, not this
 # assert).
 "blueprints/v1/token_billing.py" = ["S101"]
+# BYOK egress PII redaction (LLM01 hardening) -- `_TOKEN_PLACEHOLDER =
+# "[REDACTED_TOKEN]"` is the literal replacement string `redact_pii()`
+# substitutes *in place of* a matched secret, never a credential value
+# itself. Same false-positive shape as the music-provider `_TOKEN_URL`/
+# `_TOKEN_FILE` entries above.
+"services/ai_routing/pii_redaction.py" = ["S105"]
 
 [tool.mypy]
 python_version = "3.13"

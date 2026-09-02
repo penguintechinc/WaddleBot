@@ -13,6 +13,7 @@ from typing import Optional, Dict, Any
 from dataclasses import dataclass, field
 
 from config import Config
+from .prompt_safety import UNTRUSTED_DATA_NOTICE, wrap_untrusted
 
 logger = logging.getLogger(__name__)
 
@@ -241,7 +242,9 @@ class WaddleAIProvider:
             "content": system_prompt
         })
 
-        # Add conversation history if available
+        # Add conversation history if available -- each turn is itself
+        # untrusted (a prior user/assistant message), delimited the same
+        # way as the current message rather than passed through verbatim.
         if (  # noqa: E501
             Config.ENABLE_CHAT_CONTEXT and
             'conversation_history' in context
@@ -252,11 +255,21 @@ class WaddleAIProvider:
                     isinstance(msg, dict) and
                     'role' in msg and 'content' in msg
                 ):
-                    messages.append(msg)
+                    role = (  # noqa: E501
+                        'assistant' if msg['role'] == 'assistant' else 'user'
+                    )
+                    messages.append({
+                        "role": role,
+                        "content": wrap_untrusted(str(msg['content']))
+                    })
 
-        # Add current user message
+        # Add current user message -- message_content/user_id are the
+        # untrusted payload, delimited via wrap_untrusted; the "User X
+        # said:" framing is our own trusted text. regression: sec-llm01-audit
         if message_type == 'chatMessage':
-            user_prompt = f"User {user_id} said: {message_content}"
+            user_prompt = (  # noqa: E501
+                f"User {user_id} said:\n{wrap_untrusted(message_content)}"
+            )
         else:
             user_prompt = self._create_event_user_message(  # noqa: E501
                 message_type, user_id
@@ -315,7 +328,7 @@ class WaddleAIProvider:
 
         return (  # noqa: E501
             base_prompt + platform_context + type_context +
-            length_instruction
+            length_instruction + "\n\n" + UNTRUSTED_DATA_NOTICE
         )
 
     def _create_event_user_message(  # noqa: E501
@@ -323,45 +336,49 @@ class WaddleAIProvider:
     ) -> str:
         """Create user message for events"""
 
+        # user_id (platform username/display name) is attacker-influenceable
+        # -- delimit it before it's templated into the event description.
+        safe_user_id = wrap_untrusted(user_id)
+
         match message_type:
             case 'subscription':
                 return (  # noqa: E501
-                    f"User {user_id} just subscribed! "
+                    f"User {safe_user_id} just subscribed! "
                     f"Generate a celebratory thank you."
                 )
             case 'follow':
                 return (  # noqa: E501
-                    f"User {user_id} just followed! "
+                    f"User {safe_user_id} just followed! "
                     f"Generate a welcoming thank you."
                 )
             case 'donation':
                 return (  # noqa: E501
-                    f"User {user_id} just donated! "
+                    f"User {safe_user_id} just donated! "
                     f"Generate a grateful thank you."
                 )
             case 'cheer':
                 return (  # noqa: E501
-                    f"User {user_id} just sent bits! "
+                    f"User {safe_user_id} just sent bits! "
                     f"Generate an excited thank you."
                 )
             case 'raid':
                 return (  # noqa: E501
-                    f"User {user_id} raided the channel! "
+                    f"User {safe_user_id} raided the channel! "
                     f"Welcome the raiders."
                 )
             case 'boost':
                 return (  # noqa: E501
-                    f"User {user_id} boosted the server! "
+                    f"User {safe_user_id} boosted the server! "
                     f"Thank them for boosting."
                 )
             case 'member_join':
                 return (  # noqa: E501
-                    f"User {user_id} just joined! "
+                    f"User {safe_user_id} just joined! "
                     f"Welcome them warmly."
                 )
             case _:
                 return (  # noqa: E501
-                    f"User {user_id} triggered a {message_type} event! "
+                    f"User {safe_user_id} triggered a {message_type} event! "
                     f"Respond appropriately."
                 )
 

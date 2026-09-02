@@ -110,6 +110,36 @@ class TestOpenAIClient:
             await client.generate("sk-super-secret-value", AIRequest(prompt="hi"))
         assert "sk-super-secret-value" not in exc_info.value.message
 
+    async def test_generate_redacts_pii_in_prompt_before_egress(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import json
+
+        captured: dict[str, object] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["body"] = json.loads(request.content)
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [{"message": {"content": "hi"}}],
+                    "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+                },
+            )
+
+        _patch_transport(monkeypatch, handler)
+        client = OpenAIClient()
+        prompt = "My email is jane.doe@example.com, my key is sk-abcdefghijklmnopqrstuvwxyz"
+        await client.generate("sk-test-key", AIRequest(prompt=prompt))
+
+        body = captured["body"]
+        assert isinstance(body, dict)
+        sent_content = body["messages"][0]["content"]
+        assert "jane.doe@example.com" not in sent_content
+        assert "sk-abcdefghijklmnopqrstuvwxyz" not in sent_content
+        assert "[REDACTED_EMAIL]" in sent_content
+        assert "[REDACTED_TOKEN]" in sent_content
+
 
 class TestAnthropicClient:
     async def test_generate_normalizes_usage(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -132,6 +162,36 @@ class TestAnthropicClient:
         assert response.provider == "anthropic"
         assert response.input_tokens == 6
         assert response.output_tokens == 4
+
+    async def test_generate_redacts_pii_in_prompt_before_egress(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import json
+
+        captured: dict[str, object] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["body"] = json.loads(request.content)
+            return httpx.Response(
+                200,
+                json={
+                    "content": [{"type": "text", "text": "hi there"}],
+                    "usage": {"input_tokens": 1, "output_tokens": 1},
+                },
+            )
+
+        _patch_transport(monkeypatch, handler)
+        client = AnthropicClient()
+        prompt = "Contact jane.doe@example.com, token Bearer abc123def456ghi789"
+        await client.generate("anthropic-test-key", AIRequest(prompt=prompt))
+
+        body = captured["body"]
+        assert isinstance(body, dict)
+        sent_content = body["messages"][0]["content"]
+        assert "jane.doe@example.com" not in sent_content
+        assert "abc123def456ghi789" not in sent_content
+        assert "[REDACTED_EMAIL]" in sent_content
+        assert "[REDACTED_TOKEN]" in sent_content
 
 
 class TestValidateByokKey:

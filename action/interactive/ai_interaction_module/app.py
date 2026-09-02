@@ -31,6 +31,7 @@ from flask_core import (  # noqa: E402
     create_health_blueprint,
     validate_json
 )
+from flask_core.sanitization import sanitize_input  # noqa: E402
 
 from config import Config  # noqa: E402
 from services.ai_service import AIService  # noqa: E402
@@ -376,7 +377,12 @@ async def chat_completions():
     OpenAI-compatible chat completions endpoint.
 
     Compatible with OpenAI API format for easy integration.
-    Note: Validation is done manually here to maintain OpenAI API compatibility.
+    Note: Validation is done manually here to maintain OpenAI API
+    compatibility (arbitrary message shape, not the fixed ChatRequest
+    schema) -- but every message's content still goes through the same
+    sanitize_input() guard ChatRequest/InteractionRequest apply, it's just
+    invoked directly instead of via @validate_json. regression:
+    sec-llm01-audit
     """
     try:
         data = await request.get_json()
@@ -407,6 +413,25 @@ async def chat_completions():
             return error_response(
                 "messages array cannot exceed 50 items", status_code=400
             )
+
+        # Sanitize every message's content with the same guard
+        # InteractionRequest/ChatRequest apply to user-supplied text
+        # (flask_core.sanitization.sanitize_input) -- this endpoint parses
+        # messages manually to preserve OpenAI API shape compatibility, so
+        # @validate_json(ChatRequest) can't be reused directly, but the
+        # sanitizer step it depends on must not be skipped.
+        # regression: sec-llm01-audit
+        sanitized_messages = []
+        for msg in messages:
+            if not isinstance(msg, dict):
+                return error_response(
+                    "each message must be an object", status_code=400
+                )
+            content = msg.get('content', '')
+            if isinstance(content, str):
+                content = sanitize_input(content, allow_html=False)
+            sanitized_messages.append({**msg, 'content': content})
+        messages = sanitized_messages
 
         # Extract last user message
         user_message = ""

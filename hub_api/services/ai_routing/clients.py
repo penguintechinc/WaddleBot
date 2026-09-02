@@ -29,6 +29,7 @@ import httpx
 
 from services.ai_routing.errors import invalid_byok_key, provider_error
 from services.ai_routing.models import AIRequest, AIResponse, ByokProvider, Tier
+from services.ai_routing.pii_redaction import redact_pii
 
 _DEFAULT_TIMEOUT_SECONDS = 60.0
 _ANTHROPIC_API_VERSION = "2023-06-01"
@@ -115,11 +116,17 @@ class OpenAIClient:
         self._timeout_seconds = timeout_seconds
 
     async def generate(self, api_key: str, request: AIRequest) -> AIResponse:
-        """POST `/chat/completions`; normalize OpenAI's `usage.{prompt,completion}_tokens`."""
+        """POST `/chat/completions`; normalize OpenAI's `usage.{prompt,completion}_tokens`.
+
+        `request.prompt` is redacted (`pii_redaction.redact_pii`) before it
+        leaves this process -- this call crosses to a third-party API
+        (the community's own OpenAI account), unlike the self-hosted Ollama
+        tiers.
+        """
         model = request.model_hint or os.environ.get("AI_BYOK_OPENAI_MODEL", "gpt-4o-mini")
         payload = {
             "model": model,
-            "messages": [{"role": "user", "content": request.prompt}],
+            "messages": [{"role": "user", "content": redact_pii(request.prompt)}],
             "max_tokens": request.max_tokens,
             "temperature": request.temperature,
         }
@@ -161,14 +168,19 @@ class AnthropicClient:
         self._timeout_seconds = timeout_seconds
 
     async def generate(self, api_key: str, request: AIRequest) -> AIResponse:
-        """POST `/messages`; normalize Anthropic's `usage.{input,output}_tokens`."""
+        """POST `/messages`; normalize Anthropic's `usage.{input,output}_tokens`.
+
+        `request.prompt` is redacted (`pii_redaction.redact_pii`) before it
+        leaves this process -- see `OpenAIClient.generate`'s docstring for
+        why this tier redacts and the free/premium Ollama tiers don't.
+        """
         model = request.model_hint or os.environ.get(
             "AI_BYOK_ANTHROPIC_MODEL", "claude-3-5-haiku-20241022"
         )
         payload = {
             "model": model,
             "max_tokens": request.max_tokens,
-            "messages": [{"role": "user", "content": request.prompt}],
+            "messages": [{"role": "user", "content": redact_pii(request.prompt)}],
         }
         try:
             async with httpx.AsyncClient(

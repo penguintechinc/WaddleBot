@@ -8,10 +8,11 @@ Direct Ollama connection with configurable host:port and TLS options.
 import httpx
 import ssl
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, field
 
 from config import Config
+from .prompt_safety import UNTRUSTED_DATA_NOTICE, wrap_untrusted
 
 logger = logging.getLogger(__name__)
 
@@ -143,15 +144,19 @@ class OllamaProvider:
             Generated response or None
         """
         try:
-            # Create prompt based on message type
-            prompt = self._create_prompt(
+            # Build a real system/user message pair -- untrusted content
+            # (message_content, event descriptions) is delimited and
+            # labeled as data, never concatenated into one instruction
+            # string. regression: sec-llm01-audit
+            messages = self._build_messages(
                 message_content, message_type, user_id, platform, context
             )
 
-            # Build request payload
+            # Build request payload (Ollama's /api/chat message API, not
+            # /api/generate's single-string prompt)
             payload = {
                 "model": self.model,
-                "prompt": prompt,
+                "messages": messages,
                 "temperature": self.temperature,
                 "options": {
                     "num_predict": self.max_tokens
@@ -165,14 +170,14 @@ class OllamaProvider:
             )
             async with httpx.AsyncClient(verify=verify_param) as client:
                 response = await client.post(
-                    f"{self.base_url}/api/generate",
+                    f"{self.base_url}/api/chat",
                     json=payload,
                     timeout=self.timeout
                 )
 
                 if response.status_code == 200:
                     data = response.json()
-                    generated_text = data.get('response', '')
+                    generated_text = data.get('message', {}).get('content', '')
 
                     # Clean and validate response
                     cleaned_response = self._clean_response(generated_text)
@@ -233,16 +238,16 @@ class OllamaProvider:
             logger.error(f"Failed to get Ollama models: {e}")
             return []
 
-    def _create_prompt(
+    def _build_messages(
         self,
         message_content: str,
         message_type: str,
         user_id: str,
         platform: str,
         context: Dict[str, Any]
-    ) -> str:
+    ) -> List[Dict[str, str]]:
         """
-        Create prompt for Ollama based on message type.
+        Build the system/user message list for Ollama's /api/chat endpoint.
 
         Args:
             message_content: Message text
@@ -252,126 +257,159 @@ class OllamaProvider:
             context: Additional context
 
         Returns:
-            Formatted prompt string
+            Messages list (system role first) for /api/chat -- untrusted
+            content (chat text, event usernames) is delimited via
+            `prompt_safety.wrap_untrusted`, never concatenated straight
+            into the instructions. regression: sec-llm01-audit
         """
-        # Python 3.13 pattern matching for prompt creation
+        # Python 3.13 pattern matching for message-building
         match message_type:
             case 'chatMessage':
-                return self._create_chat_prompt(  # noqa: E501
+                return self._build_chat_messages(  # noqa: E501
                     message_content, user_id, platform, context
                 )
             case _:
-                return self._create_event_prompt(  # noqa: E501
+                return self._build_event_messages(  # noqa: E501
                     message_type, user_id, platform, context
                 )
 
-    def _create_chat_prompt(
+    def _build_chat_messages(
         self,
         message_content: str,
         user_id: str,
         platform: str,
         context: Dict[str, Any]
-    ) -> str:
-        """Create prompt for chat messages"""
+    ) -> List[Dict[str, str]]:
+        """Build messages for chat responses"""
 
         trigger_type = context.get('trigger_type', 'unknown')
 
-        # Build context-aware system prompt
-        prompt_parts = [Config.SYSTEM_PROMPT]
-
-        # Add platform context
-        prompt_parts.append(f"\nPlatform: {platform}")
+        # Build context-aware system prompt (instructions only -- no
+        # untrusted content lives in this message)
+        system_parts = [Config.SYSTEM_PROMPT]
+        system_parts.append(f"\nPlatform: {platform}")
 
         # Add trigger-specific context
         match trigger_type:
             case 'greeting':
-                prompt_parts.append(  # noqa: E501
+                system_parts.append(  # noqa: E501
                     "The user is greeting you. Respond warmly and friendly."
                 )
             case 'farewell':
-                prompt_parts.append(  # noqa: E501
+                system_parts.append(  # noqa: E501
                     "The user is saying goodbye. "
                     "Respond with a friendly farewell."
                 )
             case 'question':
-                prompt_parts.append(  # noqa: E501
+                system_parts.append(  # noqa: E501
                     "The user is asking a question. "
                     "Provide a helpful, informative answer."
                 )
             case _:
-                prompt_parts.append(  # noqa: E501
+                system_parts.append(  # noqa: E501
                     "Respond helpfully and naturally to the user's message."
                 )
 
-        # Add user message
-        prompt_parts.append(f"\nUser {user_id} said: {message_content}")
+        system_parts.append("\nYour response (keep it under 200 characters):")
+        system_parts.append(f"\n{UNTRUSTED_DATA_NOTICE}")
 
-        # Add conversation history if available
+        messages: List[Dict[str, str]] = [
+            {"role": "system", "content": '\n'.join(system_parts)}
+        ]
+
+        # Add conversation history if available -- each turn is itself
+        # untrusted (a prior user/assistant message), delimited the same
+        # way as the current message.
         if Config.ENABLE_CHAT_CONTEXT and 'conversation_history' in context:
             history = context['conversation_history']
             if history:
-                prompt_parts.insert(1, "\nRecent conversation:")
                 for msg in history[-3:]:  # Last 3 messages
                     role = msg.get('role', 'unknown')
                     content = msg.get('content', '')
-                    prompt_parts.insert(2, f"{role}: {content}")
+                    normalized_role = (  # noqa: E501
+                        'assistant' if role == 'assistant' else 'user'
+                    )
+                    messages.append({
+                        "role": normalized_role,
+                        "content": wrap_untrusted(content)
+                    })
 
-        prompt_parts.append("\nYour response (keep it under 200 characters):")
+        # Add current user message -- message_content is the untrusted
+        # payload; the "User X said:" framing is our own trusted text.
+        messages.append({
+            "role": "user",
+            "content": (  # noqa: E501
+                f"User {user_id} said:\n{wrap_untrusted(message_content)}"
+            )
+        })
 
-        return '\n'.join(prompt_parts)
+        return messages
 
-    def _create_event_prompt(
+    def _build_event_messages(
         self,
         message_type: str,
         user_id: str,
         platform: str,
         context: Dict[str, Any]
-    ) -> str:
-        """Create prompt for event responses"""
+    ) -> List[Dict[str, str]]:
+        """Build messages for event responses"""
+
+        # user_id (platform username/display name) is attacker-influenceable
+        # -- delimit it before it's templated into event_desc.
+        safe_user_id = wrap_untrusted(user_id)
 
         # Event-specific prompts using pattern matching
         match message_type:
             case 'subscription':
-                event_desc = f"User {user_id} just subscribed!"
+                event_desc = f"User {safe_user_id} just subscribed!"
                 instruction = "Generate a celebratory thank you message."
 
             case 'follow':
-                event_desc = f"User {user_id} just followed!"
+                event_desc = f"User {safe_user_id} just followed!"
                 instruction = "Generate a welcoming thank you message."
 
             case 'donation':
-                event_desc = f"User {user_id} just made a donation!"
+                event_desc = f"User {safe_user_id} just made a donation!"
                 instruction = "Generate a grateful thank you message."
 
             case 'cheer':
-                event_desc = f"User {user_id} just sent bits!"
+                event_desc = f"User {safe_user_id} just sent bits!"
                 instruction = "Generate an excited thank you message."
 
             case 'raid':
-                event_desc = f"User {user_id} just raided the channel!"
+                event_desc = (  # noqa: E501
+                    f"User {safe_user_id} just raided the channel!"
+                )
                 instruction = "Generate a welcoming message for the raiders."
 
             case 'boost':
-                event_desc = f"User {user_id} just boosted the server!"
+                event_desc = (  # noqa: E501
+                    f"User {safe_user_id} just boosted the server!"
+                )
                 instruction = "Generate a thank you message for the boost."
 
             case 'member_join':
-                event_desc = f"User {user_id} just joined!"
+                event_desc = f"User {safe_user_id} just joined!"
                 instruction = "Generate a welcoming message."
 
             case _:
                 event_desc = (  # noqa: E501
-                    f"User {user_id} triggered a {message_type} event!"
+                    f"User {safe_user_id} triggered a {message_type} event!"
                 )
                 instruction = "Generate an appropriate response."
 
-        return f"""{Config.SYSTEM_PROMPT}
+        system_content = (
+            f"{Config.SYSTEM_PROMPT}\n\n"
+            f"Platform: {platform}\n\n"
+            f"{instruction}\n"
+            "Keep it short, enthusiastic, and under 150 characters:\n\n"
+            f"{UNTRUSTED_DATA_NOTICE}"
+        )
 
-Platform: {platform}
-Event: {event_desc}
-
-{instruction}
-Keep it short, enthusiastic, and under 150 characters:"""
+        return [
+            {"role": "system", "content": system_content},
+            {"role": "user", "content": f"Event: {event_desc}"},
+        ]
 
     def _clean_response(self, response: str) -> str:
         """
