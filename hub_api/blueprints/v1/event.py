@@ -50,7 +50,6 @@ in-scope fix for a byte-for-byte controller port.
 from __future__ import annotations
 
 import json
-import os
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -59,6 +58,7 @@ from flask_core.api_utils import error_response
 from flask_core.auth import verify_jwt_token
 from flask_core.authz import require_scope
 from flask_core.feature_flags import feature_enabled
+from flask_core.secrets import require_secret_key
 from flask_core.tenancy import get_tenant_context, tenant_middleware
 from quart import Blueprint, Response, request
 
@@ -339,7 +339,7 @@ def _build_user_context(req: Any) -> UserContext:
     auth_header = req.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         return UserContext(user_id=None, username=None, role="anonymous")
-    secret_key = os.getenv("SECRET_KEY", "change-me-in-production")
+    secret_key = require_secret_key()
     payload = verify_jwt_token(auth_header[7:], secret_key)
     if payload is None:
         return UserContext(user_id=None, username=None, role="anonymous")

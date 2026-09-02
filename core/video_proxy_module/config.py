@@ -7,12 +7,43 @@ database, gRPC, HTTP ports, MinIO, JWT settings, and license validation.
 
 import logging
 import os
+import sys
 import threading
 from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+#: Placeholder secret values that must never sign a token in production
+#: (C1 security fix, A02:2021/CWE-798). video_proxy_module ships its own
+#: standalone Dockerfile (no flask_core in its requirements.txt -- it's
+#: bundled into `services/core-community`'s image too, where flask_core
+#: IS available, but this config must import cleanly under both), so it
+#: cannot depend on `flask_core.secrets.require_secret_key()` and
+#: duplicates the same small fail-closed check locally instead.
+_KNOWN_PLACEHOLDER_SECRETS = frozenset(
+    {'change-me-in-production', 'jwt-secret-change-in-production', ''}
+)
+
+
+def _require_secret_key(env_var: str, default: str = 'change-me-in-production') -> str:
+    """Read `env_var`, failing closed if unset/placeholder with `RELEASE_MODE=true`.
+
+    Mirrors this module's own `RELEASE_MODE` convention (see `Config.
+    RELEASE_MODE` below) rather than `flask_core.secrets`'s `is_production()`
+    -- kept self-contained since this file cannot import flask_core.
+    """
+    value = os.getenv(env_var, default)
+    if 'pytest' in sys.modules:
+        return value
+    release_mode = os.getenv('RELEASE_MODE', 'false').strip().lower() == 'true'
+    if release_mode and value in _KNOWN_PLACEHOLDER_SECRETS:
+        raise RuntimeError(
+            f'{env_var} is unset or still the insecure default with RELEASE_MODE=true -- '
+            f'refusing to start. Set {env_var} to a unique, randomly generated secret.'
+        )
+    return value
 
 
 @dataclass
@@ -42,18 +73,14 @@ class Config:
     # Module Configuration
     MODULE_NAME: str = 'video_proxy_module'
     MODULE_VERSION: str = os.getenv('MODULE_VERSION', '1.0.0')
-    MODULE_SECRET_KEY: str = os.getenv(
-        'MODULE_SECRET_KEY',
-        'change-me-in-production'
-    )
+    MODULE_SECRET_KEY: str = _require_secret_key('MODULE_SECRET_KEY')
 
     # JWT Configuration
     JWT_ALGORITHM: str = 'HS256'
     JWT_EXPIRATION: timedelta = timedelta(hours=1)
     JWT_REFRESH_EXPIRATION: timedelta = timedelta(days=7)
-    JWT_SECRET_KEY: str = os.getenv(
-        'JWT_SECRET_KEY',
-        'jwt-secret-change-in-production'
+    JWT_SECRET_KEY: str = _require_secret_key(
+        'JWT_SECRET_KEY', 'jwt-secret-change-in-production'
     )
 
     # MinIO Configuration

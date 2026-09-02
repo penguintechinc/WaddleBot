@@ -14,6 +14,7 @@ import threading
 from typing import Optional
 
 from dotenv import load_dotenv
+from flask_core.secrets import require_secret_key
 
 load_dotenv()
 
@@ -156,9 +157,7 @@ class Config:
     )
 
     # Security
-    SECRET_KEY = os.getenv(
-        'SECRET_KEY', 'change-me-in-production'
-    )
+    SECRET_KEY = require_secret_key()
     API_KEYS = (  # noqa: E501
         os.getenv('VALID_API_KEYS', '').split(',')
         if os.getenv('VALID_API_KEYS')

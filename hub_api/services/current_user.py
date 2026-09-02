@@ -13,9 +13,8 @@ other M-phase groups build on; not touched by this PR).
 
 from __future__ import annotations
 
-import os
-
 from flask_core.auth import verify_jwt_token
+from flask_core.secrets import require_secret_key
 from quart import Request
 
 from services.errors import unauthorized
@@ -35,7 +34,7 @@ def get_current_user_id(request: Request) -> int:
         raise unauthorized("Authentication required")
 
     token = auth_header[7:]
-    secret_key = os.getenv("SECRET_KEY", "change-me-in-production")
+    secret_key = require_secret_key()
     payload = verify_jwt_token(token, secret_key)
     if payload is None:
         raise unauthorized("Invalid or expired token")

@@ -159,6 +159,12 @@ from .workload_identity import (
     PeerNotAuthorized,
     EmptyTrustBundle,
     NoDefaultSvid,
+    is_production,
+)
+from .secrets import (
+    require_secret_key,
+    InsecureSecretError,
+    KNOWN_PLACEHOLDER_SECRETS,
 )
 
 __all__ = [
@@ -309,4 +315,9 @@ __all__ = [
     "PeerNotAuthorized",
     "EmptyTrustBundle",
     "NoDefaultSvid",
+    "is_production",
+    # Fail-closed secret loading (C1)
+    "require_secret_key",
+    "InsecureSecretError",
+    "KNOWN_PLACEHOLDER_SECRETS",
 ]

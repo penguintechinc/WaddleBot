@@ -3,6 +3,8 @@ import os
 import threading
 from typing import Optional
 
+from flask_core.secrets import require_secret_key
+
 logger = logging.getLogger(__name__)
 
 
@@ -23,7 +25,7 @@ class Config:
     MODULE_PORT: int = int(os.getenv("MODULE_PORT", "8091"))
     MODULE_HOST: str = os.getenv("MODULE_HOST", "0.0.0.0")
     MODULE_VERSION: str = os.getenv("MODULE_VERSION", "1.0.0")
-    MODULE_SECRET_KEY: str = os.getenv("MODULE_SECRET_KEY", "change-me-in-production")
+    MODULE_SECRET_KEY: str = require_secret_key("MODULE_SECRET_KEY")
 
     # Redis Configuration (for credential refresh notifications)
     REDIS_URL: str = os.getenv("REDIS_URL", "")
@@ -37,7 +39,9 @@ class Config:
     GRPC_HOST: str = os.getenv("GRPC_HOST", "0.0.0.0")
     
     # JWT Configuration
-    JWT_SECRET: str = os.getenv("JWT_SECRET", "jwt-secret-key-change-in-prod")
+    JWT_SECRET: str = require_secret_key(
+        "JWT_SECRET", default="jwt-secret-key-change-in-prod"
+    )
     JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
     JWT_EXPIRATION_HOURS: int = int(os.getenv("JWT_EXPIRATION_HOURS", "24"))
     
@@ -128,15 +132,16 @@ class Config:
 
     @classmethod
     def validate(cls) -> bool:
-        """Validate configuration settings"""
-        required_vars = ["MODULE_SECRET_KEY", "JWT_SECRET"]
-        
-        for var in required_vars:
-            value = getattr(cls, var, None)
-            if not value or value in ("change-me-in-production", "jwt-secret-key-change-in-prod"):
-                if cls.ENVIRONMENT == "production":
-                    raise ValueError(f"Required configuration {var} not properly set for production")
-        
+        """Validate configuration settings.
+
+        MODULE_SECRET_KEY/JWT_SECRET are no longer re-checked here -- both
+        now go through `flask_core.secrets.require_secret_key()` at class-
+        body evaluation (module import time, above), which already raised
+        `InsecureSecretError` before this method could ever run if either
+        was unset/placeholder in a production-like environment (C1
+        security fix; the previous local `cls.ENVIRONMENT == "production"`
+        string check is superseded, not duplicated).
+        """
         # Validate ports
         if not (1 <= cls.MODULE_PORT <= 65535):
             raise ValueError(f"Invalid MODULE_PORT: {cls.MODULE_PORT}")

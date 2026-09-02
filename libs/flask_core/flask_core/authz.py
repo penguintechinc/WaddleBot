@@ -24,11 +24,11 @@ only extracts the ``scope`` claim.
 from __future__ import annotations
 
 import logging
-import os
 from functools import wraps
 from typing import Any, Callable, FrozenSet
 
 from .auth import verify_jwt_token
+from .secrets import require_secret_key
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +127,7 @@ def require_scope(*required_scopes: str) -> Callable:
                 return error_response("Authentication required", status_code=403)
 
             token = auth_header[7:]
-            secret_key = os.getenv("SECRET_KEY", "change-me-in-production")
+            secret_key = require_secret_key()
             payload = verify_jwt_token(token, secret_key)
             if payload is None:
                 logger.warning(

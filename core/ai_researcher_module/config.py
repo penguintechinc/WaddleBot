@@ -12,6 +12,7 @@ Configuration for AI Researcher with mem0 integration:
 
 import os
 from dotenv import load_dotenv
+from flask_core.secrets import require_secret_key
 
 load_dotenv()
 
@@ -232,7 +233,7 @@ class Config:
     # ========================================================================
     # SECURITY CONFIGURATION
     # ========================================================================
-    SECRET_KEY = os.getenv('SECRET_KEY', 'change-me-in-production')
+    SECRET_KEY = require_secret_key()
     SERVICE_API_KEY = os.getenv('SERVICE_API_KEY', '')
 
     # Valid API keys for authentication

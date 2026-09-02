@@ -90,12 +90,12 @@ documented "Known inherited behavior". Reproduced here via
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
 from flask_core.auth import verify_jwt_token
 from flask_core.authz import require_scope
 from flask_core.feature_flags import feature_enabled
+from flask_core.secrets import require_secret_key
 from flask_core.tenancy import get_tenant_context, tenant_middleware
 from quart import Blueprint, current_app, request
 
@@ -141,7 +141,7 @@ def _is_super_admin(req: Any) -> bool:
     auth_header = req.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         return False
-    secret_key = os.getenv("SECRET_KEY", "change-me-in-production")
+    secret_key = require_secret_key()
     payload = verify_jwt_token(auth_header[7:], secret_key)
     if payload is None:
         return False

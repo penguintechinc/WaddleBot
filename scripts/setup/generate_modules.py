@@ -82,6 +82,7 @@ if __name__ == '__main__':
 CONFIG_TEMPLATE = '''"""Configuration for {module_name}"""
 import os
 from dotenv import load_dotenv
+from flask_core.secrets import require_secret_key
 
 load_dotenv()
 
@@ -93,7 +94,10 @@ class Config:
     CORE_API_URL = os.getenv('CORE_API_URL', 'http://router-service:8000')
     ROUTER_API_URL = os.getenv('ROUTER_API_URL', 'http://router-service:8000/api/v1/router')
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
-    SECRET_KEY = os.getenv('SECRET_KEY', 'change-me-in-production')
+    # C1 security fix: fails closed (raises InsecureSecretError) rather than
+    # silently booting with a publicly known JWT signing key when this
+    # value is unset/placeholder in a production-like environment.
+    SECRET_KEY = require_secret_key()
 '''
 
 REQUIREMENTS = '''quart>=0.19.0

@@ -70,11 +70,11 @@ invented for its own sake.
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import dataclass
 from typing import Any
 
 from flask_core.auth import verify_jwt_token
+from flask_core.secrets import require_secret_key
 from flask_core.tenancy import TenantContext, get_tenant_context
 from quart import Request
 
@@ -245,7 +245,7 @@ def _jwt_roles(request: Request) -> frozenset[str]:
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         return frozenset()
-    payload = verify_jwt_token(auth_header[7:], os.getenv("SECRET_KEY", "change-me-in-production"))
+    payload = verify_jwt_token(auth_header[7:], require_secret_key())
     if payload is None:
         return frozenset()
     roles = payload.get("roles")
@@ -475,7 +475,7 @@ def _decode_caller(request: Any) -> tuple[int, list[str]]:
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         raise unauthorized("Authentication required")
-    secret_key = os.getenv("SECRET_KEY", "change-me-in-production")
+    secret_key = require_secret_key()
     payload = verify_jwt_token(auth_header[7:], secret_key)
     if payload is None:
         raise unauthorized("Invalid or expired token")

@@ -26,6 +26,8 @@ import os
 from dataclasses import dataclass
 from urllib.parse import quote_plus
 
+from flask_core.secrets import require_secret_key
+
 #: Mirrors hub_api/config.py's own scheme map (backend-database.md Database
 #: Support Matrix minus MariaDB Galera).
 _DB_URI_SCHEMES: dict[str, str] = {
@@ -142,7 +144,7 @@ class Config:
                 os.getenv("DB_MIGRATE", "false").strip().lower() in {"1", "true", "yes", "on"}
             ),
             hub_api_url=os.getenv("HUB_API_URL", "http://hub-api:8204"),
-            jwt_secret_key=os.getenv("SECRET_KEY", "change-me-in-production"),
+            jwt_secret_key=require_secret_key(),
             ffmpeg_binary=os.getenv("FFMPEG_BINARY", "ffmpeg"),
             recordings_dir=os.getenv("RECORDINGS_DIR", "/var/lib/svc-streaming/recordings"),
             transcode_token_cost=int(os.getenv("TRANSCODE_TOKEN_COST", "5")),

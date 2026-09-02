@@ -90,14 +90,13 @@ def _caller_has_scope(required_scope: str) -> bool:
     resource for that action), re-derived locally rather than reaching into
     `flask_core.authz`'s private helpers.
     """
-    import os
-
     from flask_core.auth import verify_jwt_token
+    from flask_core.secrets import require_secret_key
 
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         return False
-    decoded = verify_jwt_token(auth_header[7:], os.getenv("SECRET_KEY", "change-me-in-production"))
+    decoded = verify_jwt_token(auth_header[7:], require_secret_key())
     if not decoded:
         return False
     granted = str(decoded.get("scope", "")).split()

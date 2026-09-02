@@ -244,8 +244,10 @@ class ModuleExecutor:
         if payload:
             token_payload.update(payload)
 
-        secret_key = getattr(Config, 'SECRET_KEY', 'change-me-in-production')
-        return jwt.encode(token_payload, secret_key, algorithm='HS256')
+        # Config.SECRET_KEY is always set (Config.py's own require_secret_key()
+        # already fails closed at import time in a production-like
+        # environment) -- no second placeholder fallback needed here.
+        return jwt.encode(token_payload, Config.SECRET_KEY, algorithm='HS256')
 
     def _normalize_module_name(self, module_name: str) -> str:
         """Normalize module name to gRPC module name format"""
