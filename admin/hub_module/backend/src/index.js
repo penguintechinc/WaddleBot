@@ -2,6 +2,12 @@
  * Hub Module - Express Application Entry Point
  * Unified Community Portal and Admin Interface
  */
+// MUST be the first import: sets the global axios.defaults.timeout before
+// any downstream module (controllers, services, routes) gets a chance to
+// call axios.create() or make a bare axios.get/post call of its own -- see
+// that module's docstring for why this closes ~55 previously-unbounded
+// outbound HTTP calls in one place.
+import './config/httpDefaults.js';
 import crypto from 'crypto';
 import express from 'express';
 import { createServer } from 'http';

@@ -2,7 +2,7 @@
  * Server Manager (RCON/Voice) Routes
  */
 import { Router } from 'express';
-import { requireAuth, requireCommunityAdmin } from '../middleware/auth.js';
+import { requireAuth, requireCommunityAdmin, requireMember } from '../middleware/auth.js';
 import {
   listServers,
   createServer,
@@ -50,9 +50,14 @@ router.post('/:communityId/rcon/servers/:serverId/enforce', requireAuth, require
 router.get('/:communityId/rcon/servers/:serverId/access-log', requireAuth, requireCommunityAdmin, getAccessLog);
 
 // ── Member Routes ──────────────────────────────────────────────
+// requireMember confirms the caller actually belongs to :communityId --
+// requireAuth alone only confirms they are logged in as *someone*, which
+// let any authenticated user query any other community's server status
+// (OWASP A01, cross-community BOLA -- see rconController.js's
+// verifyServerBelongsToCommunity for the matching :serverId ownership fix).
 
-router.get('/:communityId/rcon/info', requireAuth, listServers);
-router.get('/:communityId/rcon/info/:serverId/status', requireAuth, getServerStatus);
-router.get('/:communityId/rcon/info/:serverId/players', requireAuth, getPlayerList);
+router.get('/:communityId/rcon/info', requireAuth, requireMember, listServers);
+router.get('/:communityId/rcon/info/:serverId/status', requireAuth, requireMember, getServerStatus);
+router.get('/:communityId/rcon/info/:serverId/players', requireAuth, requireMember, getPlayerList);
 
 export default router;

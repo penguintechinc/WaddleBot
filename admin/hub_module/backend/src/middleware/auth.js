@@ -9,16 +9,20 @@ import { errors } from './errorHandler.js';
 import { query } from '../config/database.js';
 import { logger } from '../utils/logger.js';
 import { resolveScopes, hasScope } from '../services/claimsService.js';
+import { SESSION_COOKIE_NAME } from '../utils/sessionCookie.js';
 
 /**
- * Extract raw token string from request headers or cookie
+ * Extract raw token string from request headers or the HttpOnly session
+ * cookie (`wb_session` -- see utils/sessionCookie.js). Bearer header wins
+ * when both are present (service-to-service / PAT / CAT callers never send
+ * the browser cookie).
  */
 function extractToken(req) {
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
     return authHeader.substring(7);
   }
-  return req.cookies?.token || null;
+  return req.cookies?.[SESSION_COOKIE_NAME] || null;
 }
 
 /**
