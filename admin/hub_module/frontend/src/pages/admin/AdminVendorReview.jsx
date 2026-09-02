@@ -28,9 +28,11 @@ export default function AdminVendorReview() {
   const fetchSubmission = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/v1/admin/vendor/submissions/${submissionId}`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      });
+      // SECURITY (security.md C4): the session JWT lives only in the
+      // HttpOnly `wb_session` cookie now, never localStorage -- `fetch()`'s
+      // default `credentials: 'same-origin'` already sends it on this
+      // same-origin request, nothing to attach by hand.
+      const response = await fetch(`/api/v1/admin/vendor/submissions/${submissionId}`);
 
       if (!response.ok) {
         throw new Error('Failed to fetch submission');
@@ -81,7 +83,6 @@ export default function AdminVendorReview() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
         body: JSON.stringify(body),
       });

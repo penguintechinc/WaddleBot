@@ -25,7 +25,7 @@ from typing import Any
 from flask_core import create_health_blueprint, init_database, setup_aaa_logging
 from flask_core.mcp_routes import create_mcp_blueprint
 from pydal import Field
-from quart import Quart
+from quart import Quart, request
 from quart_schema import Info, QuartSchema
 
 from blueprints import register_blueprints
@@ -38,6 +38,7 @@ from services.schema import (
     bind_platform_tables,
     bind_token_billing_tables,
 )
+from services.session_cookie import bearer_token_from_cookie
 
 
 def _bind_reference_tables(dal: Any) -> None:
@@ -102,6 +103,39 @@ def _bind_reference_tables(dal: Any) -> None:
     bind_music_tables(dal)
 
 
+async def bridge_session_cookie_to_bearer() -> None:
+    """Synthesize `Authorization: Bearer <token>` from the session cookie.
+
+    security.md C4 fix (`services/session_cookie.py`'s own docstring has
+    the full rationale): the browser SPA's JWT now lives in an HttpOnly
+    cookie, never `localStorage`, so it can no longer be attached
+    client-side as an `Authorization` header. hub-api has roughly a dozen
+    independent token-extraction call sites (`flask_core.tenancy.
+    tenant_middleware`, `flask_core.authz.require_scope`, `services.
+    current_user`, `services.community_authz`, a handful of routes that
+    forward the caller's own header verbatim to a downstream proxy) --
+    rewriting the incoming request ONCE, here, before any of them run,
+    means every one of those call sites keeps reading `request.headers.
+    get("Authorization")` completely unchanged, including the ones that
+    forward it downstream. An `Authorization` header the client already
+    set always wins -- service-to-service JWTs, API clients, and every
+    existing test are unaffected.
+
+    Module-level (not a nested closure inside `create_app()`) so
+    `tests/test_v1_auth_blueprint.py`'s lightweight `auth_bp`-only app
+    fixture can register this exact same function and exercise it against
+    real (migrated) tables -- `create_app()`'s own DB binding runs
+    `migrate=False` (production: schema owned by SQL migrations, see
+    `services/schema.py::bind_auth_tables`), so a `sqlite:memory` app
+    built via `create_app()` has no tables to query against in a test.
+    """
+    if request.headers.get("Authorization"):
+        return
+    token = bearer_token_from_cookie(request)
+    if token:
+        request.headers["Authorization"] = f"Bearer {token}"
+
+
 def create_app(config: HubAPIConfig | None = None) -> Quart:
     """Build the hub-api Quart application.
 
@@ -133,6 +167,8 @@ def create_app(config: HubAPIConfig | None = None) -> Quart:
     app.register_blueprint(create_mcp_blueprint())
     register_blueprints(app)
     register_openapi_docs(app)
+
+    app.before_request(bridge_session_cookie_to_bearer)
 
     @app.before_serving
     async def startup() -> None:

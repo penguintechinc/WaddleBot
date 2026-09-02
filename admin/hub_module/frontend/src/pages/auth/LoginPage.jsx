@@ -164,14 +164,14 @@ function LoginPage() {
 
   // LoginPageBuilder's onSuccess hands back the parsed login response
   // ({success, token, user}) directly -- it already completed the
-  // email/password (or MFA) POST itself. That token is a real session JWT,
-  // not an OAuth exchange code, so store it and refresh user state rather
-  // than routing it through handleOAuthCallback (which POSTs to
-  // /api/v1/auth/exchange expecting a short-lived OAuth code and would
-  // reject a JWT, silently leaving the user unauthenticated).
+  // email/password (or MFA) POST itself. hub-api's own response already
+  // set the HttpOnly session cookie (security.md C4 -- the JWT is never
+  // persisted client-side), so there's nothing to store here; just refresh
+  // user state rather than routing it through handleOAuthCallback (which
+  // POSTs to /api/v1/auth/exchange expecting a short-lived OAuth code and
+  // would reject a JWT, silently leaving the user unauthenticated).
   const handleSuccess = async (response) => {
     if (response.token) {
-      localStorage.setItem('token', response.token);
       await refreshUser(true);
     }
     navigate('/dashboard');
@@ -179,7 +179,6 @@ function LoginPage() {
 
   const handlePasskeyLogin = async (token) => {
     if (token) {
-      localStorage.setItem('token', token);
       await refreshUser(true);
     }
     navigate('/dashboard');

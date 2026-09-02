@@ -18,47 +18,31 @@ function CommunityInteraction() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Track the auth token reactively so the socket can reconnect when it changes.
-  // Two sources of change:
-  //   1. user state changes (login / logout / user refresh) — covered by the
-  //      first useEffect below
-  //   2. Silent token refresh by the API interceptor — covered by the
-  //      'token-refreshed' CustomEvent dispatched from services/api.js
-  const [authToken, setAuthToken] = useState(() => localStorage.getItem('token'));
-
-  useEffect(() => {
-    setAuthToken(localStorage.getItem('token'));
-  }, [user]);
-
-  useEffect(() => {
-    const handler = (e) => setAuthToken(e.detail?.token || localStorage.getItem('token'));
-    window.addEventListener('token-refreshed', handler);
-    return () => window.removeEventListener('token-refreshed', handler);
-  }, []);
-
-  // Socket.IO connection — created once; auth is updated and socket reconnects
-  // when authToken changes (fixes stale-token-after-refresh bug).
+  // SECURITY (security.md C4): the session JWT lives only in the HttpOnly
+  // `wb_session` cookie — this page can't read it into an `auth: {token}`
+  // handshake payload, so the socket authenticates via `withCredentials`
+  // (the cookie) instead. `user` (from AuthContext's own `/me` check) is
+  // the reactive signal for "should a socket connection exist at all" now,
+  // replacing the old localStorage-token tracking; a token refresh no
+  // longer needs to trigger a manual reconnect -- the browser always sends
+  // whatever the current cookie value is on the next connection attempt.
   const socket = useMemo(() => {
     return io(import.meta.env.VITE_API_URL || window.location.origin, {
-      auth: { token: authToken },
+      withCredentials: true,
       transports: ['websocket', 'polling'],
       autoConnect: false,
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // socket instance created once — auth updates happen via useEffect below
+  }, []); // socket instance created once — connect/disconnect happens via useEffect below
 
   useEffect(() => {
-    if (!authToken) {
+    if (!user) {
       socket.disconnect();
       return;
     }
-    socket.auth = { token: authToken };
-    if (socket.connected) {
-      socket.disconnect().connect();
-    } else {
+    if (!socket.connected) {
       socket.connect();
     }
-  }, [authToken, socket]);
+  }, [user, socket]);
 
   useEffect(() => {
     return () => { socket.disconnect(); };
