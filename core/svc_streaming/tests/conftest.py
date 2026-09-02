@@ -59,6 +59,7 @@ def test_config(tmp_path: Path) -> Config:
         database_url=f"sqlite://{db_path}",
         db_pool_size=1,
         db_migrate=True,
+        valkey_url=None,
         hub_api_url="http://hub-api-test.invalid:8204",
         jwt_secret_key=SECRET_KEY,
         ffmpeg_binary="ffmpeg",

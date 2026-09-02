@@ -34,12 +34,12 @@ test-unit:
 
 test-integration:
 	@echo "Running integration tests..."
-	@[ -d tests/integration ] || $(error tests/integration directory not found)
+	@test -d tests/integration || { echo "tests/integration directory not found" >&2; exit 1; }
 	@bash scripts/test-api-all.sh
 
 test-e2e:
 	@echo "Running e2e tests..."
-	@[ -f scripts/e2e-test-alpha.sh ] || $(error scripts/e2e-test-alpha.sh not found)
+	@test -f scripts/e2e-test-alpha.sh || { echo "scripts/e2e-test-alpha.sh not found" >&2; exit 1; }
 	@bash scripts/e2e-test-alpha.sh
 
 test-functional:
@@ -50,12 +50,12 @@ test-security:
 
 smoke-test:
 	@echo "Running smoke tests..."
-	@[ -f tests/alpha-smoke-test.sh ] || $(error tests/alpha-smoke-test.sh not found)
+	@test -f tests/alpha-smoke-test.sh || { echo "tests/alpha-smoke-test.sh not found" >&2; exit 1; }
 	@bash tests/alpha-smoke-test.sh
 
 seed-mock-data:
 	@echo "Seeding mock data..."
-	@[ -f scripts/seed-admin.sh ] || $(error scripts/seed-admin.sh not found)
+	@test -f scripts/seed-admin.sh || { echo "scripts/seed-admin.sh not found" >&2; exit 1; }
 	@bash scripts/seed-admin.sh
 
 clean:
@@ -65,7 +65,7 @@ clean:
 
 deploy-dev:
 	@echo "Deploy to dev/alpha environment..."
-	@[ -f scripts/deploy-alpha.sh ] || $(error scripts/deploy-alpha.sh not found)
+	@test -f scripts/deploy-alpha.sh || { echo "scripts/deploy-alpha.sh not found" >&2; exit 1; }
 	@bash scripts/deploy-alpha.sh
 
 deploy-prod:
