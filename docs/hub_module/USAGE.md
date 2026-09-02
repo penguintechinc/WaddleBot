@@ -38,16 +38,18 @@ The Waddles Hub Module is the central web interface for managing communities, co
    - Live streams
    - Login button
 
-### Default Admin Credentials
+### Initial Admin Credentials
 
-On first installation, a default super admin account is created:
+No default admin account is ever created (CWE-798). On first boot, an
+initial super-admin is created **only** if both `INITIAL_ADMIN_EMAIL` and
+`INITIAL_ADMIN_PASSWORD` are set (see `config/postgres/migrations/081_seed_default_hub_admin.sql`);
+if they're unset, no admin account exists until one is created via the
+signup flow or `scripts/seed-admin.sh --email ... --password ...`.
 
-```
-Email: admin@localhost
-Password: admin123
-```
-
-**IMPORTANT:** Change these credentials immediately after first login in production environments.
+Local dev (`docker-compose.yml` / `scripts/rebuild-cluster.sh`) sets a
+dev-only default via these env vars -- override them in `.env` to change
+the local login. **Production/beta must set them explicitly; there is no
+built-in fallback.**
 
 ---
 

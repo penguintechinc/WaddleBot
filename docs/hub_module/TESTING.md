@@ -93,12 +93,18 @@ Location: `/admin/hub_module/test-api.sh`
 
 ### Running API Tests
 
+No default admin credential exists (CWE-798 fix) -- `test-api.sh` reads
+`ADMIN_EMAIL`/`ADMIN_PASSWORD`, falling back to `INITIAL_ADMIN_EMAIL`/
+`INITIAL_ADMIN_PASSWORD` (whatever the target instance was actually
+provisioned with). Set one of those, or pass `--email`/`--password`
+explicitly.
+
 ```bash
 # From /admin/hub_module directory
-./test-api.sh
+INITIAL_ADMIN_PASSWORD='<your-admin-password>' ./test-api.sh
 
-# With custom credentials
-./test-api.sh --email admin@localhost --password admin123
+# With explicit credentials
+./test-api.sh --email admin@localhost.local --password '<your-admin-password>'
 
 # With custom hub URL
 ./test-api.sh --url http://hub.example.com:8060

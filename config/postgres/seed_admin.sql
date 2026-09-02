@@ -1,17 +1,41 @@
--- Seed Script: Create Default Admin User
--- Run this after init.sql and migrations to create the default admin account
+-- Seed Script: Create or Reset the Admin User
+-- Run this after init.sql and migrations to create/reset the admin account.
 --
--- Default credentials:
---   Email: admin@localhost.local
---   Password: admin123
+-- SECURITY (CWE-798): this script NEVER contains a hardcoded credential.
+-- The admin email and password are read from the ADMIN_EMAIL / ADMIN_PASSWORD
+-- process environment variables (never CLI args, so they never land in shell
+-- history or `ps`) and hashed here with pgcrypto's bcrypt-compatible crypt().
+-- Do not run this file directly with `psql -f` -- use the wrapper:
 --
--- IMPORTANT: Change these credentials in production!
+--   ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD='<strong-password>' \
+--     scripts/seed-admin.sh
+--
+-- or set the two env vars and invoke psql directly.
+
+\set ON_ERROR_STOP on
+
+\getenv admin_email ADMIN_EMAIL
+\getenv admin_password ADMIN_PASSWORD
+
+-- Fail loudly (non-zero exit via ON_ERROR_STOP) rather than silently
+-- falling back to any default when required env vars are missing.
+\if :{?admin_email}
+\else
+DO $$ BEGIN RAISE EXCEPTION 'ADMIN_EMAIL env var not set. Run via scripts/seed-admin.sh (see --help).'; END $$;
+\endif
+
+\if :{?admin_password}
+\else
+DO $$ BEGIN RAISE EXCEPTION 'ADMIN_PASSWORD env var not set. Run via scripts/seed-admin.sh (see --help).'; END $$;
+\endif
 
 -- =============================================================================
--- Create Default Admin User
+-- Create or Reset Admin User
 -- =============================================================================
--- Password hash is bcrypt hash of 'admin123' with cost factor 12
--- You can generate a new hash with: node -e "require('bcrypt').hash('yourpassword', 12).then(console.log)"
+-- pgcrypto's crypt(password, gen_salt('bf', 12)) produces a real bcrypt hash
+-- ($2a$/$2b$), interoperable with Node's `bcrypt` package used to verify it.
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 INSERT INTO hub_users (
     email,
@@ -23,9 +47,9 @@ INSERT INTO hub_users (
     created_at,
     updated_at
 ) VALUES (
-    'admin@localhost.local',
-    'admin',
-    '$2b$12$4bHCtATjQNY//n42FMy/P.Uieygqwj.Hh5FbuPJJweqXcZbaTSK0u',
+    :'admin_email',
+    :'admin_email',
+    crypt(:'admin_password', gen_salt('bf', 12)),
     true,
     true,
     true,
@@ -83,7 +107,7 @@ SELECT
     NOW()
 FROM hub_users u
 CROSS JOIN communities c
-WHERE u.email = 'admin@localhost.local'
+WHERE u.email = :'admin_email'
   AND c.name = 'waddlebot-global'
 ON CONFLICT (community_id, user_id) DO UPDATE SET
     role = 'admin',
@@ -103,16 +127,15 @@ WHERE name = 'waddlebot-global';
 -- =============================================================================
 -- Verify Admin User Created
 -- =============================================================================
-DO $$
-DECLARE
-    admin_id INTEGER;
-BEGIN
-    SELECT id INTO admin_id FROM hub_users WHERE email = 'admin@localhost.local';
-    IF admin_id IS NULL THEN
-        RAISE EXCEPTION 'Failed to create admin user';
-    ELSE
-        RAISE NOTICE 'Admin user created successfully with ID: %', admin_id;
-    END IF;
-END $$;
+-- NOTE: :'var' substitution does not reach inside a $$-quoted DO body, so
+-- the check runs as a plain query captured via \gset, and only the failure
+-- branch (which needs no variable) uses a DO block to raise a real error.
+SELECT COUNT(*) AS verify_admin_count FROM hub_users WHERE email = :'admin_email' \gset
+
+\if :verify_admin_count
+\echo 'Admin user verified successfully'
+\else
+DO $$ BEGIN RAISE EXCEPTION 'Failed to create admin user'; END $$;
+\endif
 
 -- Seed Complete

@@ -50,6 +50,20 @@ LEGACY_SQL_DIR = os.environ.get(
 def upgrade() -> None:
     conn = op.get_bind()
 
+    # SECURITY (CWE-798): bridge INITIAL_ADMIN_EMAIL / INITIAL_ADMIN_PASSWORD
+    # (if set) into session-scoped custom GUCs. Migration 081 reads these via
+    # current_setting() to bootstrap the first super-admin -- unset means no
+    # admin account is created (fail closed). Parameterized so the values
+    # never touch SQL text directly.
+    conn.execute(
+        sa.text("SELECT set_config('waddlebot.initial_admin_email', :v, false)"),
+        {"v": os.environ.get("INITIAL_ADMIN_EMAIL", "")},
+    )
+    conn.execute(
+        sa.text("SELECT set_config('waddlebot.initial_admin_password', :v, false)"),
+        {"v": os.environ.get("INITIAL_ADMIN_PASSWORD", "")},
+    )
+
     # Check if this DB was already migrated by the legacy psql runner
     result = conn.execute(sa.text(
         "SELECT EXISTS ("

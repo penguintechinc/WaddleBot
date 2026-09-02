@@ -12,10 +12,10 @@ import cookieParser from 'cookie-parser';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-import bcrypt from 'bcrypt';
 import { config } from './config/index.js';
 import { checkConnection, closePool, query } from './config/database.js';
 import { logger } from './utils/logger.js';
+import { bootstrapInitialAdmin } from './utils/adminBootstrap.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { sanitizeBody } from './middleware/validation.js';
 import { setCsrfToken, verifyCsrfToken } from './middleware/csrf.js';
@@ -632,47 +632,11 @@ async function initializeDatabase() {
       ON community_servers(community_id)
     `);
 
-    // Check if default admin exists in hub_users (unified auth system)
-    const adminCheck = await query(
-      'SELECT id FROM hub_users WHERE email = $1',
-      ['admin@localhost.local']
-    );
-
-    if (adminCheck.rows.length === 0) {
-      // Create default admin with password 'admin123'
-      // Username is set to email for consistency across SSO/local logins
-      const passwordHash = await bcrypt.hash('admin123', 12);
-      const adminEmail = 'admin@localhost.local';
-      const adminResult = await query(
-        `INSERT INTO hub_users (email, username, password_hash, is_super_admin, is_active, email_verified)
-         VALUES ($1, $2, $3, true, true, true)
-         RETURNING id`,
-        [adminEmail, adminEmail, passwordHash]
-      );
-      const adminId = adminResult.rows[0].id;
-      logger.system('Default admin user created (email: admin@localhost.local, password: admin123)');
-
-      // Add admin to global community if it exists (check config->>'is_global')
-      const globalCommunity = await query(
-        "SELECT id FROM communities WHERE config->>'is_global' = 'true' LIMIT 1"
-      );
-      if (globalCommunity.rows.length > 0) {
-        await query(
-          `INSERT INTO community_members (community_id, user_id, role, is_active, joined_at)
-           VALUES ($1, $2, 'member', true, NOW())
-           ON CONFLICT (community_id, user_id) DO NOTHING`,
-          [globalCommunity.rows[0].id, adminId]
-        );
-        // Update member count
-        await query(
-          `UPDATE communities SET member_count = (
-            SELECT COUNT(*) FROM community_members WHERE community_id = $1 AND is_active = true
-          ) WHERE id = $1`,
-          [globalCommunity.rows[0].id]
-        );
-        logger.system('Admin user added to global community');
-      }
-    }
+    // First-run admin bootstrap: fail-closed, env-driven only.
+    // No default account/password is ever planted (CWE-798). An initial
+    // super-admin is created ONLY when both INITIAL_ADMIN_EMAIL and
+    // INITIAL_ADMIN_PASSWORD are set AND no super-admin exists yet.
+    await bootstrapInitialAdmin(query);
 
     // Seed default hub_settings if not exists
     const defaultSettings = [

@@ -20,8 +20,8 @@ TESTS_SKIPPED=0
 
 # Configuration
 HUB_URL="${HUB_URL:-http://localhost:8060}"
-ADMIN_EMAIL="${ADMIN_EMAIL:-admin@localhost}"
-ADMIN_PASSWORD="${ADMIN_PASSWORD:-admin123}"
+ADMIN_EMAIL="${ADMIN_EMAIL:-${INITIAL_ADMIN_EMAIL:-admin@localhost.local}}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-${INITIAL_ADMIN_PASSWORD:-}}"
 AUTH_TOKEN=""
 COMMUNITY_ID=""
 TEST_USER_ID=""
@@ -85,7 +85,7 @@ Options:
     -h, --help              Show this help message
     -u, --url URL           Hub module URL (default: http://localhost:8060)
     -e, --email EMAIL       Admin email (default: admin@localhost)
-    -p, --password PASS     Admin password (default: admin123)
+    -p, --password PASS     Admin password (default: $INITIAL_ADMIN_PASSWORD, if set)
     -v, --verbose           Enable verbose output (show response bodies)
 
 Environment Variables:

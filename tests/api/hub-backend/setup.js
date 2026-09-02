@@ -17,11 +17,14 @@ global.TEST_CONFIG = {
     username: 'testuser'
   },
 
-  // Admin user credentials
+  // Admin user credentials. No hardcoded fallback (CWE-798) -- must match
+  // whatever the target hub-api instance was actually provisioned with
+  // (see config/postgres/migrations/081_seed_default_hub_admin.sql /
+  // docker-compose.yml's INITIAL_ADMIN_EMAIL/PASSWORD).
   ADMIN_USER: {
-    email: 'admin@localhost.local',
-    password: 'admin123',
-    username: 'admin@localhost.local'
+    email: process.env.HUB_TEST_EMAIL || process.env.INITIAL_ADMIN_EMAIL || 'admin@localhost.local',
+    password: process.env.HUB_TEST_PASS || process.env.INITIAL_ADMIN_PASSWORD || '',
+    username: process.env.HUB_TEST_EMAIL || process.env.INITIAL_ADMIN_EMAIL || 'admin@localhost.local'
   }
 };
 

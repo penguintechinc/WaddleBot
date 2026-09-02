@@ -12,6 +12,11 @@ set -uo pipefail
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
 VERBOSE=false
+# SECURITY (CWE-798): no hardcoded fallback credential. Must match whatever
+# the target instance was actually provisioned with (INITIAL_ADMIN_EMAIL/
+# PASSWORD -- see config/postgres/migrations/081_seed_default_hub_admin.sql).
+ADMIN_EMAIL="${ADMIN_EMAIL:-${INITIAL_ADMIN_EMAIL:-admin@localhost.local}}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-${INITIAL_ADMIN_PASSWORD:-}}"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -220,13 +225,18 @@ if [[ -z "$CSRF_TOKEN" ]]; then
     skip "Login as admin" "CSRF token unavailable"
     skip "Create community (auth)" "skipped (no session)"
     skip "Cleanup test community" "skipped (no session)"
+elif [[ -z "$ADMIN_PASSWORD" ]]; then
+    skip "Login as admin" "no ADMIN_PASSWORD/INITIAL_ADMIN_PASSWORD set"
+    skip "Create community (auth)" "skipped (no session)"
+    skip "Cleanup test community" "skipped (no session)"
 else
     # Login as admin
+    LOGIN_BODY=$(printf '{"email":"%s","password":"%s"}' "$ADMIN_EMAIL" "$ADMIN_PASSWORD")
     LOGIN_RESP=$(_curl -b /tmp/wb-e2e-cookies.txt -c /tmp/wb-e2e-cookies.txt \
         -X POST "${BASE_URL}/api/v1/auth/login" \
         -H "Content-Type: application/json" \
         -H "x-csrf-token: ${CSRF_TOKEN}" \
-        -d '{"email":"admin@localhost.local","password":"admin123"}' 2>/dev/null) || LOGIN_RESP=""
+        -d "$LOGIN_BODY" 2>/dev/null) || LOGIN_RESP=""
 
     if echo "$LOGIN_RESP" | grep -q '"success":true'; then
         pass "Login as admin" "authenticated"
