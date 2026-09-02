@@ -25,8 +25,10 @@ from flask_core import (
     create_health_blueprint,
     init_database,
     install_rate_limiting,
+    install_security_headers,
     setup_aaa_logging,
 )
+from flask_core.security_headers import OVERLAY_CSP
 from quart import Quart
 
 from blueprints import register_blueprints
@@ -44,6 +46,12 @@ def create_app(config: Config | None = None) -> Quart:
 
     logger = setup_aaa_logging(cfg.module_name, cfg.module_version, log_level=cfg.log_level)
     app.config["logger"] = logger
+
+    # security.md A05 hardening -- this service's whole purpose is serving
+    # OBS browser-source overlay HTML (`services/render.py`: inline
+    # <script>/<style>, YouTube iframe API, Spotify track embeds), so it
+    # gets the relaxed OVERLAY_CSP rather than the JSON-only DEFAULT_CSP.
+    install_security_headers(app, csp=OVERLAY_CSP)
 
     app.register_blueprint(create_health_blueprint(cfg.module_name, cfg.module_version))
     register_blueprints(app)

@@ -9,13 +9,15 @@ from quart import Quart, Blueprint
 
 from flask_core import (  # noqa: E402
     setup_aaa_logging, init_database, async_endpoint, success_response,
-    create_health_blueprint, install_rate_limiting
+    create_health_blueprint, install_rate_limiting, install_security_headers
 )
 from config import Config  # noqa: E402
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'libs'))
 
 app = Quart(__name__)
+# security.md A05 hardening -- JSON-only service, default deny-everything CSP.
+install_security_headers(app)
 
 # Register health/metrics endpoints
 health_bp = create_health_blueprint(Config.MODULE_NAME, Config.MODULE_VERSION)

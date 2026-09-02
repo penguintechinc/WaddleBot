@@ -243,6 +243,18 @@ class Config:
         else []
     )
 
+    # CORS allowlist (security.md A05/A01) -- comma-separated exact origins,
+    # e.g. "https://app.waddlebot.io,https://admin.waddlebot.io". Fails
+    # closed: unset/empty means no cross-origin caller is allowed, never a
+    # wildcard fallback -- this module previously ran `allow_origin="*"`
+    # with no auth on any route, letting any origin call it from a
+    # victim's browser. See `app.py`'s `_verify_service_key()` gate, now
+    # applied to every route (not just the two that already had it), for
+    # the companion no-auth fix.
+    CORS_ALLOWED_ORIGINS = (
+        [origin.strip() for origin in os.getenv('CORS_ALLOWED_ORIGINS', '').split(',') if origin.strip()]
+    )
+
     # ========================================================================
     # GAME LOOKUP CONFIGURATION
     # ========================================================================

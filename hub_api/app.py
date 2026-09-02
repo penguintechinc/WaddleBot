@@ -22,7 +22,12 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from flask_core import create_health_blueprint, init_database, setup_aaa_logging
+from flask_core import (
+    create_health_blueprint,
+    init_database,
+    install_security_headers,
+    setup_aaa_logging,
+)
 from flask_core.mcp_routes import create_mcp_blueprint
 from pydal import Field
 from quart import Quart, request
@@ -163,6 +168,13 @@ def create_app(config: HubAPIConfig | None = None) -> Quart:
 
     logger = setup_aaa_logging(cfg.module_name, cfg.module_version, log_level=cfg.log_level)
     app.config["logger"] = logger
+
+    # security.md A05 hardening -- global after_request hook, same
+    # "one call site, not a per-route decorator" shape as the rate limiter
+    # below. hub-api is JSON-only (no HTML ever served), so the default
+    # deny-everything CSP (`flask_core.security_headers.DEFAULT_CSP`) is
+    # correct with no override.
+    install_security_headers(app)
 
     # security.md A04 hardening -- global before_request hook covering
     # every route registered below, not a per-blueprint decorator (see

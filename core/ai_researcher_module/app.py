@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
 from flask_core import (  # noqa: E402
     setup_aaa_logging,
     init_database,
+    install_security_headers,
     async_endpoint,
     auth_required,
     success_response,
@@ -47,7 +48,16 @@ from blueprints.clip_researcher_bp import clip_researcher_bp, setup as setup_cli
 from blueprints.event_lookup_bp import event_lookup_bp, setup as setup_event_lookup_bp  # noqa: E402
 
 app = Quart(__name__)
-app = cors(app, allow_origin="*")
+# security.md A05/A01 fix -- was `allow_origin="*"` (any site's browser JS
+# could call this service's endpoints, none of which required auth). Now a
+# configured exact-origin allowlist (`Config.CORS_ALLOWED_ORIGINS`, env
+# `CORS_ALLOWED_ORIGINS`) -- unset/empty denies every cross-origin caller,
+# never falls back to a wildcard. Same-origin/server-to-server callers
+# (no `Origin` header) are unaffected either way; CORS only governs
+# browser-enforced cross-origin JS.
+app = cors(app, allow_origin=Config.CORS_ALLOWED_ORIGINS)
+# security.md A05 hardening -- JSON-only service, default deny-everything CSP.
+install_security_headers(app)
 
 # Register health/metrics endpoints
 health_bp = create_health_blueprint(Config.MODULE_NAME, Config.MODULE_VERSION)
@@ -90,6 +100,72 @@ def _verify_service_key():
     key = request.headers.get('X-Service-Key', '')
     # Use constant-time comparison to prevent timing attacks
     return secrets.compare_digest(key, Config.SERVICE_API_KEY)
+
+
+#: Paths every caller (including an unauthenticated browser) must reach --
+#: k8s liveness/readiness probes never carry `X-Service-Key`, and `/status`
+#: is deliberately public (module/feature-flag info only, no PII) -- same
+#: exemption `tests/test_auth_required.py::TestUnaffectedRoutesStillWork::
+#: test_status_endpoint_is_still_public` asserts for the sibling
+#: `@auth_required` fix below.
+_AUTH_EXEMPT_PATHS = frozenset({'/health', '/healthz', '/api/v1/status'})
+
+
+def _has_valid_bearer_jwt() -> bool:
+    """True if `Authorization: Bearer <token>` carries a JWT this service's `SECRET_KEY` signed.
+
+    Same verification `flask_core.api_utils.auth_required` itself performs
+    -- deliberately duplicated (not calling `auth_required` directly, which
+    is a route decorator, not a standalone predicate) rather than
+    reimplemented differently, so this blanket gate and the 17 routes'
+    own `@auth_required` decorator agree on what counts as valid.
+    """
+    auth_header = request.headers.get('Authorization', '')
+    if not auth_header.startswith('Bearer '):
+        return False
+    from flask_core.auth import verify_jwt_token
+    from flask_core.secrets import require_secret_key
+    token = auth_header[7:]
+    return verify_jwt_token(token, require_secret_key()) is not None
+
+
+@app.before_request
+async def _require_service_key():
+    """security.md A01 fix -- every non-exempt route now requires SOME verified caller identity.
+
+    Previously only `/researcher/messages/firehose` and `/researcher/stream/
+    end` called `_verify_service_key()` inline; everything else had no auth
+    at all -- combined with the `allow_origin="*"` CORS config this
+    replaced, any site's browser JS could call them directly. A single
+    `before_request` hook closes every route, present and future, the same
+    way `hub_api/services/rate_limiting.py`'s global hook covers all 449 of
+    its routes rather than needing a per-route decorator that a new route
+    could forget.
+
+    Accepts EITHER a valid `X-Service-Key` (internal service-to-service
+    calls) OR a valid bearer JWT (`_has_valid_bearer_jwt`, same check
+    `@auth_required` performs) -- not X-Service-Key alone. The 17 user-
+    facing routes below already carry their own `@auth_required` decorator
+    (added independently -- see `tests/test_auth_required.py`); requiring
+    ONLY a service key here as well would 401 every real, correctly-
+    JWT-authenticated frontend caller of those routes before `@auth_required`
+    ever got a chance to run. The game/patch/build/tech/price/clip-research/
+    event-lookup sub-blueprints (registered below, never covered by
+    `@auth_required` or an inline service-key check) still get real,
+    closed-by-default protection from this same hook -- either credential
+    is accepted, but at least one is now mandatory everywhere but the
+    exempt paths.
+
+    `OPTIONS` (CORS preflight) is exempt: browsers never attach custom
+    headers to a preflight request, so gating it here would make every
+    real cross-origin call from an allowed origin fail before `quart_cors`
+    ever gets to answer the preflight.
+    """
+    if request.path in _AUTH_EXEMPT_PATHS or request.method == 'OPTIONS':
+        return None
+    if _verify_service_key() or _has_valid_bearer_jwt():
+        return None
+    return error_response("Unauthorized", 401)
 
 
 def _get_mem0_service(community_id: int) -> Mem0Service:

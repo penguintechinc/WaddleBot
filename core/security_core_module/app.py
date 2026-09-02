@@ -17,6 +17,7 @@ from flask_core import (
     init_database,
     install_community_scoped_auth,
     install_rate_limiting,
+    install_security_headers,
     setup_aaa_logging,
     success_response,
     verify_service_key,
@@ -27,6 +28,8 @@ from config import Config
 
 # Create Quart app
 app = Quart(__name__)
+# security.md A05 hardening -- JSON-only service, default deny-everything CSP.
+install_security_headers(app)
 
 # Health blueprint
 health_bp = create_health_blueprint(Config.MODULE_NAME, Config.MODULE_VERSION)

@@ -13,7 +13,7 @@ from typing import cast
 
 import httpx
 import redis.asyncio as redis
-from flask_core import create_health_blueprint, setup_aaa_logging
+from flask_core import create_health_blueprint, install_security_headers, setup_aaa_logging
 from flask_core.auth import create_jwt_token
 from flask_core.stage_runner import BundlePoller
 from quart import Quart
@@ -22,6 +22,8 @@ from config import Config
 from runner import ProcessRunner
 
 app = Quart(__name__)
+# security.md A05 hardening -- JSON-only service, default deny-everything CSP.
+install_security_headers(app)
 
 health_bp = create_health_blueprint(Config.MODULE_NAME, Config.MODULE_VERSION)
 app.register_blueprint(health_bp)

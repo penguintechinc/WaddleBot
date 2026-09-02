@@ -21,6 +21,7 @@ from flask_core import (  # noqa: E402
     bind_community_read_tables,
     install_community_scoped_auth,
     install_rate_limiting,
+    install_security_headers,
 )
 from flask_core.grpc_tls import bind_secure_port, default_server_options  # noqa: E402
 from config import Config  # noqa: E402
@@ -32,6 +33,8 @@ from services.grpc_handler import ReputationServiceServicer  # noqa: E402
 from proto import reputation_pb2_grpc  # noqa: E402
 
 app = Quart(__name__)
+# security.md A05 hardening -- JSON-only service, default deny-everything CSP.
+install_security_headers(app)
 
 # Register health/metrics endpoints
 health_bp = create_health_blueprint(Config.MODULE_NAME, Config.MODULE_VERSION)

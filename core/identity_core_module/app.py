@@ -9,13 +9,15 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'lib
 from config import Config  # noqa: E402
 from flask_core import (  # noqa: E402
     async_endpoint, create_health_blueprint, init_database, install_rate_limiting,
-    setup_aaa_logging, success_response,
+    install_security_headers, setup_aaa_logging, success_response,
 )
 from services.grpc_handler import IdentityServiceServicer  # noqa: E402
 from proto import identity_pb2_grpc  # noqa: E402
 from flask_core.grpc_tls import bind_secure_port, default_server_options  # noqa: E402
 
 app = Quart(__name__)
+# security.md A05 hardening -- JSON-only service, default deny-everything CSP.
+install_security_headers(app)
 
 # Register health/metrics endpoints
 health_bp = create_health_blueprint(Config.MODULE_NAME, Config.MODULE_VERSION)

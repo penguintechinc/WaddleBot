@@ -14,7 +14,7 @@ import asyncio
 import logging
 import sys
 
-from flask_core import install_rate_limiting
+from flask_core import install_rate_limiting, install_security_headers
 from flask_core.authz import require_scope
 from quart import Quart, jsonify
 
@@ -28,6 +28,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Quart(__name__)
+# security.md A05 hardening -- JSON-only service, default deny-everything CSP.
+install_security_headers(app)
 refresh_service: RefreshService | None = None
 _shutdown_event = asyncio.Event()
 
