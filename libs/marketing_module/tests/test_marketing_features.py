@@ -192,6 +192,15 @@ class TestWorkedGateEngagement:
     ) -> None:
         with patch.object(
             engagement_app, "verify_jwt_token", return_value={"user_id": 1, "tenant": "acme"}
+        ), patch(
+            # `install_community_scoped_auth`'s app-wide `before_request` hook
+            # (flask_core.community_access, wired in app.py) re-decodes the
+            # bearer token itself via its own `verify_jwt_token` import --
+            # patching only `engagement_app.verify_jwt_token` (this route's
+            # local `require_auth` check) no longer bypasses that earlier,
+            # app-wide check, so the fake token must be accepted there too.
+            "flask_core.community_access.verify_jwt_token",
+            return_value={"user_id": 1, "tenant": "acme"},
         ), patch.object(
             engagement_app, "feature_enabled", new_callable=AsyncMock
         ) as mock_gate:
@@ -222,6 +231,12 @@ class TestWorkedGateEngagement:
     ) -> None:
         with patch.object(
             engagement_app, "verify_jwt_token", return_value={"user_id": 1, "tenant": "acme"}
+        ), patch(
+            # See test_create_poll_is_a_no_op_when_the_flag_is_off for why
+            # the app-wide community_access check also needs the fake token
+            # accepted, not just the route's own require_auth.
+            "flask_core.community_access.verify_jwt_token",
+            return_value={"user_id": 1, "tenant": "acme"},
         ), patch.object(
             engagement_app, "feature_enabled", new_callable=AsyncMock
         ) as mock_gate:
