@@ -37,6 +37,7 @@ from services.community_inventory import (
     remove_stock,
     update_item,
 )
+from services.pagination import parse_limit
 
 inventory_bp = Blueprint("v1_community_inventory", __name__, url_prefix="/api/v1/admin")
 
@@ -203,7 +204,7 @@ async def audit_log_route(community_id: int) -> tuple[dict[str, object], int]:
     if not _tenant_ok(community_id):
         return api_error("Community not found", status_code=404)
     item_id = request.args.get("item_id", type=int)
-    limit = request.args.get("limit", default=50, type=int)
+    limit = parse_limit(request.args.get("limit"), default=50)
     offset = request.args.get("offset", default=0, type=int)
     log = get_audit_log(
         current_app.config["dal"],

@@ -37,6 +37,7 @@ from services import admin_service as svc
 from services.current_user import get_optional_current_user_id
 from services.dto_response import jsonify_dto
 from services.errors import ApiError
+from services.pagination import parse_limit
 
 admin_bp = Blueprint("v1_admin", __name__, url_prefix="/api/v1/admin")
 
@@ -363,7 +364,7 @@ async def get_members(community_id: int) -> MembersResponse | tuple[dict[str, ob
     ctx = get_tenant_context(request)
     assert ctx is not None
     page = int(request.args.get("page", "1"))
-    limit = int(request.args.get("limit", "25"))
+    limit = parse_limit(request.args.get("limit"), default=25)
     search = request.args.get("search", "")
     role = request.args.get("role")
     try:

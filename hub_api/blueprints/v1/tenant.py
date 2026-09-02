@@ -31,6 +31,7 @@ from quart_schema import validate_request, validate_response
 
 from services import tenant_service as svc
 from services.errors import ApiError
+from services.pagination import parse_limit
 from services.schema import bind_tenant_tables
 
 tenant_bp = Blueprint("v1_tenant", __name__, url_prefix="/api/v1/tenant")
@@ -398,7 +399,7 @@ async def get_tenant_communities(
     """Get tenant communities."""
     async_dal, dal = _dal()
     page = int(request.args.get("page", "1"))
-    limit = int(request.args.get("limit", "25"))
+    limit = parse_limit(request.args.get("limit"), default=25)
     try:
         tenant_id = _tenant_id(tenant_slug)
         rows, total, total_pages = await svc.get_tenant_communities(

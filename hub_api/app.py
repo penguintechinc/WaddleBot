@@ -31,6 +31,7 @@ from quart_schema import Info, QuartSchema
 from blueprints import register_blueprints
 from config import HubAPIConfig
 from openapi.routes import register_openapi_docs
+from services.rate_limiting import install_rate_limiting
 from services.schema import (
     bind_ai_routing_tables,
     bind_lifecycle_tables,
@@ -163,6 +164,13 @@ def create_app(config: HubAPIConfig | None = None) -> Quart:
     logger = setup_aaa_logging(cfg.module_name, cfg.module_version, log_level=cfg.log_level)
     app.config["logger"] = logger
 
+    # security.md A04 hardening -- global before_request hook covering
+    # every route registered below, not a per-blueprint decorator (see
+    # services/rate_limiting.py's own docstring for why). Registered
+    # before the blueprints so it's unmistakably "the whole app", not
+    # scoped to whichever blueprint happens to be registered first.
+    rate_limiter = install_rate_limiting(app, cfg)
+
     app.register_blueprint(create_health_blueprint(cfg.module_name, cfg.module_version))
     app.register_blueprint(create_mcp_blueprint())
     register_blueprints(app)
@@ -172,8 +180,13 @@ def create_app(config: HubAPIConfig | None = None) -> Quart:
 
     @app.before_serving
     async def startup() -> None:
-        """Initialize the DAL and bind hub-api's own reference tables."""
+        """Initialize the DAL, connect the rate limiter, bind reference tables."""
         logger.system("Starting hub-api", action="startup", extra={"port": cfg.module_port})
+        # Connects to Redis/Valkey; falls back to an in-memory limiter
+        # (per-process, non-distributed) if unreachable -- see
+        # flask_core.rate_limiter.RateLimiter.connect()'s own fail-open
+        # doc comment. Never blocks startup on Redis being down.
+        await rate_limiter.connect()
         async_dal = init_database(
             cfg.database_url,
             pool_size=cfg.db_pool_size,
@@ -211,6 +224,10 @@ def create_app(config: HubAPIConfig | None = None) -> Quart:
                 await async_dal.close_async()
             except Exception as exc:  # noqa: BLE001 - shutdown must not raise
                 logger.warning(f"Error closing DAL on shutdown: {exc}")
+        try:
+            await rate_limiter.disconnect()
+        except Exception as exc:  # noqa: BLE001 - shutdown must not raise
+            logger.warning(f"Error closing rate limiter on shutdown: {exc}")
         logger.system("hub-api shutdown complete", action="shutdown", result="SUCCESS")
 
     return app

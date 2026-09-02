@@ -47,6 +47,7 @@ from services import join_request_service as svc
 from services.current_user import get_current_user_id
 from services.dto_response import jsonify_dto
 from services.errors import ApiError
+from services.pagination import parse_limit
 
 join_request_bp = Blueprint("v1_join_request", __name__, url_prefix="/api/v1")
 
@@ -209,10 +210,7 @@ async def list_requests(
         page = int(request.args.get("page", "1"))
     except ValueError:
         page = 1
-    try:
-        limit = int(request.args.get("limit", "25"))
-    except ValueError:
-        limit = 25
+    limit = parse_limit(request.args.get("limit"), default=25)
 
     try:
         admin_user_id = get_current_user_id(request)

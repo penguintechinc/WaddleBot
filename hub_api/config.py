@@ -165,6 +165,55 @@ class HubAPIConfig:
     # other trailing field in this class.
     ai_enabled: bool = True
 
+    # security.md A04 hardening (rate-limit gap fix) -- `services/
+    # rate_limiting.py`'s global `before_request` hook reads these, not
+    # ad hoc `os.getenv()` calls scattered per-blueprint. `valkey_url`
+    # mirrors `core/svc_action/config.py` / `core/svc_presentation/
+    # config.py`'s own fallback chain byte-for-byte: `VALKEY_URL` is the
+    # primary env var, `REDIS_URL` (the Helm chart's shared secret key --
+    # see `k8s/helm/waddlebot/templates/secrets.yaml`, "44 modules read
+    # REDIS_URL") is the fallback so this boots against the real cluster
+    # secret with zero Helm changes.
+    #
+    # `RATE_LIMIT_MAX_REQUESTS`/`RATE_LIMIT_WINDOW_MS` are the existing
+    # Helm-wired env var names (`values-beta.yaml`, alpha/beta
+    # `kustomization.yaml` overlays) -- reused verbatim rather than
+    # renamed, since this fix is what makes the app actually read them.
+    # Default 100 req/60s matches `values-beta.yaml`'s own comment
+    # ("300 = 3x default").
+    #
+    # `rate_limit_auth_*` is a stricter, separate tier for the
+    # brute-force-sensitive auth surface (login/token/passkey --
+    # `services/rate_limiting.py::_AUTH_TIER_PREFIXES`), deliberately not
+    # sharing the standard tier's env vars: one shared limit would mean
+    # either the standard tier is too strict for normal browsing or the
+    # auth tier is too loose for brute-force protection.
+    valkey_url: str = "redis://localhost:6379/0"
+    rate_limit_max_requests: int = 100
+    rate_limit_window_seconds: int = 60
+    rate_limit_auth_max_requests: int = 10
+    rate_limit_auth_window_seconds: int = 60
+
+    # `services/rate_limiting.py::_client_ip()`'s trust boundary for
+    # `X-Forwarded-For` -- 0 (default, fail-closed) means don't trust the
+    # header at all, bucket on `request.remote_addr` only. `X-Forwarded-
+    # For` is client-suppliable in the general case (a raw client hitting
+    # hub-api directly, or any hop that doesn't strictly append-only, can
+    # put anything in it); trusting an arbitrary hop unconditionally lets
+    # a caller pick their own rate-limit bucket, bypassing the auth-tier
+    # brute-force limit by rotating the header. >0 means hub-api sits
+    # behind exactly that many trusted proxies (each known to append
+    # rather than blindly relay) -- operators set this to match their
+    # actual ingress chain; it is never inferred automatically.
+    trusted_proxy_hops: int = 0
+
+    # security.md Input Validation -- server-side upper bound on every
+    # client-suppliable `?limit=` page-size param. Read by
+    # `services/pagination.py::parse_limit()`, the shared helper every
+    # previously-unbounded list endpoint's `?limit=` parsing now routes
+    # through.
+    api_max_page_size: int = 100
+
     @classmethod
     def from_env(cls) -> HubAPIConfig:
         """Build config from the process environment. Raises on an invalid DB_TYPE."""
@@ -219,4 +268,17 @@ class HubAPIConfig:
             paypal_webhook_id=os.getenv("PAYPAL_WEBHOOK_ID", ""),
             paypal_mode=os.getenv("PAYPAL_MODE", "sandbox"),
             ai_enabled=_bool_env("WADDLES_AI_ENABLED", True),
+            valkey_url=os.getenv("VALKEY_URL")
+            or os.getenv("REDIS_URL")
+            or "redis://localhost:6379/0",
+            rate_limit_max_requests=int(os.getenv("RATE_LIMIT_MAX_REQUESTS", "100")),
+            rate_limit_window_seconds=max(
+                1, int(os.getenv("RATE_LIMIT_WINDOW_MS", "60000")) // 1000
+            ),
+            rate_limit_auth_max_requests=int(os.getenv("RATE_LIMIT_AUTH_MAX_REQUESTS", "10")),
+            rate_limit_auth_window_seconds=max(
+                1, int(os.getenv("RATE_LIMIT_AUTH_WINDOW_MS", "60000")) // 1000
+            ),
+            trusted_proxy_hops=max(0, int(os.getenv("TRUSTED_PROXY_HOPS", "0"))),
+            api_max_page_size=int(os.getenv("API_MAX_PAGE_SIZE", "100")),
         )

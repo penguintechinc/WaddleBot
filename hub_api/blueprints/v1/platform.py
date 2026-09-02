@@ -52,6 +52,7 @@ from services import platform_service as svc
 from services.current_user import get_current_user_id
 from services.dto_response import jsonify_dto
 from services.errors import ApiError
+from services.pagination import parse_limit
 
 platform_bp = Blueprint("v1_platform", __name__, url_prefix="/api/v1/platform")
 
@@ -354,7 +355,7 @@ async def list_users() -> ListUsersResponse:
     """List users."""
     async_dal, dal = _dal()
     page = int(request.args.get("page", "1"))
-    limit = int(request.args.get("limit", "25"))
+    limit = parse_limit(request.args.get("limit"), default=25)
     search = request.args.get("search", "")
     platform = request.args.get("platform")
 
@@ -469,7 +470,7 @@ async def list_communities() -> ListCommunitiesResponse:
     """List communities."""
     async_dal, dal = _dal()
     page = int(request.args.get("page", "1"))
-    limit = int(request.args.get("limit", "25"))
+    limit = parse_limit(request.args.get("limit"), default=25)
     search = request.args.get("search", "")
     is_active = request.args.get("isActive", "true") != "false"
 
@@ -640,7 +641,7 @@ async def get_audit_log() -> AuditLogResponse:
     """Get audit log."""
     async_dal, dal = _dal()
     page = int(request.args.get("page", "1"))
-    limit = int(request.args.get("limit", "50"))
+    limit = parse_limit(request.args.get("limit"), default=50)
     action = request.args.get("action")
     user_id_param = request.args.get("userId")
     user_id = int(user_id_param) if user_id_param else None

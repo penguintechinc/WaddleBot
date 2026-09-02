@@ -21,6 +21,7 @@ from services import user_management_service as svc
 from services.current_user import get_current_user_id
 from services.dto_response import jsonify_dto
 from services.errors import ApiError
+from services.pagination import parse_limit
 
 user_management_bp = Blueprint(
     "v1_superadmin_users", __name__, url_prefix="/api/v1/superadmin/users"
@@ -195,7 +196,7 @@ async def list_users() -> ListUsersResponse:
     """List users."""
     async_dal, dal = _dal()
     page = int(request.args.get("page", "1"))
-    limit = int(request.args.get("limit", "25"))
+    limit = parse_limit(request.args.get("limit"), default=25)
     search = request.args.get("search", "")
     role = request.args.get("role")
     is_active_param = request.args.get("isActive")

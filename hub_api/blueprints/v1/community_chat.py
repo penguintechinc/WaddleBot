@@ -41,6 +41,7 @@ from services.community_chat import (
     get_chat_history,
 )
 from services.community_common import api_error, community_in_tenant
+from services.pagination import parse_limit
 
 chat_bp = Blueprint("v1_community_chat", __name__, url_prefix="/api/v1/community")
 
@@ -65,10 +66,7 @@ async def chat_history(community_id: int) -> ChatHistoryResponse | tuple[dict[st
 
     channel_name = request.args.get("channelName")
     before = request.args.get("before")
-    try:
-        limit = int(request.args.get("limit", "50"))
-    except ValueError:
-        limit = 50
+    limit = parse_limit(request.args.get("limit"), default=50)
 
     messages, has_more = get_chat_history(
         dal, community_id, channel_name=channel_name, limit=limit, before=before

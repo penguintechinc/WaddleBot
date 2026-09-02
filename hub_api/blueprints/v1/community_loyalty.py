@@ -24,6 +24,7 @@ from quart import Blueprint, current_app, request
 from services import community_loyalty as loyalty_client
 from services.community_common import community_in_tenant
 from services.community_loyalty import DEFAULT_LOYALTY_CONFIG, LoyaltyProxyError
+from services.pagination import parse_limit
 
 loyalty_bp = Blueprint("v1_community_loyalty", __name__, url_prefix="/api/v1/admin")
 
@@ -94,7 +95,12 @@ async def get_leaderboard(community_id: int) -> tuple[dict[str, Any], int]:
     """`GET /api/v1/admin/<id>/loyalty/leaderboard`."""
     if not _tenant_ok(community_id):
         return {"success": False, "error": "Community not found"}, 404
-    limit = request.args.get("limit", "25")
+    # This endpoint proxies straight through to the loyalty-interaction
+    # service (`loyalty_client.get_or_default`) rather than querying
+    # hub-api's own DB, but an unbounded client-supplied `limit` still
+    # reaches that downstream service unbounded -- clamp here too
+    # (services/pagination.py, security.md Input Validation).
+    limit = str(parse_limit(request.args.get("limit"), default=25))
     offset = request.args.get("offset", "0")
     path = f"/api/v1/admin/{community_id}/loyalty/leaderboard{_qs(limit=limit, offset=offset)}"
     data = await loyalty_client.get_or_default(

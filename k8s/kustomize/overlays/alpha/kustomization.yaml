@@ -167,7 +167,17 @@ patches:
       kind: Ingress
       name: waddlebot-ingress
 
-  # Raise hub-api rate limit for alpha (higher than beta for E2E test runs)
+  # Raise hub-api rate limit for alpha (higher than beta for E2E test runs).
+  # RATE_LIMIT_MAX_REQUESTS/WINDOW_MS govern the standard tier (every
+  # endpoint); RATE_LIMIT_AUTH_MAX_REQUESTS/WINDOW_MS is the separate,
+  # stricter tier `hub_api/services/rate_limiting.py` applies to
+  # login/token/passkey specifically -- added alongside the existing
+  # standard-tier bump (not replacing it) so hub-api actually reading
+  # these env vars for the first time doesn't newly 429 the E2E suite's
+  # auth flow. `tests/e2e/auth.setup.js` already caches the login
+  # session across spec files ("dramatically reduces the number of
+  # login API calls"), so 50/60s here is generous headroom, not a
+  # brute-force-protection bypass.
   - patch: |-
       - op: add
         path: /spec/template/spec/containers/0/env/-
@@ -178,6 +188,16 @@ patches:
         path: /spec/template/spec/containers/0/env/-
         value:
           name: RATE_LIMIT_WINDOW_MS
+          value: "60000"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: RATE_LIMIT_AUTH_MAX_REQUESTS
+          value: "50"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: RATE_LIMIT_AUTH_WINDOW_MS
           value: "60000"
     target:
       kind: Deployment
