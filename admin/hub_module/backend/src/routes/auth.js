@@ -51,6 +51,10 @@ router.post('/password',
 // OAuth flow
 router.get('/oauth/:platform', authController.startOAuth);
 router.get('/oauth/:platform/callback', authController.oauthCallback);
+// Exchange-code handoff (see authController.oauthCallback /
+// redeemOAuthExchangeCode docstrings) -- no session yet at this point, so
+// no auth middleware.
+router.post('/exchange', authController.redeemOAuthExchangeCode);
 
 // OAuth linking (requires auth)
 router.get('/oauth/:platform/link', requireAuth, authController.linkOAuthAccount);

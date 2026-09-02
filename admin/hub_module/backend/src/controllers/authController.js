@@ -16,8 +16,14 @@ import { config } from '../config/index.js';
 import { errors } from '../middleware/errorHandler.js';
 import { logger } from '../utils/logger.js';
 import { generateVerificationToken, sendVerificationEmail } from '../utils/email.js';
+import { setSessionCookie } from '../utils/sessionCookie.js';
 
 const SALT_ROUNDS = 12;
+
+// Short-lived (60s), single-use opaque code standing in for a just-issued
+// session JWT -- see createOAuthExchangeCode()'s docstring below. Mirrors
+// hub_api's EXCHANGE_CODE_TTL_SECONDS (services/oauth_service.py).
+const OAUTH_EXCHANGE_CODE_TTL_SECONDS = 60;
 
 /**
  * Get hub settings helper
@@ -584,11 +590,86 @@ export async function oauthCallback(req, res, next) {
 
     logger.auth('OAuth login successful', { platform, userId: user.id });
 
-    // Redirect to frontend with token
-    res.redirect(`${config.cors.origin}/auth/callback?token=${sessionToken}`);
+    // SECURITY (OWASP A07): do NOT put the session JWT in the redirect
+    // URL/query string -- query strings leak into proxy/access logs,
+    // browser history, and the Referer header of any outbound request the
+    // callback page happens to make. Mint a short-lived, single-use opaque
+    // exchange code instead and redirect with THAT; the frontend
+    // immediately redeems it for the real JWT via POST /api/v1/auth/exchange
+    // (redeemOAuthExchangeCode below), delivered over the response BODY
+    // (and an HttpOnly wb_session cookie), never the URL. Mirrors hub_api's
+    // oauth_callback / exchange_oauth_code (services/oauth_service.py).
+    //
+    // NOTE: this is deliberately NOT named exchangeOAuthCode() -- that name
+    // is already taken by the direct-platform-token-exchange helper below
+    // (used as the Identity Core fallback a few lines up).
+    const exchangeCode = await createOAuthExchangeCode(sessionToken, platform);
+    res.redirect(`${config.cors.origin}/auth/callback?code=${exchangeCode}`);
   } catch (err) {
     logger.error('OAuth callback error', { error: err.message });
     res.redirect(`${config.cors.origin}/login?error=oauth_failed`);
+  }
+}
+
+/**
+ * Mint a short-lived (60s), single-use opaque code standing in for a
+ * just-issued session JWT. Used by oauthCallback() to hand the session off
+ * to the frontend via the OAuth redirect WITHOUT putting the JWT itself in
+ * the URL. The code is redeemed exactly once, server-side, via
+ * redeemOAuthExchangeCode() (POST /api/v1/auth/exchange).
+ */
+async function createOAuthExchangeCode(token, platform) {
+  const code = crypto.randomBytes(32).toString('base64url');
+  const expiresAt = new Date(Date.now() + OAUTH_EXCHANGE_CODE_TTL_SECONDS * 1000);
+
+  await query(
+    `INSERT INTO hub_oauth_exchange_codes (code, token, platform, used, expires_at, created_at)
+     VALUES ($1, $2, $3, false, $4, NOW())`,
+    [code, token, platform, expiresAt]
+  );
+
+  return code;
+}
+
+/**
+ * Exchange a short-lived, single-use OAuth callback code for the session
+ * JWT. Completes the exchange-code handoff oauthCallback() starts -- see
+ * that function's docstring. No auth middleware: like login/refresh, there
+ * is no session yet at this point, only the opaque code the callback
+ * redirect just handed the frontend via the URL.
+ *
+ * The `UPDATE ... WHERE used = false AND expires_at > NOW()` clause is the
+ * atomic single-use claim -- the database, not application logic,
+ * arbitrates a concurrent-redemption race against the same code.
+ */
+export async function redeemOAuthExchangeCode(req, res, next) {
+  try {
+    const { code } = req.body;
+
+    if (!code) {
+      return next(errors.badRequest('Exchange code required'));
+    }
+
+    const result = await query(
+      `UPDATE hub_oauth_exchange_codes
+       SET used = true, used_at = NOW()
+       WHERE code = $1 AND used = false AND expires_at > NOW()
+       RETURNING token`,
+      [code]
+    );
+
+    if (result.rows.length === 0) {
+      logger.auth('OAuth exchange code invalid or expired');
+      return next(errors.badRequest('Invalid or expired exchange code'));
+    }
+
+    const { token } = result.rows[0];
+    setSessionCookie(res, token);
+
+    logger.auth('OAuth exchange code redeemed');
+    res.json({ success: true, token });
+  } catch (err) {
+    next(err);
   }
 }
 

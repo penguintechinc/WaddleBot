@@ -26,6 +26,27 @@ function isPrivateHost(host) {
   return PRIVATE_IP_PATTERNS.some(pattern => pattern.test(host));
 }
 
+/**
+ * Confirm `serverId` actually belongs to `communityId` before any proxied
+ * server-manager call touches it (OWASP A01 -- cross-community BOLA).
+ *
+ * requireCommunityAdmin/requireMember (see routes/rcon.js) only confirm the
+ * caller is authorized on `:communityId` -- they never checked that
+ * `:serverId` itself is one of that community's servers, so a legitimate
+ * admin/member of community A could target community B's server (RCON
+ * command execution, kicks/bans, voice moves, etc.) just by supplying its
+ * numeric id in the URL. update/deleteServer/testConnection already scope
+ * their SQL by `id = $1 AND community_id = $2`; this guard closes the same
+ * gap for the handlers that proxy straight to server-manager instead.
+ */
+async function verifyServerBelongsToCommunity(serverId, communityId) {
+  const result = await query(
+    'SELECT id FROM server_status_configs WHERE id = $1 AND community_id = $2 AND deleted_at IS NULL',
+    [serverId, communityId]
+  );
+  return result.rows.length > 0;
+}
+
 async function proxyToModule(path, method = 'GET', body = null) {
   const url = `${SERVER_MANAGER_URL}${path}`;
   const options = {
@@ -264,6 +285,10 @@ export async function executeCommand(req, res, next) {
     const { communityId, serverId } = req.params;
     const { command } = req.body;
 
+    if (!(await verifyServerBelongsToCommunity(serverId, communityId))) {
+      return res.status(403).json({ error: 'Server does not belong to this community' });
+    }
+
     if (!command || !command.trim()) {
       return res.status(400).json({ error: 'Command is required' });
     }
@@ -283,6 +308,9 @@ export async function executeCommand(req, res, next) {
 export async function getServerStatus(req, res, next) {
   try {
     const { communityId, serverId } = req.params;
+    if (!(await verifyServerBelongsToCommunity(serverId, communityId))) {
+      return res.status(403).json({ error: 'Server does not belong to this community' });
+    }
     const result = await proxyToModule(`/api/v1/server-manager/${communityId}/servers/${serverId}/status`);
     res.json(result);
   } catch (err) {
@@ -294,6 +322,9 @@ export async function getServerStatus(req, res, next) {
 export async function getPlayerList(req, res, next) {
   try {
     const { communityId, serverId } = req.params;
+    if (!(await verifyServerBelongsToCommunity(serverId, communityId))) {
+      return res.status(403).json({ error: 'Server does not belong to this community' });
+    }
     const result = await proxyToModule(`/api/v1/server-manager/${communityId}/servers/${serverId}/players`);
     res.json(result);
   } catch (err) {
@@ -306,6 +337,9 @@ export async function kickPlayer(req, res, next) {
   try {
     const { communityId, serverId } = req.params;
     const { player, reason } = req.body;
+    if (!(await verifyServerBelongsToCommunity(serverId, communityId))) {
+      return res.status(403).json({ error: 'Server does not belong to this community' });
+    }
     if (!player) {
       return res.status(400).json({ error: 'Player identifier is required' });
     }
@@ -325,6 +359,9 @@ export async function banPlayer(req, res, next) {
   try {
     const { communityId, serverId } = req.params;
     const { player, reason, duration } = req.body;
+    if (!(await verifyServerBelongsToCommunity(serverId, communityId))) {
+      return res.status(403).json({ error: 'Server does not belong to this community' });
+    }
     if (!player) {
       return res.status(400).json({ error: 'Player identifier is required' });
     }
@@ -343,6 +380,9 @@ export async function banPlayer(req, res, next) {
 export async function getChannels(req, res, next) {
   try {
     const { communityId, serverId } = req.params;
+    if (!(await verifyServerBelongsToCommunity(serverId, communityId))) {
+      return res.status(403).json({ error: 'Server does not belong to this community' });
+    }
     const result = await proxyToModule(`/api/v1/server-manager/${communityId}/servers/${serverId}/channels`);
     res.json(result);
   } catch (err) {
@@ -355,6 +395,9 @@ export async function moveUser(req, res, next) {
   try {
     const { communityId, serverId } = req.params;
     const { user_id: targetUserId, channel_id } = req.body;
+    if (!(await verifyServerBelongsToCommunity(serverId, communityId))) {
+      return res.status(403).json({ error: 'Server does not belong to this community' });
+    }
     if (!targetUserId || channel_id === undefined) {
       return res.status(400).json({ error: 'user_id and channel_id are required' });
     }
@@ -374,6 +417,9 @@ export async function sendMessage(req, res, next) {
   try {
     const { communityId, serverId } = req.params;
     const { text, channel_id, target_mode } = req.body;
+    if (!(await verifyServerBelongsToCommunity(serverId, communityId))) {
+      return res.status(403).json({ error: 'Server does not belong to this community' });
+    }
     if (!text || !text.trim()) {
       return res.status(400).json({ error: 'Message text is required' });
     }
@@ -430,6 +476,9 @@ export async function getCommandLog(req, res, next) {
 export async function getAccessPolicy(req, res, next) {
   try {
     const { communityId, serverId } = req.params;
+    if (!(await verifyServerBelongsToCommunity(serverId, communityId))) {
+      return res.status(403).json({ error: 'Server does not belong to this community' });
+    }
     const result = await proxyToModule(`/api/v1/server-manager/${communityId}/servers/${serverId}/policy`);
     res.json(result);
   } catch (err) {
@@ -441,6 +490,9 @@ export async function getAccessPolicy(req, res, next) {
 export async function updateAccessPolicy(req, res, next) {
   try {
     const { communityId, serverId } = req.params;
+    if (!(await verifyServerBelongsToCommunity(serverId, communityId))) {
+      return res.status(403).json({ error: 'Server does not belong to this community' });
+    }
     const result = await proxyToModule(
       `/api/v1/server-manager/${communityId}/servers/${serverId}/policy`,
       'PUT',
@@ -456,6 +508,9 @@ export async function updateAccessPolicy(req, res, next) {
 export async function triggerEnforcement(req, res, next) {
   try {
     const { communityId, serverId } = req.params;
+    if (!(await verifyServerBelongsToCommunity(serverId, communityId))) {
+      return res.status(403).json({ error: 'Server does not belong to this community' });
+    }
     const result = await proxyToModule(
       `/api/v1/server-manager/${communityId}/servers/${serverId}/enforce`,
       'POST'
@@ -471,6 +526,9 @@ export async function getAccessLog(req, res, next) {
   try {
     const { communityId, serverId } = req.params;
     const { limit = 50, offset = 0 } = req.query;
+    if (!(await verifyServerBelongsToCommunity(serverId, communityId))) {
+      return res.status(403).json({ error: 'Server does not belong to this community' });
+    }
     const result = await proxyToModule(
       `/api/v1/server-manager/${communityId}/servers/${serverId}/access-log?limit=${limit}&offset=${offset}`
     );
