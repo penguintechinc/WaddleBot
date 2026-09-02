@@ -3,6 +3,18 @@ global:
   imageRegistry: ""
   imageTag: "alpha"
   imagePullPolicy: Never
+  # gRPC transport TLS (PR #264) -- alpha is single-node local dev with no cert material
+  # provisioned, so it uses flask_core's own documented dev-only escape hatch instead of
+  # real certs (refused outright under production posture, so this can never leak into
+  # beta/gamma/production even if this file were merged upward by mistake).
+  grpcTls:
+    insecureDev: true
+  # First-run super-admin bootstrap (PR #256) -- documented non-default so alpha's
+  # Playwright e2e suite (tests/k8s/alpha/) has a known login; NEVER reused in
+  # beta/gamma/production (see values.yaml global.initialAdmin).
+  initialAdmin:
+    email: "admin@waddlebot.localhost.local"
+    password: "WaddleAlpha-Local-Only-2026!"
 infrastructure:
   postgresql:
     enabled: true
