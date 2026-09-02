@@ -3,8 +3,13 @@ quart==0.20.0
 hypercorn==0.17.3
 
 # gRPC
-grpcio==1.68.1
-grpcio-tools==1.68.1
+# Range (not a hard ==1.68.1 pin) matching core/identity_core_module's proven
+# working range -- flask_core's opentelemetry-exporter-otlp-proto-grpc dep
+# needs protobuf>=6.33.5 (compiled gencode), but grpcio-tools==1.68.1 caps
+# protobuf<6, forcing a downgrade that crashes flask_core's import
+# (google.protobuf.runtime_version.VersionError) on container start.
+grpcio>=1.67.0,<1.77.0
+grpcio-tools>=1.67.0,<1.77.0
 protobuf>=5.29.6
 
 # Database
