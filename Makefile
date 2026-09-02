@@ -1,8 +1,14 @@
 .PHONY: dev test test-unit test-integration test-e2e test-functional test-security \
         smoke-test lint build docker-build docker-push deploy-dev deploy-prod \
-        seed-mock-data clean pre-commit run-ai-local check-docs
+        seed-mock-data clean pre-commit run-ai-local check-docs grpc-dev-certs
 
-dev:
+# Dev-only self-signed CA + server/client cert pair for the gRPC transport
+# TLS required by every service in docker-compose.yml (security audit A02).
+# Idempotent -- skips regeneration if certs/grpc-dev is already populated.
+grpc-dev-certs:
+	@bash scripts/setup/generate_dev_grpc_certs.sh
+
+dev: grpc-dev-certs
 	docker-compose up
 
 build:

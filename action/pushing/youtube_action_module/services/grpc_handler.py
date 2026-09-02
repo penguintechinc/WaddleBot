@@ -13,6 +13,7 @@ from proto import youtube_action_pb2, youtube_action_pb2_grpc
 
 from services.youtube_service import YouTubeService
 from services.grpc_auth_interceptor import AuthInterceptor
+from services.grpc_tls import bind_secure_port, default_server_options
 from config import Config
 
 
@@ -395,7 +396,10 @@ class GRPCServer:
         self._executor = ThreadPoolExecutor(
             max_workers=Config.MAX_WORKERS, thread_name_prefix="youtube-api"
         )
-        self.server = grpc.aio.server(interceptors=[AuthInterceptor()])
+        self.server = grpc.aio.server(
+            interceptors=[AuthInterceptor()],
+            options=default_server_options(),
+        )
 
         servicer = YouTubeActionServicer(self.youtube_service, self._executor)
         youtube_action_pb2_grpc.add_YouTubeActionServicer_to_server(
@@ -403,11 +407,10 @@ class GRPCServer:
         )
 
         listen_addr = f"[::]:{Config.GRPC_PORT}"
-        if self.server.add_insecure_port(listen_addr) == 0:
-            raise RuntimeError(f"Unable to bind gRPC server to {listen_addr}")
+        bind_secure_port(self.server, listen_addr)
         await self.server.start()
 
-        logger.info(f"gRPC server started on {listen_addr}")
+        logger.info(f"gRPC server started (TLS) on {listen_addr}")
 
     async def stop(self) -> None:
         """Stop the gRPC server, giving in-flight RPCs a grace period."""

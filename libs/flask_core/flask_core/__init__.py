@@ -176,6 +176,15 @@ from .secrets import (
     InsecureSecretError,
     KNOWN_PLACEHOLDER_SECRETS,
 )
+from .grpc_tls import (
+    GrpcTlsConfigError,
+    server_credentials as grpc_server_credentials,
+    channel_credentials as grpc_channel_credentials,
+    bind_secure_port as grpc_bind_secure_port,
+    secure_channel as grpc_secure_channel,
+    default_server_options as grpc_default_server_options,
+    DEFAULT_MAX_MESSAGE_BYTES as GRPC_DEFAULT_MAX_MESSAGE_BYTES,
+)
 
 __all__ = [
     # Platform version / App Bundle compatibility
@@ -339,4 +348,12 @@ __all__ = [
     "require_secret_key",
     "InsecureSecretError",
     "KNOWN_PLACEHOLDER_SECRETS",
+    # gRPC transport TLS (A02)
+    "GrpcTlsConfigError",
+    "grpc_server_credentials",
+    "grpc_channel_credentials",
+    "grpc_bind_secure_port",
+    "grpc_secure_channel",
+    "grpc_default_server_options",
+    "GRPC_DEFAULT_MAX_MESSAGE_BYTES",
 ]

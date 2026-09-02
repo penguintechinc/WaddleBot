@@ -21,6 +21,7 @@ except ImportError:
 
 from services.teams_service import TeamsService
 from services.grpc_auth_interceptor import AuthInterceptor
+from services.grpc_tls import bind_secure_port, default_server_options
 
 
 logger = logging.getLogger(__name__)
@@ -212,12 +213,13 @@ def create_grpc_server(teams_service: TeamsService, port: int, max_workers: int 
     server = grpc.aio.server(
         futures.ThreadPoolExecutor(max_workers=max_workers),
         interceptors=[AuthInterceptor()],
+        options=default_server_options(),
     )
 
     servicer = TeamsActionServicer(teams_service)
     teams_action_pb2_grpc.add_TeamsActionServiceServicer_to_server(servicer, server)
 
-    server.add_insecure_port(f'[::]:{port}')
+    bind_secure_port(server, f'[::]:{port}')
 
-    logger.info(f"gRPC server configured on port {port}")
+    logger.info(f"gRPC server (TLS) configured on port {port}")
     return server

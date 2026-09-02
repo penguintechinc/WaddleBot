@@ -50,6 +50,9 @@ opentelemetry-instrumentation-requests==0.60b1
 opentelemetry-exporter-otlp-proto-grpc==1.39.1
 protobuf>=5.29.6,<7.0  # CVE fix + compatible with OTel 1.39
 
+# gRPC transport TLS (grpc_tls.py) -- direct usage, not just OTel's transitive pin
+grpcio>=1.83.0,<1.84.0
+
 # Observability - Prometheus
 prometheus-client>=0.19.0
 
@@ -60,3 +63,4 @@ pytest-cov>=4.1.0
 black>=23.12.0
 flake8>=7.0.0
 mypy>=1.8.0
+types-grpcio>=1.83.0

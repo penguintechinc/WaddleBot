@@ -12,6 +12,7 @@ from flask_core import (  # noqa: E402
 )
 from services.grpc_handler import IdentityServiceServicer  # noqa: E402
 from proto import identity_pb2_grpc  # noqa: E402
+from flask_core.grpc_tls import bind_secure_port, default_server_options  # noqa: E402
 
 app = Quart(__name__)
 
@@ -41,16 +42,15 @@ async def startup():
     from grpc import aio
 
     servicer = IdentityServiceServicer(dal=dal, logger=logger)
-    grpc_server = aio.server()
+    grpc_server = aio.server(options=default_server_options())
     identity_pb2_grpc.add_IdentityServiceServicer_to_server(
         servicer, grpc_server
     )
     listen_address = f"0.0.0.0:{Config.GRPC_PORT}"
-    if grpc_server.add_insecure_port(listen_address) == 0:
-        raise RuntimeError(f"Unable to bind Identity gRPC server to {listen_address}")
+    bind_secure_port(grpc_server, listen_address)
     await grpc_server.start()
     logger.system(
-        "Identity gRPC server started",
+        "Identity gRPC server started (TLS)",
         action="grpc_startup",
         address=listen_address,
     )

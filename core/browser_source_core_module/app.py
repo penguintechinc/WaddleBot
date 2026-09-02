@@ -18,6 +18,7 @@ from flask_core import (  # noqa: E402
     async_endpoint, create_health_blueprint, init_database,
     setup_aaa_logging, success_response)
 from flask_core.auth import verify_service_key  # noqa: E402
+from flask_core.grpc_tls import bind_secure_port, default_server_options  # noqa: E402
 from proto import browser_source_pb2_grpc  # noqa: E402
 from services.grpc_handler import BrowserSourceServiceServicer  # noqa: E402
 from services.overlay_service import OverlayService  # noqa: E402
@@ -264,7 +265,10 @@ async def serve_grpc():
     global dal, overlay_service, caption_connections
 
     logger = logging.getLogger(__name__)
-    server = grpc.aio.server(futures.ThreadPoolExecutor(max_workers=10))
+    server = grpc.aio.server(
+        futures.ThreadPoolExecutor(max_workers=10),
+        options=default_server_options(),
+    )
 
     # Add gRPC service
     browser_source_pb2_grpc.add_BrowserSourceServiceServicer_to_server(
@@ -272,8 +276,8 @@ async def serve_grpc():
         server
     )
 
-    server.add_insecure_port(f"0.0.0.0:{Config.GRPC_PORT}")
-    logger.info(f"Starting gRPC server on 0.0.0.0:{Config.GRPC_PORT}")
+    bind_secure_port(server, f"0.0.0.0:{Config.GRPC_PORT}")
+    logger.info(f"Starting gRPC server (TLS) on 0.0.0.0:{Config.GRPC_PORT}")
     await server.start()
     await server.wait_for_termination()
 

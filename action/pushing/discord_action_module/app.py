@@ -25,6 +25,7 @@ from config import Config
 from services.discord_service import DiscordService
 from services.grpc_auth_interceptor import AuthInterceptor
 from services.grpc_handler import DiscordActionServicer
+from services.grpc_tls import bind_secure_port, default_server_options
 
 # Configure logging
 logging.basicConfig(
@@ -401,12 +402,13 @@ async def serve_grpc():
     server = grpc.aio.server(
         futures.ThreadPoolExecutor(max_workers=10),
         interceptors=[AuthInterceptor()],
+        options=default_server_options(),
     )
     discord_action_pb2_grpc.add_DiscordActionServicer_to_server(
         DiscordActionServicer(discord_service), server
     )
-    server.add_insecure_port(f"{Config.HOST}:{Config.GRPC_PORT}")
-    logger.info(f"Starting gRPC server on {Config.HOST}:{Config.GRPC_PORT}")
+    bind_secure_port(server, f"{Config.HOST}:{Config.GRPC_PORT}")
+    logger.info(f"Starting gRPC server (TLS) on {Config.HOST}:{Config.GRPC_PORT}")
     await server.start()
     await server.wait_for_termination()
 

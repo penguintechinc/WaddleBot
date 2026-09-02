@@ -21,6 +21,7 @@ from flask_core import (  # noqa: E402
     bind_community_read_tables,
     install_community_scoped_auth,
 )
+from flask_core.grpc_tls import bind_secure_port, default_server_options  # noqa: E402
 from config import Config  # noqa: E402
 from services.reputation_service import ReputationService  # noqa: E402
 from services.weight_manager import WeightManager  # noqa: E402
@@ -96,16 +97,16 @@ async def startup():
     event_processor.policy_enforcer = policy_enforcer
 
     # Initialize gRPC server
-    grpc_server = grpc.aio.server()
+    grpc_server = grpc.aio.server(options=default_server_options())
     servicer = ReputationServiceServicer(reputation_service, event_processor)
     reputation_pb2_grpc.add_ReputationServiceServicer_to_server(servicer, grpc_server)
 
     grpc_server_address = f"0.0.0.0:{Config.GRPC_PORT}"
-    grpc_server.add_insecure_port(grpc_server_address)
+    bind_secure_port(grpc_server, grpc_server_address)
     await grpc_server.start()
 
     logger.system(
-        "gRPC server started",
+        "gRPC server started (TLS)",
         action="grpc_startup",
         port=Config.GRPC_PORT,
         address=grpc_server_address

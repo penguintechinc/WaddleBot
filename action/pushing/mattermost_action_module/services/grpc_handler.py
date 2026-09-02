@@ -6,6 +6,7 @@ import grpc
 from grpc import aio
 
 from services.grpc_auth_interceptor import AuthInterceptor, require_auth
+from services.grpc_tls import bind_secure_port, default_server_options
 
 logger = logging.getLogger(__name__)
 
@@ -245,7 +246,10 @@ async def create_grpc_server(
     """
     try:
         # Create gRPC server
-        server = aio.server(interceptors=[AuthInterceptor()])
+        server = aio.server(
+            interceptors=[AuthInterceptor()],
+            options=default_server_options(),
+        )
 
         # Add servicer to server
         servicer = ActionServiceServicer(service)
@@ -253,12 +257,12 @@ async def create_grpc_server(
         # action_pb2_grpc.add_ActionServiceServicer_to_server(servicer, server)
 
         # Add port
-        server.add_insecure_port(f'0.0.0.0:{grpc_port}')
+        bind_secure_port(server, f'0.0.0.0:{grpc_port}')
 
         # Start server in background task
         async def run_server():
             await server.start()
-            logger.info(f"gRPC server started on port {grpc_port}")
+            logger.info(f"gRPC server started (TLS) on port {grpc_port}")
             try:
                 await server.wait_for_termination()
             except asyncio.CancelledError:

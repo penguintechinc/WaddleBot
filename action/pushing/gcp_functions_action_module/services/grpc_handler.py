@@ -13,6 +13,7 @@ import grpc
 from config import Config
 from services.gcp_functions_service import GCPFunctionsService
 from services.grpc_auth_interceptor import AuthInterceptor
+from services.grpc_tls import bind_secure_port, default_server_options
 
 # Import generated proto files (will be generated during Docker build)
 try:
@@ -375,6 +376,7 @@ class GrpcServer:
             self.server = grpc.aio.server(
                 futures.ThreadPoolExecutor(max_workers=Config.MAX_WORKERS),
                 interceptors=self.interceptors,
+                options=default_server_options(),
             )
 
             gcp_functions_action_pb2_grpc.add_GCPFunctionsActionServiceServicer_to_server(
@@ -382,10 +384,10 @@ class GrpcServer:
                 self.server
             )
 
-            self.server.add_insecure_port(f"[::]:{self.port}")
+            bind_secure_port(self.server, f"[::]:{self.port}")
             await self.server.start()
 
-            logger.info(f"gRPC server started on port {self.port}")
+            logger.info(f"gRPC server started (TLS) on port {self.port}")
 
         except Exception as e:
             logger.error(f"Failed to start gRPC server: {e}", exc_info=True)

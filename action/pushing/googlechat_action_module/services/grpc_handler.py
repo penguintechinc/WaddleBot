@@ -21,6 +21,7 @@ except ImportError:
 
 from services.googlechat_service import GoogleChatService
 from services.grpc_auth_interceptor import AuthInterceptor
+from services.grpc_tls import bind_secure_port, default_server_options
 
 
 logger = logging.getLogger(__name__)
@@ -179,12 +180,13 @@ def create_grpc_server(googlechat_service: GoogleChatService, port: int, max_wor
     server = grpc.aio.server(
         futures.ThreadPoolExecutor(max_workers=max_workers),
         interceptors=[AuthInterceptor()],
+        options=default_server_options(),
     )
 
     servicer = GoogleChatActionServicer(googlechat_service)
     googlechat_action_pb2_grpc.add_GoogleChatActionServiceServicer_to_server(servicer, server)
 
-    server.add_insecure_port(f'[::]:{port}')
+    bind_secure_port(server, f'[::]:{port}')
 
-    logger.info(f"gRPC server configured on port {port}")
+    logger.info(f"gRPC server (TLS) configured on port {port}")
     return server

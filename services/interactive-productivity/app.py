@@ -518,17 +518,19 @@ async def start_grpc_server():
         _setup_module_imports('translate_interaction_module')
         from translate_interaction_module.proto import translate_interaction_pb2_grpc
         from translate_interaction_module.services.grpc_handler import TranslateInteractionServicer
+        from flask_core.grpc_tls import bind_secure_port, default_server_options
 
         server = grpc.aio.server(
-            futures.ThreadPoolExecutor(max_workers=10)
+            futures.ThreadPoolExecutor(max_workers=10),
+            options=default_server_options(),
         )
         translate_interaction_pb2_grpc.add_TranslateInteractionServicer_to_server(
             TranslateInteractionServicer(translation_service, dal),
             server,
         )
-        server.add_insecure_port(f"0.0.0.0:50033")
+        bind_secure_port(server, f"0.0.0.0:50033")
         await server.start()
-        logger.info(f"gRPC server listening on port 50033")
+        logger.info(f"gRPC server (TLS) listening on port 50033")
         await server.wait_for_termination()
     except Exception as e:
         logger.warning(f"gRPC server startup failed (translate optional): {e}")
