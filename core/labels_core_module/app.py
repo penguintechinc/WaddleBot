@@ -22,11 +22,14 @@ from flask_core import (  # noqa: E402
     init_database,
     install_community_scoped_auth,
     install_rate_limiting,
+    install_security_headers,
     setup_aaa_logging,
     success_response,
 )
 
 app = Quart(__name__)
+# security.md A05 hardening -- JSON-only service, default deny-everything CSP.
+install_security_headers(app)
 
 # Register health/metrics endpoints
 health_bp = create_health_blueprint(Config.MODULE_NAME, Config.MODULE_VERSION)

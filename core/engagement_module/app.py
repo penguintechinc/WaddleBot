@@ -20,6 +20,7 @@ from quart import Quart, request, jsonify
 import jwt
 from pydal import DAL, Field
 
+from flask_core import install_security_headers
 from flask_core.auth import DEFAULT_TENANT_SLUG
 from flask_core.community_access import bind_shared_read_tables, install_community_scoped_auth
 from flask_core.feature_flags import feature_enabled
@@ -65,6 +66,8 @@ class PreConfiguredQuart(Quart):
 
 
 app = PreConfiguredQuart(__name__)
+# security.md A05 hardening -- JSON-only service, default deny-everything CSP.
+install_security_headers(app)
 config = Config()
 
 for key in dir(config):

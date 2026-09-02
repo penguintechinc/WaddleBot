@@ -17,11 +17,14 @@ from flask_core import (
     error_response,
     create_health_blueprint,
     install_rate_limiting,
+    install_security_headers,
 )
 from config import Config
 
 # Create Quart app
 app = Quart(__name__)
+# security.md A05 hardening -- JSON-only service, default deny-everything CSP.
+install_security_headers(app)
 
 # Health blueprint
 health_bp = create_health_blueprint(Config.MODULE_NAME, Config.MODULE_VERSION)

@@ -28,7 +28,13 @@ from __future__ import annotations
 
 import asyncio
 
-from flask_core import create_health_blueprint, init_database, install_rate_limiting, setup_aaa_logging
+from flask_core import (
+    create_health_blueprint,
+    init_database,
+    install_rate_limiting,
+    install_security_headers,
+    setup_aaa_logging,
+)
 from quart import Quart
 from quart_schema import QuartSchema
 
@@ -56,6 +62,9 @@ def create_app(config: Config | None = None) -> Quart:
 
     logger = setup_aaa_logging(cfg.module_name, cfg.module_version, log_level=cfg.log_level)
     app.config["logger"] = logger
+
+    # security.md A05 hardening -- JSON-only service, default deny-everything CSP.
+    install_security_headers(app)
 
     app.register_blueprint(create_health_blueprint(cfg.module_name, cfg.module_version))
     register_blueprints(app)

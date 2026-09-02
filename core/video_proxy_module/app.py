@@ -22,6 +22,7 @@ from quart.config import Config as QuartConfig
 from pydal import DAL, Field
 import jwt
 
+from flask_core import install_security_headers
 from config import Config
 from services.community_authz import (
     CommunityAccessError,
@@ -74,6 +75,8 @@ class PreConfiguredQuart(Quart):
         super().__init__(*args, **kwargs)
 
 app = PreConfiguredQuart(__name__)
+# security.md A05 hardening -- JSON-only service, default deny-everything CSP.
+install_security_headers(app)
 
 # Load config from Config class
 config = Config()

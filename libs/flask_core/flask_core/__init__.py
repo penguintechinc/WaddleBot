@@ -190,6 +190,12 @@ from .grpc_tls import (
     default_server_options as grpc_default_server_options,
     DEFAULT_MAX_MESSAGE_BYTES as GRPC_DEFAULT_MAX_MESSAGE_BYTES,
 )
+from .security_headers import (
+    install_security_headers,
+    SecurityHeadersConfig,
+    DEFAULT_CSP,
+    OVERLAY_CSP,
+)
 
 __all__ = [
     # Platform version / App Bundle compatibility
@@ -364,4 +370,9 @@ __all__ = [
     "grpc_secure_channel",
     "grpc_default_server_options",
     "GRPC_DEFAULT_MAX_MESSAGE_BYTES",
+    # Security headers (A05 hardening)
+    "install_security_headers",
+    "SecurityHeadersConfig",
+    "DEFAULT_CSP",
+    "OVERLAY_CSP",
 ]

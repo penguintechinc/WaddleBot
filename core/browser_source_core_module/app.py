@@ -19,6 +19,7 @@ from flask_core import (  # noqa: E402
     install_rate_limiting, setup_aaa_logging, success_response)
 from flask_core.auth import verify_service_key  # noqa: E402
 from flask_core.grpc_tls import bind_secure_port, default_server_options  # noqa: E402
+from flask_core.security_headers import OVERLAY_CSP, install_security_headers  # noqa: E402
 from proto import browser_source_pb2_grpc  # noqa: E402
 from services.grpc_handler import BrowserSourceServiceServicer  # noqa: E402
 from services.overlay_service import OverlayService  # noqa: E402
@@ -27,6 +28,26 @@ from services.overlay_service import OverlayService  # noqa: E402
 caption_connections = {}  # community_id -> set of websocket connections
 
 app = Quart(__name__)
+# security.md A05 hardening -- this module serves real OBS browser-source
+# overlay HTML (templates/*.html: inline <script>/<style>, YouTube iframe
+# API, Twitch clip embeds, placeholder images) alongside its JSON API, so
+# it gets the relaxed OVERLAY_CSP rather than the JSON-only DEFAULT_CSP
+# every other core/* module installs.
+#
+# `frame-ancestors` is stripped from the shared OVERLAY_CSP here (unlike
+# svc_presentation, which keeps `frame-ancestors 'none'` unmodified):
+# `overlay_bp`'s two HTML routes below each already return an explicit
+# `X-Frame-Options: ALLOWALL` ("Required for OBS browser source" --
+# intentionally embeddable from any origin, not just direct OBS
+# navigation). CSP `frame-ancestors`, when present, overrides
+# `X-Frame-Options` in every browser that supports it -- shipping the
+# unmodified `'none'` value would silently re-block the exact framing
+# those routes opt into, regardless of what `X-Frame-Options` says.
+# `headers.setdefault()` (see `security_headers.py`) already protects
+# `X-Frame-Options` itself from being clobbered; this is the CSP-specific
+# companion so the two policies stay in agreement instead of fighting.
+_OVERLAY_CSP_FRAMEABLE = OVERLAY_CSP.replace("frame-ancestors 'none'; ", "")
+install_security_headers(app, csp=_OVERLAY_CSP_FRAMEABLE)
 
 # Register health/metrics endpoints
 health_bp = create_health_blueprint(Config.MODULE_NAME, Config.MODULE_VERSION)

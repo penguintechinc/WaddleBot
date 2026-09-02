@@ -12,13 +12,15 @@ runner task started in `before_serving`.
 
 from __future__ import annotations
 
-from flask_core import create_health_blueprint, setup_aaa_logging
+from flask_core import create_health_blueprint, install_security_headers, setup_aaa_logging
 from quart import Quart
 
 from config import ActionConfig
 from services.runner import ActionRunner
 
 app = Quart(__name__)
+# security.md A05 hardening -- JSON-only service, default deny-everything CSP.
+install_security_headers(app)
 
 _config = ActionConfig.from_env()
 
