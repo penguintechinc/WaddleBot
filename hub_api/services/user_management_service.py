@@ -7,6 +7,22 @@ equivalent blueprint with `require_scope("users:admin")` -- present in
 `auth_service.create_session_token` grants exactly when `hub_users.
 is_super_admin` is true, so the scope check is equivalent to Node's
 boolean check, expressed the OIDC-scope way security.md requires.
+
+SECURITY (C3, A01/BOLA fix): that invariant -- "`users:admin` is granted
+exactly when `hub_users.is_super_admin` is true" -- did NOT hold until
+this fix: `flask_core.auth.SCOPE_BUNDLES["tenant"]["admin"]` also granted
+the identical literal `users:admin`, so any tenant owner's JWT satisfied
+this whole blueprint's `require_scope("users:admin")` gate, including
+`assign_super_admin_role` below -- letting a tenant owner promote
+themselves (or anyone) to PLATFORM super admin. The bundle collision is
+fixed at its root in `flask_core/auth.py` (tenant bundle no longer grants
+`users:admin` at all), but `assign_super_admin_role` additionally
+re-validates the caller against `hub_users.is_super_admin` directly
+(`services.community_authz.is_super_admin`, "THE canonical super-admin
+check -- DB-authoritative") before ever toggling that flag on anyone --
+defense in depth, independent of the JWT `scope` claim, so a future
+`SCOPE_BUNDLES` regression can't silently reopen platform-wide privilege
+escalation through this one action.
 """
 
 from __future__ import annotations
@@ -19,6 +35,7 @@ from typing import Any
 
 import bcrypt
 
+from services.community_authz import is_super_admin
 from services.errors import bad_request, conflict, forbidden, not_found
 
 SALT_ROUNDS = (
@@ -145,8 +162,21 @@ async def delete_user(async_dal: Any, dal: Any, *, user_id: int, caller_id: int)
     )
 
 
-async def assign_super_admin_role(async_dal: Any, dal: Any, *, user_id: int, grant: bool) -> bool:
-    """Assign super admin role."""
+async def assign_super_admin_role(
+    async_dal: Any, dal: Any, *, user_id: int, grant: bool, caller_id: int
+) -> bool:
+    """Assign super admin role.
+
+    SECURITY: only a caller who is already a DB-authoritative platform
+    super admin (`hub_users.is_super_admin`, never the JWT `scope` claim
+    alone -- see this module's docstring) may grant OR revoke platform
+    super admin on anyone, including themselves. This is the "separate,
+    higher authority" gate for platform-wide role promotion -- a tenant
+    owner must never be able to grant a platform-wide role, regardless of
+    what scopes their token otherwise carries.
+    """
+    if not await is_super_admin(async_dal, dal, user_id=caller_id):
+        raise forbidden("Platform super admin access required")
     user = await get_user(async_dal, dal, user_id=user_id)
     if bool(user.is_super_admin) == grant:
         return False
