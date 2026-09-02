@@ -23,6 +23,14 @@ from pydal import DAL, Field
 import jwt
 
 from config import Config
+from services.community_authz import (
+    CommunityAccessError,
+    bind_shared_read_tables,
+    extract_user_id,
+    require_admin,
+    require_member,
+)
+from services.rate_limiting import install_rate_limiting
 
 # Custom config dict that provides Quart defaults
 class DefaultConfig(dict):
@@ -102,6 +110,12 @@ db = DAL(
     pool_size=config.DB_POOL_SIZE,
     migrate_enabled=False,
 )
+
+# SECURITY (A01, BOLA/IDOR -- deferred from gh security PR #260): binds the
+# read-only `communities`/`community_members` field subset every
+# `_authorize_community()` call below needs. `migrate=False` -- these
+# tables are owned by hub-api's own migrations, never created here.
+bind_shared_read_tables(db)
 
 # Define database tables
 def init_database():
@@ -196,6 +210,60 @@ def require_auth(f):
     decorated_function.__name__ = f.__name__
     return decorated_function
 
+
+# SECURITY (A04): every route below had zero rate limiting -- shared global
+# before_request hook, see services/rate_limiting.py module docstring.
+install_rate_limiting(
+    app,
+    namespace=config.MODULE_NAME,
+    redis_url=config.REDIS_URL or f"redis://{config.REDIS_HOST}:{config.REDIS_PORT}/{config.REDIS_DB}",
+    verify_jwt_token=verify_jwt_token,
+    jwt_secret_key=config.JWT_SECRET_KEY,
+)
+
+
+async def _authorize_community(raw_community_id, *, admin_required: bool):
+    """Require the authenticated caller be a member/admin of `raw_community_id`.
+
+    SECURITY (A01, BOLA/IDOR -- deferred from gh security PR #260): every
+    route below decoded and verified a bearer JWT (`require_auth`) but
+    never checked the caller actually belonged to the community they were
+    operating on -- any authenticated caller could read/write ANY
+    community's stream config. See `services/community_authz.py` module
+    docstring for the full rationale.
+
+    Args:
+        raw_community_id: The (string or int) community identifier to
+            check -- callers resolve this from the actual DB row being
+            operated on, never trust a client-supplied value in isolation
+            without cross-checking it against the resource's real owner.
+        admin_required: Whether the caller must be a community-admin
+            (mutating routes) or just an active member (read routes)
+            suffices.
+
+    Returns:
+        `None` if authorized; otherwise a `(response, status_code)` tuple
+        the caller must `return` immediately.
+    """
+    payload = getattr(request, "auth_payload", None)
+    if payload is None:
+        return jsonify({"error": "Authentication required"}), 401
+
+    try:
+        community_id = int(raw_community_id)
+    except (TypeError, ValueError):
+        return jsonify({"error": "community_id must be numeric"}), 400
+
+    try:
+        user_id = extract_user_id(payload)
+        check = require_admin if admin_required else require_member
+        check(db, community_id=community_id, user_id=user_id)
+    except CommunityAccessError as e:
+        return jsonify({"error": e.message}), 403
+
+    return None
+
+
 # Helper functions
 def generate_stream_key() -> str:
     """Generate a secure random stream key."""
@@ -273,6 +341,10 @@ async def create_stream_config():
         if not community_id:
             return jsonify({"error": "community_id is required"}), 400
 
+        auth_error = await _authorize_community(community_id, admin_required=True)
+        if auth_error:
+            return auth_error
+
         # Check if config already exists
         existing = db(db.stream_configs.community_id == community_id).select().first()
         if existing:
@@ -323,6 +395,10 @@ async def create_stream_config():
 async def get_stream_config(community_id: str):
     """Get stream configuration for a community."""
     try:
+        auth_error = await _authorize_community(community_id, admin_required=False)
+        if auth_error:
+            return auth_error
+
         config_row = db(db.stream_configs.community_id == community_id).select().first()
 
         if not config_row:
@@ -342,6 +418,10 @@ async def get_stream_config(community_id: str):
 async def regenerate_stream_key(community_id: str):
     """Regenerate stream key for a community."""
     try:
+        auth_error = await _authorize_community(community_id, admin_required=True)
+        if auth_error:
+            return auth_error
+
         config_row = db(db.stream_configs.community_id == community_id).select().first()
 
         if not config_row:
@@ -383,6 +463,10 @@ async def get_destinations(config_id: int):
         if not config_row:
             return jsonify({"error": "Stream config not found"}), 404
 
+        auth_error = await _authorize_community(config_row.community_id, admin_required=False)
+        if auth_error:
+            return auth_error
+
         # Get destinations
         destinations = db(db.stream_destinations.config_id == config_id).select()
 
@@ -418,6 +502,10 @@ async def add_destination():
         config_row = db.stream_configs[config_id]
         if not config_row:
             return jsonify({"error": "Stream config not found"}), 404
+
+        auth_error = await _authorize_community(config_row.community_id, admin_required=True)
+        if auth_error:
+            return auth_error
 
         # Check destination count limits (basic check, license check would go here)
         dest_count = db(db.stream_destinations.config_id == config_id).count()
@@ -462,6 +550,13 @@ async def remove_destination(destination_id: int):
         if not dest_row:
             return jsonify({"error": "Destination not found"}), 404
 
+        config_row = db.stream_configs[dest_row.config_id]
+        if not config_row:
+            return jsonify({"error": "Destination not found"}), 404
+        auth_error = await _authorize_community(config_row.community_id, admin_required=True)
+        if auth_error:
+            return auth_error
+
         # Delete destination
         db(db.stream_destinations.id == destination_id).delete()
         db.commit()
@@ -486,6 +581,13 @@ async def toggle_force_cut(destination_id: int):
         dest_row = db.stream_destinations[destination_id]
         if not dest_row:
             return jsonify({"error": "Destination not found"}), 404
+
+        config_row = db.stream_configs[dest_row.config_id]
+        if not config_row:
+            return jsonify({"error": "Destination not found"}), 404
+        auth_error = await _authorize_community(config_row.community_id, admin_required=True)
+        if auth_error:
+            return auth_error
 
         # Toggle force_cut
         new_force_cut = not dest_row.force_cut
@@ -518,6 +620,10 @@ async def get_stream_status(config_id: int):
         config_row = db.stream_configs[config_id]
         if not config_row:
             return jsonify({"error": "Stream config not found"}), 404
+
+        auth_error = await _authorize_community(config_row.community_id, admin_required=False)
+        if auth_error:
+            return auth_error
 
         # Get status
         status_row = db(db.stream_status.config_id == config_id).select().first()

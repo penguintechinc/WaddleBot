@@ -23,6 +23,7 @@ from pydal import DAL, Field
 from flask_core.auth import DEFAULT_TENANT_SLUG
 from flask_core.community_access import bind_shared_read_tables, install_community_scoped_auth
 from flask_core.feature_flags import feature_enabled
+from flask_core.http_rate_limit import install_rate_limiting
 
 from config import Config
 
@@ -135,6 +136,11 @@ app.config["dal"] = db
 app.config["async_dal"] = _SyncDalAsyncAdapter(db)
 bind_shared_read_tables(db, migrate=config.DB_MIGRATE)
 install_community_scoped_auth(app, exempt_paths=frozenset({"/health"}))
+
+# SECURITY (A04): every route on `app` had zero rate limiting -- shared
+# global before_request hook, see flask_core.http_rate_limit module
+# docstring. `/health` stays exempt (DEFAULT_EXEMPT_PATHS).
+install_rate_limiting(app, namespace=config.MODULE_NAME, redis_url=config.REDIS_URL)
 
 
 def init_database():

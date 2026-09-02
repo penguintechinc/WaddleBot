@@ -20,6 +20,7 @@ from flask_core import (  # noqa: E402
     create_health_blueprint,
     bind_community_read_tables,
     install_community_scoped_auth,
+    install_rate_limiting,
 )
 from flask_core.grpc_tls import bind_secure_port, default_server_options  # noqa: E402
 from config import Config  # noqa: E402
@@ -49,6 +50,11 @@ admin_bp = Blueprint('admin', __name__, url_prefix='/api/v1/admin')
 # omission -- see flask_core.community_access module docstring.
 install_community_scoped_auth(api_bp)
 install_community_scoped_auth(admin_bp)
+
+# SECURITY (A04): every route on `app` (api_bp, admin_bp, internal_bp) had
+# zero rate limiting -- shared global before_request hook, see
+# flask_core.http_rate_limit module docstring.
+install_rate_limiting(app, namespace=Config.MODULE_NAME)
 
 logger = setup_aaa_logging(Config.MODULE_NAME, Config.MODULE_VERSION)
 

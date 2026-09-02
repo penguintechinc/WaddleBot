@@ -60,7 +60,7 @@ class RateLimiter:
         self._fallback_enabled = False
         self._connected = False
 
-    async def connect(self):
+    async def connect(self) -> None:
         """Connect to Redis (call during startup)"""
         if not REDIS_AVAILABLE:
             logger.warning(
@@ -98,7 +98,7 @@ class RateLimiter:
             else:
                 raise
 
-    async def disconnect(self):
+    async def disconnect(self) -> None:
         """Disconnect from Redis (call during shutdown)"""
         if self._redis:
             await self._redis.close()

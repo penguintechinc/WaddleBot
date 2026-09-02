@@ -10,7 +10,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'lib
 
 from config import Config  # noqa: E402
 from flask_core import (  # noqa: E402
-    async_endpoint, create_health_blueprint, init_database, setup_aaa_logging, success_response,
+    async_endpoint, create_health_blueprint, init_database, install_rate_limiting,
+    setup_aaa_logging, success_response,
 )
 
 # Import services
@@ -29,6 +30,11 @@ app = Quart(__name__)
 # Register health/metrics endpoints
 health_bp = create_health_blueprint(Config.MODULE_NAME, Config.MODULE_VERSION)
 app.register_blueprint(health_bp)
+
+# SECURITY (A04): every workflow/execution CRUD route had zero rate
+# limiting -- shared global before_request hook, see
+# flask_core.http_rate_limit module docstring.
+install_rate_limiting(app, namespace=Config.MODULE_NAME, redis_url=Config.REDIS_URL)
 
 # API Blueprint for v1
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
@@ -131,9 +137,19 @@ async def startup():
         }
     )
     try:
-        # Initialize database
-        dal = init_database(Config.DATABASE_URI)
+        # Initialize database. `tenant_middleware` (added for the A01
+        # community-scoping fix below) calls `dal(query)` directly, which
+        # only the raw pydal `DAL` supports -- `AsyncDAL` has no `__call__`.
+        # Store both under the same `dal`/`async_dal` config keys
+        # `core/svc_streaming`, `core/svc_presentation`, and
+        # `security_core_module` already use for this identical split;
+        # `PermissionService`/`WorkflowService`/`WorkflowEngine` only ever
+        # call `.executesql()` (never an `AsyncDAL`-only async method), so
+        # the raw pydal object works for them unchanged.
+        async_dal = init_database(Config.DATABASE_URI)
+        dal = async_dal.dal
         app.config['dal'] = dal
+        app.config['async_dal'] = async_dal
 
         # Initialize services
         license_service = LicenseService(
