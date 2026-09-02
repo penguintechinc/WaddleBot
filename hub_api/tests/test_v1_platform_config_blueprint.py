@@ -271,6 +271,93 @@ class TestTestPlatformConnection:
         assert body["data"]["valid"] is False
 
 
+class TestTestPlatformConnectionDecryptsEncryptedCredentials:
+    """SECURITY (HIGH): `test_platform_connection()` must decrypt before sending to the provider.
+
+    `credential_manager_module`'s refresh service encrypts `access_token`
+    at rest and sets `is_encrypted = TRUE`; this group proves the
+    superadmin "test credential" feature sends the real, decrypted token
+    to the platform's own API -- not ciphertext -- via the SAME
+    `httpx.MockTransport` pattern `TestTestPlatformConnection` uses,
+    asserting on the actual `Authorization` header the mock transport
+    received.
+
+    Fail-first proof: with `platform_config_service.test_platform_connection`'s
+    `decrypt_if_needed(...)` call reverted to plain `row.access_token` (no
+    decryption at all), `test_encrypted_token_is_decrypted_before_send`
+    went red as expected (the mock transport observed the raw ciphertext
+    in the `Authorization` header, not the real token). Reverted after
+    confirming; see PR report for the exact before/after run.
+    """
+
+    # Fixed test-only AES key, not a real credential.
+    _KEY = "d4f9317783becee1a4415c1a1229b9258e7a90b768d72a9e2c7dc891af661df6"  # gitleaks:allow
+
+    def _encrypt_for_test(self, plaintext: str) -> str:
+        """Same AES-256-GCM wire format as `token_crypto`/`platform_integrations_crypto`."""
+        import base64
+        import os as _os
+
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+        key = bytes.fromhex(self._KEY)
+        iv = _os.urandom(12)
+        ciphertext_and_tag = AESGCM(key).encrypt(iv, plaintext.encode("utf-8"), None)
+        return base64.b64encode(iv + ciphertext_and_tag).decode("ascii")
+
+    def _patch_httpx(self, monkeypatch: Any, handler: Any) -> None:
+        real_async_client = httpx.AsyncClient
+
+        def _factory(*args: Any, **kwargs: Any) -> httpx.AsyncClient:
+            kwargs["transport"] = httpx.MockTransport(handler)
+            return real_async_client(*args, **kwargs)
+
+        monkeypatch.setattr(httpx, "AsyncClient", _factory)
+
+    async def test_encrypted_token_is_decrypted_before_send(
+        self, client: Any, platform_db: Any, monkeypatch: Any
+    ) -> None:
+        monkeypatch.setenv("CREDENTIAL_ENCRYPTION_KEY", self._KEY)
+        real_token = "real-plaintext-twitch-oauth-token"
+        encrypted_token = self._encrypt_for_test(real_token)
+        _seed_bot_credential(platform_db, platform="twitch", access_token=encrypted_token)
+
+        received_auth_header: dict[str, str] = {}
+
+        def _handler(req: httpx.Request) -> httpx.Response:
+            received_auth_header["value"] = req.headers.get("authorization", "")
+            return httpx.Response(200, json={})
+
+        self._patch_httpx(monkeypatch, _handler)
+        response = await client.post(
+            "/api/v1/superadmin/platform-config/twitch/test", headers=_admin_headers()
+        )
+        body = await response.get_json()
+        assert body["data"]["valid"] is True
+        assert real_token in received_auth_header["value"]
+
+    async def test_legacy_plaintext_token_still_works(
+        self, client: Any, platform_db: Any, monkeypatch: Any
+    ) -> None:
+        """A pre-fix row (`is_encrypted` not actually true ciphertext) still authenticates."""
+        monkeypatch.setenv("CREDENTIAL_ENCRYPTION_KEY", self._KEY)
+        _seed_bot_credential(platform_db, platform="twitch", access_token="tok_abc")
+
+        received_auth_header: dict[str, str] = {}
+
+        def _handler(req: httpx.Request) -> httpx.Response:
+            received_auth_header["value"] = req.headers.get("authorization", "")
+            return httpx.Response(200, json={})
+
+        self._patch_httpx(monkeypatch, _handler)
+        response = await client.post(
+            "/api/v1/superadmin/platform-config/twitch/test", headers=_admin_headers()
+        )
+        body = await response.get_json()
+        assert body["data"]["valid"] is True
+        assert "tok_abc" in received_auth_header["value"]
+
+
 class TestHubSettings:
     async def test_get_settings_empty(self, client: Any) -> None:
         response = await client.get("/api/v1/superadmin/settings", headers=_admin_headers())

@@ -11,11 +11,13 @@ Executes outbound webhook actions in workflows with support for:
 - Async execution with httpx
 """
 
+import ast
 import asyncio
 import hashlib
 import hmac
 import json
 import logging
+import operator
 import re
 import time
 from datetime import datetime, timedelta
@@ -99,6 +101,137 @@ class HMACSignatureGenerator:
         return hmac.compare_digest(expected_signature, signature)
 
 
+class UnsafeExpressionError(Exception):
+    """Raised when a `$(...)` webhook-template expression uses a disallowed construct."""
+
+
+class SafeExpressionEvaluator:
+    """AST-walking evaluator for the `$(...)` webhook-template mini-language.
+
+    Replaces `eval(expr, {"__builtins__": {}}, context)` (SECURITY C8,
+    OWASP A03/RCE): stripping `__builtins__` from an `eval()` globals dict
+    is a well-known escapable sandbox -- attribute-chain gadgets such as
+    `().__class__.__bases__[0].__subclasses__()` reach arbitrary Python
+    objects (and from there, `os.system`/`subprocess`/etc.) without ever
+    touching the stripped `__builtins__` mapping, since object attribute
+    access happens through the object's own `__class__`, not through
+    builtins lookup. This evaluator never calls `eval`/`exec`/`compile` on
+    attacker-controlled input -- it parses the expression into an
+    `ast.Expression` and walks it, evaluating only an explicit allowlist
+    of node types (arithmetic, comparisons, boolean logic, bare-name
+    lookups into `context`). Attribute access, subscripting, function
+    calls, comprehensions, lambdas, and imports are all refused
+    (`UnsafeExpressionError`) -- there is no gadget surface to escape
+    because nothing here ever resolves an object's `__class__`/
+    `__globals__`/`__subclasses__`; those are `ast.Attribute` nodes, which
+    this evaluator doesn't implement at all.
+    """
+
+    _BINOPS: Dict[type, Any] = {
+        ast.Add: operator.add,
+        ast.Sub: operator.sub,
+        ast.Mult: operator.mul,
+        ast.Div: operator.truediv,
+        ast.FloorDiv: operator.floordiv,
+        ast.Mod: operator.mod,
+        ast.Pow: operator.pow,
+    }
+    _UNARYOPS: Dict[type, Any] = {
+        ast.UAdd: operator.pos,
+        ast.USub: operator.neg,
+        ast.Not: operator.not_,
+    }
+    _COMPARES: Dict[type, Any] = {
+        ast.Eq: operator.eq,
+        ast.NotEq: operator.ne,
+        ast.Lt: operator.lt,
+        ast.LtE: operator.le,
+        ast.Gt: operator.gt,
+        ast.GtE: operator.ge,
+        ast.In: lambda a, b: a in b,
+        ast.NotIn: lambda a, b: a not in b,
+    }
+
+    def __init__(self, context: Dict[str, Any]):
+        self._context = context
+
+    def evaluate(self, expr: str) -> Any:
+        """Parse and evaluate `expr`; raises `UnsafeExpressionError` for any disallowed construct."""
+        try:
+            tree = ast.parse(expr, mode="eval")
+        except SyntaxError as exc:
+            raise UnsafeExpressionError(f"invalid expression syntax: {exc}") from exc
+        return self._eval(tree)
+
+    def _eval(self, node: ast.AST) -> Any:
+        if isinstance(node, ast.Expression):
+            return self._eval(node.body)
+
+        if isinstance(node, ast.Constant):
+            return node.value
+
+        if isinstance(node, ast.Name):
+            # Dunder/private names are refused even though this evaluator
+            # never implements ast.Attribute -- defense in depth against a
+            # `context` dict that happens to hold a key like `__class__`.
+            if node.id.startswith("_"):
+                raise UnsafeExpressionError(f"disallowed name: {node.id}")
+            return self._context.get(node.id)
+
+        if isinstance(node, ast.BinOp):
+            op = self._BINOPS.get(type(node.op))
+            if op is None:
+                raise UnsafeExpressionError(f"disallowed operator: {type(node.op).__name__}")
+            return op(self._eval(node.left), self._eval(node.right))
+
+        if isinstance(node, ast.UnaryOp):
+            op = self._UNARYOPS.get(type(node.op))
+            if op is None:
+                raise UnsafeExpressionError(f"disallowed operator: {type(node.op).__name__}")
+            return op(self._eval(node.operand))
+
+        if isinstance(node, ast.BoolOp):
+            values = [self._eval(v) for v in node.values]
+            if isinstance(node.op, ast.And):
+                result: Any = values[0]
+                for value in values[1:]:
+                    result = result and value
+                return result
+            result = values[0]
+            for value in values[1:]:
+                result = result or value
+            return result
+
+        if isinstance(node, ast.Compare):
+            left = self._eval(node.left)
+            outcome = True
+            for op_node, comparator in zip(node.ops, node.comparators):
+                op = self._COMPARES.get(type(op_node))
+                if op is None:
+                    raise UnsafeExpressionError(
+                        f"disallowed comparison: {type(op_node).__name__}"
+                    )
+                right = self._eval(comparator)
+                if not op(left, right):
+                    outcome = False
+                    break
+                left = right
+            return outcome
+
+        if isinstance(node, (ast.Tuple, ast.List)):
+            # Literal tuples/lists of otherwise-allowed elements only --
+            # needed for `x in (1, 2, 3)`/`x in ['a', 'b']`. Each element
+            # still goes through this same allowlisted `_eval`, so this
+            # adds no new gadget surface (no arbitrary object is ever
+            # constructed, only nested constants/names/expressions).
+            values = tuple(self._eval(elt) for elt in node.elts)
+            return values if isinstance(node, ast.Tuple) else list(values)
+
+        raise UnsafeExpressionError(
+            f"disallowed expression construct: {type(node).__name__}"
+        )
+
+
 class ExpressionTemplater:
     """Handles expression substitution in webhook payloads."""
 
@@ -141,13 +274,18 @@ class ExpressionTemplater:
 
         result = ExpressionTemplater.EXPRESSION_PATTERN.sub(replace_variable, result)
 
-        # Handle $(expression) format (simple evaluation)
+        # Handle $(expression) format -- arithmetic/comparison/boolean
+        # evaluation via SafeExpressionEvaluator's AST allowlist, never
+        # eval() (SECURITY C8 -- see that class's own docstring for why
+        # `eval(expr, {"__builtins__": {}}, context)` was an escapable
+        # sandbox, not a safe one).
         def evaluate_expression(match):
             expr = match.group(1)
             try:
-                # Only allow safe evaluations (no import, exec, eval of dangerous code)
-                # Support basic operations: comparisons, arithmetic, string concat
-                return str(eval(expr, {"__builtins__": {}}, context))
+                return str(SafeExpressionEvaluator(context).evaluate(expr))
+            except UnsafeExpressionError as e:
+                logger.warning(f"Rejected unsafe expression '{expr}': {e}")
+                return match.group(0)  # Return original if expression is disallowed
             except Exception as e:
                 logger.warning(f"Failed to evaluate expression '{expr}': {e}")
                 return match.group(0)  # Return original if evaluation fails

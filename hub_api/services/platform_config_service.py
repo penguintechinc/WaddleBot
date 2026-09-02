@@ -29,6 +29,7 @@ import httpx
 
 from services.auth_service import get_hub_settings_map
 from services.errors import not_found
+from services.platform_integrations_crypto import decrypt_if_needed
 
 _TWITCH_VALIDATE_URL = "https://id.twitch.tv/oauth2/validate"
 _DISCORD_ME_URL = "https://discord.com/api/users/@me"
@@ -175,7 +176,13 @@ async def test_platform_connection(
     row = rows.first()
     if not row.access_token:
         return True, None
-    return await _test_token(platform, row.access_token)
+    # SECURITY (HIGH): `credential_manager_module`'s refresh service
+    # encrypts this column at rest (`is_encrypted = TRUE`) -- decrypt
+    # before sending to the platform's own validation API, or a
+    # since-refreshed row sends ciphertext and reports a false
+    # "invalid token". See `platform_integrations_crypto`'s own docstring.
+    access_token = decrypt_if_needed(row.access_token, is_encrypted=bool(row.is_encrypted))
+    return await _test_token(platform, access_token)
 
 
 async def get_hub_settings(async_dal: Any, dal: Any) -> dict[str, str]:

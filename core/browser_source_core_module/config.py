@@ -38,6 +38,10 @@ class Config:  # noqa: E302
     # is enough to prove a real secret is configured.
     MODULE_SECRET_KEY = os.getenv('MODULE_SECRET_KEY') or SECRET_KEY
     JWT_ALGORITHM = 'HS256'
+    # SECURITY (C6): `/api/v1/internal/captions` gates on this -- was
+    # previously never defined at all, so the endpoint's own `hasattr()`
+    # guard silently skipped auth entirely, always.
+    SERVICE_API_KEY = os.getenv('SERVICE_API_KEY', '')
 
     # Redis Configuration (for credential refresh notifications)
     REDIS_URL: str = os.getenv('REDIS_URL', '')

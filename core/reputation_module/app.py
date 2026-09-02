@@ -18,6 +18,8 @@ from flask_core import (  # noqa: E402
     success_response,
     error_response,
     create_health_blueprint,
+    bind_community_read_tables,
+    install_community_scoped_auth,
 )
 from config import Config  # noqa: E402
 from services.reputation_service import ReputationService  # noqa: E402
@@ -37,6 +39,15 @@ app.register_blueprint(health_bp)
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
 internal_bp = Blueprint('internal', __name__, url_prefix='/api/v1/internal')
 admin_bp = Blueprint('admin', __name__, url_prefix='/api/v1/admin')
+
+# SECURITY (C6, A01 -- unauthenticated access): `api_bp` (community/global
+# reputation reads) and `admin_bp` (community-scoped reputation writes)
+# had ZERO authentication -- `internal_bp` already gates on
+# `_verify_service_key()` below, but these two did not. Registered once
+# per blueprint so a route added later can't ship without this check by
+# omission -- see flask_core.community_access module docstring.
+install_community_scoped_auth(api_bp)
+install_community_scoped_auth(admin_bp)
 
 logger = setup_aaa_logging(Config.MODULE_NAME, Config.MODULE_VERSION)
 
@@ -66,7 +77,12 @@ async def startup():
     logger.system("Starting reputation_module", action="startup")
 
     dal = init_database(Config.DATABASE_URL)
-    app.config['dal'] = dal
+    # SECURITY (C6): `async_dal`/`dal` under the two config keys
+    # `install_community_scoped_auth`/`community_access` expect -- matches
+    # `core/svc_streaming/app.py`'s established convention.
+    app.config['async_dal'] = dal
+    app.config['dal'] = dal.dal
+    bind_community_read_tables(app.config['dal'], migrate=Config.DB_MIGRATE)
 
     # Initialize services
     weight_manager = WeightManager(dal, logger)

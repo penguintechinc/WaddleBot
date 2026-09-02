@@ -27,6 +27,12 @@ class Config:
     MODULE_VERSION: str = os.getenv("MODULE_VERSION", "1.0.0")
     MODULE_SECRET_KEY: str = require_secret_key("MODULE_SECRET_KEY")
 
+    # Whether to issue CREATE TABLE DDL for the read-only tenants/
+    # communities/community_members subset `flask_core.
+    # bind_shared_read_tables` binds for community-scoped authz. Prod
+    # NEVER migrates these -- owned by hub-api's own migrations.
+    DB_MIGRATE: bool = os.getenv("DB_MIGRATE", "false").strip().lower() in {"1", "true", "yes", "on"}
+
     # Redis Configuration (for credential refresh notifications)
     REDIS_URL: str = os.getenv("REDIS_URL", "")
 

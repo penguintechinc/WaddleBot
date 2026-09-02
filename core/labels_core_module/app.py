@@ -16,9 +16,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'lib
 from config import Config  # noqa: E402
 from flask_core import (  # noqa: E402
     async_endpoint,
+    bind_community_read_tables,
     create_health_blueprint,
     error_response,
     init_database,
+    install_community_scoped_auth,
     setup_aaa_logging,
     success_response,
 )
@@ -31,6 +33,13 @@ app.register_blueprint(health_bp)
 
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
 logger = setup_aaa_logging(Config.MODULE_NAME, Config.MODULE_VERSION)
+
+# SECURITY (C6, A01 -- unauthenticated access): every api_bp route had ZERO
+# authentication -- any caller reaching this service's network address
+# could read/write ANY community's labels. Registered once for the whole
+# blueprint so a route added later can't ship without this check by
+# omission -- see flask_core.community_access module docstring.
+install_community_scoped_auth(api_bp)
 
 dal = None
 
@@ -134,8 +143,15 @@ async def startup():
     global dal
     logger.system("Starting labels_core_module", action="startup")
     dal = init_database(Config.DATABASE_URL)
-    define_tables(dal)
-    app.config['dal'] = dal
+    define_tables(dal.dal)
+    # SECURITY (C6): `async_dal` (this AsyncDAL wrapper) and `dal` (the
+    # real pydal DAL it proxies attribute access to) are stored under the
+    # two config keys `install_community_scoped_auth`/`community_access`
+    # expect -- matches `core/svc_streaming/app.py`'s established
+    # convention.
+    app.config['async_dal'] = dal
+    app.config['dal'] = dal.dal
+    bind_community_read_tables(app.config['dal'], migrate=Config.DB_MIGRATE)
     logger.system("labels_core_module started", result="SUCCESS")
 
 
