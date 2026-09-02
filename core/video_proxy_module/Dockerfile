@@ -17,6 +17,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Copy shared library
+COPY libs/flask_core /app/libs/flask_core
+
+# Install shared library
+RUN uv pip install --system --no-cache /app/libs/flask_core
+
 # Copy requirements
 COPY core/video_proxy_module/requirements.txt /app/
 
