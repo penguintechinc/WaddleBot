@@ -23,10 +23,12 @@ const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
 const API_URL = process.env.API_URL || BASE_URL.replace(':3000', ':8060');
 const TIMEOUT = 10000; // 10 seconds per page
 
-// Test user credentials (default admin)
+// Test user credentials (default admin). No hardcoded fallback (CWE-798) --
+// must match whatever the target instance was actually provisioned with
+// (see config/postgres/migrations/081_seed_default_hub_admin.sql).
 const TEST_USER = {
-  email: 'admin@localhost.local',
-  password: 'admin123'
+  email: process.env.HUB_TEST_EMAIL || process.env.INITIAL_ADMIN_EMAIL || 'admin@localhost.local',
+  password: process.env.HUB_TEST_PASS || process.env.INITIAL_ADMIN_PASSWORD || ''
 };
 
 // Pages to test

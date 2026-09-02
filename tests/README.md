@@ -232,7 +232,9 @@ Create `tests/e2e/<workflow>.spec.js` for complete user journeys
 
 ### API Tests Failing
 - Check API is accessible: `curl http://localhost:8060/api/v1/health`
-- Verify test user exists: admin@localhost.local / admin123
+- Verify a test admin exists and `HUB_TEST_EMAIL`/`HUB_TEST_PASS` (or
+  `INITIAL_ADMIN_EMAIL`/`INITIAL_ADMIN_PASSWORD`) match it -- no default
+  admin credential is created automatically (CWE-798 fix)
 - Check for port conflicts
 
 ### Integration Tests Failing

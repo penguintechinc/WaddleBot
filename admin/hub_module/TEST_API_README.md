@@ -71,8 +71,8 @@ Show full response bodies (useful for debugging):
 |--------|-------------|---------|
 | `-h, --help` | Show help message | - |
 | `-u, --url URL` | Hub module URL | `http://localhost:8060` |
-| `-e, --email EMAIL` | Admin email | `admin@localhost` |
-| `-p, --password PASS` | Admin password | `admin123` |
+| `-e, --email EMAIL` | Admin email | `$INITIAL_ADMIN_EMAIL`, or `admin@localhost.local` |
+| `-p, --password PASS` | Admin password | `$INITIAL_ADMIN_PASSWORD`, if set (no hardcoded default -- CWE-798 fix) |
 | `-v, --verbose` | Show response bodies | `false` |
 
 ## Exit Codes

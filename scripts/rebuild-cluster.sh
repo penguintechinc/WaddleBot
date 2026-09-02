@@ -34,6 +34,11 @@ export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-waddlebot123}"
 export REDIS_PASSWORD="${REDIS_PASSWORD:-redis123}"
 export MINIO_ROOT_USER="${MINIO_ROOT_USER:-minioadmin}"
 export MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD:-minioadmin}"
+# SECURITY (CWE-798): dev/local-only bootstrap credential -- matches the
+# default in docker-compose.yml's db-migrations service. Override via .env
+# to change the local admin login; never used as a fallback in beta/prod.
+export INITIAL_ADMIN_EMAIL="${INITIAL_ADMIN_EMAIL:-admin@localhost.local}"
+export INITIAL_ADMIN_PASSWORD="${INITIAL_ADMIN_PASSWORD:-WaddleDev-Local-Only-2026!}"
 
 show_help() {
     cat << EOF
@@ -254,6 +259,10 @@ seed_admin() {
 
     log_step "Seeding admin user..."
 
+    # seed_admin.sql reads ADMIN_EMAIL/ADMIN_PASSWORD via psql's \getenv --
+    # reuse the same dev-only INITIAL_ADMIN_EMAIL/PASSWORD exported above
+    # (single source of truth for the local admin login).
+    ADMIN_EMAIL="$INITIAL_ADMIN_EMAIL" ADMIN_PASSWORD="$INITIAL_ADMIN_PASSWORD" \
     PGPASSWORD="$POSTGRES_PASSWORD" psql \
         -h localhost \
         -p 5432 \
@@ -322,9 +331,9 @@ show_summary() {
     if [ "$SKIP_SEED" = false ]; then
         echo ""
         echo -e "${CYAN}Hub Module Admin Login:${NC}"
-        echo -e "  Email: ${BLUE}admin@localhost${NC}"
-        echo -e "  Password: ${BLUE}admin123${NC}"
-        echo -e "  ${YELLOW}⚠ Change credentials in production!${NC}"
+        echo -e "  Email: ${BLUE}${INITIAL_ADMIN_EMAIL}${NC}"
+        echo -e "  Password: (from INITIAL_ADMIN_PASSWORD -- set in .env, or the local dev default; not echoed)"
+        echo -e "  ${YELLOW}⚠ Dev-only credential. Set INITIAL_ADMIN_EMAIL/INITIAL_ADMIN_PASSWORD explicitly in beta/prod -- never a default there.${NC}"
     fi
 
     echo ""

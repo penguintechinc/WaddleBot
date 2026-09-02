@@ -12,7 +12,7 @@
 const { test, expect } = require('./fixtures');
 
 const TEST_EMAIL = process.env.HUB_TEST_EMAIL || 'admin@localhost.local';
-const TEST_PASS = process.env.HUB_TEST_PASS || 'admin123';
+const TEST_PASS = process.env.HUB_TEST_PASS || process.env.INITIAL_ADMIN_PASSWORD || 'admin123';
 const COMMUNITY_ID = process.env.TEST_COMMUNITY_ID || '1';
 
 // ---------------------------------------------------------------------------

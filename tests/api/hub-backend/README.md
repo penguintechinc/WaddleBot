@@ -61,10 +61,12 @@ OAuth platform responses (Twitch, Discord, YouTube, Slack) are mocked using `noc
 
 ## Test User Credentials
 
-Tests use these default credentials:
+`ADMIN_USER` in `setup.js` reads `HUB_TEST_EMAIL`/`HUB_TEST_PASS`, falling
+back to `INITIAL_ADMIN_EMAIL`/`INITIAL_ADMIN_PASSWORD` -- no admin
+credential is hardcoded (CWE-798 fix). Set one of those to match whatever
+the target `API_BASE_URL` instance was actually provisioned with.
 
-- **Admin**: admin@localhost.local / admin123
-- **Test User**: test@test.com / Test123!
+- **Test User** (mocked, not a real login): test@test.com / Test123!
 
 ## Writing New Tests
 

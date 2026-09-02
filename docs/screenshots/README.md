@@ -14,9 +14,9 @@ This directory contains screenshots of the Waddles admin interface and features.
 2. Access the admin portal at http://localhost:8060
    - Note: You may need to expose port 8060 in docker-compose.yml first
 
-3. Login with default credentials:
-   - Username: `admin@localhost`
-   - Password: `admin123`
+3. Login with the local dev admin credentials (`INITIAL_ADMIN_EMAIL` /
+   `INITIAL_ADMIN_PASSWORD` in `docker-compose.yml`, overridable via `.env`;
+   no built-in default in production -- see `docs/hub_module/USAGE.md`)
 
 4. Take screenshots of key pages and save them here
 

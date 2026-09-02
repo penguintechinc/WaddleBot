@@ -1,4 +1,4 @@
--- Migration 081: Seed default hub admin user + default hub_settings/cookie
+-- Migration 081: First-run admin bootstrap + default hub_settings/cookie
 -- policy, migrated out of admin/hub_module/backend/src/index.js's
 -- initializeDatabase(). That function is now skipped in every deployment
 -- (docker-compose.yml/Helm set SKIP_DB_INIT=true) because it unconditionally
@@ -10,20 +10,24 @@
 -- These SQL migrations already own the schema (as documented in
 -- hub_api/PORTING.md's "the house pattern") -- so the one thing
 -- initializeDatabase() did that SQL migrations don't yet cover, the
--- one-time dev/demo admin-user + default-settings seed, moves here instead
+-- one-time first-run admin-user + default-settings seed, moves here instead
 -- of being silently lost when SKIP_DB_INIT=true.
+--
+-- SECURITY (CWE-798, OWASP A07): this migration NEVER plants a default or
+-- known credential. It creates an initial super-admin ONLY when both
+-- waddlebot.initial_admin_email / waddlebot.initial_admin_password custom
+-- GUCs are populated (from the INITIAL_ADMIN_EMAIL / INITIAL_ADMIN_PASSWORD
+-- process env vars -- see alembic/versions/0001_baseline_from_sql_migrations.py
+-- and config/postgres/migrations/run-migrations.sh, which both set these
+-- GUCs via `SELECT set_config(...)` before this file runs, in whichever
+-- execution path applies) AND only if no super-admin exists yet. If the env
+-- vars are unset, NO admin account is created -- boot continues normally.
 --
 -- Uses pgcrypto's crypt(..., gen_salt('bf', 12)) to produce a real bcrypt
 -- hash ($2a$/$2b$) -- interoperable with Node's `bcrypt` package
--- (admin/hub_module/backend/src/middleware/auth or similar calls
+-- (admin/hub_module/backend/src/utils/adminBootstrap.js calls
 -- bcrypt.compare() against whatever is in password_hash; bcrypt's hash
 -- format isn't implementation-specific).
---
--- Dev/demo bootstrap credential only (admin@localhost.local / admin123),
--- matching the exact account initializeDatabase() used to create -- not a
--- new credential, just relocated. NODE_ENV defaults to "development"
--- (docker-compose.yml) in every environment this migration currently runs
--- in; the login page itself doesn't pre-fill or display these values.
 
 BEGIN;
 
@@ -31,19 +35,32 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 DO $$
 DECLARE
+    v_admin_email TEXT := NULLIF(current_setting('waddlebot.initial_admin_email', true), '');
+    v_admin_password TEXT := NULLIF(current_setting('waddlebot.initial_admin_password', true), '');
     v_admin_id INTEGER;
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM hub_users WHERE email = 'admin@localhost.local') THEN
+    IF v_admin_email IS NULL OR v_admin_password IS NULL THEN
+        RAISE NOTICE 'INITIAL_ADMIN_EMAIL/INITIAL_ADMIN_PASSWORD not set - skipping initial admin bootstrap. No default admin account is created.';
+    ELSIF EXISTS (SELECT 1 FROM hub_users WHERE is_super_admin = true) THEN
+        RAISE NOTICE 'A super-admin already exists - skipping initial admin bootstrap.';
+    ELSE
         INSERT INTO hub_users (email, username, password_hash, is_super_admin, is_active, email_verified)
         VALUES (
-            'admin@localhost.local',
-            'admin@localhost.local',
-            crypt('admin123', gen_salt('bf', 12)),
+            v_admin_email,
+            v_admin_email,
+            crypt(v_admin_password, gen_salt('bf', 12)),
             true,
             true,
             true
         )
+        ON CONFLICT (email) DO NOTHING
         RETURNING id INTO v_admin_id;
+
+        IF v_admin_id IS NULL THEN
+            RAISE WARNING 'Initial admin bootstrap: INITIAL_ADMIN_EMAIL is already in use by an existing account - not escalating it to super-admin.';
+        ELSE
+            RAISE NOTICE 'Initial super-admin created with ID: %', v_admin_id;
+        END IF;
     END IF;
 END
 $$;

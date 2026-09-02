@@ -13,8 +13,14 @@
 const { execFileSync } = require('child_process');
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
-const TEST_EMAIL = process.env.HUB_TEST_EMAIL || 'admin@localhost.local';
-const TEST_PASS = process.env.HUB_TEST_PASS || 'admin123';
+// SECURITY (CWE-798): no hardcoded fallback credential. HUB_TEST_EMAIL/PASS
+// take priority (CI-supplied secret); otherwise this reuses whatever
+// INITIAL_ADMIN_EMAIL/PASSWORD the target environment was actually
+// provisioned with (see docker-compose.yml / config/postgres/migrations/
+// 081_seed_default_hub_admin.sql). If neither is set, seeding is skipped
+// entirely rather than falling back to a known/guessable password.
+const TEST_EMAIL = process.env.HUB_TEST_EMAIL || process.env.INITIAL_ADMIN_EMAIL || 'admin@localhost.local';
+const TEST_PASS = process.env.HUB_TEST_PASS || process.env.INITIAL_ADMIN_PASSWORD || '';
 
 // K8s context — auto-detect from BASE_URL or explicit env var
 function detectK8sContext() {
@@ -25,6 +31,15 @@ function detectK8sContext() {
 
 async function globalSetup() {
   console.log(`[global-setup] Checking test user at ${BASE_URL}...`);
+
+  if (!TEST_PASS) {
+    console.error(
+      '[global-setup] WARNING: No test password available (set HUB_TEST_PASS or ' +
+      'INITIAL_ADMIN_PASSWORD). Skipping seed -- tests requiring authentication will fail ' +
+      'rather than seeding a guessable default credential.'
+    );
+    return;
+  }
 
   // Try to login — if it succeeds, the user exists and we're good
   const userExists = await checkTestUser();
@@ -97,15 +112,18 @@ async function seedViaKubectl() {
   const context = detectK8sContext();
   const namespace = 'waddlebot';
 
-  // Bcrypt hash of 'admin123' (cost 12) — matches config/postgres/seed_admin.sql
-  const passwordHash = '$2b$12$4bHCtATjQNY//n42FMy/P.Uieygqwj.Hh5FbuPJJweqXcZbaTSK0u';
+  // SECURITY (CWE-798): no precomputed/static hash. The hash is derived
+  // in-database via pgcrypto from TEST_PASS (HUB_TEST_PASS/INITIAL_ADMIN_PASSWORD),
+  // which is never a hardcoded literal -- see the TEST_PASS guard in globalSetup().
+  const sqlLiteral = (s) => `'${String(s).replace(/'/g, "''")}'`;
 
   const seedSql = [
+    `CREATE EXTENSION IF NOT EXISTS pgcrypto;`,
     // Create global tenant (if not exists)
     `INSERT INTO tenants (slug, display_name, is_global) VALUES ('global', 'Waddles Global', TRUE) ON CONFLICT (slug) DO NOTHING;`,
     // Create admin user
     `INSERT INTO hub_users (email, username, password_hash, is_active, is_super_admin, email_verified, created_at, updated_at)`,
-    `VALUES ('${TEST_EMAIL}', 'admin', '${passwordHash}', true, true, true, NOW(), NOW())`,
+    `VALUES (${sqlLiteral(TEST_EMAIL)}, 'admin', crypt(${sqlLiteral(TEST_PASS)}, gen_salt('bf', 12)), true, true, true, NOW(), NOW())`,
     `ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash, is_super_admin = true, is_active = true, email_verified = true, updated_at = NOW();`,
     // Create global community
     `INSERT INTO communities (name, display_name, description, is_public, is_active, is_global, platform, member_count, tenant_id, created_at)`,
@@ -115,7 +133,7 @@ async function seedViaKubectl() {
     `INSERT INTO community_members (community_id, user_id, role, is_active, joined_at)`,
     `SELECT c.id, u.id, 'admin', true, NOW()`,
     `FROM hub_users u CROSS JOIN communities c`,
-    `WHERE u.email = '${TEST_EMAIL}' AND c.name = 'waddlebot-global'`,
+    `WHERE u.email = ${sqlLiteral(TEST_EMAIL)} AND c.name = 'waddlebot-global'`,
     `ON CONFLICT (community_id, user_id) DO UPDATE SET role = 'admin', is_active = true;`,
   ].join(' ');
 

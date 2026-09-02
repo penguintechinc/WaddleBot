@@ -11,7 +11,29 @@ DB_NAME="${POSTGRES_DB:-waddlebot}"
 DB_USER="${POSTGRES_USER:-waddlebot}"
 DB_PASSWORD="${POSTGRES_PASSWORD:-password}"
 
+# SECURITY (CWE-798): no default admin credential is ever set here. These
+# are forwarded, if present, into the waddlebot.initial_admin_email /
+# waddlebot.initial_admin_password session GUCs that migration 081 reads
+# via current_setting() to bootstrap the first super-admin. Unset ->
+# migration 081 skips admin creation entirely (fail closed).
+INITIAL_ADMIN_EMAIL="${INITIAL_ADMIN_EMAIL:-}"
+INITIAL_ADMIN_PASSWORD="${INITIAL_ADMIN_PASSWORD:-}"
+
 MIGRATIONS_DIR="$(dirname "$0")"
+
+# Preamble file bridging INITIAL_ADMIN_EMAIL/PASSWORD into session GUCs via
+# psql's :'var' substitution (only -f/stdin-sourced SQL is substituted --
+# -c command strings are not). Regenerated fresh each run; cleaned up on exit.
+ADMIN_GUC_PREAMBLE="$(mktemp)"
+trap 'rm -f "$ADMIN_GUC_PREAMBLE"' EXIT
+cat > "$ADMIN_GUC_PREAMBLE" << 'PREAMBLE_SQL'
+-- \o suppresses these two SELECT results so the plaintext admin password
+-- is never echoed to stdout/CI logs.
+\o /dev/null
+SELECT set_config('waddlebot.initial_admin_email', :'admin_email', false);
+SELECT set_config('waddlebot.initial_admin_password', :'admin_password', false);
+\o
+PREAMBLE_SQL
 
 echo "=== Waddles Database Migrations ==="
 echo "Host: $DB_HOST:$DB_PORT"
@@ -62,8 +84,14 @@ for migration_file in "$MIGRATIONS_DIR"/*.sql; do
       # Calculate checksum
       checksum=$(sha256sum "$migration_file" | awk '{print $1}')
 
-      # Run migration
-      if psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f "$migration_file"; then
+      # Run migration. The preamble bridges INITIAL_ADMIN_EMAIL/PASSWORD into
+      # session GUCs (harmless no-op for every file except 081, which
+      # reads them via current_setting() to bootstrap the first admin).
+      if psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" \
+        -v admin_email="$INITIAL_ADMIN_EMAIL" \
+        -v admin_password="$INITIAL_ADMIN_PASSWORD" \
+        -f "$ADMIN_GUC_PREAMBLE" \
+        -f "$migration_file"; then
         # Record migration
         psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c \
           "INSERT INTO schema_migrations (migration_file, checksum) VALUES ('$filename', '$checksum')"

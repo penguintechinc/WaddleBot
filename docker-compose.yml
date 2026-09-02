@@ -87,6 +87,14 @@ services:
     container_name: db-migrations
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-waddlebot}:${POSTGRES_PASSWORD:-changeme}@infra-postgres:5432/${POSTGRES_DB:-waddlebot}
+      # SECURITY (CWE-798): dev/local-only bootstrap credential for the
+      # first-run admin (see config/postgres/migrations/081_seed_default_hub_admin.sql).
+      # No default is used in beta/gamma/prod -- leaving these unset there
+      # means no admin account is auto-created (fail closed); an operator
+      # must set them explicitly or run scripts/seed-admin.sh. Override
+      # locally via .env to change the dev login.
+      INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-admin@localhost.local}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-WaddleDev-Local-Only-2026!}
     networks:
       - waddlebot-internal
     depends_on:
@@ -415,6 +423,11 @@ services:
       # "must be owner of table hub_chat_messages" and crash-loops the
       # container before it ever binds its HTTP port.
       SKIP_DB_INIT: "true"
+      # Forward-compatible with admin/hub_module/backend/src/utils/adminBootstrap.js
+      # in case SKIP_DB_INIT is ever unset -- see db-migrations above for
+      # the actual (currently live) bootstrap path and its security note.
+      INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-admin@localhost.local}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-WaddleDev-Local-Only-2026!}
       DATABASE_URL: postgresql://hub_admin:${DB_PASS_HUB_ADMIN:-hub_admin_dev_changeme}@infra-postgres:5432/waddlebot
       # Redis ACL: user=hub, prefix=hub:*, waddlebot:session:*, waddlebot:auth:*
       REDIS_URL: redis://hub:${REDIS_HUB_PASSWORD:-changeme}@infra-redis:6379/0
