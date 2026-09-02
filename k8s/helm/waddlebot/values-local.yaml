@@ -9,6 +9,14 @@ global:
   jwtSecret: "local-dev-jwt-secret-change-in-production"
   moduleSecretKey: "local-dev-module-secret-change-in-production"
   serviceApiKey: "local-dev-api-key-change-in-production"
+  # gRPC transport TLS (PR #264) -- local/MicroK8s dev, no cert material provisioned; use
+  # flask_core's dev-only escape hatch (refused under production posture). See values-alpha.yaml.
+  grpcTls:
+    insecureDev: true
+  # First-run super-admin bootstrap (PR #256) -- local dev only, never reused beyond this file.
+  initialAdmin:
+    email: "admin@waddlebot.localhost.local"
+    password: "local-dev-admin-password-change-in-production"
 
 # Top-level infrastructure for template compatibility
 redis:

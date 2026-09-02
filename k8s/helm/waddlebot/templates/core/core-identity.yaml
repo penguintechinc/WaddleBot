@@ -50,6 +50,10 @@ spec:
           value: "8050"
         - name: GRPC_PORT
           value: "50030"
+        {{- include "waddlebot.grpcTlsInsecureDevEnv" . | nindent 8 }}
+        {{- if eq (include "waddlebot.grpcTlsMaterialAvailable" .) "true" }}
+        {{- include "waddlebot.grpcTlsServerEnv" . | nindent 8 }}
+        {{- end }}
         livenessProbe:
           httpGet:
             path: /health
@@ -73,11 +77,17 @@ spec:
           mountPath: /var/log/waddlebotlog
         - name: tmp
           mountPath: /tmp
+        {{- if eq (include "waddlebot.grpcTlsMaterialAvailable" .) "true" }}
+        {{- include "waddlebot.grpcTlsVolumeMount" . | nindent 8 }}
+        {{- end }}
       volumes:
       - name: logs
         emptyDir: {}
       - name: tmp
         emptyDir: {}
+      {{- if eq (include "waddlebot.grpcTlsMaterialAvailable" .) "true" }}
+      {{- include "waddlebot.grpcTlsVolume" . | nindent 6 }}
+      {{- end }}
 ---
 apiVersion: v1
 kind: Service

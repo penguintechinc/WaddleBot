@@ -29,6 +29,43 @@ global:
   moduleSecretKey: "REPLACE_ME_module_secret"
   serviceApiKey: "REPLACE_ME_service_key"
 
+  # gRPC transport TLS (PR #264, A02 HIGH -- flask_core.grpc_tls / GRPC_TLS_* env vars).
+  # Every gRPC server (core-data, core-identity, interactive-productivity,
+  # action-serverless) and client (router) now fails closed at gRPC bind/dial time without
+  # this. See templates/grpc-tls-secret.yaml + templates/grpc-tls-certificate.yaml for the
+  # two ways the {{ fullname }}-grpc-tls Secret this wires gets populated.
+  grpcTls:
+    # Explicit, dev-only plaintext escape hatch -- flask_core refuses it outright under
+    # production posture even if left true by mistake. Only values-alpha.yaml sets this;
+    # never override to true in beta/gamma/production.
+    insecureDev: false
+    # Whether mTLS is enforced server-side (server-role Deployments only).
+    requireClientCert: true
+    certManager:
+      enabled: false
+      issuerKind: "ClusterIssuer"
+      issuerName: "waddlebot-internal-ca"
+      duration: "2160h"    # 90d
+      renewBefore: "360h"  # 15d
+    # Static dev/interim CA + identity cert, used when certManager.enabled=false (the
+    # default). OVERRIDE REQUIRED for beta/gamma/production -- NEVER a literal cert/key in
+    # git; populate via --set-file or an out-of-git values override / ExternalSecret.
+    ca:
+      crt: ""
+    tls:
+      crt: ""
+      key: ""
+
+  # First-run super-admin bootstrap (PR #256, CWE-798 -- admin/hub_module backend
+  # adminBootstrap.js / config/postgres/migrations/081_seed_default_hub_admin.sql). Both
+  # unset (the default) means no admin account is auto-created -- fail closed, safe
+  # default for beta/gamma/production. OVERRIDE REQUIRED to bootstrap a real first
+  # super-admin -- NEVER a literal in git beyond alpha's own documented non-default
+  # (values-alpha.yaml); set via --set or an out-of-git values override / ExternalSecret.
+  initialAdmin:
+    email: ""
+    password: ""
+
   # Logging
   logLevel: "INFO"
   nodeEnv: "production"

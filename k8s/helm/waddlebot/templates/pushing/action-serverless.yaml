@@ -35,6 +35,15 @@ spec:
         - name: http
           containerPort: 8103
           protocol: TCP
+        - name: grpc-lambda
+          containerPort: 50051
+          protocol: TCP
+        - name: grpc-openwhisk
+          containerPort: 50052
+          protocol: TCP
+        - name: grpc-gcp
+          containerPort: 50053
+          protocol: TCP
         envFrom:
         - configMapRef:
             name: {{ include "waddlebot.fullname" . }}-config
@@ -45,6 +54,10 @@ spec:
           value: "action-serverless"
         - name: MODULE_PORT
           value: "8103"
+        {{- include "waddlebot.grpcTlsInsecureDevEnv" . | nindent 8 }}
+        {{- if eq (include "waddlebot.grpcTlsMaterialAvailable" .) "true" }}
+        {{- include "waddlebot.grpcTlsServerEnv" . | nindent 8 }}
+        {{- end }}
         livenessProbe:
           httpGet:
             path: /health
@@ -68,11 +81,17 @@ spec:
           mountPath: /var/log/waddlebotlog
         - name: tmp
           mountPath: /tmp
+        {{- if eq (include "waddlebot.grpcTlsMaterialAvailable" .) "true" }}
+        {{- include "waddlebot.grpcTlsVolumeMount" . | nindent 8 }}
+        {{- end }}
       volumes:
       - name: logs
         emptyDir: {}
       - name: tmp
         emptyDir: {}
+      {{- if eq (include "waddlebot.grpcTlsMaterialAvailable" .) "true" }}
+      {{- include "waddlebot.grpcTlsVolume" . | nindent 6 }}
+      {{- end }}
 ---
 apiVersion: v1
 kind: Service
@@ -88,6 +107,18 @@ spec:
     targetPort: http
     protocol: TCP
     name: http
+  - port: 50051
+    targetPort: grpc-lambda
+    protocol: TCP
+    name: grpc-lambda
+  - port: 50052
+    targetPort: grpc-openwhisk
+    protocol: TCP
+    name: grpc-openwhisk
+  - port: 50053
+    targetPort: grpc-gcp
+    protocol: TCP
+    name: grpc-gcp
   selector:
     {{- include "waddlebot.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: action-serverless
