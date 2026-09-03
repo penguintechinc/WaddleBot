@@ -32,7 +32,7 @@ os.environ.setdefault("DB_NAME", "memory")
 
 @pytest.fixture
 async def redis_client() -> Any:
-    """Real LIST/PUBLISH semantics via `fakeredis.FakeAsyncRedis` -- mirrors svc-process's own fixture."""
+    """Real LIST/PUBLISH semantics via `fakeredis.FakeAsyncRedis` -- mirrors svc-process's own."""
     client = fakeredis.FakeAsyncRedis(decode_responses=True)
     yield client
     await client.aclose()

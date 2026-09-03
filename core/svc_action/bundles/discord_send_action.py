@@ -36,7 +36,7 @@ from collections.abc import Mapping
 from typing import Any
 
 import httpx
-from waddle_transports.base import NonRetryableTransportError, RetryableTransportError, TransportResult
+from waddle_transports import NonRetryableTransportError, RetryableTransportError, TransportResult
 from waddle_transports.signing import SecretResolutionError, resolve_secret
 from waddle_transports.url_guard import SSRFError, guarded_request
 
@@ -56,26 +56,42 @@ async def send_message(
     *,
     http_client: httpx.AsyncClient,
 ) -> TransportResult:
-    """Send `envelope.payload["text"]` to a Discord channel via the Bot API.
+    """Reply in-place: send `envelope.payload["text"]` to `envelope.payload["channel_id"]`.
 
-    `config` is the bundle's resolved `stages.action.config` (the catalog's
-    own defaults merged with any activation-level override, resolved by
-    hub-api's distribution endpoint and handed to this entrypoint by
-    `runner.py::_handle_envelope` via the poller) and must declare
-    `channel_id` and `bot_token_ref` (an env-var *name*, resolved via
-    `resolve_secret` -- never a literal token in DB config). `api_base`
-    optionally overrides the Discord API root (default: the real Discord
-    API).
+    "Reply-in-place" is the primary behavior -- `channel_id` comes from
+    the triggering event's own payload (the channel the inbound message
+    that caused this action came from), not a statically configured
+    channel, so a bundle activated once serves every channel the bot
+    is in rather than always posting to one hardcoded channel. `config`
+    (the bundle's resolved `stages.action.config`, resolved by hub-api's
+    distribution endpoint and handed to this entrypoint by `runner.py::
+    _handle_envelope` via the poller) supplies `channel_id` only as a
+    fallback for a proactive/scheduled send with no originating channel
+    in its payload, and must always declare `bot_token_ref` (an env-var
+    *name*, resolved via `resolve_secret` -- never a literal token in DB
+    config). `api_base` optionally overrides the Discord API root
+    (default: the real Discord API).
 
-    Raises `NonRetryableTransportError` for a config/auth failure (missing
-    config field, unresolvable secret, 401/403, any other 4xx) and
-    `RetryableTransportError` for a 429 (rate limited -- `retry_with_backoff`
-    in `runner.py` owns the actual backoff; this bundle never sleeps
-    itself) or a 5xx/network error.
+    Raises `NonRetryableTransportError` for a config/auth failure (no
+    resolvable channel_id, unresolvable secret, 401/403, any other 4xx)
+    and `RetryableTransportError` for a 429 (rate limited --
+    `retry_with_backoff` in `runner.py` owns the actual backoff; this
+    bundle never sleeps itself) or a 5xx/network error.
     """
-    channel_id = config.get("channel_id")
-    if not isinstance(channel_id, str) or not channel_id:
-        raise NonRetryableTransportError("discord bundle config missing required 'channel_id'")
+    payload_channel_id = envelope.payload.get("channel_id")
+    config_channel_id = config.get("channel_id")
+    channel_id = (
+        payload_channel_id
+        if isinstance(payload_channel_id, str) and payload_channel_id
+        else (
+            config_channel_id if isinstance(config_channel_id, str) and config_channel_id else None
+        )
+    )
+    if channel_id is None:
+        raise NonRetryableTransportError(
+            "discord bundle could not resolve a channel_id from either "
+            "envelope.payload['channel_id'] (reply-in-place) or config['channel_id'] (fallback)"
+        )
 
     bot_token_ref = config.get("bot_token_ref")
     if not isinstance(bot_token_ref, str) or not bot_token_ref:

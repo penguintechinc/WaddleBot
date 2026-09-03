@@ -18,7 +18,12 @@ from typing import cast
 
 import httpx
 import redis.asyncio as redis
-from flask_core import AsyncDAL, create_health_blueprint, install_security_headers, setup_aaa_logging
+from flask_core import (
+    AsyncDAL,
+    create_health_blueprint,
+    install_security_headers,
+    setup_aaa_logging,
+)
 from flask_core.auth import create_jwt_token
 from flask_core.stage_runner import BundlePoller
 from quart import Quart
@@ -41,7 +46,7 @@ logger = setup_aaa_logging(_config.module_name, _config.module_version)
 
 
 def _jwt_provider() -> str:
-    """Mint a fresh 1h service JWT for this runner's own tenant scope (see svc-ingest's docstring)."""
+    """Mint a fresh 1h service JWT for this runner's own tenant scope (see svc-ingest's own)."""
     return cast(
         str,
         create_jwt_token(

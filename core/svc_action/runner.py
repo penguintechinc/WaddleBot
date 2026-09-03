@@ -40,7 +40,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 import httpx
@@ -53,12 +53,7 @@ from flask_core.stage_runner import (
     load_entrypoint,
 )
 from flask_core.stream_pipeline import bundle_stream_key
-
-from waddle_transports.base import (
-    NonRetryableTransportError,
-    RetryableTransportError,
-    TransportResult,
-)
+from waddle_transports import NonRetryableTransportError, RetryableTransportError, TransportResult
 
 from services.dispatch_log import record_dispatch
 from services.envelope import ActionEnvelope, EnvelopeError, parse_envelope
@@ -75,7 +70,7 @@ def _parse_envelope_ts(ts: str) -> datetime | None:
 
 
 class ActionRunner:
-    """One poll+drain+dispatch cycle per call to `run_once()`; `run_forever()` loops it in production."""
+    """One poll+drain+dispatch cycle per `run_once()`; `run_forever()` loops it in production."""
 
     def __init__(
         self,
@@ -89,7 +84,7 @@ class ActionRunner:
         retry_initial_delay: float,
         retry_max_delay: float,
     ) -> None:
-        """Build a runner bound to one `BundlePoller`, one Valkey client, one DAL, one tenant scope."""
+        """Build a runner bound to one poller, one Valkey client, one DAL, one tenant scope."""
         self._poller = poller
         self._redis = redis_client
         self._dal = dal
@@ -105,14 +100,14 @@ class ActionRunner:
         self._running = False
 
     async def run_forever(self) -> None:
-        """Production loop: poll, drain+dispatch every active bundle's action queue, sleep, repeat."""
+        """Production loop: poll, drain+dispatch every active bundle's queue, sleep, repeat."""
         self._running = True
         while self._running:
             await self.run_once()
             await asyncio.sleep(self._poller.next_delay_s)
 
     async def run_once(self) -> int:
-        """One poll+drain+dispatch cycle; returns total envelopes successfully dispatched. Never raises."""
+        """One poll+drain+dispatch cycle; returns total envelopes dispatched. Never raises."""
         bundles = await self._poller.poll_once()
         total = 0
         for bundle in bundles:
@@ -220,7 +215,9 @@ class ActionRunner:
             )
             return 0
 
-        target_type = result.transport if result.sub_type is None else f"{result.transport}:{result.sub_type}"
+        target_type = (
+            result.transport if result.sub_type is None else f"{result.transport}:{result.sub_type}"
+        )
         await self._record(
             envelope,
             bundle,

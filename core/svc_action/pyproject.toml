@@ -23,8 +23,12 @@ exclude = ["^\\.venv/", "^tests/"]
 # Same boundary override as hub_api/pyproject.toml: libs/flask_core and
 # pydal ship no py.typed marker / stubs -- follow_imports = "skip" so mypy
 # treats every imported name as Any rather than analyzing flask_core's own
-# untyped source. svc-action's own code stays --strict throughout.
+# untyped source. libs/waddle_transports (the shared transport-primitives
+# library, PR #275) is itself --strict clean internally but likewise ships
+# no py.typed marker yet -- same treatment here, tracked as a follow-up on
+# that package rather than this service's own pyproject.toml. svc-action's
+# own code stays --strict throughout.
 [[tool.mypy.overrides]]
-module = ["flask_core.*", "pydal.*", "aiosmtplib.*", "fakeredis.*"]
+module = ["flask_core.*", "pydal.*", "fakeredis.*", "waddle_transports.*"]
 ignore_missing_imports = true
 follow_imports = "skip"

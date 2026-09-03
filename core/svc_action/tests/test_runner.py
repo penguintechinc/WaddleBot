@@ -23,8 +23,6 @@ from flask_core.stage_runner import BundlePoller
 from flask_core.stream_pipeline import bundle_stream_key
 
 from runner import ActionRunner
-from services.dispatch_log import init_action_dispatch_log_table
-from services.reference_tables import bind_minimal_reference_tables
 
 TENANT = "acme-corp"
 DISCORD_APP_ID = "waddles.bot.discord.default"
@@ -42,7 +40,10 @@ def _distribution_handler(bundles: list[dict[str, Any]]) -> Any:
 def _make_poller(http_client_factory: Any, bundles: list[dict[str, Any]]) -> BundlePoller:
     client = http_client_factory(_distribution_handler(bundles))
     return BundlePoller(
-        client, "http://hub-api/api/v1/distribution/bundles", stage="action", jwt_provider=lambda: "t"
+        client,
+        "http://hub-api/api/v1/distribution/bundles",
+        stage="action",
+        jwt_provider=lambda: "t",
     )
 
 
@@ -73,7 +74,9 @@ def dal(tmp_path: Path) -> AsyncDAL:
     return async_dal
 
 
-def _runner(poller: BundlePoller, redis_client: Any, dal: AsyncDAL, http_client: httpx.AsyncClient) -> ActionRunner:
+def _runner(
+    poller: BundlePoller, redis_client: Any, dal: AsyncDAL, http_client: httpx.AsyncClient
+) -> ActionRunner:
     return ActionRunner(
         poller=poller,
         redis_client=redis_client,
@@ -96,7 +99,11 @@ async def _last_dispatch_row(async_dal: AsyncDAL) -> Any:
 
 
 def _envelope_json(
-    *, app_id: str = DISCORD_APP_ID, community: str = "42", payload: dict | None = None, ts: str = "2026-08-31T12:00:00Z"
+    *,
+    app_id: str = DISCORD_APP_ID,
+    community: str = "42",
+    payload: dict | None = None,
+    ts: str = "2026-08-31T12:00:00Z",
 ) -> str:
     return json.dumps(
         {
@@ -120,9 +127,13 @@ class TestRunOnce:
             assert await runner.run_once() == 0
 
     async def test_real_end_to_end_loads_and_invokes_the_discord_bundle(
-        self, redis_client: Any, http_client_factory: Any, dal: AsyncDAL, monkeypatch: pytest.MonkeyPatch
+        self,
+        redis_client: Any,
+        http_client_factory: Any,
+        dal: AsyncDAL,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Fail-first proof: a real queue envelope -> poll -> RPOP -> importlib load -> Discord send.
+        """Fail-first: a real queue envelope -> poll -> RPOP -> importlib load -> Discord send.
 
         Not a stubbed/mocked bundle loader -- the real one
         (`flask_core.stage_runner.load_entrypoint`). Only the outbound
@@ -133,7 +144,9 @@ class TestRunOnce:
         monkeypatch.setenv("SVC_ACTION_TEST_DISCORD_TOKEN", "s3cr3t-bot-token")
         captured: dict[str, Any] = {}
 
-        async def _fake_guarded_request(client, method, url, *, headers=None, content=None, json=None):
+        async def _fake_guarded_request(
+            client, method, url, *, headers=None, content=None, json=None
+        ):
             captured["url"] = url
             captured["headers"] = headers
             captured["json"] = json
@@ -178,11 +191,17 @@ class TestRunOnce:
         assert "message_id=42424242" in row.detail
 
     async def test_malformed_json_in_queue_is_skipped_not_fatal(
-        self, redis_client: Any, http_client_factory: Any, dal: AsyncDAL, monkeypatch: pytest.MonkeyPatch
+        self,
+        redis_client: Any,
+        http_client_factory: Any,
+        dal: AsyncDAL,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setenv("SVC_ACTION_TEST_DISCORD_TOKEN", "s3cr3t-bot-token")
 
-        async def _fake_guarded_request(client, method, url, *, headers=None, content=None, json=None):
+        async def _fake_guarded_request(
+            client, method, url, *, headers=None, content=None, json=None
+        ):
             return httpx.Response(200, json={"id": "1"})
 
         import bundles.discord_send_action as discord_bundle
@@ -246,14 +265,26 @@ class TestRunOnce:
     ) -> None:
         poller = _make_poller(
             http_client_factory,
-            [{"appId": DISCORD_APP_ID, "communityId": 42, "entrypoint": None, "spec": {}, "config": {}}],
+            [
+                {
+                    "appId": DISCORD_APP_ID,
+                    "communityId": 42,
+                    "entrypoint": None,
+                    "spec": {},
+                    "config": {},
+                }
+            ],
         )
         async with httpx.AsyncClient() as http_client:
             runner = _runner(poller, redis_client, dal, http_client)
             assert await runner.run_once() == 0
 
     async def test_non_retryable_bundle_failure_is_recorded(
-        self, redis_client: Any, http_client_factory: Any, dal: AsyncDAL, monkeypatch: pytest.MonkeyPatch
+        self,
+        redis_client: Any,
+        http_client_factory: Any,
+        dal: AsyncDAL,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Missing bot token secret -- the bundle's own config error, non-retryable."""
         monkeypatch.delenv("SVC_ACTION_TEST_MISSING_TOKEN", raising=False)
@@ -287,11 +318,17 @@ class TestRunOnce:
         assert row.attempt == 1  # non-retryable -- never enters the retry loop's 2nd attempt
 
     async def test_retryable_bundle_failure_exhausts_retries_and_is_recorded(
-        self, redis_client: Any, http_client_factory: Any, dal: AsyncDAL, monkeypatch: pytest.MonkeyPatch
+        self,
+        redis_client: Any,
+        http_client_factory: Any,
+        dal: AsyncDAL,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setenv("SVC_ACTION_TEST_DISCORD_TOKEN_5XX", "s3cr3t-bot-token")
 
-        async def _fake_guarded_request(client, method, url, *, headers=None, content=None, json=None):
+        async def _fake_guarded_request(
+            client, method, url, *, headers=None, content=None, json=None
+        ):
             return httpx.Response(503)
 
         import bundles.discord_send_action as discord_bundle

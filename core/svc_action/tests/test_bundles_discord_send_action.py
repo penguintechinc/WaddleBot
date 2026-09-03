@@ -10,23 +10,25 @@ message.
 
 from __future__ import annotations
 
+import json as _json
 from pathlib import Path
 
 import httpx
 import pytest
+from waddle_transports import NonRetryableTransportError, RetryableTransportError
 
 from bundles.discord_send_action import send_message
-from services.adapters.base import NonRetryableDispatchError, RetryableDispatchError
 from services.envelope import ActionEnvelope
 
 
 def _envelope(payload: dict | None = None) -> ActionEnvelope:
+    default_payload = {"text": "hello from waddlebot", "channel_id": "123456789"}
     return ActionEnvelope(
         tenant="1",
         community="42",
         app_id="waddles.bot.discord.default",
         stage="action",
-        payload=payload if payload is not None else {"text": "hello from waddlebot"},
+        payload=payload if payload is not None else default_payload,
         ts="2026-08-31T12:00:00Z",
         raw="{}",
     )
@@ -34,7 +36,6 @@ def _envelope(payload: dict | None = None) -> ActionEnvelope:
 
 def _config(**overrides: object) -> dict:
     base = {
-        "channel_id": "123456789",
         "bot_token_ref": "TEST_DISCORD_BOT_TOKEN",
         "api_base": "https://8.8.8.8/api/v10",  # literal IP -- no real DNS in unit tests
     }
@@ -46,28 +47,70 @@ def _client(handler) -> httpx.AsyncClient:  # noqa: ANN001
     return httpx.AsyncClient(transport=httpx.MockTransport(handler), follow_redirects=False)
 
 
-async def test_missing_channel_id_is_non_retryable() -> None:
-    async with _client(lambda r: httpx.Response(200)) as client:
-        with pytest.raises(NonRetryableDispatchError, match="channel_id"):
-            await send_message(_envelope(), _config(channel_id=None), http_client=client)
+class TestChannelIdResolution:
+    """Reply-in-place: payload.channel_id is primary, config.channel_id is a fallback only."""
+
+    async def test_no_channel_id_from_either_source_is_non_retryable(self) -> None:
+        async with _client(lambda r: httpx.Response(200)) as client:
+            with pytest.raises(NonRetryableTransportError, match="channel_id"):
+                await send_message(_envelope(payload={"text": "hi"}), _config(), http_client=client)
+
+    async def test_payload_channel_id_takes_precedence_over_config(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("TEST_DISCORD_BOT_TOKEN", "s3cr3t-bot-token")
+        captured = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["url"] = str(request.url)
+            return httpx.Response(200, json={"id": "1"})
+
+        payload = {"text": "hi", "channel_id": "from-payload"}
+        async with _client(handler) as client:
+            await send_message(
+                _envelope(payload=payload),
+                _config(channel_id="from-config"),
+                http_client=client,
+            )
+        assert captured["url"] == "https://8.8.8.8/api/v10/channels/from-payload/messages"
+
+    async def test_config_channel_id_used_as_fallback_when_payload_lacks_one(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("TEST_DISCORD_BOT_TOKEN", "s3cr3t-bot-token")
+        captured = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["url"] = str(request.url)
+            return httpx.Response(200, json={"id": "1"})
+
+        async with _client(handler) as client:
+            await send_message(
+                _envelope(payload={"text": "hi"}),
+                _config(channel_id="from-config"),
+                http_client=client,
+            )
+        assert captured["url"] == "https://8.8.8.8/api/v10/channels/from-config/messages"
 
 
 async def test_missing_bot_token_ref_is_non_retryable() -> None:
     async with _client(lambda r: httpx.Response(200)) as client:
-        with pytest.raises(NonRetryableDispatchError, match="bot_token_ref"):
+        with pytest.raises(NonRetryableTransportError, match="bot_token_ref"):
             await send_message(_envelope(), _config(bot_token_ref=None), http_client=client)
 
 
 async def test_missing_payload_text_is_non_retryable() -> None:
     async with _client(lambda r: httpx.Response(200)) as client:
-        with pytest.raises(NonRetryableDispatchError, match="'text'"):
-            await send_message(_envelope(payload={}), _config(), http_client=client)
+        with pytest.raises(NonRetryableTransportError, match="'text'"):
+            await send_message(
+                _envelope(payload={"channel_id": "123456789"}), _config(), http_client=client
+            )
 
 
 async def test_unresolvable_bot_token_is_non_retryable(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("TEST_DISCORD_BOT_TOKEN", raising=False)
     async with _client(lambda r: httpx.Response(200)) as client:
-        with pytest.raises(NonRetryableDispatchError, match="token resolution failed"):
+        with pytest.raises(NonRetryableTransportError, match="token resolution failed"):
             await send_message(_envelope(), _config(), http_client=client)
 
 
@@ -87,10 +130,8 @@ async def test_sends_real_discord_create_message_request(monkeypatch: pytest.Mon
 
     assert captured["url"] == "https://8.8.8.8/api/v10/channels/123456789/messages"
     assert captured["auth_header"] == "Bot s3cr3t-bot-token"
-    import json as _json
-
     assert _json.loads(captured["body"]) == {"content": "hello from waddlebot"}
-    assert result.target_type == "bundle"
+    assert result.transport == "bundle"
     assert result.http_status == 200
     assert "message_id=999888777" in result.detail
 
@@ -103,11 +144,9 @@ async def test_includes_embed_when_present(monkeypatch: pytest.MonkeyPatch) -> N
         captured["body"] = request.content
         return httpx.Response(200, json={"id": "1"})
 
-    payload = {"text": "raid!", "embed": {"title": "Raid Alert"}}
+    payload = {"text": "raid!", "channel_id": "123456789", "embed": {"title": "Raid Alert"}}
     async with _client(handler) as client:
         await send_message(_envelope(payload=payload), _config(), http_client=client)
-
-    import json as _json
 
     assert _json.loads(captured["body"])["embeds"] == [{"title": "Raid Alert"}]
 
@@ -118,14 +157,14 @@ async def test_auth_rejection_is_non_retryable(
 ) -> None:
     monkeypatch.setenv("TEST_DISCORD_BOT_TOKEN", "s3cr3t-bot-token")
     async with _client(lambda r: httpx.Response(status)) as client:
-        with pytest.raises(NonRetryableDispatchError, match="rejected auth"):
+        with pytest.raises(NonRetryableTransportError, match="rejected auth"):
             await send_message(_envelope(), _config(), http_client=client)
 
 
 async def test_other_4xx_is_non_retryable(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TEST_DISCORD_BOT_TOKEN", "s3cr3t-bot-token")
     async with _client(lambda r: httpx.Response(400, text="Bad Request")) as client:
-        with pytest.raises(NonRetryableDispatchError, match="client error"):
+        with pytest.raises(NonRetryableTransportError, match="client error"):
             await send_message(_envelope(), _config(), http_client=client)
 
 
@@ -142,14 +181,14 @@ async def test_429_rate_limit_is_retryable_not_slept_locally(
         return httpx.Response(429, headers={"Retry-After": "2.5"})
 
     async with _client(handler) as client:
-        with pytest.raises(RetryableDispatchError, match="rate limited"):
+        with pytest.raises(RetryableTransportError, match="rate limited"):
             await send_message(_envelope(), _config(), http_client=client)
 
 
 async def test_5xx_is_retryable(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TEST_DISCORD_BOT_TOKEN", "s3cr3t-bot-token")
     async with _client(lambda r: httpx.Response(503)) as client:
-        with pytest.raises(RetryableDispatchError, match="server error"):
+        with pytest.raises(RetryableTransportError, match="server error"):
             await send_message(_envelope(), _config(), http_client=client)
 
 
@@ -160,14 +199,14 @@ async def test_network_error_is_retryable(monkeypatch: pytest.MonkeyPatch) -> No
         raise httpx.ConnectError("connection refused", request=request)
 
     async with _client(handler) as client:
-        with pytest.raises(RetryableDispatchError, match="request failed"):
+        with pytest.raises(RetryableTransportError, match="request failed"):
             await send_message(_envelope(), _config(), http_client=client)
 
 
 async def test_private_host_api_base_is_blocked_non_retryable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """SSRF guard applies to the Discord API base exactly like every other adapter."""
+    """SSRF guard applies to the Discord API base exactly like every other transport."""
     monkeypatch.setenv("TEST_DISCORD_BOT_TOKEN", "s3cr3t-bot-token")
     called = False
 
@@ -177,7 +216,7 @@ async def test_private_host_api_base_is_blocked_non_retryable(
         return httpx.Response(200, json={"id": "1"})
 
     async with _client(handler) as client:
-        with pytest.raises(NonRetryableDispatchError, match="SSRF"):
+        with pytest.raises(NonRetryableTransportError, match="SSRF"):
             await send_message(
                 _envelope(),
                 _config(api_base="http://169.254.169.254"),
