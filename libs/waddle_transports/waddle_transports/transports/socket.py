@@ -29,6 +29,7 @@ from __future__ import annotations
 import json
 from collections.abc import AsyncIterator, Mapping
 from typing import Any
+from urllib.parse import urlparse
 
 import websockets
 from websockets.exceptions import ConnectionClosed, InvalidURI, WebSocketException
@@ -40,8 +41,24 @@ from waddle_transports.base import (
     TransportResult,
 )
 from waddle_transports.types import Direction
+from waddle_transports.url_guard import SSRFError, is_private_host
 
 _DEFAULT_TIMEOUT_SECONDS = 10.0
+
+
+def _guard_ws_url(url: str) -> None:
+    """Re-validate a `ws(s)://` URL's host through the shared SSRF guard.
+
+    `url_guard.validate_url()` isn't reused directly -- it only accepts
+    `http`/`https` schemes -- so this checks the host (ws/wss carry the
+    same SSRF risk as http/https: an internal/link-local/loopback target)
+    without re-litigating scheme validity, which `websockets.connect`
+    already enforces via its own `InvalidURI`. A URL with no parseable
+    host is left to that `InvalidURI` check rather than guarded here.
+    """
+    hostname = urlparse(url).hostname
+    if hostname and is_private_host(hostname):
+        raise SSRFError(f"socket URL host {hostname!r} resolves to a disallowed address")
 
 
 class SocketTransport(Transport):
@@ -55,6 +72,10 @@ class SocketTransport(Transport):
         url = config.get("url")
         if not isinstance(url, str) or not url:
             raise NonRetryableTransportError("socket config missing required 'url'")
+        try:
+            _guard_ws_url(url)
+        except SSRFError as exc:
+            raise NonRetryableTransportError(f"socket URL rejected by SSRF guard: {exc}") from exc
         timeout_seconds = float(config.get("timeout_seconds", _DEFAULT_TIMEOUT_SECONDS))
 
         raw_message = config.get("raw_message")
@@ -81,6 +102,10 @@ class SocketTransport(Transport):
         url = config.get("url")
         if not isinstance(url, str) or not url:
             raise NonRetryableTransportError("socket config missing required 'url'")
+        try:
+            _guard_ws_url(url)
+        except SSRFError as exc:
+            raise NonRetryableTransportError(f"socket URL rejected by SSRF guard: {exc}") from exc
         timeout_seconds = float(config.get("timeout_seconds", _DEFAULT_TIMEOUT_SECONDS))
         parse_json = bool(config.get("parse_json", True))
         max_messages = config.get("_max_messages")  # test-only escape hatch, see tests

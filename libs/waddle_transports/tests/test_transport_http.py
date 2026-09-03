@@ -70,6 +70,36 @@ class TestWebhookSubType:
                     {},
                 )
 
+    async def test_body_template_payload_cannot_inject_a_json_field(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Fail-first regression for JSON body-template injection.
+
+        A payload value carrying JSON metacharacters must not break out of
+        `body_template`'s JSON string and inject a sibling field.
+        """
+        monkeypatch.setenv("TEST_WEBHOOK_SECRET_5", "s3cr3t")
+        captured = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["body"] = json.loads(request.content)
+            return httpx.Response(200)
+
+        async with _client(handler) as client:
+            transport = HttpTransport(http_client=client)
+            await transport.send(
+                {
+                    "sub_type": "webhook",
+                    "url": "https://8.8.8.8/hook",
+                    "secret_ref": "TEST_WEBHOOK_SECRET_5",
+                    "body_template": '{"user": "{{name}}"}',
+                },
+                {"name": '",\"admin\":true'},
+            )
+
+        assert captured["body"] == {"user": '",\"admin\":true'}
+        assert "admin" not in captured["body"]
+
     async def test_private_host_is_blocked_non_retryable(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -446,3 +476,128 @@ async def test_unsupported_send_sub_type_is_non_retryable() -> None:
         transport = HttpTransport(http_client=client)
         with pytest.raises(NonRetryableTransportError, match="not supported"):
             await transport.send({"sub_type": "soap", "url": "https://8.8.8.8/x"}, {})
+
+
+# --- response size cap ------------------------------------------------------------
+
+
+class TestResponseSizeCap:
+    """Fail-first regression for the missing response-body size cap.
+
+    An oversized response must be rejected, not buffered fully into
+    memory, for every sub_type sharing `guarded_request()`.
+    """
+
+    async def test_rest_pull_oversized_response_is_non_retryable(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json=[{"id": i} for i in range(50)])
+
+        async with _client(handler) as client:
+            transport = HttpTransport(http_client=client)
+            with pytest.raises(NonRetryableTransportError, match="exceeded"):
+                async for _item in transport.receive(
+                    {
+                        "sub_type": "rest_pull",
+                        "url": "https://8.8.8.8/events",
+                        "_max_iterations": 1,
+                        "max_response_bytes": 10,
+                    }
+                ):
+                    pass
+
+    async def test_graphql_oversized_response_is_non_retryable(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json={"data": {"x": "y" * 1000}})
+
+        async with _client(handler) as client:
+            transport = HttpTransport(http_client=client)
+            with pytest.raises(NonRetryableTransportError, match="exceeded"):
+                await transport.send(
+                    {
+                        "sub_type": "graphql",
+                        "url": "https://8.8.8.8/graphql",
+                        "query": "{ x }",
+                        "max_response_bytes": 10,
+                    },
+                    {},
+                )
+
+    async def test_grpc_oversized_response_is_non_retryable(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            message = b"x" * 1000
+            frame = b"\x00" + len(message).to_bytes(4, "big") + message
+            return httpx.Response(200, content=frame, headers={"grpc-status": "0"})
+
+        async with _client(handler) as client:
+            transport = HttpTransport(http_client=client)
+            with pytest.raises(NonRetryableTransportError, match="exceeded"):
+                await transport.send(
+                    {
+                        "sub_type": "grpc",
+                        "url": "https://8.8.8.8/x",
+                        "grpc_message_b64": "",
+                        "max_response_bytes": 10,
+                    },
+                    {},
+                )
+
+    async def test_webhook_oversized_response_is_non_retryable(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Confirm the cap protects every sub_type, not just the three named.
+
+        The cap is enforced centrally in `guarded_request()` -- every
+        sub_type is protected, not just the three named in the finding.
+        """
+        monkeypatch.setenv("TEST_WEBHOOK_SECRET_6", "s3cr3t")
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, content=b"x" * 1000)
+
+        async with _client(handler) as client:
+            transport = HttpTransport(http_client=client)
+            with pytest.raises(NonRetryableTransportError, match="exceeded"):
+                await transport.send(
+                    {
+                        "sub_type": "webhook",
+                        "url": "https://8.8.8.8/hook",
+                        "secret_ref": "TEST_WEBHOOK_SECRET_6",
+                        "max_response_bytes": 10,
+                    },
+                    {},
+                )
+
+    async def test_rest_api_oversized_response_is_non_retryable(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, content=b"x" * 1000)
+
+        async with _client(handler) as client:
+            transport = HttpTransport(http_client=client)
+            with pytest.raises(NonRetryableTransportError, match="exceeded"):
+                await transport.send(
+                    {
+                        "sub_type": "rest_api",
+                        "url": "https://8.8.8.8/api",
+                        "max_response_bytes": 10,
+                    },
+                    {},
+                )
+
+    async def test_response_within_configured_cap_succeeds(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json=[{"id": 1}])
+
+        async with _client(handler) as client:
+            transport = HttpTransport(http_client=client)
+            items = [
+                item
+                async for item in transport.receive(
+                    {
+                        "sub_type": "rest_pull",
+                        "url": "https://8.8.8.8/events",
+                        "_max_iterations": 1,
+                        "max_response_bytes": 1024,
+                    }
+                )
+            ]
+        assert items == [{"id": 1}]

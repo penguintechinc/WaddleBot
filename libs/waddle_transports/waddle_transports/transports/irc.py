@@ -46,6 +46,24 @@ _PRIVMSG_RE = re.compile(r"^:(?P<prefix>\S+) PRIVMSG (?P<channel>\S+) :(?P<text>
 
 _DEFAULT_TIMEOUT_SECONDS = 10.0
 
+#: CR, LF, and every other C0 control character (`\x00`-`\x1F`).
+_CONTROL_CHARS_RE = re.compile(r"[\x00-\x1f]")
+
+
+def sanitize_irc_component(value: str) -> str:
+    r"""Strip CR/LF and other control chars (`\x00`-`\x1F`) before an IRC wire write.
+
+    Applied to both the outgoing message text and the channel/target name
+    -- either one written unsanitized lets a payload smuggle a second wire
+    command (CRLF/command injection) or otherwise corrupt the line the
+    server itself parses. Exported (not `_`-prefixed) so `irc_relay.py`'s
+    queue-based send path -- which never writes to the wire directly, but
+    whose queued value a drain loop elsewhere eventually does write as a
+    real `PRIVMSG` -- can apply the identical sanitization as defense in
+    depth.
+    """
+    return _CONTROL_CHARS_RE.sub("", value)
+
 
 class IrcTransport(Transport):
     """`irc` transport -- no sub_type, both directions implemented."""
@@ -62,6 +80,7 @@ class IrcTransport(Transport):
             if isinstance(body_template, str) and body_template
             else str(payload.get("text", ""))
         )
+        message = sanitize_irc_component(message)
         if not message:
             raise NonRetryableTransportError(
                 "irc target has no message to send (empty body_template/payload.text)"
@@ -160,7 +179,12 @@ class IrcTransport(Transport):
         except (OSError, TimeoutError) as exc:
             raise RetryableTransportError(f"irc connection to {host}:{port} failed: {exc}") from exc
 
-        channel = channel_raw if channel_raw.startswith("#") else f"#{channel_raw}"
+        sanitized_channel = sanitize_irc_component(channel_raw)
+        channel = (
+            sanitized_channel
+            if sanitized_channel.startswith("#")
+            else f"#{sanitized_channel}"
+        )
         try:
             if password:
                 writer.write(f"PASS {password}\r\n".encode())

@@ -59,3 +59,29 @@ class TestRelayOutboundIrcTransport:
         transport = RelayOutboundIrcTransport(provider="twitch", redis_client=redis_client)
         with pytest.raises(NotImplementedError, match="does not implement inbound receive"):
             await transport.receive({}).__anext__()
+
+    async def test_crlf_in_channel_and_text_is_stripped_before_queuing(
+        self, redis_client: Any
+    ) -> None:
+        """Fail-first regression for IRC CRLF injection via the relay queue.
+
+        Control chars in `channel`/`text` must be stripped before LPUSH --
+        defense in depth for whatever drain loop eventually writes the
+        real PRIVMSG line from this queued payload (see `transports/irc.py`'s
+        own CRLF-injection fix for the direct-write case this mirrors).
+        """
+        transport = RelayOutboundIrcTransport(provider="twitch", redis_client=redis_client)
+        await transport.send({"channel": "#somechannel\r\nQUIT"}, {"text": "hi\r\nQUIT\r\n"})
+
+        raw = await redis_client.rpop(outbound_queue_key("twitch"))
+        assert raw is not None
+        queued = json.loads(raw)
+        assert queued == {"channel": "#somechannelQUIT", "text": "hiQUIT"}
+
+    async def test_channel_of_only_control_chars_is_non_retryable(
+        self, redis_client: Any
+    ) -> None:
+        transport = RelayOutboundIrcTransport(provider="twitch", redis_client=redis_client)
+        with pytest.raises(NonRetryableTransportError, match="channel"):
+            await transport.send({"channel": "\r\n"}, {"text": "hi"})
+        assert await redis_client.rpop(outbound_queue_key("twitch")) is None

@@ -161,6 +161,49 @@ class TestSend:
         with pytest.raises(NonRetryableTransportError, match="host"):
             await transport.send({"nick": "b", "channel": "c"}, {"text": "hi"})
 
+    async def test_crlf_in_message_cannot_inject_a_second_command(
+        self, fake_irc_server
+    ) -> None:
+        r"""Fail-first regression for IRC CRLF/command injection.
+
+        A payload smuggling `\r\n` must yield exactly ONE PRIVMSG line and
+        zero injected commands -- CRLF/control chars stripped before the
+        wire write, never written verbatim.
+        """
+        transport = IrcTransport()
+        result = await transport.send(_config(fake_irc_server), {"text": "hi\r\nQUIT\r\n"})
+        await asyncio.wait_for(fake_irc_server.quit_seen.wait(), timeout=3.0)
+
+        assert result.transport == "irc"
+        privmsg_lines = [
+            line for line in fake_irc_server.received_lines if line.startswith("PRIVMSG")
+        ]
+        assert len(privmsg_lines) == 1
+        assert privmsg_lines[0] == "PRIVMSG #testchannel :hiQUIT"
+        # Only the transport's own trailing QUIT -- no injected extra one.
+        assert fake_irc_server.received_lines.count("QUIT") == 1
+
+    async def test_crlf_in_channel_cannot_inject_a_second_line(self, fake_irc_server) -> None:
+        r"""Fail-first regression for IRC CRLF/command injection via `channel`.
+
+        A `channel` value smuggling `\r\n` must not create an extra JOIN/
+        PRIVMSG line on the wire.
+        """
+        transport = IrcTransport()
+        await transport.send(
+            _config(fake_irc_server, channel="testchannel\r\nPRIVMSG #eviltarget :pwned"),
+            {"text": "hi"},
+        )
+        await asyncio.wait_for(fake_irc_server.quit_seen.wait(), timeout=3.0)
+
+        join_lines = [line for line in fake_irc_server.received_lines if line.startswith("JOIN")]
+        privmsg_lines = [
+            line for line in fake_irc_server.received_lines if line.startswith("PRIVMSG")
+        ]
+        assert len(join_lines) == 1
+        assert len(privmsg_lines) == 1
+        assert fake_irc_server.received_lines.count("QUIT") == 1
+
 
 class TestReceive:
     async def test_yields_a_real_privmsg(self) -> None:

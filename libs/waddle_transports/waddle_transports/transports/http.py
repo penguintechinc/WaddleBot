@@ -56,7 +56,12 @@ from waddle_transports.base import (
 from waddle_transports.signing import resolve_secret, sign_body
 from waddle_transports.templating import build_body
 from waddle_transports.types import Direction
-from waddle_transports.url_guard import SSRFError, guarded_request
+from waddle_transports.url_guard import (
+    DEFAULT_MAX_RESPONSE_BYTES,
+    ResponseTooLargeError,
+    SSRFError,
+    guarded_request,
+)
 
 #: gRPC status codes worth retrying (transient) per the standard status
 #: code table (grpc.io/docs/guides/status-codes): DEADLINE_EXCEEDED(4),
@@ -145,9 +150,18 @@ class HttpTransport(Transport):
 
         client, owns_client = await self._client_or_new(timeout_seconds)
         try:
-            response = await guarded_request(client, "POST", url, headers=headers, content=body)
+            response = await guarded_request(
+                client,
+                "POST",
+                url,
+                headers=headers,
+                content=body,
+                max_response_bytes=_max_response_bytes(config),
+            )
         except SSRFError as exc:
             raise NonRetryableTransportError(f"webhook URL rejected by SSRF guard: {exc}") from exc
+        except ResponseTooLargeError as exc:
+            raise NonRetryableTransportError(f"webhook response exceeded max size: {exc}") from exc
         except (httpx.TimeoutException, httpx.NetworkError, httpx.TransportError) as exc:
             raise RetryableTransportError(f"webhook request failed: {exc}") from exc
         finally:
@@ -181,9 +195,18 @@ class HttpTransport(Transport):
 
         client, owns_client = await self._client_or_new(timeout_seconds)
         try:
-            response = await guarded_request(client, method, url, headers=headers, content=body)
+            response = await guarded_request(
+                client,
+                method,
+                url,
+                headers=headers,
+                content=body,
+                max_response_bytes=_max_response_bytes(config),
+            )
         except SSRFError as exc:
             raise NonRetryableTransportError(f"rest_api URL rejected by SSRF guard: {exc}") from exc
+        except ResponseTooLargeError as exc:
+            raise NonRetryableTransportError(f"rest_api response exceeded max size: {exc}") from exc
         except (httpx.TimeoutException, httpx.NetworkError, httpx.TransportError) as exc:
             raise RetryableTransportError(f"rest_api request failed: {exc}") from exc
         finally:
@@ -214,9 +237,18 @@ class HttpTransport(Transport):
 
         client, owns_client = await self._client_or_new(timeout_seconds)
         try:
-            response = await guarded_request(client, "POST", url, headers=headers, content=body)
+            response = await guarded_request(
+                client,
+                "POST",
+                url,
+                headers=headers,
+                content=body,
+                max_response_bytes=_max_response_bytes(config),
+            )
         except SSRFError as exc:
             raise NonRetryableTransportError(f"graphql URL rejected by SSRF guard: {exc}") from exc
+        except ResponseTooLargeError as exc:
+            raise NonRetryableTransportError(f"graphql response exceeded max size: {exc}") from exc
         except (httpx.TimeoutException, httpx.NetworkError, httpx.TransportError) as exc:
             raise RetryableTransportError(f"graphql request failed: {exc}") from exc
         finally:
@@ -269,9 +301,18 @@ class HttpTransport(Transport):
 
         client, owns_client = await self._client_or_new(timeout_seconds, http2=True)
         try:
-            response = await guarded_request(client, "POST", url, headers=headers, content=frame)
+            response = await guarded_request(
+                client,
+                "POST",
+                url,
+                headers=headers,
+                content=frame,
+                max_response_bytes=_max_response_bytes(config),
+            )
         except SSRFError as exc:
             raise NonRetryableTransportError(f"grpc URL rejected by SSRF guard: {exc}") from exc
+        except ResponseTooLargeError as exc:
+            raise NonRetryableTransportError(f"grpc response exceeded max size: {exc}") from exc
         except (httpx.TimeoutException, httpx.NetworkError, httpx.TransportError) as exc:
             raise RetryableTransportError(f"grpc request failed: {exc}") from exc
         finally:
@@ -325,11 +366,19 @@ class HttpTransport(Transport):
                 iterations += 1
                 try:
                     response = await guarded_request(
-                        client, "GET", url, headers=dict(config.get("headers", {}))
+                        client,
+                        "GET",
+                        url,
+                        headers=dict(config.get("headers", {})),
+                        max_response_bytes=_max_response_bytes(config),
                     )
                 except SSRFError as exc:
                     raise NonRetryableTransportError(
                         f"rest_pull URL rejected by SSRF guard: {exc}"
+                    ) from exc
+                except ResponseTooLargeError as exc:
+                    raise NonRetryableTransportError(
+                        f"rest_pull response exceeded max size: {exc}"
                     ) from exc
                 except (httpx.TimeoutException, httpx.NetworkError, httpx.TransportError) as exc:
                     raise RetryableTransportError(f"rest_pull request failed: {exc}") from exc
@@ -353,6 +402,11 @@ class HttpTransport(Transport):
         finally:
             if owns_client:
                 await client.aclose()
+
+
+def _max_response_bytes(config: Mapping[str, Any]) -> int:
+    """`config["max_response_bytes"]`, or `url_guard`'s own default if unset."""
+    return int(config.get("max_response_bytes", DEFAULT_MAX_RESPONSE_BYTES))
 
 
 def _grpc_frame(message: bytes) -> bytes:

@@ -33,6 +33,7 @@ from collections.abc import Mapping
 from typing import Any, Protocol
 
 from waddle_transports.base import NonRetryableTransportError, Transport, TransportResult
+from waddle_transports.transports.irc import sanitize_irc_component
 from waddle_transports.types import Direction
 
 logger = logging.getLogger(__name__)
@@ -105,6 +106,17 @@ class RelayOutboundIrcTransport(Transport):
         if not isinstance(channel, str) or not channel:
             raise NonRetryableTransportError("irc_relay send requires a non-empty 'channel'")
         if not isinstance(text, str) or not text:
+            raise NonRetryableTransportError("irc_relay send requires non-empty payload 'text'")
+
+        # Stripped here, before ever hitting the queue -- defense in depth
+        # for whatever drain loop eventually writes the real PRIVMSG line
+        # from this queued payload (see `transports/irc.py`'s own direct-
+        # write CRLF-injection fix, which this mirrors).
+        channel = sanitize_irc_component(channel)
+        text = sanitize_irc_component(text)
+        if not channel:
+            raise NonRetryableTransportError("irc_relay send requires a non-empty 'channel'")
+        if not text:
             raise NonRetryableTransportError("irc_relay send requires non-empty payload 'text'")
 
         key = outbound_queue_key(self.provider)

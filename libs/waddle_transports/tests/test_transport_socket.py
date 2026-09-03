@@ -16,6 +16,22 @@ from waddle_transports.transports.socket import SocketTransport
 
 
 @pytest.fixture
+def _bypass_ssrf_guard_for_local_server(monkeypatch: pytest.MonkeyPatch):
+    """Bypass the SSRF guard's loopback rejection for real-local-server tests.
+
+    The functional send/receive tests below connect to a REAL local
+    WebSocket test server on 127.0.0.1 -- that's a loopback address,
+    which the SSRF guard (correctly) treats as disallowed in production.
+    These tests exercise real wire behavior, not the guard itself (see
+    `TestSsrfGuard` for that, using hosts other than 127.0.0.1 so the
+    real, unpatched guard is exercised there).
+    """
+    import waddle_transports.transports.socket as socket_module
+
+    monkeypatch.setattr(socket_module, "is_private_host", lambda host: False)  # noqa: ARG005
+
+
+@pytest.fixture
 async def echo_server():
     """Echoes every received frame straight back."""
 
@@ -45,6 +61,7 @@ async def push_server():
     await server.wait_closed()
 
 
+@pytest.mark.usefixtures("_bypass_ssrf_guard_for_local_server")
 class TestSend:
     async def test_sends_json_serialized_payload(self, echo_server: str) -> None:
         transport = SocketTransport()
@@ -73,6 +90,7 @@ class TestSend:
             await transport.send({"url": "ws://127.0.0.1:1", "timeout_seconds": 2.0}, {})
 
 
+@pytest.mark.usefixtures("_bypass_ssrf_guard_for_local_server")
 class TestReceive:
     async def test_yields_parsed_json_and_raw_text_frames(self, push_server: str) -> None:
         transport = SocketTransport()
@@ -106,3 +124,62 @@ class TestReceive:
                 {"url": "ws://127.0.0.1:1", "timeout_seconds": 2.0}
             ):
                 pass
+
+
+class TestSsrfGuard:
+    """Fail-first regression: `socket` transport bypassed the shared SSRF guard.
+
+    `websockets.connect(config["url"])` was called directly with no
+    `url_guard` validation. These tests use the REAL, unpatched guard (no
+    `_bypass_ssrf_guard_for_local_server` fixture) and never reach a real
+    network call if the guard is doing its job -- confirmed via the
+    `websockets.connect` spy below.
+    """
+
+    def _spy_connect(self, monkeypatch: pytest.MonkeyPatch) -> dict:  # noqa: ANN001
+        calls = {"n": 0}
+
+        def _fail_if_called(*args: object, **kwargs: object) -> None:  # noqa: ANN401
+            calls["n"] += 1
+            raise AssertionError("websockets.connect must not be called -- SSRF guard failed")
+
+        monkeypatch.setattr(websockets, "connect", _fail_if_called)
+        return calls
+
+    async def test_send_to_metadata_ip_is_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        calls = self._spy_connect(monkeypatch)
+        transport = SocketTransport()
+        with pytest.raises(NonRetryableTransportError, match="SSRF"):
+            await transport.send({"url": "ws://169.254.169.254/x"}, {"text": "hi"})
+        assert calls["n"] == 0
+
+    async def test_send_to_loopback_is_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        calls = self._spy_connect(monkeypatch)
+        transport = SocketTransport()
+        with pytest.raises(NonRetryableTransportError, match="SSRF"):
+            await transport.send({"url": "ws://127.0.0.1:1/x"}, {"text": "hi"})
+        assert calls["n"] == 0
+
+    async def test_send_to_private_range_is_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        calls = self._spy_connect(monkeypatch)
+        transport = SocketTransport()
+        with pytest.raises(NonRetryableTransportError, match="SSRF"):
+            await transport.send({"url": "ws://10.0.0.5/x"}, {"text": "hi"})
+        assert calls["n"] == 0
+
+    async def test_wss_scheme_is_also_guarded(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        calls = self._spy_connect(monkeypatch)
+        transport = SocketTransport()
+        with pytest.raises(NonRetryableTransportError, match="SSRF"):
+            await transport.send({"url": "wss://169.254.169.254/x"}, {"text": "hi"})
+        assert calls["n"] == 0
+
+    async def test_receive_to_metadata_ip_is_rejected(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        calls = self._spy_connect(monkeypatch)
+        transport = SocketTransport()
+        with pytest.raises(NonRetryableTransportError, match="SSRF"):
+            async for _item in transport.receive({"url": "ws://169.254.169.254/x"}):
+                pass
+        assert calls["n"] == 0

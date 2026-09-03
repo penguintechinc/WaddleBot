@@ -7,7 +7,13 @@ import socket
 import httpx
 import pytest
 
-from waddle_transports.url_guard import SSRFError, guarded_request, is_private_host, validate_url
+from waddle_transports.url_guard import (
+    ResponseTooLargeError,
+    SSRFError,
+    guarded_request,
+    is_private_host,
+    validate_url,
+)
 
 
 class TestIsPrivateHost:
@@ -39,6 +45,22 @@ class TestIsPrivateHost:
 
         monkeypatch.setattr(socket, "getaddrinfo", _fake_getaddrinfo)
         assert is_private_host("example.com") is False
+
+    def test_unparseable_resolved_address_fails_closed(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def _fake_getaddrinfo(host: str, port: object) -> list:
+            return [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("not-an-ip-address", 0))]
+
+        monkeypatch.setattr(socket, "getaddrinfo", _fake_getaddrinfo)
+        assert is_private_host("weird.example.com") is True
+
+    def test_no_resolved_addresses_fails_closed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        def _fake_getaddrinfo(host: str, port: object) -> list:
+            return []
+
+        monkeypatch.setattr(socket, "getaddrinfo", _fake_getaddrinfo)
+        assert is_private_host("empty.example.com") is True
 
 
 class TestValidateUrl:
@@ -117,3 +139,153 @@ class TestGuardedRequest:
         ) as client:
             with pytest.raises(SSRFError, match="too many redirects"):
                 await guarded_request(client, "GET", "https://8.8.8.8/start")
+
+
+class TestGuardedRequestDnsRebindPinning:
+    """Fail-first regression for the DNS-rebind TOCTOU.
+
+    `validate_url()`'s own resolution and the HTTP client's connect-time
+    resolution used to be two independent `getaddrinfo()` calls -- an
+    attacker controlling DNS could return a public IP for the first
+    (validation) lookup and a private/internal IP for the second (connect)
+    lookup. The fix resolves once and pins the connection to that one
+    validated IP, so a second, independently-resolved (and potentially
+    rebound) address is never dialed.
+    """
+
+    async def test_connects_to_the_one_validated_ip_not_a_re_resolved_hostname(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        calls = {"n": 0}
+
+        def _fake_getaddrinfo(host: str, port: object) -> list:
+            calls["n"] += 1
+            return [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 0))]
+
+        monkeypatch.setattr(socket, "getaddrinfo", _fake_getaddrinfo)
+
+        captured = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["url_host"] = request.url.host
+            captured["host_header"] = request.headers.get("host")
+            captured["sni"] = request.extensions.get("sni_hostname")
+            return httpx.Response(200)
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler), follow_redirects=False
+        ) as client:
+            response = await guarded_request(client, "GET", "https://example.com/path")
+
+        assert response.status_code == 200
+        # The actual outbound request targets the ONE resolved/validated IP --
+        # not "example.com" left for the transport to resolve again.
+        assert captured["url_host"] == "93.184.216.34"
+        # Host header + SNI still carry the real hostname, so virtual-hosting
+        # and TLS certificate verification are unaffected by the IP pin.
+        assert captured["host_header"] == "example.com"
+        assert captured["sni"] == "example.com"
+        # Exactly one resolution for this hop -- no second, independent lookup.
+        assert calls["n"] == 1
+
+    async def test_bad_scheme_is_rejected_before_any_request(self) -> None:
+        called = False
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal called
+            called = True
+            return httpx.Response(200)  # pragma: no cover -- must never be reached
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler), follow_redirects=False
+        ) as client:
+            with pytest.raises(SSRFError, match="scheme"):
+                await guarded_request(client, "GET", "ftp://8.8.8.8/x")
+        assert called is False
+
+    async def test_no_host_is_rejected(self) -> None:
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(lambda r: httpx.Response(200)), follow_redirects=False
+        ) as client:
+            with pytest.raises(SSRFError, match="no host"):
+                await guarded_request(client, "GET", "https://")
+
+    async def test_preserves_userinfo_and_port_in_the_pinned_url(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def _fake_getaddrinfo(host: str, port: object) -> list:
+            return [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 0))]
+
+        monkeypatch.setattr(socket, "getaddrinfo", _fake_getaddrinfo)
+
+        captured = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["url"] = str(request.url)
+            return httpx.Response(200)
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler), follow_redirects=False
+        ) as client:
+            await guarded_request(client, "GET", "https://user:pass@example.com:8443/x")
+
+        assert captured["url"] == "https://user:pass@93.184.216.34:8443/x"
+
+    async def test_literal_ip_url_needs_no_dns_resolution(self) -> None:
+        """Confirm a literal-IP URL never triggers DNS resolution.
+
+        A literal-IP URL (the common case in this file's other tests) must
+        not trigger any `getaddrinfo()` call at all -- the pin is the
+        literal itself.
+        """
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200)
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler), follow_redirects=False
+        ) as client:
+            response = await guarded_request(client, "GET", "https://8.8.8.8/x")
+        assert response.status_code == 200
+
+
+class TestGuardedRequestResponseSizeCap:
+    """Fail-first regression for the missing response-body size cap.
+
+    `rest_pull`/`graphql`/`grpc` (and every other sub_type sharing this
+    one `guarded_request()` call path) used to buffer the full response
+    body with no size limit. A cap is enforced here, centrally, so every
+    caller is protected uniformly.
+    """
+
+    async def test_oversized_response_is_rejected(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, content=b"x" * 100)
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler), follow_redirects=False
+        ) as client:
+            with pytest.raises(ResponseTooLargeError, match="exceeded"):
+                await guarded_request(client, "GET", "https://8.8.8.8/x", max_response_bytes=10)
+
+    async def test_response_within_cap_is_returned_normally(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, content=b"ok")
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler), follow_redirects=False
+        ) as client:
+            response = await guarded_request(
+                client, "GET", "https://8.8.8.8/x", max_response_bytes=10
+            )
+        assert response.content == b"ok"
+
+    async def test_default_cap_allows_a_normal_sized_response(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json={"a": 1})
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler), follow_redirects=False
+        ) as client:
+            response = await guarded_request(client, "GET", "https://8.8.8.8/x")
+        assert response.json() == {"a": 1}
