@@ -15,7 +15,7 @@ import httpx
 
 from config import ActionConfig
 from services.action_target import ActionTarget
-from services.adapters import email, message_queue, overlay, rest_api, webhook
+from services.adapters import bundle, email, message_queue, overlay, rest_api, webhook
 from services.adapters.base import AdapterResult, NonRetryableDispatchError
 from services.envelope import ActionEnvelope
 
@@ -55,6 +55,8 @@ async def dispatch_action(
             timeout_seconds=config.http_timeout_seconds,
             client=http_client,
         )
+    if target.type == "bundle":
+        return await bundle.dispatch(target, envelope, http_client=http_client)
     if target.type == "email":
         return await email.dispatch(
             target,

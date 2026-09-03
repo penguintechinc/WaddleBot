@@ -70,6 +70,7 @@ def db():
         Field("incompatible_with", "list:string", default=[]),
         Field("platform_compatibility", "json", notnull=True),
         Field("status", "string", default="active"),
+        Field("stages", "json", default={}),
         primarykey=["app_id"],
     )
     dal.define_table(
@@ -141,6 +142,7 @@ def db_via_module():
             incompatible_with TEXT DEFAULT '[]',
             platform_compatibility TEXT NOT NULL,
             status TEXT DEFAULT 'active',
+            stages TEXT DEFAULT '{}',
             installed_at TIMESTAMP
         );
         """
@@ -202,6 +204,46 @@ class TestAppCatalogCRUD:
         assert row.incompatible_with == ["waddles.bot.giveaway.legacy"]
         assert row.platform_compatibility["min_version"] == "3.0.0"
         assert row.status == "active"  # default applied
+
+    def test_stages_field_round_trips_action_entrypoint(self, db):
+        """`stages` (migration 071) added to this binding by the svc-action
+        bundle-runtime proof -- confirms it's actually queryable, not just
+        declared. Prior to this field's addition, `ActionConfigLookup`
+        (core/svc_action/services/config_lookup.py) had no way to read
+        `app_catalog.stages` at all.
+        """
+        db.app_catalog.insert(
+            app_id="waddles.bot.discord.default",
+            manifest_version="1.0.0",
+            module="bot",
+            feature="waddles.bot.discord",
+            provider="builtin",
+            execution_model="native",
+            platform_compatibility={},
+            stages={
+                "action": {
+                    "entrypoint": "bundles.discord_send_action:send_message",
+                    "config": {"api_base": "https://discord.com/api/v10"},
+                }
+            },
+        )
+        db.commit()
+        row = db(db.app_catalog.app_id == "waddles.bot.discord.default").select().first()
+        assert row.stages["action"]["entrypoint"] == "bundles.discord_send_action:send_message"
+
+    def test_stages_defaults_to_empty_dict(self, db):
+        db.app_catalog.insert(
+            app_id="waddles.core.demo.no-stages",
+            manifest_version="1.0.0",
+            module="core",
+            feature="waddles.core.demo",
+            provider="builtin",
+            execution_model="native",
+            platform_compatibility={},
+        )
+        db.commit()
+        row = db(db.app_catalog.app_id == "waddles.core.demo.no-stages").select().first()
+        assert row.stages == {}
 
     def test_app_id_is_the_primary_key(self, db):
         """primarykey=['app_id'] means no separate surrogate id column --

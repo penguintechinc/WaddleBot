@@ -113,6 +113,27 @@ async def test_routes_email(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result.target_type == "email"
 
 
+async def test_routes_bundle(monkeypatch: pytest.MonkeyPatch) -> None:
+    import sys
+    import types
+
+    from services.adapters.base import AdapterResult
+
+    async def _fake_send(envelope, config, *, http_client):  # noqa: ANN001, ANN202, ARG001
+        return AdapterResult(target_type="bundle", detail="ok")
+
+    fake_module = types.ModuleType("tests_registry_fake_bundle")
+    fake_module.send = _fake_send  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "tests_registry_fake_bundle", fake_module)
+
+    target = ActionTarget(type="bundle", entrypoint="tests_registry_fake_bundle:send")
+    async with _client(lambda r: httpx.Response(200)) as client:
+        result = await dispatch_action(
+            target, _envelope(), config=_config(), redis_client=None, http_client=client
+        )
+    assert result.target_type == "bundle"
+
+
 async def test_unregistered_type_raises_non_retryable() -> None:
     """Defense-in-depth test.
 

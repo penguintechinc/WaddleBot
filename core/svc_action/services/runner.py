@@ -11,6 +11,17 @@ runner blocks on `BRPOP` across that snapshot, re-scanning whenever a
 `BRPOP` call times out with nothing popped (so a bundle activated after
 the last scan is picked up on the loop's next iteration) or the scan
 interval elapses, whichever comes first.
+
+Bundle-script precedence (added by the Discord bundle-runtime proof):
+`_handle_item` checks `app_catalog.stages.action.entrypoint`
+(`config_lookup.py::get_action_entrypoint`) *before* the generic
+`action_target` resolution below -- a bundle that declares an action-stage
+script entrypoint (the same `module:function`/importlib convention
+ingest/process bundles use, `flask_core.stage_runner.load_entrypoint`)
+always dispatches through it via the synthesized `ActionTarget(type=
+"bundle", ...)` (`services/adapters/bundle.py`); every other bundle keeps
+resolving a generic webhook/rest_api/message_queue/overlay/email target
+exactly as before -- purely additive, no existing dispatch path changes.
 """
 
 from __future__ import annotations
@@ -154,6 +165,16 @@ class ActionRunner:
             return
 
         ctx = f"tenant={envelope.tenant} community={envelope.community} app_id={envelope.app_id}"
+
+        assert self._config_lookup is not None
+        bundle_entrypoint = await self._config_lookup.get_action_entrypoint(app_id=envelope.app_id)
+        if bundle_entrypoint is not None:
+            entrypoint_path, bundle_config = bundle_entrypoint
+            bundle_target = ActionTarget(
+                type="bundle", entrypoint=entrypoint_path, bundle_config=bundle_config
+            )
+            await self._dispatch_with_retry(envelope, bundle_target, ctx)
+            return
 
         raw_target = envelope.payload.get("target")
         if not raw_target:

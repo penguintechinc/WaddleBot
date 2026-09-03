@@ -1,4 +1,8 @@
-"""services/action_target.py -- parse_action_target validation for all 5 types."""
+"""services/action_target.py -- parse_action_target validation for all 5 configurable types.
+
+Plus one rejection test for the 6th, runner-internal `bundle` type (never
+settable via stored config -- see services/adapters/bundle.py).
+"""
 
 from __future__ import annotations
 
@@ -96,6 +100,12 @@ def test_email_empty_to_list_raises() -> None:
 def test_email_missing_subject_template_raises() -> None:
     with pytest.raises(ActionTargetError, match="subject_template"):
         parse_action_target({"type": "email", "to": ["ops@example.com"]})
+
+
+def test_bundle_type_rejected_via_config() -> None:
+    """`bundle` is runner-internal (services/adapters/bundle.py) -- never settable via config."""
+    with pytest.raises(ActionTargetError, match="runner-internal"):
+        parse_action_target({"type": "bundle", "entrypoint": "bundles.evil:pwn"})
 
 
 def test_unknown_type_raises() -> None:

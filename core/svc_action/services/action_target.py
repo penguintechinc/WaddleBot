@@ -23,8 +23,15 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-#: The five standardized adapter types this stage-runner supports.
-KNOWN_TARGET_TYPES = frozenset({"webhook", "rest_api", "message_queue", "overlay", "email"})
+#: The five generically-configured adapter types this stage-runner
+#: supports, plus `bundle` -- a sixth type synthesized by `runner.py`
+#: itself (never present in stored `action_target` config) when the
+#: envelope's `app_id` has a catalog-declared `stages.action.entrypoint`
+#: (services/config_lookup.py::get_action_entrypoint) -- see
+#: services/adapters/bundle.py.
+KNOWN_TARGET_TYPES = frozenset(
+    {"webhook", "rest_api", "message_queue", "overlay", "email", "bundle"}
+)
 
 #: HTTP methods `rest_api` may declare -- deliberately excludes methods with
 #: no defined request body semantics relevant to a bundle action dispatch.
@@ -67,6 +74,15 @@ class ActionTarget:
     # email.
     to_addrs: tuple[str, ...] = ()
     subject_template: str = ""
+
+    # bundle -- `module:function` dotted-path entrypoint (flask_core.
+    # stage_runner.load_entrypoint, the same convention ingest/process
+    # bundles use) plus its resolved `stages.action.config`. Never built by
+    # `parse_action_target` (no stored `action_target.type=="bundle"` config
+    # exists) -- `runner.py` constructs this variant directly from a
+    # catalog lookup, bypassing this module's validation entirely.
+    entrypoint: str = ""
+    bundle_config: Mapping[str, Any] = field(default_factory=dict)
 
 
 def _require(raw: Mapping[str, Any], key: str, target_type: str) -> str:
@@ -130,6 +146,17 @@ def parse_action_target(raw: Mapping[str, Any]) -> ActionTarget:
         if community is not None and not isinstance(community, str):
             raise ActionTargetError("action_target.type=overlay community must be a string")
         return ActionTarget(type=target_type, community=community, surface=surface)
+
+    if target_type == "bundle":
+        # `runner.py` builds `ActionTarget(type="bundle", ...)` directly from
+        # a catalog lookup (services/config_lookup.py::get_action_entrypoint)
+        # -- never from a stored `action_target` block, so a config author
+        # writing `{"type": "bundle", ...}` by hand is always a mistake, not
+        # a supported configuration surface. Reject loudly rather than
+        # silently falling through to the `email` branch below.
+        raise ActionTargetError(
+            "action_target.type=bundle is runner-internal and cannot be set via config"
+        )
 
     # email
     to_raw = raw.get("to")

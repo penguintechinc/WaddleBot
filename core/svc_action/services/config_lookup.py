@@ -95,3 +95,36 @@ class ActionConfigLookup:
                 return avail_target
 
         return None
+
+    async def get_action_entrypoint(self, *, app_id: str) -> tuple[str, Mapping[str, Any]] | None:
+        """Return `(entrypoint, config)` for `app_id`'s catalog-declared `stages.action`, or `None`.
+
+        Reads `app_catalog.stages` directly against this service's own
+        read-only DB connection -- the same `{entrypoint, config, spec}`
+        shape `hub_api`'s distribution endpoint serves over HTTP to
+        svc-ingest/svc-process's `BundlePoller` (`hub_api/services/
+        distribution_service.py`), read here without an HTTP hop since
+        svc-action already holds a direct DB connection for `action_target`
+        lookups above. Requires `flask_core.app_bundle_tables.
+        init_app_bundle_tables(dal.dal)`'s `stages` field (added alongside
+        this method -- it did not exist on this binding before, see that
+        module's docstring). `None` for the common case: a bundle with no
+        declared action-stage script, which keeps using the generic
+        `action_target` adapters via `get_action_target_config` above.
+        """
+        dal = self._dal.dal
+        catalog_set = dal(dal.app_catalog.app_id == app_id)
+        rows = await self._dal.select_async(catalog_set, dal.app_catalog.stages, limitby=(0, 1))
+        if not rows:
+            return None
+
+        stages = dict(rows[0].stages or {})
+        action_stage = stages.get("action")
+        if not isinstance(action_stage, dict):
+            return None
+
+        entrypoint = action_stage.get("entrypoint")
+        if not isinstance(entrypoint, str) or not entrypoint:
+            return None
+
+        return entrypoint, dict(action_stage.get("config") or {})

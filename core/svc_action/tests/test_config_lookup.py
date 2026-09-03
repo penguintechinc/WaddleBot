@@ -49,6 +49,7 @@ def dal(tmp_path: Path) -> AsyncDAL:
         d.Field("incompatible_with", "list:string", default=[]),
         d.Field("platform_compatibility", "json", notnull=True),
         d.Field("status", "string", default="active"),
+        d.Field("stages", "json", default={}),
         migrate=True,
     )
     d.define_table(
@@ -158,6 +159,68 @@ async def test_no_config_returns_none(dal: AsyncDAL) -> None:
         tenant="1", community="42", app_id="waddles.bot.shoutout.default"
     )
     assert target is None
+
+
+async def _insert_catalog_row(dal: AsyncDAL, *, app_id: str, stages: dict) -> None:
+    dal.dal.app_catalog.insert(
+        app_id=app_id,
+        manifest_version="1.0.0",
+        module="bot",
+        feature="waddles.bot.discord",
+        provider="builtin",
+        execution_model="native",
+        platform_compatibility={},
+        stages=stages,
+    )
+    dal.dal.commit()
+
+
+async def test_get_action_entrypoint_returns_entrypoint_and_config(dal: AsyncDAL) -> None:
+    await _insert_catalog_row(
+        dal,
+        app_id="waddles.bot.discord.default",
+        stages={
+            "action": {
+                "entrypoint": "bundles.discord_send_action:send_message",
+                "config": {"api_base": "https://discord.com/api/v10"},
+            }
+        },
+    )
+
+    lookup = ActionConfigLookup(dal)
+    result = await lookup.get_action_entrypoint(app_id="waddles.bot.discord.default")
+    assert result == (
+        "bundles.discord_send_action:send_message",
+        {"api_base": "https://discord.com/api/v10"},
+    )
+
+
+async def test_get_action_entrypoint_no_catalog_row_returns_none(dal: AsyncDAL) -> None:
+    lookup = ActionConfigLookup(dal)
+    result = await lookup.get_action_entrypoint(app_id="waddles.bot.unknown.default")
+    assert result is None
+
+
+async def test_get_action_entrypoint_no_action_stage_returns_none(dal: AsyncDAL) -> None:
+    await _insert_catalog_row(
+        dal,
+        app_id="waddles.core.demo.echo",
+        stages={"ingest": {"entrypoint": "bundles.echo_ingest:normalize"}},
+    )
+
+    lookup = ActionConfigLookup(dal)
+    result = await lookup.get_action_entrypoint(app_id="waddles.core.demo.echo")
+    assert result is None
+
+
+async def test_get_action_entrypoint_missing_entrypoint_string_returns_none(dal: AsyncDAL) -> None:
+    await _insert_catalog_row(
+        dal, app_id="waddles.bot.broken.default", stages={"action": {"config": {}}}
+    )
+
+    lookup = ActionConfigLookup(dal)
+    result = await lookup.get_action_entrypoint(app_id="waddles.bot.broken.default")
+    assert result is None
 
 
 async def test_disabled_activation_is_ignored(dal: AsyncDAL) -> None:

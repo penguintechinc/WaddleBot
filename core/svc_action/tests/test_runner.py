@@ -82,6 +82,7 @@ async def wired_runner(tmp_path: Path):
         d.Field("incompatible_with", "list:string", default=[]),
         d.Field("platform_compatibility", "json", notnull=True),
         d.Field("status", "string", default="active"),
+        d.Field("stages", "json", default={}),
         migrate=True,
     )
     d.define_table(
@@ -308,6 +309,138 @@ async def test_handle_item_records_retryable_failure_after_exhausting_retries(
     row = await _last_dispatch_row(async_dal)
     assert row.status == "retryable_failure"
     assert row.attempt == runner._config.max_retries + 1  # noqa: SLF001
+
+
+async def test_handle_item_loads_and_invokes_the_discord_bundle_end_to_end(
+    wired_runner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Fail-first proof: a real action envelope -> catalog lookup -> importlib load -> Discord send.
+
+    Exercises the actual bundle-runtime path this task exists to prove:
+    `app_catalog.stages.action.entrypoint` (seeded here exactly as
+    migration 082 seeds it in production) drives `_handle_item` to load
+    `bundles.discord_send_action:send_message` via `flask_core.
+    stage_runner.load_entrypoint` and invoke it against the popped
+    envelope -- not a stubbed/mocked bundle loader, the real one. Only the
+    outbound Discord HTTP call is faked (`monkeypatch` on `guarded_request`
+    inside the bundle module), per this task's "mock the Discord API"
+    requirement.
+    """
+    runner, _fake_redis, async_dal = wired_runner
+    async_dal.dal.app_catalog.insert(
+        app_id="waddles.bot.discord.default",
+        manifest_version="1.0.0",
+        module="bot",
+        feature="waddles.bot.discord",
+        provider="builtin",
+        execution_model="native",
+        platform_compatibility={},
+        stages={
+            "action": {
+                "entrypoint": "bundles.discord_send_action:send_message",
+                "config": {
+                    "channel_id": "555",
+                    "bot_token_ref": "SVC_ACTION_TEST_DISCORD_TOKEN",
+                    "api_base": "https://8.8.8.8/api/v10",
+                },
+            }
+        },
+    )
+    async_dal.dal.commit()
+    monkeypatch.setenv("SVC_ACTION_TEST_DISCORD_TOKEN", "s3cr3t-bot-token")
+
+    captured = {}
+
+    async def _fake_guarded_request(client, method, url, *, headers=None, content=None, json=None):
+        captured["url"] = url
+        captured["headers"] = headers
+        captured["json"] = json
+        return httpx.Response(200, json={"id": "42424242"})
+
+    import bundles.discord_send_action as discord_bundle
+
+    monkeypatch.setattr(discord_bundle, "guarded_request", _fake_guarded_request)
+
+    # `_envelope_json`'s default payload only carries {"event", "raider"};
+    # the discord bundle requires a 'text' field, so build the raw JSON
+    # directly here rather than layering an override onto that helper.
+    raw = json.dumps(
+        {
+            "tenant": "1",
+            "community": "42",
+            "app_id": "waddles.bot.discord.default",
+            "stage": "action",
+            "payload": {"text": "raid incoming!"},
+            "ts": "2026-08-31T12:00:00Z",
+        }
+    )
+
+    await runner._handle_item(raw.encode("utf-8"))  # noqa: SLF001
+
+    assert captured["url"] == "https://8.8.8.8/api/v10/channels/555/messages"
+    assert captured["headers"]["Authorization"] == "Bot s3cr3t-bot-token"
+    assert captured["json"] == {"content": "raid incoming!"}
+
+    row = await _last_dispatch_row(async_dal)
+    assert row.status == "success"
+    assert row.target_type == "bundle"
+    assert "message_id=42424242" in row.detail
+
+
+async def test_handle_item_catalog_entrypoint_takes_precedence_over_action_target(
+    wired_runner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A bundle with a catalog-declared action entrypoint ignores any inline `action_target`."""
+    runner, _fake_redis, async_dal = wired_runner
+    async_dal.dal.app_catalog.insert(
+        app_id="waddles.bot.discord.default",
+        manifest_version="1.0.0",
+        module="bot",
+        feature="waddles.bot.discord",
+        provider="builtin",
+        execution_model="native",
+        platform_compatibility={},
+        stages={
+            "action": {
+                "entrypoint": "bundles.discord_send_action:send_message",
+                "config": {
+                    "channel_id": "555",
+                    "bot_token_ref": "SVC_ACTION_TEST_DISCORD_TOKEN_2",
+                    "api_base": "https://8.8.8.8/api/v10",
+                },
+            }
+        },
+    )
+    async_dal.dal.commit()
+    monkeypatch.setenv("SVC_ACTION_TEST_DISCORD_TOKEN_2", "s3cr3t-bot-token")
+
+    async def _fake_guarded_request(client, method, url, *, headers=None, content=None, json=None):
+        return httpx.Response(200, json={"id": "1"})
+
+    import bundles.discord_send_action as discord_bundle
+
+    monkeypatch.setattr(discord_bundle, "guarded_request", _fake_guarded_request)
+
+    # Inline `action_target` present too -- must be ignored in favor of the
+    # catalog entrypoint (never dispatched to message_queue).
+    raw = json.dumps(
+        {
+            "tenant": "1",
+            "community": "42",
+            "app_id": "waddles.bot.discord.default",
+            "stage": "action",
+            "payload": {
+                "text": "raid incoming!",
+                "target": {"type": "message_queue", "channel": "should-not-be-used"},
+            },
+            "ts": "2026-08-31T12:00:00Z",
+        }
+    )
+
+    await runner._handle_item(raw.encode("utf-8"))  # noqa: SLF001
+
+    row = await _last_dispatch_row(async_dal)
+    assert row.target_type == "bundle"
 
 
 def test_parse_envelope_ts_returns_none_for_malformed_ts() -> None:
