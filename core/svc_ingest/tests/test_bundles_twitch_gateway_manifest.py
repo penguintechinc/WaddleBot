@@ -16,7 +16,7 @@ class TestRegisterDefaultBundles:
         registry = AppRegistry()
         gateway, eventsub = register_default_bundles(registry)
 
-        assert gateway.app_id == "waddles.bot.twitch.gateway"
+        assert gateway.app_id == "waddles.bot.twitch.default"
         assert gateway.feature == "waddles.bot.twitch"
         assert gateway.is_default is True
 
@@ -46,20 +46,25 @@ class TestRegisterDefaultBundles:
         registry = AppRegistry()
         register_default_bundles(registry)
 
-        assert registry.get("waddles.bot.twitch.gateway").app_id == "waddles.bot.twitch.gateway"
+        assert registry.get("waddles.bot.twitch.default").app_id == "waddles.bot.twitch.default"
         assert (
             registry.get("waddles.bot.twitchevents.eventsub").app_id
             == "waddles.bot.twitchevents.eventsub"
         )
 
-    def test_raw_manifest_dicts_match_migration_082s_seeded_shape(self) -> None:
-        """Loose coupling check against migration 082's DB rows.
+    def test_raw_manifest_dicts_match_the_seeded_shapes(self) -> None:
+        """Loose coupling check against the DB rows.
 
-        Both must describe the identical bundles (same app_id/entrypoint/
-        consumes); the SQL itself isn't executable here.
+        `TWITCH_GATEWAY_MANIFEST` must match
+        `083_discord_twitch_demo_convergence.sql`'s twitch row (on the
+        merged `feature/v3-svc-gateway-discord` branch); the eventsub
+        manifest currently has no DB row (out of demo scope, deferred --
+        see this module's own docstring). Both must describe the
+        identical bundles (same app_id/entrypoint/consumes); the SQL
+        itself isn't executable here.
         """
         gateway_stages = TWITCH_GATEWAY_MANIFEST["stages"]
-        assert TWITCH_GATEWAY_MANIFEST["app_id"] == "waddles.bot.twitch.gateway"
+        assert TWITCH_GATEWAY_MANIFEST["app_id"] == "waddles.bot.twitch.default"
         assert gateway_stages["ingest"]["entrypoint"] == "bundles.twitch_ingest:normalize"
         assert gateway_stages["ingest"]["consumes"] == ["twitch.message"]
 

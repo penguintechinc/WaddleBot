@@ -26,8 +26,11 @@ triggering chat message (e.g. a scheduled announcement). Mirrors
 `discord_send_action.py`'s own `channel_id` reply-in-place precedence
 exactly.
 
-Seeded via `config/postgres/migrations/083_twitch_send_action_bundle.sql`
-as `waddles.bot.twitch.default`'s `stages.action.entrypoint`.
+Seeded via `config/postgres/migrations/083_discord_twitch_demo_convergence.sql`
+(on the merged `feature/v3-svc-gateway-discord` branch) as
+`waddles.bot.twitch.default`'s `stages.action.entrypoint`, alongside the
+SAME app_id's ingest/process stages -- T8 convergence unified what used
+to be a separate action-only migration onto the connector's one app_id.
 """
 
 from __future__ import annotations

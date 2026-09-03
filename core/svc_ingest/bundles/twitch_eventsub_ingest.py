@@ -4,8 +4,13 @@ Fanned out by this container's own EventSub webhook handler
 (`eventsub.py`, mounted at `POST /eventsub/twitch/webhook` in `app.py`).
 Referenced by `app_catalog.stages.ingest.entrypoint` as
 `"bundles.twitch_eventsub_ingest:normalize"` for the
-`waddles.bot.twitch.eventsub` bundle seeded by `config/postgres/
-migrations/082_twitch_gateway_bundle.sql`.
+`waddles.bot.twitchevents.eventsub` bundle (`bundles/
+twitch_gateway_manifest.py`'s `TWITCH_EVENTSUB_MANIFEST`, registered
+in-process). Out of the v3 demo's scope (Twitch chat ingest/process/
+action only) -- no `app_catalog` seed row exists for it as of T8
+convergence (`083_discord_twitch_demo_convergence.sql`), so it is not yet
+discoverable by the poll-drain loop; deferred, not a regression (it was
+never wired to a process/action stage either).
 
 Consumes the raw event shape `eventsub.py`'s `build_raw_event` LPUSHes
 onto this bundle's `:ingest` Valkey key -- `{platform, event_type,

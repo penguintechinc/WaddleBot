@@ -4,8 +4,9 @@ Fanned out by this container's own Twitch IRC receiver
 (`receivers/twitch_irc.py`). Referenced by `app_catalog.stages.ingest.
 entrypoint` (same pattern as migration 071's `bundles.echo_ingest:
 normalize`) as `"bundles.twitch_ingest:normalize"` for the
-`waddles.bot.twitch.gateway` bundle seeded by `config/postgres/
-migrations/082_twitch_gateway_bundle.sql` and registered into svc-ingest's
+`waddles.bot.twitch.default` bundle seeded by `config/postgres/
+migrations/083_discord_twitch_demo_convergence.sql` (on the merged
+`feature/v3-svc-gateway-discord` branch) and registered into svc-ingest's
 own in-process registry at startup (`app.py`, `bundles/
 twitch_gateway_manifest.py`).
 

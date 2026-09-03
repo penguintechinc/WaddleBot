@@ -14,12 +14,24 @@ app_manifest`'s `_FEATURE_RE`/`_APP_ID_RE` require `feature` to be exactly
 segments to equal it, so a `feature` value cannot itself contain a
 further `.`-separated qualifier the way an earlier draft of this module
 tried (`waddles.bot.twitch.chat` is a valid 4-segment *app_id* shape, not
-a valid 3-segment *feature* shape):
+a valid 3-segment *feature* shape -- and `_APP_ID_RE` itself caps app_id
+at exactly 4 segments total, so `waddles.bot.twitch.chat.default` is not
+a legal app_id either):
 
-- `waddles.bot.twitch.gateway` -- the IRC chat receiver
+- `waddles.bot.twitch.default` -- the IRC chat receiver
   (`receivers/twitch_irc.py`), feature `waddles.bot.twitch` (matches
-  Discord's own `waddles.bot.discord` gateway-bundle convention exactly),
-  platform-level, `communication_model="gateway_socket"`.
+  Discord's own `waddles.bot.discord` bundle convention exactly). Same
+  app_id the action stage uses (`core/svc_action/bundles/
+  twitch_send_action.py`) and the unified 3-stage `app_catalog` row
+  (`083_discord_twitch_demo_convergence.sql`, on the merged `feature/
+  v3-svc-gateway-discord` branch) describes -- T8 convergence: an earlier
+  draft used a separate `waddles.bot.twitch.gateway` app_id for ingest
+  alone, which never connected to the action-only DB row seeded under
+  `waddles.bot.twitch.default` (the pipeline keys every Valkey stream by
+  `(tenant, community, app_id, stage)`, `flask_core.stream_pipeline.
+  bundle_stream_key` -- the receiver's fan-out and the poll-drain loop
+  must agree on app_id or the ingest event never reaches the poll loop).
+  Platform-level, `communication_model="gateway_socket"`.
 - `waddles.bot.twitchevents.eventsub` -- the EventSub webhook handler
   (`eventsub.py`), feature `waddles.bot.twitchevents` (a single token,
   deliberately NOT `waddles.bot.twitch` -- `AppRegistry.register` rejects
@@ -29,7 +41,11 @@ a valid 3-segment *feature* shape):
   `InstallationLookup` row exists yet), `communication_model=
   "webhook_push"` (the existing StageSpec value for a thirdparty-push-fed
   stage -- EventSub genuinely IS a webhook Twitch calls into this
-  service, unlike the IRC socket the chat gateway holds).
+  service, unlike the IRC socket the chat gateway holds). Out of the v3
+  demo's scope (Twitch chat ingest/process/action only) -- registered
+  in-process same as before, but no `app_catalog` seed row as of this PR,
+  so it is not yet discoverable by the poll-drain loop; deferred, not a
+  regression (it was never wired to a process/action stage either).
 """
 
 from __future__ import annotations
@@ -43,7 +59,7 @@ from flask_core.app_registry import AppRegistry
 #: parse_manifest` at registration time, never constructed as an
 #: `AppManifest` directly (see that module's own docstring on why).
 TWITCH_GATEWAY_MANIFEST: dict[str, Any] = {
-    "app_id": "waddles.bot.twitch.gateway",
+    "app_id": "waddles.bot.twitch.default",
     "name": "Twitch Chat Ingest",
     "version": "1.0.0",
     "feature": "waddles.bot.twitch",

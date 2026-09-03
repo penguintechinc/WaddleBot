@@ -26,7 +26,7 @@ from bundles.twitch_gateway_manifest import register_default_bundles
 from receivers.twitch_irc import TwitchIrcReceiver
 
 TENANT = "acme-corp"
-APP_ID = "waddles.bot.twitch.gateway"
+APP_ID = "waddles.bot.twitch.default"
 
 
 def _make_receiver(
