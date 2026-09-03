@@ -15,6 +15,19 @@ global:
   initialAdmin:
     email: "admin@waddlebot.localhost.local"
     password: "WaddleAlpha-Local-Only-2026!"
+
+# T10 (v3 Discord+Twitch demo) -- dev-only placeholder credentials, NEVER real tokens.
+# Templated into the waddlebot-secrets K8s Secret (templates/secrets.yaml), not committed
+# as literals anywhere else. Replace with real bot tokens via --set or an out-of-git values
+# override before pointing this at a real Discord guild / Twitch channel.
+oauth:
+  discord:
+    botToken: "REPLACE_ME_discord_bot_token_dev_only"
+  twitch:
+    oauthToken: "oauth:REPLACE_ME_twitch_irc_token_dev_only"
+    nick: "waddlebot_demo"
+    channels: "#waddlebot_demo_channel"
+
 infrastructure:
   postgresql:
     enabled: true
@@ -31,28 +44,98 @@ infrastructure:
 
 # WADDLES_AI_ENABLED=false -- no Ollama deployed above (infrastructure.
 # ollama.enabled: false), so hub-api's AI-routing subsystem stays off too
-# rather than crash-looping/degrading against an unreachable backend.
+# rather than crash-looping/degrading against an unreachable backend. Now global (T10):
+# svc-ingest/svc-process/svc-action all render WADDLES_AI_ENABLED from this same value.
 pipeline:
   hubApi:
     aiEnabled: false
+  # T10 (v3 demo) -- minimal 5-of-8 container demo set. Only svc-ingest, svc-process,
+  # svc-action, hub-api (all default enabled: true) run; the other 3 pipeline containers
+  # are not needed for the Discord+Twitch round-trip and are disabled here rather than
+  # left running idle. See k8s/helm/waddlebot/README.md and the v3 demo roadmap's
+  # "MINIMAL DEPLOY (5 of 8 + 2 infra)" section.
+  hubWebui:
+    enabled: false
+  svcCore:
+    enabled: false
+  svcPresentation:
+    enabled: false
+  svcStreaming:
+    enabled: false
+  svcRtc:
+    enabled: false
+
+# T10 (v3 demo) -- the ~26 legacy per-module Deployments (collectors/pushing/interactive/
+# core) are superseded for this demo by the 4 new pipeline containers above (svc-ingest
+# now owns Discord/Twitch ingest in-process; see PIPELINE_MAPPING.md for the full 31->7
+# mapping). Disabled here rather than left running duplicate/idle capacity alongside the
+# new pipeline. modules.bot/social stay enabled (true, from values.yaml) -- those are the
+# MODULE_LOAD_* bundle-import toggles the pipeline containers themselves read, not legacy
+# Deployment gates.
+modules:
+  # Alpha is where the local e2e Playwright suite runs (tests/k8s/alpha/07-page-load.sh).
+  # Unlike beta (which already raises this 3x for the same reason), alpha inherited no
+  # override at all and ran on the hardcoded 100 req/min production default -- too strict
+  # for rapid SERIAL Playwright runs against a cold, cache-less cluster. Alpha-only,
+  # env-var driven (admin/hub_module/backend/src/config/index.js); production/default
+  # stays untouched at 100. Kept here even though modules.hub is disabled below (T10) --
+  # legacy core/hub.yaml is superseded by hub-api.yaml (pipeline.hubApi) for the demo, but
+  # this env override is harmless/inert while disabled and documents alpha's known-good
+  # rate limit if hub is ever re-enabled.
+  hub:
+    enabled: false
+    env:
+      RATE_LIMIT_MAX_REQUESTS: "1000"    # ~10x default; local e2e test/dev only
+      RATE_LIMIT_WINDOW_MS: "60000"      # keep 60s window unchanged
+  hubWebui:
+    enabled: false
+  coreCommunity:
+    enabled: false
+  coreData:
+    enabled: false
+  coreIdentity:
+    enabled: false
+  aiResearcher:
+    enabled: false
+  router:
+    enabled: false
+  marketplace:
+    enabled: false
+  collectors:
+    discord:
+      enabled: false
+    twitch:
+      enabled: false
+    slack:
+      enabled: false
+    youtubeLive:
+      enabled: false
+  interactiveSocial:
+    enabled: false
+  interactiveGaming:
+    enabled: false
+  interactiveMedia:
+    enabled: false
+  interactiveProductivity:
+    enabled: false
+  interactiveAi:
+    enabled: false
+  interactiveLoyalty:
+    enabled: false
+  triggerStreaming:
+    enabled: false
+  triggerWebhooks:
+    enabled: false
+  actionPlatforms:
+    enabled: false
+  actionServerless:
+    enabled: false
 
 ingress:
   enabled: false
 spire:
   enabled: true
   environment: "alpha"
-
-# Alpha is where the local e2e Playwright suite runs (tests/k8s/alpha/07-page-load.sh).
-# Unlike beta (which already raises this 3x for the same reason), alpha inherited no
-# override at all and ran on the hardcoded 100 req/min production default -- too strict
-# for rapid SERIAL Playwright runs against a cold, cache-less cluster. Alpha-only,
-# env-var driven (admin/hub_module/backend/src/config/index.js); production/default
-# stays untouched at 100.
-modules:
-  hub:
-    env:
-      RATE_LIMIT_MAX_REQUESTS: "1000"    # ~10x default; local e2e test/dev only
-      RATE_LIMIT_WINDOW_MS: "60000"      # keep 60s window unchanged
 
 # PostHog stays OFF by default even in alpha (trimmed stack still budgets
 # ~4GB RAM — heavier than typical alpha footprint). To smoke-test the

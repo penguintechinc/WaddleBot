@@ -418,12 +418,41 @@ posthog:
 pipeline:
   pythonBaseImage: "python:3.13-slim-bookworm@sha256:01f42367a0a94ad4bc17111776fd66e3500c1d87c15bbd6055b7371d39c124fb"
   nodeBaseImage: "node:20-bookworm-slim@sha256:1e85773c98c31d4fe5b545e4cb17379e617b348832fb3738b22a08f68dec30f3"
+
+  # T10 (v3 demo) — shared runner identity across svc-ingest/svc-process/svc-action.
+  # RUNNER_TENANT_SLUG scopes stage_runner.py to one tenant; deliberately NOT paired
+  # with a RUNNER_COMMUNITY_ID here (left unset in every template below) so the
+  # runner stays tenant-wide rather than community-scoped -- see roadmap DATA-MODEL
+  # GAPS "guild->community" shortcut (community_id=None, activated tenant-wide).
+  runnerTenantSlug: "global"
+
+  # T10 (v3 demo) — pre-install/pre-upgrade Helm hook Job (templates/migrations-job.yaml)
+  # that applies config/postgres/migrations/*.sql to completion before any pipeline
+  # Deployment's pods are scheduled. Complements (does not replace) the per-pod
+  # waddlebot.dbMigrateInitContainer already used by svc-ingest/svc-process/svc-action/
+  # hub-api/svc-core.
+  migrationsJob:
+    enabled: true
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
   goRuntimeImage: "debian:bookworm-slim@sha256:f06537653ac770703bc45b4b113475bd402f451e85223f0f2837acbf89ab020a"
 
   svcIngest:
     enabled: true
     port: 8200
     replicas: 2
+    # T10 (v3 demo) -- sane defaults for svc-ingest's held-socket lease (Discord
+    # gateway / Twitch IRC single-connection ownership via Valkey), see
+    # supervisor/socket_lease.py. Override per-env if lease churn is observed.
+    socketLease:
+      ttlSeconds: 30
+      renewSeconds: 10
+      keyPrefix: "waddlebot:socket-lease"
     resources:
       requests:
         cpu: "500m"
@@ -1357,6 +1386,13 @@ oauth:
     clientId: ""
     clientSecret: ""
     webhookSecret: ""
+    # T10 (v3 demo) -- IRC bot account credentials for svc-ingest's held-socket
+    # twitch_irc.py receiver / CANON-LIB relay outbound (waddle_transports/irc_relay.py).
+    # oauthToken is an IRC OAuth token ("oauth:...", NOT the OAuth2 clientSecret above).
+    # NEVER a real value in git -- see values-alpha.yaml for the dev-only placeholder.
+    oauthToken: ""
+    nick: ""
+    channels: ""
   slack:
     clientId: ""
     clientSecret: ""
