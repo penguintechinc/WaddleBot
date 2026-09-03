@@ -13,13 +13,6 @@ convention = "google"
 # pytest `assert`; S105/S106 flag fixed test-only secret/env-var names
 # (e.g. "TEST_WEBHOOK_SECRET"), not real credentials.
 "tests/*" = ["D100", "D101", "D102", "D103", "D104", "S101", "S105", "S106"]
-# runner.py's `assert self._x is not None` calls are postcondition asserts
-# (start() always populates these before _loop()/_handle_item() ever run;
-# the type checker needs the narrowing, mypy --strict can't otherwise see
-# past Optional) -- same rationale as hub_api's blueprints/v2/platform.py
-# tenant_middleware postcondition asserts, not a security control being
-# stripped under `-O`.
-"services/runner.py" = ["S101"]
 
 [tool.mypy]
 python_version = "3.13"

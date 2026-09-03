@@ -1,22 +1,27 @@
 """svc-action service configuration.
 
-Env-driven configuration for the ACTION stage-runner (Helm skeleton:
-k8s/helm/waddlebot/templates/svc-action.yaml, values.yaml
-`pipeline.svcAction.port: 8202`). Mirrors hub_api/config.py's pattern
-(frozen slotted dataclass, `from_env()`, DB_TYPE/DB_HOST/DB_PORT/DB_NAME/
-DB_USER/DB_PASS -> pydal URI) -- see that module's docstring for the
-rationale. svc-action holds a READ-ONLY DB account (`DB_USER` defaults to
-`svc-action-ro`) -- it only ever reads `app_activations`/
-`app_tenant_availability` to resolve a bundle's declared action target
-(services/config_lookup.py); it never writes app-bundle tables.
+Mirrors `core/svc_process/config.py`/`core/svc_ingest/config.py`'s poller
+wiring exactly (`HUB_API_URL`/`DISTRIBUTION_URL`/`POLL_INTERVAL_S`/
+`RUNNER_TENANT_SLUG`/`RUNNER_COMMUNITY_ID`/`SECRET_KEY`/`JWT_SCOPE`) -- one
+uniform stage-runner config shape across ingest/process/action, per the
+App Bundle SDK bundle-runtime proof (docs/plans/2026-08-31-app-bundle-sdk-
+design.md). Two genuine differences from ingest/process's config: (1)
+svc-action keeps a DB connection (`DATABASE_URL`/`DB_POOL_SIZE`) for
+`action_dispatch_log` audit writes -- ingest/process have no audit table,
+they either enqueue or drop; (2) svc-action keeps retry-with-backoff
+config (`ACTION_MAX_RETRIES`/`ACTION_RETRY_INITIAL_DELAY`/
+`ACTION_RETRY_MAX_DELAY`) -- action dispatches to a real external system
+(a real HTTP call, IRC connection, etc.) where a transient failure is
+worth retrying, unlike ingest/process's pure in-memory transform (nothing
+to retry -- a bad event is just dropped and logged, `runner.py`'s own
+docstring).
 
-Queue connection: Valkey (backend.md "Use Valkey, not bitnami/redis").
-`VALKEY_URL` is the primary env var per this task's spec; the Helm chart's
-existing secret currently only sets `REDIS_URL` (same connection, older
-name shared by every other module) -- `VALKEY_URL` is read first so this
-service is forward-compatible with the eventual rename, falling back to
-`REDIS_URL` so it works against the chart as it exists today without a
-Helm change.
+No central `presentation_base_url`/`smtp_*`/transport-specific settings
+here -- `services/transports/` primitives take those as direct kwargs
+(`services/transports/__init__.py::dispatch_transport`'s `settings`
+param), sourced from a bundle's own `stages.action.config`
+(`app_catalog`, migration 071/082) rather than a service-wide object
+every transport implicitly depends on.
 """
 
 from __future__ import annotations
@@ -25,8 +30,10 @@ import os
 from dataclasses import dataclass
 from urllib.parse import quote_plus
 
+from flask_core.secrets import require_secret_key
+
 #: DB_TYPE values understood -- backend-database.md Database Support Matrix
-#: minus MariaDB Galera (not needed for this service's narrow read-only use).
+#: minus MariaDB Galera (not needed for this service's narrow audit-log use).
 _DB_URI_SCHEMES: dict[str, str] = {
     "postgresql": "postgres",  # pydal wants postgres://, not postgresql://
     "mysql": "mysql",
@@ -34,9 +41,8 @@ _DB_URI_SCHEMES: dict[str, str] = {
 }
 
 
-def _bool_env(name: str, default: bool) -> bool:
-    """Parse a boolean env var; anything not in the truthy set is False."""
-    return os.getenv(name, str(default)).strip().lower() in {"1", "true", "yes", "on"}
+def _optional_int(value: str | None) -> int | None:
+    return int(value) if value not in (None, "") else None
 
 
 def _build_db_url(
@@ -65,33 +71,43 @@ class ActionConfig:
     pipeline_stage: str
     log_level: str
 
-    # Valkey (process -> action queue; libs/flask_core/flask_core/
-    # stream_pipeline.py bundle_stream_key(..., stage="action") key scheme).
-    valkey_url: str
-    queue_scan_pattern: str
-    queue_scan_interval_seconds: float
-    queue_block_timeout_seconds: int
+    # Distribution API (hub_api/blueprints/v1/distribution.py) poll wiring
+    # -- flask_core.stage_runner.BundlePoller, same shape svc-ingest/
+    # svc-process use.
+    hub_api_url: str
+    distribution_url: str
+    poll_interval_s: float
+    base_backoff_s: float
+    max_backoff_s: float
 
-    # Read-only DB account -- action-target config lookup + dispatch-log writes.
+    # This runner instance's own tenant/community scope -- security.md
+    # Tenant Isolation: never widened at request time, fixed at deploy
+    # time, matching the JWT `tenant` claim this runner mints for itself.
+    runner_tenant_slug: str
+    runner_community_id: int | None
+
+    # Shared HS256 secret -- mirrors flask_core.tenancy/authz's own
+    # os.getenv("SECRET_KEY", ...) fallback exactly, so a token minted
+    # here verifies against hub-api's own decorators.
+    secret_key: str
+    jwt_scope: str
+
+    # Valkey (process -> action queue; each active bundle's own
+    # `:action` key, flask_core.stream_pipeline.bundle_stream_key).
+    valkey_url: str
+
+    # DB account -- action_dispatch_log audit writes only (svc-action
+    # never reads app_catalog/app_activations/app_tenant_availability
+    # directly anymore; the poller resolves bundle config over HTTP).
     database_url: str
     db_pool_size: int
 
-    # Outbound HTTP dispatch (webhook/rest_api/overlay adapters).
+    # Shared httpx client timeout (distribution poll + every transport's
+    # outbound call) and per-envelope retry-with-backoff.
     http_timeout_seconds: float
     max_retries: int
     retry_initial_delay: float
     retry_max_delay: float
-
-    # overlay adapter target -- svc-presentation's push endpoint.
-    presentation_base_url: str
-
-    # email adapter (aiosmtplib).
-    smtp_host: str
-    smtp_port: int
-    smtp_user: str
-    smtp_password: str
-    smtp_use_tls: bool
-    smtp_from_addr: str
 
     @classmethod
     def from_env(cls) -> ActionConfig:
@@ -102,35 +118,34 @@ class ActionConfig:
             host=os.getenv("DB_HOST", "infra-postgres"),
             port=os.getenv("DB_PORT", "5432"),
             name=os.getenv("DB_NAME", "waddlebot"),
-            user=os.getenv("DB_USER", "svc-action-ro"),
+            user=os.getenv("DB_USER", "svc-action-rw"),
             password=os.getenv("DB_PASS", ""),
         )
-
         valkey_url = os.getenv("VALKEY_URL") or os.getenv("REDIS_URL") or "redis://localhost:6379/0"
+        hub_api_url = os.getenv("HUB_API_URL", "http://hub-api:8204")
 
         return cls(
             module_name=os.getenv("MODULE_NAME", "svc-action"),
             module_version=os.getenv("MODULE_VERSION", "0.1.0"),
             module_port=int(os.getenv("MODULE_PORT", "8202")),
-            pipeline_stage=os.getenv("PIPELINE_STAGE", "action"),
+            pipeline_stage="action",
             log_level=os.getenv("LOG_LEVEL", "INFO"),
-            valkey_url=valkey_url,
-            queue_scan_pattern=os.getenv(
-                "ACTION_QUEUE_SCAN_PATTERN", "waddles:t:*:c:*:app:*:action"
+            hub_api_url=hub_api_url,
+            distribution_url=os.getenv(
+                "DISTRIBUTION_URL", f"{hub_api_url}/api/v1/distribution/bundles"
             ),
-            queue_scan_interval_seconds=float(os.getenv("ACTION_QUEUE_SCAN_INTERVAL_SECONDS", "5")),
-            queue_block_timeout_seconds=int(os.getenv("ACTION_QUEUE_BLOCK_TIMEOUT_SECONDS", "5")),
+            poll_interval_s=float(os.getenv("POLL_INTERVAL_S", "5.0")),
+            base_backoff_s=float(os.getenv("BASE_BACKOFF_S", "1.0")),
+            max_backoff_s=float(os.getenv("MAX_BACKOFF_S", "60.0")),
+            runner_tenant_slug=os.getenv("RUNNER_TENANT_SLUG", "global"),
+            runner_community_id=_optional_int(os.getenv("RUNNER_COMMUNITY_ID")),
+            secret_key=require_secret_key(),
+            jwt_scope="distribution:read",
+            valkey_url=valkey_url,
             database_url=database_url,
             db_pool_size=int(os.getenv("DB_POOL_SIZE", "5")),
             http_timeout_seconds=float(os.getenv("ACTION_HTTP_TIMEOUT_SECONDS", "10")),
             max_retries=int(os.getenv("ACTION_MAX_RETRIES", "3")),
             retry_initial_delay=float(os.getenv("ACTION_RETRY_INITIAL_DELAY", "1.0")),
             retry_max_delay=float(os.getenv("ACTION_RETRY_MAX_DELAY", "30.0")),
-            presentation_base_url=os.getenv("PRESENTATION_URL", "http://svc-presentation:8207"),
-            smtp_host=os.getenv("SMTP_HOST", "localhost"),
-            smtp_port=int(os.getenv("SMTP_PORT", "587")),
-            smtp_user=os.getenv("SMTP_USER", ""),
-            smtp_password=os.getenv("SMTP_PASS", ""),
-            smtp_use_tls=_bool_env("SMTP_USE_TLS", True),
-            smtp_from_addr=os.getenv("SMTP_FROM_ADDR", "noreply@waddlebot.com"),
         )
