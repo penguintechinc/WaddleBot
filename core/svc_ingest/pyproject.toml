@@ -12,8 +12,10 @@ convention = "google"
 # Test names are self-documenting (pytest convention); S101 (assert) is
 # standard pytest usage; SLF001 (private-member access) is a deliberate
 # test-only override of BundlePoller's internal backoff state for a fast
-# lifecycle test.
-"tests/*" = ["D100", "D101", "D102", "D103", "D104", "S101", "SLF001"]
+# lifecycle test; S105/S106 flag fixed test-only secret/token literals
+# (e.g. "wrong-secret", a fake OAuth token string), not real credentials
+# -- same rationale as core/svc_action/pyproject.toml's own exemption.
+"tests/*" = ["D100", "D101", "D102", "D103", "D104", "S101", "S105", "S106", "SLF001"]
 
 [tool.mypy]
 python_version = "3.13"

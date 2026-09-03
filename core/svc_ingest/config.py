@@ -13,12 +13,12 @@ here precludes swapping the JWT for an mTLS/X.509-SVID identity later, that
 wiring itself is out of scope for this PR).
 
 Also carries svc-ingest's socket-owning receiver config (8-container
-decision, folded in from the standalone svc-gateway skeleton): a
-gateway-socket receiver (`receivers/discord_gateway.py`) runs as a
-`supervisor.ReceiverSupervisor`-supervised task alongside the poll-drain
-loop above, guarded by a `socket_lease.SocketLease` so scaling
-`pipeline.svcIngest.replicas` never opens duplicate sockets for the same
-`(provider, community)`.
+decision, folded in from the standalone svc-gateway skeleton): persistent
+inbound transports (`receivers/discord_gateway.py`, `receivers/
+twitch_irc.py`) run as `supervisor.ReceiverSupervisor`-supervised tasks
+alongside the poll-drain loop above, each guarded by a `socket_lease.
+SocketLease` so scaling `pipeline.svcIngest.replicas` never opens
+duplicate sockets for the same `(provider, community)`.
 """
 
 from __future__ import annotations
@@ -72,6 +72,34 @@ class Config:
     # own "DISCORD_BOT_TOKEN not configured" skip behavior.
     DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN", "")
 
+    # Twitch IRC receiver -- waddle_transports.transports.irc.IrcTransport's
+    # own config shape (`host`/`port`/`nick`/`password_ref`/`use_tls`), one
+    # connection per channel (that transport's own single-channel-per-call
+    # contract -- see receivers/twitch_irc.py's docstring).
+    # `TWITCH_BOT_TOKEN_REF` is an env-var *name* (never a raw token) --
+    # `waddle_transports.signing.resolve_secret` resolves it at connect
+    # time; the referenced value must already carry Twitch's own `oauth:`
+    # prefix (this transport is Twitch-agnostic, it does not add one).
+    # Empty channel list disables the receiver entirely -- `app.py`'s
+    # startup skips it gracefully, matching Discord's own skip behavior.
+    TWITCH_IRC_HOST = os.getenv("TWITCH_IRC_HOST", "irc.chat.twitch.tv")
+    TWITCH_IRC_PORT = int(os.getenv("TWITCH_IRC_PORT", "6697"))
+    TWITCH_IRC_USE_TLS = os.getenv("TWITCH_IRC_USE_TLS", "true").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    TWITCH_BOT_NICK = os.getenv("TWITCH_BOT_NICK", "waddlebot")
+    TWITCH_BOT_TOKEN_REF = os.getenv("TWITCH_BOT_TOKEN_REF", "")
+    # Comma-separated channel names -- no DB-backed channel list in this
+    # MVP receiver (documented gap, same precedent Discord's single-
+    # connection-serves-everything model sets, adapted here to N
+    # independent per-channel connections -- see receivers/twitch_irc.py).
+    TWITCH_CHANNELS = [
+        c.strip().lower() for c in os.getenv("TWITCH_CHANNELS", "").split(",") if c.strip()
+    ]
+
     # ReceiverSupervisor backoff bounds for socket receivers -- same shape
     # as POLL_INTERVAL_S's BASE_BACKOFF_S/MAX_BACKOFF_S above, kept as
     # separate env vars since a died gateway socket and a failed
@@ -86,3 +114,24 @@ class Config:
     # the lease).
     SOCKET_LEASE_TTL_S = float(os.getenv("SOCKET_LEASE_TTL_S", "30.0"))
     SOCKET_LEASE_RENEW_INTERVAL_S = float(os.getenv("SOCKET_LEASE_RENEW_INTERVAL_S", "10.0"))
+
+    # Twitch EventSub webhook (`eventsub.py`, mounted at
+    # POST /eventsub/twitch/webhook). Empty secret disables the endpoint's
+    # signature verification path entirely -- `app.py`'s startup skips
+    # registering the handler, matching the IRC receiver's own
+    # empty-token skip behavior.
+    TWITCH_EVENTSUB_SECRET = os.getenv("TWITCH_EVENTSUB_SECRET", "")
+
+    @classmethod
+    def twitch_irc_config_base(cls) -> dict[str, object]:
+        """The shared (non-channel) `IrcTransport` config.
+
+        `app.py` adds `channel` per receiver.
+        """
+        return {
+            "host": cls.TWITCH_IRC_HOST,
+            "port": cls.TWITCH_IRC_PORT,
+            "use_tls": cls.TWITCH_IRC_USE_TLS,
+            "nick": cls.TWITCH_BOT_NICK,
+            "password_ref": cls.TWITCH_BOT_TOKEN_REF or None,
+        }

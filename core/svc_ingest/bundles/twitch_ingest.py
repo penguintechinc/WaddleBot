@@ -1,0 +1,59 @@
+"""Twitch chat ingest bundle -- normalizes a raw fanned-out Twitch IRC chat message.
+
+Fanned out by this container's own Twitch IRC receiver
+(`receivers/twitch_irc.py`). Referenced by `app_catalog.stages.ingest.
+entrypoint` (same pattern as migration 071's `bundles.echo_ingest:
+normalize`) as `"bundles.twitch_ingest:normalize"` for the
+`waddles.bot.twitch.gateway` bundle seeded by `config/postgres/
+migrations/082_twitch_gateway_bundle.sql` and registered into svc-ingest's
+own in-process registry at startup (`app.py`, `bundles/
+twitch_gateway_manifest.py`).
+
+Consumes the raw event shape `receivers/twitch_irc.py`'s
+`TwitchIrcReceiver._build_raw_event` LPUSHes onto this bundle's `:ingest`
+Valkey key -- `{platform, channel_name, message_id, author_id,
+author_username, author_display_name, content, is_mod, is_subscriber,
+is_broadcaster}` -- and produces the same `{platform, event_type, actor,
+payload, occurred_at}` platform event shape `echo_ingest.py`/
+`discord_ingest.py` document (this repo's own minimal convention, no
+repo-wide schema exists yet).
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from typing import Any
+
+
+async def normalize(raw: dict[str, Any]) -> dict[str, Any]:
+    """Normalize one raw Twitch IRC chat message event to the platform event shape.
+
+    Real, working transform (not a stub): requires `content`/`channel_name`
+    on the raw event, trims `content`, and stamps a UTC `occurred_at` when
+    the raw event didn't carry its own timestamp. Raises `ValueError` on a
+    malformed raw event -- the ingest runner catches this per-event so one
+    bad event never kills the poll loop (`core/svc_ingest/runner.py`).
+    """
+    content = raw.get("content")
+    channel_name = raw.get("channel_name")
+    if not isinstance(content, str) or not content:
+        raise ValueError("raw Twitch event missing required 'content' string field")
+    if not channel_name or not isinstance(channel_name, str):
+        raise ValueError("raw Twitch event missing required 'channel_name' string field")
+
+    return {
+        "platform": raw.get("platform", "twitch"),
+        "event_type": "message",
+        "actor": raw.get("author_username") or raw.get("author_id") or "unknown",
+        "payload": {
+            "text": content.strip(),
+            "channel_name": channel_name,
+            "message_id": raw.get("message_id"),
+            "author_id": raw.get("author_id"),
+            "author_display_name": raw.get("author_display_name"),
+            "is_mod": bool(raw.get("is_mod", False)),
+            "is_subscriber": bool(raw.get("is_subscriber", False)),
+            "is_broadcaster": bool(raw.get("is_broadcaster", False)),
+        },
+        "occurred_at": raw.get("occurred_at") or datetime.now(UTC).isoformat(),
+    }

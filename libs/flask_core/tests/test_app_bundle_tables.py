@@ -50,9 +50,13 @@ def db():
     """
     dal = DAL("sqlite:memory")
     dal.define_table(
-        "tenants", Field("slug", unique=True), Field("is_active", "boolean", default=True)
+        "tenants",
+        Field("slug", unique=True),
+        Field("is_active", "boolean", default=True),
     )
-    dal.define_table("communities", Field("tenant_id", "reference tenants"), Field("name"))
+    dal.define_table(
+        "communities", Field("tenant_id", "reference tenants"), Field("name")
+    )
 
     # Patch define_table calls to actually migrate against sqlite for this
     # test DB, mirroring init_app_bundle_tables' field declarations exactly
@@ -120,9 +124,13 @@ def db_via_module():
     """
     dal = DAL("sqlite:memory")
     dal.define_table(
-        "tenants", Field("slug", unique=True), Field("is_active", "boolean", default=True)
+        "tenants",
+        Field("slug", unique=True),
+        Field("is_active", "boolean", default=True),
     )
-    dal.define_table("communities", Field("tenant_id", "reference tenants"), Field("name"))
+    dal.define_table(
+        "communities", Field("tenant_id", "reference tenants"), Field("name")
+    )
 
     # Pre-create the three tables via raw SQL (sqlite dialect stand-in for
     # migration 069 -- Postgres-specific syntax (SERIAL, TEXT[], JSONB) was
@@ -142,8 +150,8 @@ def db_via_module():
             incompatible_with TEXT DEFAULT '[]',
             platform_compatibility TEXT NOT NULL,
             status TEXT DEFAULT 'active',
-            stages TEXT DEFAULT '{}',
-            installed_at TIMESTAMP
+            installed_at TIMESTAMP,
+            stages TEXT DEFAULT '{}'
         );
         """
     )
@@ -197,7 +205,11 @@ class TestAppCatalogCRUD:
             platform_compatibility={"tested_with": "v3.0.x", "min_version": "3.0.0"},
         )
         db.commit()
-        row = db(db.app_catalog.app_id == "waddles.bot.giveaway.giveaway-classic").select().first()
+        row = (
+            db(db.app_catalog.app_id == "waddles.bot.giveaway.giveaway-classic")
+            .select()
+            .first()
+        )
         assert row.app_id == "waddles.bot.giveaway.giveaway-classic"
         assert row.feature == "waddles.bot.giveaway"
         assert row.is_default is True
@@ -360,7 +372,9 @@ class TestInitAppBundleTablesAgainstMigratedSchema:
             platform_compatibility={"tested_with": "v3.0.x"},
         )
         dal.app_tenant_availability.insert(
-            tenant_id=tenant, app_id="waddles.bot.giveaway.giveaway-classic", available=True
+            tenant_id=tenant,
+            app_id="waddles.bot.giveaway.giveaway-classic",
+            available=True,
         )
         dal.app_activations.insert(
             community_id=community,
@@ -370,9 +384,17 @@ class TestInitAppBundleTablesAgainstMigratedSchema:
         )
         dal.commit()
 
-        catalog_row = dal(dal.app_catalog.app_id == "waddles.bot.giveaway.giveaway-classic").select().first()
-        avail_row = dal(dal.app_tenant_availability.tenant_id == tenant).select().first()
-        activation_row = dal(dal.app_activations.community_id == community).select().first()
+        catalog_row = (
+            dal(dal.app_catalog.app_id == "waddles.bot.giveaway.giveaway-classic")
+            .select()
+            .first()
+        )
+        avail_row = (
+            dal(dal.app_tenant_availability.tenant_id == tenant).select().first()
+        )
+        activation_row = (
+            dal(dal.app_activations.community_id == community).select().first()
+        )
 
         assert catalog_row.feature == "waddles.bot.giveaway"
         assert avail_row.available is True
