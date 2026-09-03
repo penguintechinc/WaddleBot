@@ -23,11 +23,11 @@ strict = true
 warn_unused_ignores = true
 exclude = ["^\\.venv/", "^tests/"]
 
-# libs/flask_core ships no py.typed marker -- same boundary override
-# hub_api/pyproject.toml uses for the identical reason (see that file's
-# own comment).
+# libs/flask_core / libs/waddle_transports ship no py.typed marker --
+# same boundary override hub_api/pyproject.toml uses for the identical
+# reason (see that file's own comment).
 [[tool.mypy.overrides]]
-module = ["flask_core.*"]
+module = ["flask_core.*", "waddle_transports.*"]
 ignore_missing_imports = true
 follow_imports = "skip"
 

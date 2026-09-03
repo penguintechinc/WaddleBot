@@ -11,12 +11,21 @@ docstring). `runner.py::_handle_item` builds this `ActionTarget` only when
 the envelope's `app_id` has a catalog-declared `stages.action.entrypoint`
 (`services/config_lookup.py::get_action_entrypoint`) -- every other bundle
 keeps using the generic adapters above; this module is purely additive.
+
+A bundle script may return either the local `AdapterResult` (e.g.
+`discord_send_action.py`) or the shared `waddle_transports.TransportResult`
+(e.g. `twitch_send_action.py`, which relays through a `waddle_transports`
+transport directly) -- both are accepted here and normalized to
+`AdapterResult` before returning, so `runner.py::_record`'s dispatch-log
+audit call sees one consistent shape (`target_type`/`detail`/
+`http_status`) regardless of which result type the script itself produced.
 """
 
 from __future__ import annotations
 
 import httpx
 from flask_core.stage_runner import EntrypointLoadError, load_entrypoint
+from waddle_transports import TransportResult
 
 from services.action_target import ActionTarget
 from services.adapters.base import AdapterResult, NonRetryableDispatchError, RetryableDispatchError
@@ -54,9 +63,13 @@ async def dispatch(
             f"bundle entrypoint {target.entrypoint!r} raised: {exc}"
         ) from exc
 
+    if isinstance(result, TransportResult):
+        return AdapterResult(
+            target_type=result.transport, detail=result.detail, http_status=result.http_status
+        )
     if not isinstance(result, AdapterResult):
         raise NonRetryableDispatchError(
             f"bundle entrypoint {target.entrypoint!r} returned "
-            f"{type(result).__name__}, expected AdapterResult"
+            f"{type(result).__name__}, expected AdapterResult or waddle_transports.TransportResult"
         )
     return result

@@ -4,14 +4,21 @@ Loaded via the same bundle-script entrypoint mechanism Discord's action
 bundle uses (`services/adapters/bundle.py::dispatch`,
 `app_catalog.stages.action.entrypoint`), but its OWN implementation does
 NOT call an HTTP API the way `discord_send_action.py`'s `send_message`
-does. Per the 2026-09-02 transport-unification coordination note (see
-`libs/waddle_transports/waddle_transports/irc.py`'s module docstring):
-Twitch chat send is `irc`, `Direction.OUTBOUND`, and for this connector's
-demo scope it reuses the ONE real IRC connection svc-ingest's
-`TwitchIrcReceiver` already holds, relayed across the process boundary
-via `waddle_transports.irc.RelayOutboundIrcTransport` (a Valkey LPUSH) --
-not a second IRC connection and not Twitch's Helix REST API (a
-documented future alternative, out of scope here).
+does. Twitch chat send is `irc`, `Direction.OUTBOUND`; for this
+connector's demo scope it relays through Valkey to svc-ingest's own
+`outbound_drain.py` (which sends via a fresh `waddle_transports.
+transports.irc.IrcTransport` connection) rather than calling Twitch's
+Helix REST API directly -- svc-action never holds Twitch credentials or
+opens its own IRC connections. Realigned (2026-09-03) onto the merged
+`waddle_transports.transports.irc_relay.RelayOutboundIrcTransport`.
+
+Replies to the ORIGIN channel: `envelope.payload["channel_name"]` (the
+channel the triggering chat message came from, carried through process->
+action by `bundles/twitch_ingest.py::normalize()`'s own payload shape)
+takes precedence over the bundle's static `config["channel"]` default --
+a reply belongs in the channel the request came from, not a hardcoded
+one; the static config value only matters for an action with no
+triggering chat message (e.g. a scheduled announcement).
 
 Seeded via `config/postgres/migrations/083_twitch_send_action_bundle.sql`
 as `waddles.bot.twitch.default`'s `stages.action.entrypoint`.
@@ -24,18 +31,11 @@ from typing import Any
 
 import httpx
 import redis.asyncio as redis
+from waddle_transports import NonRetryableTransportError, RetryableTransportError, TransportResult
+from waddle_transports.transports.irc_relay import RelayOutboundIrcTransport
 
-from services.adapters.base import AdapterResult, NonRetryableDispatchError, RetryableDispatchError
+from services.adapters.base import NonRetryableDispatchError, RetryableDispatchError
 from services.envelope import ActionEnvelope
-
-try:
-    from waddle_transports.base import NonRetryableTransportError, RetryableTransportError
-    from waddle_transports.irc import RelayOutboundIrcTransport
-except ImportError as exc:  # pragma: no cover - packaging guard, not a runtime code path
-    raise ImportError(
-        "waddle_transports is not installed -- see core/svc_action/Dockerfile "
-        "('pip install /app/libs/waddle_transports')"
-    ) from exc
 
 #: Lazily-built, process-wide Valkey client -- `send_message`'s own
 #: signature (`(envelope, config, *, http_client)`) is the same one every
@@ -74,26 +74,36 @@ async def send_message(
     config: Mapping[str, Any],
     *,
     http_client: httpx.AsyncClient,
-) -> AdapterResult:
-    """Relay `envelope.payload["text"]` to a Twitch channel via the OUTBOUND `irc` transport.
+) -> TransportResult:
+    """Relay `envelope.payload["text"]` to the origin (or configured) Twitch channel.
 
-    `config` is the bundle's resolved `stages.action.config` and must
-    declare `channel` (the Twitch channel name svc-ingest's
-    `TwitchIrcReceiver` has joined). `http_client` is accepted (and
+    `channel` resolution: `envelope.payload["channel_name"]` (the
+    triggering message's own channel) first, falling back to the bundle's
+    static `config["channel"]` default. `http_client` is accepted (and
     unused) only because `services/adapters/bundle.py::dispatch` always
     passes it -- every bundle-script entrypoint shares that one call
     signature.
 
     Raises `NonRetryableDispatchError` for a config error or an empty
-    payload `text`; a `RetryableTransportError` from the transport layer
-    (currently: none -- the Valkey relay itself has no notion of a
-    "transient" failure distinct from any other write) would map to
-    `RetryableDispatchError`, kept symmetric with `discord_send_action.py`
-    for when a future retryable transport failure mode is added.
+    payload `text`, translating any `waddle_transports.
+    NonRetryableTransportError`/`RetryableTransportError` the relay itself
+    raises into this bundle's own `*DispatchError` family --
+    `services/adapters/bundle.py::dispatch` only ever catches that family,
+    never `waddle_transports`' own error types directly. On success,
+    returns the transport's own `waddle_transports.TransportResult`
+    unwrapped -- `dispatch()` normalizes it into this service's local
+    `AdapterResult` shape for the dispatch-log audit record.
     """
-    channel = config.get("channel")
-    if not isinstance(channel, str) or not channel:
-        raise NonRetryableDispatchError("twitch bundle config missing required 'channel'")
+    payload_channel = envelope.payload.get("channel_name")
+    channel = payload_channel if isinstance(payload_channel, str) and payload_channel else None
+    if channel is None:
+        config_channel = config.get("channel")
+        channel = config_channel if isinstance(config_channel, str) and config_channel else None
+    if not channel:
+        raise NonRetryableDispatchError(
+            "twitch bundle has no channel: envelope.payload['channel_name'] and "
+            "config['channel'] are both missing"
+        )
 
     text = envelope.payload.get("text")
     if not isinstance(text, str) or not text:
@@ -102,10 +112,8 @@ async def send_message(
     transport = RelayOutboundIrcTransport(provider="twitch", redis_client=_get_redis_client(config))
 
     try:
-        result = await transport.send(channel=channel, text=text)
+        return await transport.send({"channel": channel}, {"text": text})
     except NonRetryableTransportError as exc:
         raise NonRetryableDispatchError(str(exc), http_status=exc.http_status) from exc
     except RetryableTransportError as exc:
         raise RetryableDispatchError(str(exc), http_status=exc.http_status) from exc
-
-    return AdapterResult(target_type="bundle", detail=result.detail, http_status=result.http_status)

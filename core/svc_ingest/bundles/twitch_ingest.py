@@ -10,13 +10,19 @@ own in-process registry at startup (`app.py`, `bundles/
 twitch_gateway_manifest.py`).
 
 Consumes the raw event shape `receivers/twitch_irc.py`'s
-`TwitchIrcReceiver._build_raw_event` LPUSHes onto this bundle's `:ingest`
-Valkey key -- `{platform, channel_name, message_id, author_id,
-author_username, author_display_name, content, is_mod, is_subscriber,
-is_broadcaster}` -- and produces the same `{platform, event_type, actor,
-payload, occurred_at}` platform event shape `echo_ingest.py`/
-`discord_ingest.py` document (this repo's own minimal convention, no
-repo-wide schema exists yet).
+`TwitchIrcReceiver.receive()` LPUSHes onto this bundle's `:ingest` Valkey
+key -- `{platform, channel_name, author_username, content}` -- and
+produces the same `{platform, event_type, actor, payload, occurred_at}`
+platform event shape `echo_ingest.py`/`discord_ingest.py` document (this
+repo's own minimal convention, no repo-wide schema exists yet).
+
+Realigned (2026-09-03) onto the merged `waddle_transports` library's
+generic `IrcTransport` -- that transport does NOT parse Twitch's own
+IRCv3 message tags (badges, mod/sub/broadcaster flags, numeric user id),
+only the base `PRIVMSG` line, so the richer per-message metadata this
+bundle's earlier draft carried (`author_id`, `is_mod`, `is_subscriber`,
+`is_broadcaster`, `message_id`) is no longer available from the raw
+event -- documented gap, not silently dropped.
 """
 
 from __future__ import annotations
@@ -44,16 +50,10 @@ async def normalize(raw: dict[str, Any]) -> dict[str, Any]:
     return {
         "platform": raw.get("platform", "twitch"),
         "event_type": "message",
-        "actor": raw.get("author_username") or raw.get("author_id") or "unknown",
+        "actor": raw.get("author_username") or "unknown",
         "payload": {
             "text": content.strip(),
             "channel_name": channel_name,
-            "message_id": raw.get("message_id"),
-            "author_id": raw.get("author_id"),
-            "author_display_name": raw.get("author_display_name"),
-            "is_mod": bool(raw.get("is_mod", False)),
-            "is_subscriber": bool(raw.get("is_subscriber", False)),
-            "is_broadcaster": bool(raw.get("is_broadcaster", False)),
         },
         "occurred_at": raw.get("occurred_at") or datetime.now(UTC).isoformat(),
     }

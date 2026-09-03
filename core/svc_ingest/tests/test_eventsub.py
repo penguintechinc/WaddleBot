@@ -127,7 +127,7 @@ class TestTwitchEventSubHandler:
         assert status == 200
         assert response == {"status": "ok"}
 
-        ingest_key = bundle_stream_key(TENANT, "999", APP_ID, "ingest")
+        ingest_key = bundle_stream_key(TENANT, None, APP_ID, "ingest")
         raw = await redis_client.rpop(ingest_key)
         assert raw is not None
         event = json.loads(raw)
@@ -149,7 +149,7 @@ class TestTwitchEventSubHandler:
         assert status == 200
         assert response == {"status": "ignored"}
 
-        ingest_key = bundle_stream_key(TENANT, "999", APP_ID, "ingest")
+        ingest_key = bundle_stream_key(TENANT, None, APP_ID, "ingest")
         assert await redis_client.rpop(ingest_key) is None
 
     async def test_revocation_is_acknowledged(self, redis_client: Any) -> None:

@@ -73,6 +73,35 @@ async def test_loads_and_invokes_real_entrypoint(monkeypatch: pytest.MonkeyPatch
     assert calls["http_client"] is client
 
 
+async def test_transport_result_is_normalized_to_adapter_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A bundle script returning `waddle_transports.TransportResult` directly.
+
+    (e.g. `twitch_send_action.py`) is normalized to `AdapterResult`
+    before `dispatch()` returns.
+    """
+    import sys
+    import types
+
+    from waddle_transports import TransportResult
+
+    async def _fake_send(envelope, config, *, http_client):  # noqa: ANN001, ANN202, ARG001
+        return TransportResult(transport="irc", detail="relayed", http_status=None)
+
+    fake_module = types.ModuleType("tests_fake_bundle_transport_result")
+    fake_module.send = _fake_send  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "tests_fake_bundle_transport_result", fake_module)
+
+    target = ActionTarget(type="bundle", entrypoint="tests_fake_bundle_transport_result:send")
+    async with _client() as client:
+        result = await bundle.dispatch(target, _envelope(), http_client=client)
+
+    assert isinstance(result, AdapterResult)
+    assert result.target_type == "irc"
+    assert result.detail == "relayed"
+
+
 async def test_bundle_raising_retryable_propagates() -> None:
     import sys
     import types

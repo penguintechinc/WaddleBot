@@ -158,7 +158,10 @@ class TwitchEventSubHandler:
                     raw_event,
                     consumes_tag=CONSUMES_TAG,
                     tenant=self._tenant_slug,
-                    community=raw_event["broadcaster_id"] or None,
+                    # T9 (2026-09-03 coordination): fan out at community=None
+                    # for the demo -- see receivers/twitch_irc.py's own
+                    # docstring for the same change applied to chat events.
+                    community=None,
                     redis_client=self._redis,
                     registry=self._registry,
                 )

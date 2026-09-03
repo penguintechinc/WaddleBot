@@ -11,14 +11,8 @@ async def test_normalizes_a_real_chat_message() -> None:
     raw = {
         "platform": "twitch",
         "channel_name": "waddlebot",
-        "message_id": "abc-123",
-        "author_id": "555",
         "author_username": "alice",
-        "author_display_name": "Alice",
         "content": "  hello chat  ",
-        "is_mod": False,
-        "is_subscriber": True,
-        "is_broadcaster": False,
     }
     event = await normalize(raw)
 
@@ -27,14 +21,13 @@ async def test_normalizes_a_real_chat_message() -> None:
     assert event["actor"] == "alice"
     assert event["payload"]["text"] == "hello chat"
     assert event["payload"]["channel_name"] == "waddlebot"
-    assert event["payload"]["is_subscriber"] is True
     assert "occurred_at" in event
 
 
-async def test_falls_back_to_author_id_when_username_missing() -> None:
-    raw = {"channel_name": "waddlebot", "content": "hi", "author_id": "555"}
+async def test_falls_back_to_unknown_when_sender_missing() -> None:
+    raw = {"channel_name": "waddlebot", "content": "hi"}
     event = await normalize(raw)
-    assert event["actor"] == "555"
+    assert event["actor"] == "unknown"
 
 
 async def test_missing_content_raises() -> None:

@@ -1,25 +1,26 @@
 """Tests for `receivers.twitch_irc.TwitchIrcReceiver`.
 
-Real `twitchio.ext.commands.Bot` subclass instance (constructing one does
-not open a network connection -- only `bot.start()` does, same precedent
-`receivers/discord_gateway.py`'s own tests document for py-cord), duck-
-typed fake `twitchio.Message`/`Author`/`Channel` objects (twitchio's own
-`Message` needs live IRC state to construct, so a fake with just the
-attributes this receiver reads is the standard testing pattern), and a
-real `fakeredis` round trip for the fan-out + outbound-relay assertions --
-no mocked IRC connection is ever opened.
+`IrcTransport.receive()` is monkeypatched to a fake async generator --
+the real transport opens a genuine TCP/TLS socket, which this unit suite
+never does (matches `waddle_transports`' own test suite precedent of
+exercising the wire protocol against a local `asyncio` server, out of
+scope for THIS container's tests, which only need to prove the
+normalize + fan-out + supervisor-compatible `run()`/`stop()` wiring).
+`redis_client` (from `conftest.py`) is a real `fakeredis.FakeAsyncRedis`
+-- genuine LPUSH/RPOP round trip for the fan-out assertions.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
-from dataclasses import dataclass
+from collections.abc import AsyncIterator, Mapping
 from typing import Any
-from unittest.mock import AsyncMock
 
+import pytest
 from flask_core.app_registry import AppRegistry
 from flask_core.stream_pipeline import bundle_stream_key
-from waddle_transports.irc import outbound_queue_key
+from waddle_transports import Direction
 
 from bundles.twitch_gateway_manifest import register_default_bundles
 from receivers.twitch_irc import TwitchIrcReceiver
@@ -28,206 +29,132 @@ TENANT = "acme-corp"
 APP_ID = "waddles.bot.twitch.gateway"
 
 
-@dataclass
-class _FakeAuthor:
-    id: int
-    name: str
-    display_name: str = ""
-    is_mod: bool = False
-    is_subscriber: bool = False
-
-
-@dataclass
-class _FakeChannel:
-    name: str
-
-    async def send(self, text: str) -> None:  # pragma: no cover - overridden per-test as needed
-        pass
-
-
-@dataclass
-class _FakeMessage:
-    id: str
-    author: _FakeAuthor | None
-    channel: _FakeChannel | None
-    content: str
-    echo: bool = False
-
-
-def _make_receiver(redis_client: Any, registry: AppRegistry | None = None) -> TwitchIrcReceiver:
+def _make_receiver(
+    redis_client: Any, registry: AppRegistry | None = None, *, channel: str = "waddlebot"
+) -> TwitchIrcReceiver:
     reg = registry if registry is not None else AppRegistry()
     if not reg.all_apps():
         register_default_bundles(reg)
     return TwitchIrcReceiver(
-        token="oauth:fake-token-not-a-real-twitch-token",  # noqa: S106 - test literal
-        nick="waddlebot",
-        channels=["waddlebot"],
+        irc_config={
+            "host": "irc.chat.twitch.tv",
+            "port": 6697,
+            "nick": "waddlebot",
+            "channel": channel,
+            "password_ref": "TEST_TWITCH_TOKEN_REF",
+        },
         redis_client=redis_client,
         registry=reg,
         tenant_slug=TENANT,
     )
 
 
-class TestHandleMessage:
-    async def test_echoed_message_is_ignored(self, redis_client: Any) -> None:
+async def _fake_privmsgs(*items: Mapping[str, str]) -> AsyncIterator[Mapping[str, str]]:
+    for item in items:
+        yield item
+
+
+class TestTransportShape:
+    def test_declares_inbound_irc(self, redis_client: Any) -> None:
         receiver = _make_receiver(redis_client)
-        message = _FakeMessage(
-            id="1",
-            author=_FakeAuthor(id=999, name="waddlebot"),
-            channel=_FakeChannel(name="waddlebot"),
-            content="I am the bot",
-            echo=True,
-        )
-        await receiver._handle_message(message)  # noqa: SLF001 - exercising the real handler
+        assert receiver.name == "twitch_irc"
+        assert receiver.directions == frozenset({Direction.INBOUND})
 
-        ingest_key = bundle_stream_key(TENANT, "waddlebot", APP_ID, "ingest")
-        assert await redis_client.rpop(ingest_key) is None
+    def test_channel_property_reflects_config(self, redis_client: Any) -> None:
+        receiver = _make_receiver(redis_client, channel="othershow")
+        assert receiver.channel == "othershow"
 
-    async def test_human_chat_message_fans_out_to_the_twitch_ingest_bundle(
-        self, redis_client: Any
+
+class TestNormalize:
+    """`TwitchIrcReceiver.receive()`'s own normalization, isolated from the real IRC socket."""
+
+    async def test_normalizes_raw_irc_transport_output(
+        self, redis_client: Any, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         receiver = _make_receiver(redis_client)
-        message = _FakeMessage(
-            id="123",
-            author=_FakeAuthor(id=555, name="alice", display_name="Alice", is_subscriber=True),
-            channel=_FakeChannel(name="waddlebot"),
-            content="hello waddlebot",
+        raw_privmsg = {"channel": "#waddlebot", "sender": "alice", "text": "hi"}
+        monkeypatch.setattr(
+            receiver._irc,  # noqa: SLF001 - test override of the real IrcTransport instance
+            "receive",
+            lambda config: _fake_privmsgs(raw_privmsg),
         )
-        await receiver._handle_message(message)  # noqa: SLF001
 
-        ingest_key = bundle_stream_key(TENANT, "waddlebot", APP_ID, "ingest")
-        raw = await redis_client.rpop(ingest_key)
-        assert raw is not None
-        event = json.loads(raw)
-        assert event == {
+        events = [event async for event in receiver.receive({"channel": "waddlebot"})]
+
+        assert events == [
+            {
+                "platform": "twitch",
+                "channel_name": "waddlebot",
+                "author_username": "alice",
+                "content": "hi",
+            }
+        ]
+
+
+class TestHandleMessage:
+    async def test_fans_out_at_community_none(self, redis_client: Any) -> None:
+        """T9 (2026-09-03): every Twitch event fans out at community=None for the demo."""
+        receiver = _make_receiver(redis_client)
+        event = {
             "platform": "twitch",
             "channel_name": "waddlebot",
-            "message_id": "123",
-            "author_id": "555",
             "author_username": "alice",
-            "author_display_name": "Alice",
             "content": "hello waddlebot",
-            "is_mod": False,
-            "is_subscriber": True,
-            "is_broadcaster": False,
         }
+        await receiver._handle_message(event)  # noqa: SLF001 - exercising the real handler
 
-    async def test_broadcaster_message_is_flagged(self, redis_client: Any) -> None:
-        receiver = _make_receiver(redis_client)
-        message = _FakeMessage(
-            id="124",
-            author=_FakeAuthor(id=1, name="waddlebot_owner"),
-            channel=_FakeChannel(name="waddlebot_owner"),
-            content="mod command",
-        )
-        await receiver._handle_message(message)  # noqa: SLF001
-
-        ingest_key = bundle_stream_key(TENANT, "waddlebot_owner", APP_ID, "ingest")
-        event = json.loads(await redis_client.rpop(ingest_key))
-        assert event["is_broadcaster"] is True
+        ingest_key = bundle_stream_key(TENANT, None, APP_ID, "ingest")
+        raw = await redis_client.rpop(ingest_key)
+        assert raw is not None
+        assert json.loads(raw) == event
 
     async def test_fanout_failure_does_not_propagate(self, redis_client: Any) -> None:
-        """One bad event must never kill the IRC connection -- `_handle_message` swallows."""
+        """One bad event must never kill the connection -- `_handle_message` swallows."""
 
         class _BrokenRedis:
             async def lpush(self, key: str, value: str) -> None:
                 raise ConnectionError("valkey unreachable")
 
         receiver = _make_receiver(_BrokenRedis())
-        message = _FakeMessage(
-            id="125",
-            author=_FakeAuthor(id=555, name="alice"),
-            channel=_FakeChannel(name="waddlebot"),
-            content="hello",
+        await receiver._handle_message(  # noqa: SLF001
+            {"platform": "twitch", "channel_name": "waddlebot", "content": "hi"}
         )
-        await receiver._handle_message(message)  # noqa: SLF001 - must not raise
-
-
-class TestOutboundDrain:
-    async def test_send_one_delivers_through_the_matching_channel(self, redis_client: Any) -> None:
-        receiver = _make_receiver(redis_client)
-        sent: list[str] = []
-
-        class _RecordingChannel(_FakeChannel):
-            async def send(self, text: str) -> None:
-                sent.append(text)
-
-        fake_channel = _RecordingChannel(name="waddlebot")
-        receiver.bot.get_channel = lambda name: fake_channel if name == "waddlebot" else None  # type: ignore[method-assign]
-
-        await receiver._send_one(json.dumps({"channel": "waddlebot", "text": "hi chat"}))  # noqa: SLF001
-
-        assert sent == ["hi chat"]
-
-    async def test_send_one_unknown_channel_is_a_noop(self, redis_client: Any) -> None:
-        receiver = _make_receiver(redis_client)
-        receiver.bot.get_channel = lambda name: None  # type: ignore[method-assign]
-
-        await receiver._send_one(json.dumps({"channel": "nope", "text": "hi"}))  # noqa: SLF001 - must not raise
-
-    async def test_send_one_malformed_payload_is_a_noop(self, redis_client: Any) -> None:
-        receiver = _make_receiver(redis_client)
-        await receiver._send_one("not json")  # noqa: SLF001 - must not raise
-
-    async def test_drain_outbound_relays_a_queued_message_end_to_end(
-        self, redis_client: Any
-    ) -> None:
-        """Fail-first proof: a message relayed via `outbound_queue_key` is delivered.
-
-        By the receiver's own drain loop -- the same queue `bundles/
-        twitch_send_action.py` LPUSHes onto from svc-action.
-        """
-        receiver = _make_receiver(redis_client)
-        sent: list[tuple[str, str]] = []
-
-        class _RecordingChannel(_FakeChannel):
-            async def send(self, text: str) -> None:
-                sent.append((self.name, text))
-
-        receiver.bot.get_channel = lambda name: _RecordingChannel(name=name)  # type: ignore[method-assign]
-
-        await redis_client.lpush(
-            outbound_queue_key("twitch"), json.dumps({"channel": "waddlebot", "text": "relayed!"})
-        )
-
-        receiver._running = True  # noqa: SLF001
-        import asyncio
-
-        task = asyncio.ensure_future(receiver._drain_outbound())  # noqa: SLF001
-        await asyncio.sleep(0.05)
-        receiver._running = False  # noqa: SLF001
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
-
-        assert sent == [("waddlebot", "relayed!")]
 
 
 class TestRunStop:
-    async def test_run_delegates_to_bot_start_and_stops_the_drain_loop(
-        self, redis_client: Any
+    async def test_run_drives_receive_and_fans_out_each_event(
+        self, redis_client: Any, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         receiver = _make_receiver(redis_client)
-        receiver.bot.start = AsyncMock()  # type: ignore[method-assign]
+        monkeypatch.setattr(
+            receiver._irc,  # noqa: SLF001
+            "receive",
+            lambda config: _fake_privmsgs(
+                {"channel": "#waddlebot", "sender": "alice", "text": "one"},
+                {"channel": "#waddlebot", "sender": "bob", "text": "two"},
+            ),
+        )
 
         await receiver.run()
 
-        receiver.bot.start.assert_awaited_once()
-        assert receiver._outbound_task is not None  # noqa: SLF001
-        assert receiver._outbound_task.cancelled() or receiver._outbound_task.done()  # noqa: SLF001
+        ingest_key = bundle_stream_key(TENANT, None, APP_ID, "ingest")
+        first = json.loads(await redis_client.rpop(ingest_key))
+        second = json.loads(await redis_client.rpop(ingest_key))
+        assert {first["author_username"], second["author_username"]} == {"alice", "bob"}
 
-    async def test_stop_closes_the_bot(self, redis_client: Any) -> None:
+    async def test_run_returns_when_receive_generator_ends(
+        self, redis_client: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A connection drop (generator ends) makes `run()` return.
+
+        `ReceiverSupervisor`'s own restart-on-exit contract treats that
+        exactly like a raised exception.
+        """
         receiver = _make_receiver(redis_client)
-        receiver.bot.close = AsyncMock()  # type: ignore[method-assign]
+        monkeypatch.setattr(receiver._irc, "receive", lambda config: _fake_privmsgs())  # noqa: SLF001
 
-        await receiver.stop()
+        await asyncio.wait_for(receiver.run(), timeout=2.0)  # must return promptly, not hang
 
-        receiver.bot.close.assert_awaited_once()
-
-    async def test_stop_swallows_close_errors(self, redis_client: Any) -> None:
+    async def test_stop_never_raises(self, redis_client: Any) -> None:
         receiver = _make_receiver(redis_client)
-        receiver.bot.close = AsyncMock(side_effect=RuntimeError("already closed"))  # type: ignore[method-assign]
-
         await receiver.stop()  # must not raise
