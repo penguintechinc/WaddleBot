@@ -55,6 +55,16 @@ def init_app_bundle_tables(dal: Any) -> None:
         dal.Field("incompatible_with", "list:string", default=[]),
         dal.Field("platform_compatibility", "json", notnull=True),
         dal.Field("status", "string", default="active"),  # active | deprecated | yanked
+        # Per-stage {entrypoint, config, spec} JSON, keyed by ingest/process/
+        # action (migration 071) -- this field was missing from this binding
+        # until the svc-action bundle-runtime proof (docs/plans/...-app-
+        # bundle-discord-action-proof.md), a confirmed gap: hub_api/services/
+        # schema.py's own separate app_catalog binding already carried this
+        # column (used by the distribution endpoint), but nothing on this
+        # binding's side -- the one svc-action's ActionConfigLookup actually
+        # queries against -- could ever read app_catalog.stages until now.
+        # default={} so a pre-071 row reads back as an empty dict, never None.
+        dal.Field("stages", "json", default={}),
         dal.Field("installed_at", "datetime", default=datetime.utcnow),
         primarykey=["app_id"],
         migrate=False,

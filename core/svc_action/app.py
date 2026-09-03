@@ -1,22 +1,37 @@
-"""svc-action -- Quart application entrypoint.
+"""svc-action -- Quart control-plane + background stage-runner loop.
 
-ACTION stage-runner (docs/plans/2026-08-31-app-bundle-sdk-design.md Sec6):
-dequeues `waddles:t:{tenant}:c:{community}:app:{app_id}:action` (Valkey,
-BRPOP fan-in -- services/runner.py) and dispatches each item to its
-bundle's declared `action_target` via one of the five standardized
-adapters (services/adapters/). The HTTP surface here is intentionally
-thin -- only `/health` (k8s liveness/readiness, same as every other
-pipeline-stage container) -- the real work happens in the background
-runner task started in `before_serving`.
+Mirrors `core/svc_process/app.py`/`core/svc_ingest/app.py` exactly: polls
+hub-api's distribution endpoint for the `action` stage's active bundles
+(`flask_core.stage_runner.BundlePoller`), RPOPs each bundle's own
+`:action` Valkey key, loads its real script entrypoint (`flask_core.
+stage_runner.load_entrypoint`), and dispatches -- see `runner.py`'s own
+docstring for the one real difference from ingest/process (retry-with-
+backoff + an audit-log DB connection, since action dispatches to a real
+external system). `/health`/`/healthz`/`/metrics` come from `flask_core`'s
+standard health blueprint, same as every other pipeline-stage container.
 """
 
 from __future__ import annotations
 
-from flask_core import create_health_blueprint, install_security_headers, setup_aaa_logging
+import asyncio
+from typing import cast
+
+import httpx
+import redis.asyncio as redis
+from flask_core import (
+    AsyncDAL,
+    create_health_blueprint,
+    install_security_headers,
+    setup_aaa_logging,
+)
+from flask_core.auth import create_jwt_token
+from flask_core.stage_runner import BundlePoller
 from quart import Quart
 
 from config import ActionConfig
-from services.runner import ActionRunner
+from runner import ActionRunner
+from services.dispatch_log import init_action_dispatch_log_table
+from services.reference_tables import bind_minimal_reference_tables
 
 app = Quart(__name__)
 # security.md A05 hardening -- JSON-only service, default deny-everything CSP.
@@ -29,26 +44,110 @@ app.register_blueprint(health_bp)
 
 logger = setup_aaa_logging(_config.module_name, _config.module_version)
 
-app.config["ACTION_CONFIG"] = _config
-_runner = ActionRunner(_config)
-app.config["ACTION_RUNNER"] = _runner
+
+def _jwt_provider() -> str:
+    """Mint a fresh 1h service JWT for this runner's own tenant scope (see svc-ingest's own)."""
+    return cast(
+        str,
+        create_jwt_token(
+            user_id="svc-action",
+            username="svc-action",
+            email="svc-action@internal.waddlebot",
+            roles=["service"],
+            secret_key=_config.secret_key,
+            tenant=_config.runner_tenant_slug,
+            scope=_config.jwt_scope,
+            expiration_hours=1,
+        ),
+    )
 
 
 @app.before_serving
-async def _start_runner() -> None:
-    """Open Valkey/DB connections and start the BRPOP dispatch loop."""
-    await _runner.start()
+async def startup() -> None:
+    """Wire the httpx/Valkey/DAL clients, poller, and start the background loop.
+
+    `http2=True` on the shared httpx client -- the `http` transport's
+    `grpc` sub-type (`services/transports/http.py`) needs real HTTP/2
+    negotiation; every other caller of this client (the distribution poll,
+    every other transport, `bundles/discord_send_action.py`) works
+    identically over HTTP/1.1 or /2, so sharing one client is safe.
+    """
+    http_client = httpx.AsyncClient(
+        follow_redirects=False, http2=True, timeout=_config.http_timeout_seconds
+    )
+    redis_client = redis.from_url(_config.valkey_url, encoding="utf-8", decode_responses=True)
+    async_dal = AsyncDAL(_config.database_url, pool_size=_config.db_pool_size, migrate=False)
+    bind_minimal_reference_tables(async_dal.dal)
+    init_action_dispatch_log_table(async_dal.dal)
+
+    poller = BundlePoller(
+        http_client,
+        _config.distribution_url,
+        stage=_config.pipeline_stage,
+        jwt_provider=_jwt_provider,
+        community_id=_config.runner_community_id,
+        poll_interval_s=_config.poll_interval_s,
+        base_backoff_s=_config.base_backoff_s,
+        max_backoff_s=_config.max_backoff_s,
+    )
+    runner = ActionRunner(
+        poller=poller,
+        redis_client=redis_client,
+        dal=async_dal,
+        http_client=http_client,
+        tenant_slug=_config.runner_tenant_slug,
+        max_retries=_config.max_retries,
+        retry_initial_delay=_config.retry_initial_delay,
+        retry_max_delay=_config.retry_max_delay,
+    )
+
+    app.config["http_client"] = http_client
+    app.config["redis_client"] = redis_client
+    app.config["async_dal"] = async_dal
+    app.config["runner"] = runner
+    app.config["runner_task"] = asyncio.ensure_future(runner.run_forever())
+    logger.system("svc-action started", action="startup", result="SUCCESS")
 
 
 @app.after_serving
-async def _stop_runner() -> None:
-    """Stop the dispatch loop and close all connections cleanly."""
-    await _runner.stop()
+async def shutdown() -> None:
+    """Stop the background loop and close all clients -- must never raise."""
+    runner = app.config.get("runner")
+    if runner is not None:
+        runner.stop()
+    task = app.config.get("runner_task")
+    if task is not None:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass  # expected -- this is our own cancel() above, not a failure
+        except Exception as exc:  # noqa: BLE001 - shutdown must not raise
+            logger.warning(f"Error stopping runner task: {exc}")
+
+    http_client = app.config.get("http_client")
+    if http_client is not None:
+        await http_client.aclose()
+    redis_client = app.config.get("redis_client")
+    if redis_client is not None:
+        await redis_client.aclose()
+    async_dal = app.config.get("async_dal")
+    if async_dal is not None:
+        # Defensive try/except -- flask_core's AsyncDAL.close_async() runs
+        # pydal's DAL.close() inside its own ThreadPoolExecutor, on a
+        # different thread than the one that created the DAL; pydal's
+        # close() reads THREAD_LOCAL state only ever populated on the
+        # *creating* thread, so a cross-thread close can raise. Failing to
+        # release the pool cleanly on shutdown must never crash the ASGI
+        # lifespan (same pattern the pre-refactor runner used).
+        try:
+            await async_dal.close_async()
+        except Exception as exc:  # noqa: BLE001 -- shutdown must not raise
+            logger.warning(f"Error closing DAL on shutdown: {exc}")
+    logger.system("svc-action shutdown complete", action="shutdown", result="SUCCESS")
 
 
 if __name__ == "__main__":  # pragma: no cover - process entrypoint, not exercised by unit tests
-    import asyncio
-
     import hypercorn.asyncio
     from hypercorn.config import Config as HyperConfig
 

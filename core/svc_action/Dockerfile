@@ -9,9 +9,13 @@ FROM python:3.13-slim-bookworm@sha256:01f42367a0a94ad4bc17111776fd66e3500c1d87c1
 
 WORKDIR /app
 
-# Shared library
+# Shared libraries
 COPY libs/flask_core /app/libs/flask_core
 RUN cd /app/libs/flask_core && pip install --no-cache-dir .
+COPY libs/waddle_transports /app/libs/waddle_transports
+RUN cd /app/libs/waddle_transports \
+    && pip install --no-cache-dir --require-hashes -r requirements.txt \
+    && pip install --no-cache-dir .
 
 # Module files
 COPY core/svc_action/requirements.txt /app/
