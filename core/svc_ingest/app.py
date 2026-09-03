@@ -103,7 +103,8 @@ async def startup() -> None:
     app.config["runner"] = runner
     app.config["runner_task"] = asyncio.ensure_future(runner.run_forever())
 
-    # Socket-owning receivers (App Bundle SDK gateway_socket ingest) --
+    # Socket-owning receivers (inbound Transport.SOCKET connections, per
+    # transport_boundary.py's waddle_transports-shaped interface) --
     # supervised alongside the poll-drain loop above, each guarded by a
     # Valkey lease so scaling svc-ingest to N replicas never opens N
     # duplicate sockets for the same (provider, community). See this
@@ -136,7 +137,7 @@ async def startup() -> None:
             renew_interval_s=Config.SOCKET_LEASE_RENEW_INTERVAL_S,
         )
         app.config["discord_leased_receiver"] = leased_discord
-        supervisor.register("discord_gateway", leased_discord.run)
+        supervisor.register("discord_gateway", leased_discord.run, transport=discord_receiver)
         logger.system(
             "svc-ingest registered Discord gateway receiver",
             action="startup",

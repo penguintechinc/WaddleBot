@@ -1,18 +1,20 @@
-"""ReceiverSupervisor -- restart-on-exit + exponential backoff for long-lived receiver tasks.
+"""ReceiverSupervisor -- restart-on-exit + exponential backoff for long-lived transport tasks.
 
-svc-ingest's socket receivers (`receivers/discord_gateway.py` today, more
-platforms later) hold PERSISTENT inbound sockets as long-lived asyncio
-tasks, alongside the container's existing poll-drain loop (`app.py`'s own
-`runner.IngestRunner.run_forever()`, started with a raw `asyncio.
-ensure_future` since that loop already retries internally). A receiver
-task started the same raw way would die silently on any unhandled
-exception -- the task just stops, no retry, no restart, no crash loud
-enough for anyone to notice, and the platform quietly loses that entire
-receiver's traffic. `ReceiverSupervisor` wraps each registered receiver
-coroutine in its own supervised loop so a dropped gateway connection, an
-auth failure, or any other unhandled exception restarts the receiver
-rather than ending it -- backoff shape (double on failure, cap at
-`max_backoff_s`, reset to `base_backoff_s` on a clean `RECEIVER_HEALTHY_S`-
+svc-ingest hosts long-lived INBOUND socket/IRC transports (`receivers/
+discord_gateway.py`'s Discord gateway connection today, more platforms
+later -- see `transport_boundary.py` for the shared `waddle_transports`-
+shaped `Transport`/`TransportType`/`Direction` vocabulary each one is
+modeled against) as long-lived asyncio tasks, alongside the container's
+existing poll-drain loop (`app.py`'s own `runner.IngestRunner.
+run_forever()`, started with a raw `asyncio.ensure_future` since that loop
+already retries internally). A transport task started the same raw way
+would die silently on any unhandled exception -- the task just stops, no
+retry, no restart, no crash loud enough for anyone to notice, and the
+platform quietly loses that entire transport's traffic. `ReceiverSupervisor`
+wraps each registered coroutine in its own supervised loop so a dropped
+gateway connection, an auth failure, or any other unhandled exception
+restarts it rather than ending it -- backoff shape (double on failure, cap
+at `max_backoff_s`, reset to `base_backoff_s` on a clean `RECEIVER_HEALTHY_S`-
 long run) deliberately mirrors `flask_core.stage_runner.BundlePoller.
 poll_once` (stage_runner.py:185-211) so the two "keep retrying, never go
 idle, never hammer" policies in this codebase read the same way.
@@ -25,6 +27,8 @@ import logging
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
+
+from transport_boundary import Transport
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +55,7 @@ class _Supervised:
 
     name: str
     coro_factory: Callable[[], Awaitable[None]]
+    transport: Transport | None = None
     task: asyncio.Task[None] | None = None
     restart_count: int = 0
 
@@ -72,11 +77,26 @@ class ReceiverSupervisor:
     _receivers: dict[str, _Supervised] = field(default_factory=dict)
     _running: bool = False
 
-    def register(self, name: str, coro_factory: Callable[[], Awaitable[None]]) -> None:
-        """Register a receiver by name. `coro_factory()` is called fresh on every (re)start."""
+    def register(
+        self,
+        name: str,
+        coro_factory: Callable[[], Awaitable[None]],
+        *,
+        transport: Transport | None = None,
+    ) -> None:
+        """Register a receiver by name. `coro_factory()` is called fresh on every (re)start.
+
+        `transport` is optional classification metadata (the underlying
+        `Transport` this coroutine ultimately runs, e.g. a lease-wrapped
+        `DiscordGatewayReceiver`) -- used only for richer log lines below,
+        never required for correctness; a bare `coro_factory` with no
+        `Transport` still supervises exactly the same way.
+        """
         if name in self._receivers:
             raise ValueError(f"receiver {name!r} already registered")
-        self._receivers[name] = _Supervised(name=name, coro_factory=coro_factory)
+        self._receivers[name] = _Supervised(
+            name=name, coro_factory=coro_factory, transport=transport
+        )
 
     def restart_count(self, name: str) -> int:
         """How many times the named receiver has been restarted after a failed/exited run."""
@@ -108,6 +128,7 @@ class ReceiverSupervisor:
     async def _supervise(self, supervised: _Supervised) -> None:
         """One receiver's restart-on-exit + exponential-backoff loop. Never raises out."""
         backoff_s = self.base_backoff_s
+        transport_label = self._transport_label(supervised.transport)
         while self._running:
             started_at = time.monotonic()
             try:
@@ -117,13 +138,18 @@ class ReceiverSupervisor:
                 # until cancelled; returning means its connection ended
                 # (or it was never opened), so it restarts exactly like a
                 # raised exception would.
-                logger.warning("supervisor.receiver_exited name=%s -- restarting", supervised.name)
+                logger.warning(
+                    "supervisor.receiver_exited name=%s transport=%s -- restarting",
+                    supervised.name,
+                    transport_label,
+                )
             except asyncio.CancelledError:
                 raise  # our own stop() -- propagate, do not restart
             except Exception as exc:  # noqa: BLE001 - one receiver's bug must never kill others
                 logger.error(
-                    "supervisor.receiver_failed name=%s error=%s backoff_s=%s",
+                    "supervisor.receiver_failed name=%s transport=%s error=%s backoff_s=%s",
                     supervised.name,
+                    transport_label,
                     exc,
                     backoff_s,
                 )
@@ -137,3 +163,10 @@ class ReceiverSupervisor:
                 backoff_s = self.base_backoff_s
             await self._sleep(backoff_s)
             backoff_s = min(backoff_s * 2, self.max_backoff_s)
+
+    @staticmethod
+    def _transport_label(transport: Transport | None) -> str:
+        """`"socket/inbound"`-shaped log label, or `"unknown"` for a bare `coro_factory`."""
+        if transport is None:
+            return "unknown"
+        return f"{transport.transport_type.value}/{transport.direction.value}"

@@ -20,10 +20,15 @@
 -- change.
 --
 -- `stages.ingest` mirrors flask_core.app_manifest.StageSpec's field names
--- (071's own convention) plus this PR's two new fields --
--- `consumes`/`communication_model` -- so the in-process manifest
--- (`discord_gateway_manifest.py`'s `DISCORD_GATEWAY_MANIFEST`) and this DB
--- row describe the identical bundle, never two different vocabularies.
+-- (071's own convention) plus this PR's new `consumes` field -- so the
+-- in-process manifest (`discord_gateway_manifest.py`'s
+-- `DISCORD_GATEWAY_MANIFEST`) and this DB row describe the identical
+-- bundle, never two different vocabularies. Deliberately no
+-- `communication_model` here: that field is thirdparty-vendor-only
+-- (`webhook_push`/`rest_pull`); this bundle's persistent-socket transport
+-- shape is declared in CODE instead (`core/svc_ingest/receivers/
+-- discord_gateway.py`'s `DiscordGatewayReceiver`, via the shared
+-- `waddle_transports` boundary -- see `transport_boundary.py`).
 --
 -- `is_default = TRUE` for `waddles.bot.discord` -- global tier only,
 -- ON CONFLICT DO NOTHING keeps this idempotent across re-applies, same
@@ -47,7 +52,7 @@ INSERT INTO app_catalog (
     'active',
     (
         '{"ingest": {"entrypoint": "bundles.discord_ingest:normalize", "config": {}, ' ||
-        '"spec": {}, "consumes": ["discord.message"], "communication_model": "gateway_socket"}}'
+        '"spec": {}, "consumes": ["discord.message"]}}'
     )::jsonb
 )
 ON CONFLICT (app_id) DO NOTHING;

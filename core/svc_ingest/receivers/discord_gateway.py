@@ -10,6 +10,11 @@ slash/prefix command routing (`_register_slash_commands` and friends) --
 that command-router surface is a separate, much larger migration, out of
 scope here; this receiver's only job is turning one inbound message into
 one fan-out call (`fanout.fan_out_event`).
+
+Modeled as a `transport_boundary.Transport` (`TransportType.SOCKET`,
+`Direction.INBOUND`) -- see that module's own docstring for why this is a
+shim for the shared `waddle_transports` library rather than the receiver
+declaring its own bespoke classification.
 """
 
 from __future__ import annotations
@@ -21,6 +26,7 @@ import discord
 from flask_core.app_registry import AppRegistry
 
 from fanout import RedisLike, fan_out_event
+from transport_boundary import Direction, Transport, TransportType
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +36,7 @@ logger = logging.getLogger(__name__)
 CONSUMES_TAG = "discord.message"
 
 
-class DiscordGatewayReceiver:
+class DiscordGatewayReceiver(Transport):
     """Holds ONE persistent Discord bot gateway connection, fans every inbound message out.
 
     PLATFORM-level, not per-community: one `discord.Bot` connection serves
@@ -38,6 +44,9 @@ class DiscordGatewayReceiver:
     once (`ReceiverSupervisor` restarts it on failure, never runs a second
     concurrent instance).
     """
+
+    transport_type = TransportType.SOCKET
+    direction = Direction.INBOUND
 
     def __init__(
         self,

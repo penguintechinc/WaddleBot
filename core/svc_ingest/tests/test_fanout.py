@@ -39,7 +39,6 @@ def _manifest(app_id: str, feature: str, *, consumes: tuple[str, ...], is_defaul
                 "ingest": {
                     "entrypoint": "bundles.discord_ingest:normalize",
                     "consumes": list(consumes),
-                    "communication_model": "gateway_socket",
                 }
             },
         }

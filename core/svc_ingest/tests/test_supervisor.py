@@ -12,8 +12,13 @@ green -- confirmed, reverted.
 from __future__ import annotations
 
 import asyncio
+import logging
+from typing import Any
+
+import pytest
 
 from supervisor import ReceiverSupervisor
+from transport_boundary import Direction, Transport, TransportType
 
 
 class _FakeSleep:
@@ -157,3 +162,59 @@ class TestStop:
             pass
         else:
             raise AssertionError("expected ValueError for duplicate receiver name")
+
+
+class _FakeSocketTransport(Transport):
+    """Minimal concrete `Transport`.
+
+    Proves `ReceiverSupervisor` references `transport_boundary`'s real
+    types (`TransportType`/`Direction`), not a local enum.
+    """
+
+    transport_type = TransportType.SOCKET
+    direction = Direction.INBOUND
+
+    async def run(self) -> None:
+        await asyncio.sleep(100)
+
+    async def stop(self) -> None:
+        pass
+
+
+class TestTransportLabel:
+    def test_transport_label_formats_type_and_direction(self) -> None:
+        transport = _FakeSocketTransport()
+        assert ReceiverSupervisor._transport_label(transport) == "socket/inbound"  # noqa: SLF001
+
+    def test_transport_label_unknown_when_no_transport_registered(self) -> None:
+        assert ReceiverSupervisor._transport_label(None) == "unknown"  # noqa: SLF001
+
+    async def test_registered_transport_appears_in_failure_log(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A registered `Transport`'s label reaches the real log line on a failed run.
+
+        Proves `register(transport=...)` is actually wired through to
+        `_supervise`, not just accepted and dropped.
+        """
+        attempts = 0
+        done = asyncio.Event()
+
+        async def flaky() -> None:
+            nonlocal attempts
+            attempts += 1
+            if attempts < 2:
+                raise RuntimeError("boom")
+            done.set()
+            await asyncio.sleep(100)
+
+        supervisor = ReceiverSupervisor(base_backoff_s=0.01, max_backoff_s=0.05)
+        transport: Any = _FakeSocketTransport()
+        supervisor.register("flaky", flaky, transport=transport)
+
+        with caplog.at_level(logging.ERROR):
+            await supervisor.start()
+            await asyncio.wait_for(done.wait(), timeout=2.0)
+            await supervisor.stop()
+
+        assert any("transport=socket/inbound" in record.message for record in caplog.records)

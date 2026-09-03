@@ -16,12 +16,18 @@ class TestRegisterDefaultBundles:
         assert manifest.feature == "waddles.bot.discord"
         assert manifest.is_default is True
 
-    def test_ingest_stage_declares_gateway_socket_and_discord_message(self) -> None:
+    def test_ingest_stage_declares_discord_message_and_no_communication_model(self) -> None:
+        """Transport shape (persistent socket, inbound) is declared in CODE, not the manifest.
+
+        See `discord_gateway_manifest.py`'s own docstring for why
+        `communication_model` stays unset here (that field is
+        thirdparty-vendor-only).
+        """
         registry = AppRegistry()
         manifest = register_default_bundles(registry)
 
         ingest_spec = manifest.stage_specs["ingest"]
-        assert ingest_spec.communication_model == "gateway_socket"
+        assert ingest_spec.communication_model is None
         assert ingest_spec.consumes == ("discord.message",)
         assert ingest_spec.entrypoint == "bundles.discord_ingest:normalize"
 
@@ -34,12 +40,12 @@ class TestRegisterDefaultBundles:
     def test_raw_manifest_dict_matches_migration_082s_seeded_shape(self) -> None:
         """Loose coupling check against migration 082's DB row.
 
-        Both must describe the identical bundle (same app_id/entrypoint/
-        consumes/communication_model) -- this test only asserts the
+        Both must describe the identical bundle (same
+        app_id/entrypoint/consumes) -- this test only asserts the
         in-process side; the SQL itself isn't executable here.
         """
         stages = DISCORD_GATEWAY_MANIFEST["stages"]
         assert DISCORD_GATEWAY_MANIFEST["app_id"] == "waddles.bot.discord.gateway"
         assert stages["ingest"]["entrypoint"] == "bundles.discord_ingest:normalize"
         assert stages["ingest"]["consumes"] == ["discord.message"]
-        assert stages["ingest"]["communication_model"] == "gateway_socket"
+        assert "communication_model" not in stages["ingest"]

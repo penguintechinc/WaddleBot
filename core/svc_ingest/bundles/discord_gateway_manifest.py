@@ -19,8 +19,19 @@ PR's own task spec), not one poll against one fixed scope.
 `resolve_apps` falls back to the Feature's shipped default whenever the
 lookup returns no rows, exactly like migration 071's `waddles.core.demo.
 echo` bundle does for the ingest/process stage-runners. A real per-(tenant,
-community) activation table for gateway-socket bundles is follow-up work,
-same posture the rest of this PR documents for guild->community mapping.
+community) activation table for persistent-socket bundles is follow-up
+work, same posture the rest of this PR documents for guild->community
+mapping.
+
+This manifest does NOT set `stages.ingest.communication_model` -- that
+field is thirdparty-vendor-only (`webhook_push`/`rest_pull`,
+`hub_api/services/marketplace_execution_service.py`), not a place to
+classify a native/builtin bundle's own transport. The receiver's transport
+shape (a persistent inbound socket) is declared in CODE instead --
+`receivers/discord_gateway.py`'s `DiscordGatewayReceiver` subclasses
+`transport_boundary.Transport` and sets `transport_type = TransportType.
+SOCKET`, `direction = Direction.INBOUND` (placeholder for the shared
+`waddle_transports` library, landing separately).
 """
 
 from __future__ import annotations
@@ -51,7 +62,6 @@ DISCORD_GATEWAY_MANIFEST: dict[str, Any] = {
             # bundle.
             "entrypoint": "bundles.discord_ingest:normalize",
             "consumes": ["discord.message"],
-            "communication_model": "gateway_socket",
         }
     },
 }

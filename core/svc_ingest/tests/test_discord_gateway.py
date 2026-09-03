@@ -21,6 +21,7 @@ from flask_core.stream_pipeline import bundle_stream_key
 
 from bundles.discord_gateway_manifest import register_default_bundles
 from receivers.discord_gateway import DiscordGatewayReceiver
+from transport_boundary import Direction, Transport, TransportType
 
 TENANT = "acme-corp"
 APP_ID = "waddles.bot.discord.gateway"
@@ -167,3 +168,19 @@ class TestRunStop:
         receiver.bot.close = AsyncMock(side_effect=RuntimeError("already closed"))  # type: ignore[method-assign]
 
         await receiver.stop()  # must not raise
+
+
+class TestTransportClassification:
+    """`DiscordGatewayReceiver` maps to `(TransportType.SOCKET, Direction.INBOUND)`."""
+
+    def test_is_a_transport_subclass(self, redis_client: Any) -> None:
+        receiver = _make_receiver(redis_client)
+        assert isinstance(receiver, Transport)
+
+    def test_transport_type_is_socket(self, redis_client: Any) -> None:
+        receiver = _make_receiver(redis_client)
+        assert receiver.transport_type is TransportType.SOCKET
+
+    def test_direction_is_inbound(self, redis_client: Any) -> None:
+        receiver = _make_receiver(redis_client)
+        assert receiver.direction is Direction.INBOUND

@@ -100,17 +100,17 @@ KNOWN_PROVIDERS = frozenset({"builtin", "thirdparty"})
 # the two share member names.
 KNOWN_EXECUTION_MODELS = frozenset({"native", "thirdparty"})
 
-# communication_model (StageSpec, §3.2's webhook_push/rest_pull pair) grows
-# a third member here: `gateway_socket` -- a stage fed by a PLATFORM-level
-# persistent inbound socket (one connection serving many tenants/
-# communities, e.g. a Discord bot gateway connection held by svc-gateway)
-# rather than a per-bundle thirdparty webhook/poll. Unlike webhook_push/
-# rest_pull, a gateway_socket stage is typically still `native`/`builtin`
-# (it has a real in-image `entrypoint`, run by svc-ingest) -- the field
-# describes how raw events REACH the bundle's `:ingest` Valkey key
-# (fanned out by svc-gateway's own resolve_apps()-based routing), not
-# whether the stage itself is thirdparty code.
-KNOWN_COMMUNICATION_MODELS = frozenset({"webhook_push", "rest_pull", "gateway_socket"})
+# communication_model (StageSpec, §3.2's webhook_push/rest_pull pair) --
+# both thirdparty-vendor-only values (marketplace_execution_service.py).
+# A persistent-socket ingest stage (Discord gateway etc.) is deliberately
+# NOT a third member here (see design note, 2026-09-02): that transport
+# shape is modeled by the shared `waddle_transports` boundary
+# (`core/svc_ingest/transport_boundary.py`'s `Transport`/`TransportType.
+# SOCKET`/`Direction.INBOUND`) in the CODE that implements the receiver,
+# not by the bundle manifest schema -- duplicating that classification
+# into `communication_model` would just be a second, competing vocabulary
+# once the real `libs/waddle_transports` package lands.
+KNOWN_COMMUNICATION_MODELS = frozenset({"webhook_push", "rest_pull"})
 
 _SEGMENT = r"[a-z0-9][a-z0-9_-]*"
 # waddles.<module>.<feature>.<app> -- exactly four dot-separated tokens.
@@ -159,9 +159,9 @@ REASON_INVALID_COMPAT_APP_ID = "invalid_compat_app_id"
 REASON_PRESENTATION_MISSING_HTML_ENTRYPOINT = "presentation_missing_html_entrypoint"
 REASON_PRESENTATION_HAS_SCRIPT_ENTRYPOINT = "presentation_has_script_entrypoint"
 REASON_SCRIPT_STAGE_HAS_HTML_ENTRYPOINT = "script_stage_has_html_entrypoint"
-# svc-gateway design (2026-09-02) -- communication_model now has a fixed
-# enum (see KNOWN_COMMUNICATION_MODELS above); a bad value is rejected
-# with the same stable-reason-code convention as every other enum field.
+# communication_model has a fixed enum (see KNOWN_COMMUNICATION_MODELS
+# above); a bad value is rejected with the same stable-reason-code
+# convention as every other enum field.
 REASON_INVALID_COMMUNICATION_MODEL = "invalid_communication_model"
 
 _REQUIRED_STR_FIELDS = ("app_id", "name", "version", "feature", "module", "provider")
@@ -203,7 +203,7 @@ class StageSpec:
     config: Optional[str] = None
     spec: Optional[str] = None
     execution_model: Optional[str] = None
-    communication_model: Optional[str] = None  # 'webhook_push' | 'rest_pull' | 'gateway_socket'
+    communication_model: Optional[str] = None  # 'webhook_push' | 'rest_pull'
     webhook_url: Optional[str] = None
     api_base_url: Optional[str] = None
     secret_ref: Optional[str] = None
@@ -388,7 +388,7 @@ def parse_manifest(data: Dict[str, Any]) -> AppManifest:
     12. an ``ingest``/``process``/``action`` stage entry in ``stages``
         declaring ``html_entrypoint``
     13. any ``stages`` entry's ``communication_model`` outside
-        ``{webhook_push, rest_pull, gateway_socket}`` (when set)
+        ``{webhook_push, rest_pull}`` (when set)
 
     Two things this function deliberately does **not** check (per App
     Bundle SDK spec §3.5, left for a later, registry-aware pass): whether
