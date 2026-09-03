@@ -21,13 +21,20 @@ ladder (community binding -> tenant binding -> shipped default) so a
 Feature with more than one implementing App still resolves to whichever
 one is actually bound -- not just "the App whose manifest happened to
 declare the tag".
+
+`community` is a generic `int | None` here (this module makes no
+Discord-specific assumption) -- `app.py`'s own Discord wiring always
+passes `community=None` (tenant-wide) for this demo, per T9: no
+guild->community mapping table exists yet anywhere in this codebase, so
+a real per-community binding is a documented, deferred follow-up rather
+than routing on `item["guild_id"]` today.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Awaitable, Sequence
+from collections.abc import Awaitable, Mapping, Sequence
 from typing import Any, Protocol
 
 from flask_core.app_binding import (
@@ -137,7 +144,7 @@ async def resolve_consuming_apps(
 
 
 async def fan_out_event(
-    raw_event: dict[str, Any],
+    raw_event: Mapping[str, Any],
     *,
     consumes_tag: str,
     tenant: str,
@@ -168,7 +175,10 @@ async def fan_out_event(
         return 0
 
     community_str = str(community) if community is not None else None
-    payload = json.dumps(raw_event)
+    # dict(...) rather than json.dumps(raw_event) directly -- `raw_event`
+    # is typed `Mapping` (any dict-like caller), and the stdlib json
+    # encoder's fast C path only special-cases real `dict` instances.
+    payload = json.dumps(dict(raw_event))
     for app in apps:
         ingest_key = bundle_stream_key(tenant, community_str, app.app_id, "ingest")
         await redis_client.lpush(ingest_key, payload)

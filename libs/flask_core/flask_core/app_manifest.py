@@ -103,13 +103,13 @@ KNOWN_EXECUTION_MODELS = frozenset({"native", "thirdparty"})
 # communication_model (StageSpec, §3.2's webhook_push/rest_pull pair) --
 # both thirdparty-vendor-only values (marketplace_execution_service.py).
 # A persistent-socket ingest stage (Discord gateway etc.) is deliberately
-# NOT a third member here (see design note, 2026-09-02): that transport
-# shape is modeled by the shared `waddle_transports` boundary
-# (`core/svc_ingest/transport_boundary.py`'s `Transport`/`TransportType.
-# SOCKET`/`Direction.INBOUND`) in the CODE that implements the receiver,
-# not by the bundle manifest schema -- duplicating that classification
-# into `communication_model` would just be a second, competing vocabulary
-# once the real `libs/waddle_transports` package lands.
+# NOT a third member here: that transport shape is modeled by the shared
+# `libs/waddle_transports` library's own `Transport`/`TransportType.
+# SOCKET`/`Direction.INBOUND` (`core/svc_ingest/receivers/discord_gateway.
+# py`'s `DiscordGatewayReceiver`) in the CODE that implements the
+# receiver, not by the bundle manifest schema -- duplicating that
+# classification into `communication_model` would just be a second,
+# competing vocabulary.
 KNOWN_COMMUNICATION_MODELS = frozenset({"webhook_push", "rest_pull"})
 
 _SEGMENT = r"[a-z0-9][a-z0-9_-]*"

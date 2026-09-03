@@ -2,9 +2,9 @@
 
 svc-ingest hosts long-lived INBOUND socket/IRC transports (`receivers/
 discord_gateway.py`'s Discord gateway connection today, more platforms
-later -- see `transport_boundary.py` for the shared `waddle_transports`-
-shaped `Transport`/`TransportType`/`Direction` vocabulary each one is
-modeled against) as long-lived asyncio tasks, alongside the container's
+later -- see the shared `waddle_transports` library, specifically its
+`Transport`/`TransportType`/`Direction` vocabulary, each one is modeled
+against) as long-lived asyncio tasks, alongside the container's
 existing poll-drain loop (`app.py`'s own `runner.IngestRunner.
 run_forever()`, started with a raw `asyncio.ensure_future` since that loop
 already retries internally). A transport task started the same raw way
@@ -28,7 +28,7 @@ import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
-from transport_boundary import Transport
+from waddle_transports import Transport
 
 logger = logging.getLogger(__name__)
 
@@ -166,7 +166,14 @@ class ReceiverSupervisor:
 
     @staticmethod
     def _transport_label(transport: Transport | None) -> str:
-        """`"socket/inbound"`-shaped log label, or `"unknown"` for a bare `coro_factory`."""
+        """`"discord_gateway/inbound"`-shaped log label, or `"unknown"` for a bare `coro_factory`.
+
+        `Transport.name` + `Transport.directions` (`waddle_transports.
+        base.Transport`'s real `ClassVar` attributes -- a frozenset since
+        one transport class may implement both directions, e.g. `irc`)
+        rather than any bespoke per-instance classification.
+        """
         if transport is None:
             return "unknown"
-        return f"{transport.transport_type.value}/{transport.direction.value}"
+        directions = "+".join(sorted(d.value for d in transport.directions))
+        return f"{transport.name}/{directions}"

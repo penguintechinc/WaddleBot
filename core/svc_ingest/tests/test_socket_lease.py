@@ -13,7 +13,10 @@ replica_as_lease` green-for-the-wrong-reason into a false negative
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator, Mapping
 from typing import Any
+
+from waddle_transports import Direction, Transport
 
 from socket_lease import (
     PLATFORM_COMMUNITY,
@@ -25,21 +28,41 @@ from socket_lease import (
 PROVIDER = "discord"
 
 
-class _FakeReceiver:
-    """Minimal `LeasedSocketReceiver` double -- `run()` blocks until `stop()` is called."""
+async def _noop_on_item(item: Mapping[str, Any]) -> None:
+    """`on_item` that does nothing.
+
+    `LeasedReceiver.on_item` must be an async callable, not a bare sync
+    `lambda`/`list.append` (`_consume` does `await self.on_item(item)`).
+    """
+
+
+class _FakeTransport(Transport):
+    """Minimal `waddle_transports.Transport` double.
+
+    `receive()` yields pushed items, blocking for more until closed
+    (cancelled) -- mirrors a real persistent-socket transport's "connect
+    once, yield forever until the connection ends" shape.
+    """
+
+    name = "fake"
+    directions = frozenset({Direction.INBOUND})
 
     def __init__(self) -> None:
-        self.run_calls = 0
-        self.stop_calls = 0
-        self._stop_event = asyncio.Event()
+        self.receive_calls = 0
+        self.closed = False
+        self._queue: asyncio.Queue[Mapping[str, Any]] = asyncio.Queue()
 
-    async def run(self) -> None:
-        self.run_calls += 1
-        await self._stop_event.wait()
+    async def push(self, item: Mapping[str, Any]) -> None:
+        await self._queue.put(item)
 
-    async def stop(self) -> None:
-        self.stop_calls += 1
-        self._stop_event.set()
+    async def receive(self, config: Mapping[str, Any]) -> AsyncIterator[Mapping[str, Any]]:
+        self.receive_calls += 1
+        try:
+            while True:
+                item = await self._queue.get()
+                yield item
+        finally:
+            self.closed = True
 
 
 class TestLeaseKey:
@@ -138,10 +161,17 @@ class TestClaimRenewRelease:
 
 
 class TestLeasedReceiver:
-    async def test_run_starts_receiver_when_lease_claimed(self, redis_client: Any) -> None:
-        receiver = _FakeReceiver()
+    async def test_run_starts_consuming_when_lease_claimed(self, redis_client: Any) -> None:
+        transport = _FakeTransport()
+        received: list[Mapping[str, Any]] = []
+
+        async def _collect(item: Mapping[str, Any]) -> None:
+            received.append(item)
+
         leased = LeasedReceiver(
-            receiver=receiver,
+            transport=transport,
+            config={},
+            on_item=_collect,
             redis_client=redis_client,
             provider=PROVIDER,
             community=PLATFORM_COMMUNITY,
@@ -149,16 +179,21 @@ class TestLeasedReceiver:
         )
         task = asyncio.ensure_future(leased.run())
         await asyncio.sleep(0.05)
-        assert receiver.run_calls == 1
+        assert transport.receive_calls == 1
+
+        await transport.push({"content": "hi"})
+        await asyncio.sleep(0.05)
+        assert received == [{"content": "hi"}]
 
         task.cancel()
         try:
             await task
         except asyncio.CancelledError:
             pass
+        assert transport.closed is True
 
     async def test_run_returns_immediately_when_lease_already_held(self, redis_client: Any) -> None:
-        """A replica that loses the claim race never starts its receiver.
+        """A replica that loses the claim race never starts consuming.
 
         The raw `run()` coroutine just returns, letting
         `ReceiverSupervisor`'s own backoff retry later.
@@ -171,27 +206,31 @@ class TestLeasedReceiver:
         )
         assert await other.try_claim() is True
 
-        receiver = _FakeReceiver()
+        transport = _FakeTransport()
         leased = LeasedReceiver(
-            receiver=receiver,
+            transport=transport,
+            config={},
+            on_item=_noop_on_item,  # never called, lease unavailable
             redis_client=redis_client,
             provider=PROVIDER,
             community=PLATFORM_COMMUNITY,
             owner_id="replica-b",
         )
         await leased.run()  # returns without hanging -- lease unavailable
-        assert receiver.run_calls == 0
+        assert transport.receive_calls == 0
 
-    async def test_losing_the_lease_stops_the_receiver(self, redis_client: Any) -> None:
+    async def test_losing_the_lease_stops_consumption(self, redis_client: Any) -> None:
         """Fail-first proof of failover.
 
         Replica A's lease is stolen (simulated expiry via a direct
         compare-and-delete + replica B's claim); A's renew loop must
-        notice and force its receiver to stop.
+        notice and close the transport's `receive()` generator.
         """
-        receiver = _FakeReceiver()
+        transport = _FakeTransport()
         leased_a = LeasedReceiver(
-            receiver=receiver,
+            transport=transport,
+            config={},
+            on_item=_noop_on_item,
             redis_client=redis_client,
             provider=PROVIDER,
             community=PLATFORM_COMMUNITY,
@@ -200,7 +239,7 @@ class TestLeasedReceiver:
         )
         task = asyncio.ensure_future(leased_a.run())
         await asyncio.sleep(0.03)
-        assert receiver.run_calls == 1
+        assert transport.receive_calls == 1
 
         # Simulate the lease expiring and replica-b claiming it (a real TTL
         # lapse in production; forced here via direct key deletion + a
@@ -214,15 +253,19 @@ class TestLeasedReceiver:
         )
         assert await other.try_claim() is True
 
-        # replica-a's renew loop should notice on its next tick and stop
-        # its receiver -- `run()` then returns.
+        # replica-a's renew loop should notice on its next tick, close the
+        # transport, and let run() return normally.
         await asyncio.wait_for(task, timeout=2.0)
-        assert receiver.stop_calls >= 1
+        assert transport.closed is True
 
-    async def test_cancellation_stops_receiver_and_releases_lease(self, redis_client: Any) -> None:
-        receiver = _FakeReceiver()
+    async def test_cancellation_stops_consumption_and_releases_lease(
+        self, redis_client: Any
+    ) -> None:
+        transport = _FakeTransport()
         leased = LeasedReceiver(
-            receiver=receiver,
+            transport=transport,
+            config={},
+            on_item=_noop_on_item,
             redis_client=redis_client,
             provider=PROVIDER,
             community=PLATFORM_COMMUNITY,
@@ -230,7 +273,7 @@ class TestLeasedReceiver:
         )
         task = asyncio.ensure_future(leased.run())
         await asyncio.sleep(0.03)
-        assert receiver.run_calls == 1
+        assert transport.receive_calls == 1
 
         task.cancel()
         try:
@@ -238,7 +281,7 @@ class TestLeasedReceiver:
         except asyncio.CancelledError:
             pass
 
-        assert receiver.stop_calls >= 1
+        assert transport.closed is True
         # Lease released -- another replica can now claim it.
         other = SocketLease(
             provider=PROVIDER,

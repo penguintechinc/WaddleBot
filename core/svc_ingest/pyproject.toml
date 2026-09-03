@@ -37,3 +37,10 @@ follow_imports = "skip"
 module = ["discord.*"]
 ignore_missing_imports = true
 follow_imports = "skip"
+
+# waddle_transports (libs/waddle_transports) ships no py.typed marker
+# either -- same boundary treatment.
+[[tool.mypy.overrides]]
+module = ["waddle_transports.*"]
+ignore_missing_imports = true
+follow_imports = "skip"

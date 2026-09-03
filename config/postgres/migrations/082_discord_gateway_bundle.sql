@@ -27,8 +27,9 @@
 -- `communication_model` here: that field is thirdparty-vendor-only
 -- (`webhook_push`/`rest_pull`); this bundle's persistent-socket transport
 -- shape is declared in CODE instead (`core/svc_ingest/receivers/
--- discord_gateway.py`'s `DiscordGatewayReceiver`, via the shared
--- `waddle_transports` boundary -- see `transport_boundary.py`).
+-- discord_gateway.py`'s `DiscordGatewayReceiver`, a `libs/waddle_transports`
+-- `Transport` subclass -- `name="discord_gateway"`,
+-- `directions={Direction.INBOUND}`).
 --
 -- `is_default = TRUE` for `waddles.bot.discord` -- global tier only,
 -- ON CONFLICT DO NOTHING keeps this idempotent across re-applies, same

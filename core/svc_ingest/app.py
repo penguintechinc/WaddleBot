@@ -12,23 +12,32 @@ key as a JSON envelope. `/health`/`/healthz`/`/metrics` come from
 stage container (`core/svc_streaming/app.py`).
 
 Alongside that poll-drain loop, svc-ingest ALSO runs any registered
-platform-level socket receivers (`receivers/discord_gateway.py` today) as
-`supervisor.ReceiverSupervisor`-supervised tasks -- 8-container decision:
-these receivers were briefly a standalone `svc-gateway` 9th container,
-folded back into svc-ingest since a Discord bot connection is exactly the
-same "hold a persistent inbound socket, normalize, feed the pipeline"
-shape this container already owns. Each receiver is guarded by a
-`socket_lease.SocketLease` (`waddles:socket-owner:{provider}:{community}`,
-Valkey `SET NX PX`) so scaling `pipeline.svcIngest.replicas` never opens
-duplicate sockets for the same `(provider, community)` -- see
-`socket_lease.py`'s own module docstring for the full design.
+platform-level inbound transports (`receivers/discord_gateway.py`'s
+`waddle_transports.Transport` today) as `supervisor.ReceiverSupervisor`-
+supervised tasks -- 8-container decision: these receivers were briefly a
+standalone `svc-gateway` 9th container, folded back into svc-ingest since
+a Discord bot connection is exactly the same "hold a persistent inbound
+socket, normalize, feed the pipeline" shape this container already owns.
+Each transport is guarded by a `socket_lease.SocketLease`
+(`waddles:socket-owner:{provider}:{community}`, Valkey `SET NX PX`) so
+scaling `pipeline.svcIngest.replicas` never opens duplicate sockets for
+the same `(provider, community)` -- see `socket_lease.py`'s own module
+docstring for the full design.
+
+Fan-out (T9): every item the Discord transport yields is routed at
+`community=None` (tenant-wide) for this demo -- `item["guild_id"]` is
+carried in the normalized dict for FUTURE use, but no
+guild->community mapping table exists yet anywhere in this codebase
+(documented, deferred slot; see `receivers/discord_gateway.py`'s own
+docstring).
 """
 
 from __future__ import annotations
 
 import asyncio
 import uuid
-from typing import cast
+from collections.abc import Mapping
+from typing import Any, cast
 
 import httpx
 import redis.asyncio as redis
@@ -40,7 +49,8 @@ from quart import Quart
 
 from bundles.discord_gateway_manifest import register_default_bundles
 from config import Config
-from receivers.discord_gateway import DiscordGatewayReceiver
+from fanout import fan_out_event
+from receivers.discord_gateway import CONSUMES_TAG, DiscordGatewayReceiver
 from runner import IngestRunner
 from socket_lease import PLATFORM_COMMUNITY, LeasedReceiver
 from supervisor import ReceiverSupervisor
@@ -103,12 +113,11 @@ async def startup() -> None:
     app.config["runner"] = runner
     app.config["runner_task"] = asyncio.ensure_future(runner.run_forever())
 
-    # Socket-owning receivers (inbound Transport.SOCKET connections, per
-    # transport_boundary.py's waddle_transports-shaped interface) --
-    # supervised alongside the poll-drain loop above, each guarded by a
-    # Valkey lease so scaling svc-ingest to N replicas never opens N
-    # duplicate sockets for the same (provider, community). See this
-    # module's own docstring and socket_lease.py for the full design.
+    # Socket-owning transports (inbound waddle_transports.Transport
+    # connections) -- supervised alongside the poll-drain loop above, each
+    # guarded by a Valkey lease so scaling svc-ingest to N replicas never
+    # opens N duplicate sockets for the same (provider, community). See
+    # this module's own docstring and socket_lease.py for the full design.
     registry = AppRegistry()
     register_default_bundles(registry)
     app.config["registry"] = registry
@@ -121,14 +130,31 @@ async def startup() -> None:
 
     if Config.DISCORD_BOT_TOKEN:
         replica_id = uuid.uuid4().hex
-        discord_receiver = DiscordGatewayReceiver(
-            token=Config.DISCORD_BOT_TOKEN,
-            redis_client=redis_client,
-            registry=registry,
-            tenant_slug=Config.RUNNER_TENANT_SLUG,
-        )
+        discord_receiver = DiscordGatewayReceiver()
+
+        async def _on_discord_item(item: Mapping[str, Any]) -> None:
+            """Fan one normalized Discord message dict out to every consuming bundle.
+
+            T9: `community=None` (tenant-wide) for this demo -- see this
+            module's own docstring for the deferred guild->community
+            mapping slot.
+            """
+            await fan_out_event(
+                item,
+                consumes_tag=CONSUMES_TAG,
+                tenant=Config.RUNNER_TENANT_SLUG,
+                community=None,
+                redis_client=redis_client,
+                registry=registry,
+            )
+
         leased_discord = LeasedReceiver(
-            receiver=discord_receiver,
+            transport=discord_receiver,
+            # `token_ref` is an env var *name*, resolved by `receive()`
+            # via `waddle_transports.signing.resolve_secret` -- never a
+            # raw token in this config dict.
+            config={"token_ref": "DISCORD_BOT_TOKEN"},
+            on_item=_on_discord_item,
             redis_client=redis_client,
             provider="discord",
             community=PLATFORM_COMMUNITY,

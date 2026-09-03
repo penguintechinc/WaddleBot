@@ -1,30 +1,29 @@
 """Tests for `receivers.discord_gateway.DiscordGatewayReceiver`.
 
-Real `discord.Bot` instance (constructing one does not open a network
-connection -- only `bot.start()` does), duck-typed fake `discord.Message`/
-`Author`/`Guild`/`Channel` objects (py-cord's own `Message` needs live HTTP
-state to construct, so a fake with just the attributes this receiver
-reads is the standard py-cord testing pattern), and a real `fakeredis`
-round trip for the fan-out assertions -- no mocked gateway connection is
-ever opened, matching the task's own "mock the gateway in tests" scope.
+`discord.Bot` itself is monkeypatched to a fake class (records registered
+event handlers, controllable `start()`/`close()`) rather than opening a
+real gateway connection -- the fake still exercises the REAL
+`_build_bot`/`receive()` wiring (queue bridging, `on_message` filtering,
+`_build_raw_event` normalization), only the actual py-cord network layer
+is replaced, matching the task's own "mock the gateway in tests" scope.
+Duck-typed fake `discord.Message`/`Author`/`Guild`/`Channel` objects
+(py-cord's own `Message` needs live HTTP state to construct).
 """
 
 from __future__ import annotations
 
-import json
-from dataclasses import dataclass
+import asyncio
+import contextlib
+from dataclasses import dataclass, field
 from typing import Any
-from unittest.mock import AsyncMock
 
-from flask_core.app_registry import AppRegistry
-from flask_core.stream_pipeline import bundle_stream_key
+import pytest
+from waddle_transports import Direction, NonRetryableTransportError, Transport
 
-from bundles.discord_gateway_manifest import register_default_bundles
-from receivers.discord_gateway import DiscordGatewayReceiver
-from transport_boundary import Direction, Transport, TransportType
+import receivers.discord_gateway as discord_gateway_module
+from receivers.discord_gateway import CONSUMES_TAG, DiscordGatewayReceiver
 
-TENANT = "acme-corp"
-APP_ID = "waddles.bot.discord.gateway"
+TOKEN = "fake-token-not-a-real-discord-token"  # noqa: S105 - test literal, not a secret
 
 
 @dataclass
@@ -53,39 +52,120 @@ class _FakeMessage:
     guild: _FakeGuild | None = None
 
 
-def _make_receiver(
-    redis_client: Any, registry: AppRegistry | None = None
-) -> DiscordGatewayReceiver:
-    reg = registry if registry is not None else AppRegistry()
-    if not reg.all_apps():
-        register_default_bundles(reg)
-    return DiscordGatewayReceiver(
-        token="fake-token-not-a-real-discord-token",  # noqa: S106 - test literal, not a secret
-        redis_client=redis_client,
-        registry=reg,
-        tenant_slug=TENANT,
-    )
+@dataclass
+class _FakeBot:
+    """Stand-in for `discord.Bot` -- records registered handlers, controllable lifecycle."""
+
+    intents: Any = None
+    user: str = "TestBot#0001"
+    handlers: dict[str, Any] = field(default_factory=dict)
+    start_calls: list[str] = field(default_factory=list)
+    close_calls: int = 0
+    _stop_event: asyncio.Event = field(default_factory=asyncio.Event)
+
+    def event(self, func: Any) -> Any:
+        """Mirror `discord.Bot.event`'s decorator -- register by function name."""
+        self.handlers[func.__name__] = func
+        return func
+
+    async def start(self, token: str) -> None:
+        """Block until `close()` is called -- mirrors a real gateway connection staying open."""
+        self.start_calls.append(token)
+        await self._stop_event.wait()
+
+    async def close(self) -> None:
+        self.close_calls += 1
+        self._stop_event.set()
 
 
-class TestHandleMessage:
-    async def test_bot_authored_message_is_ignored(self, redis_client: Any) -> None:
-        receiver = _make_receiver(redis_client)
-        message = _FakeMessage(
-            id=1,
-            author=_FakeAuthor(id=999, name="OtherBot", bot=True),
-            channel=_FakeChannel(id=42),
-            content="I am a bot",
-            guild=_FakeGuild(id=7),
-        )
-        await receiver._handle_message(message)  # noqa: SLF001 - exercising the real handler
+@pytest.fixture
+def fake_bots(monkeypatch: pytest.MonkeyPatch) -> list[_FakeBot]:
+    """Every `discord.Bot(...)` constructed during the test lands in this list."""
+    created: list[_FakeBot] = []
 
-        ingest_key = bundle_stream_key(TENANT, "7", APP_ID, "ingest")
-        assert await redis_client.rpop(ingest_key) is None
+    def _fake_bot_ctor(*, intents: Any) -> _FakeBot:
+        bot = _FakeBot(intents=intents)
+        created.append(bot)
+        return bot
 
-    async def test_human_guild_message_fans_out_to_the_discord_ingest_bundle(
-        self, redis_client: Any
+    monkeypatch.setattr(discord_gateway_module.discord, "Bot", _fake_bot_ctor)
+    return created
+
+
+async def _advance_to_bot_started(gen: Any, fake_bots: list[_FakeBot]) -> asyncio.Task[Any]:
+    """Start `gen.__anext__()` as a task and yield control until `receive()`'s bot has started.
+
+    A single `asyncio.sleep(0)` only lets `receive()`'s OWN synchronous
+    code (through its first real await, `asyncio.wait(...)`) run --
+    `bot.start(token)` was merely scheduled via `ensure_future`, not
+    actually entered, at that point. Polling (bounded) until
+    `start_calls` is populated avoids that one-yield-is-enough
+    assumption breaking silently on an unrelated asyncio internals change.
+    """
+    next_task = asyncio.ensure_future(gen.__anext__())
+    for _ in range(50):
+        await asyncio.sleep(0)
+        if fake_bots and fake_bots[-1].start_calls:
+            return next_task
+    raise AssertionError("bot.start() was never actually entered")
+
+
+async def _cancel_and_close(next_task: asyncio.Task[Any], gen: Any) -> None:
+    """Cancel `next_task`, await its cancellation, then close `gen` -- safe teardown order.
+
+    `gen.aclose()` while `next_task` (wrapping the same generator's
+    `__anext__()`) hasn't finished processing its own cancellation yet
+    raises `RuntimeError: aclose(): asynchronous generator is already
+    running` -- cancel-and-await first, THEN close (a no-op by that point,
+    the generator's own `finally` already tore it down).
+    """
+    next_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError, StopAsyncIteration):
+        await next_task
+    await gen.aclose()
+
+
+class TestResolveToken:
+    async def test_literal_token_is_used_directly(self, fake_bots: list[_FakeBot]) -> None:
+        receiver = DiscordGatewayReceiver()
+        gen = receiver.receive({"token": TOKEN})
+        next_task = await _advance_to_bot_started(gen, fake_bots)
+        assert fake_bots[0].start_calls == [TOKEN]
+        await _cancel_and_close(next_task, gen)
+
+    async def test_token_ref_is_resolved_from_env(
+        self, fake_bots: list[_FakeBot], monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        receiver = _make_receiver(redis_client)
+        monkeypatch.setenv("SOME_DISCORD_TOKEN_VAR", TOKEN)
+        receiver = DiscordGatewayReceiver()
+        gen = receiver.receive({"token_ref": "SOME_DISCORD_TOKEN_VAR"})
+        next_task = await _advance_to_bot_started(gen, fake_bots)
+        assert fake_bots[0].start_calls == [TOKEN]
+        await _cancel_and_close(next_task, gen)
+
+    async def test_missing_token_and_token_ref_raises(self) -> None:
+        receiver = DiscordGatewayReceiver()
+        gen = receiver.receive({})
+        with pytest.raises(NonRetryableTransportError, match="token"):
+            await gen.__anext__()
+
+    async def test_unresolvable_token_ref_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("UNSET_TOKEN_VAR", raising=False)
+        receiver = DiscordGatewayReceiver()
+        gen = receiver.receive({"token_ref": "UNSET_TOKEN_VAR"})
+        with pytest.raises(NonRetryableTransportError, match="resolution failed"):
+            await gen.__anext__()
+
+
+class TestReceive:
+    async def test_yields_normalized_dict_for_human_guild_message(
+        self, fake_bots: list[_FakeBot]
+    ) -> None:
+        receiver = DiscordGatewayReceiver()
+        gen = receiver.receive({"token": TOKEN})
+        next_task = await _advance_to_bot_started(gen, fake_bots)
+        bot = fake_bots[0]
+
         message = _FakeMessage(
             id=123,
             author=_FakeAuthor(id=555, name="alice"),
@@ -93,13 +173,10 @@ class TestHandleMessage:
             content="hello waddlebot",
             guild=_FakeGuild(id=7),
         )
-        await receiver._handle_message(message)  # noqa: SLF001
+        await bot.handlers["on_message"](message)
 
-        ingest_key = bundle_stream_key(TENANT, "7", APP_ID, "ingest")
-        raw = await redis_client.rpop(ingest_key)
-        assert raw is not None
-        event = json.loads(raw)
-        assert event == {
+        item = await asyncio.wait_for(next_task, timeout=2.0)
+        assert item == {
             "platform": "discord",
             "guild_id": "7",
             "channel_id": "42",
@@ -108,11 +185,14 @@ class TestHandleMessage:
             "author_username": "alice",
             "content": "hello waddlebot",
         }
+        await gen.aclose()
 
-    async def test_dm_message_has_no_guild_and_uses_tenant_wide_key(
-        self, redis_client: Any
-    ) -> None:
-        receiver = _make_receiver(redis_client)
+    async def test_dm_message_has_no_guild_id(self, fake_bots: list[_FakeBot]) -> None:
+        receiver = DiscordGatewayReceiver()
+        gen = receiver.receive({"token": TOKEN})
+        next_task = await _advance_to_bot_started(gen, fake_bots)
+        bot = fake_bots[0]
+
         message = _FakeMessage(
             id=124,
             author=_FakeAuthor(id=555, name="alice"),
@@ -120,67 +200,91 @@ class TestHandleMessage:
             content="dm text",
             guild=None,
         )
-        await receiver._handle_message(message)  # noqa: SLF001
+        await bot.handlers["on_message"](message)
 
-        ingest_key = bundle_stream_key(TENANT, None, APP_ID, "ingest")
-        raw = await redis_client.rpop(ingest_key)
-        assert raw is not None
-        event = json.loads(raw)
-        assert event["guild_id"] is None
+        item = await asyncio.wait_for(next_task, timeout=2.0)
+        assert item["guild_id"] is None
+        await gen.aclose()
 
-    async def test_fanout_failure_does_not_propagate(self, redis_client: Any) -> None:
-        """One bad event must never kill the gateway connection -- `_handle_message` swallows."""
+    async def test_bot_authored_message_is_ignored(self, fake_bots: list[_FakeBot]) -> None:
+        receiver = DiscordGatewayReceiver()
+        gen = receiver.receive({"token": TOKEN})
+        next_task = await _advance_to_bot_started(gen, fake_bots)
+        bot = fake_bots[0]
 
-        class _BrokenRedis:
-            async def lpush(self, key: str, value: str) -> None:
-                raise ConnectionError("valkey unreachable")
-
-        receiver = _make_receiver(_BrokenRedis())
-        message = _FakeMessage(
-            id=125,
-            author=_FakeAuthor(id=555, name="alice"),
+        bot_message = _FakeMessage(
+            id=1,
+            author=_FakeAuthor(id=999, name="OtherBot", bot=True),
             channel=_FakeChannel(id=42),
-            content="hello",
+            content="I am a bot",
             guild=_FakeGuild(id=7),
         )
-        await receiver._handle_message(message)  # noqa: SLF001 - must not raise
+        await bot.handlers["on_message"](bot_message)
+        # Immediately followed by a real human message -- if the bot
+        # message had been queued, THAT would be the first item yielded.
+        human_message = _FakeMessage(
+            id=2,
+            author=_FakeAuthor(id=555, name="alice"),
+            channel=_FakeChannel(id=42),
+            content="hi",
+            guild=_FakeGuild(id=7),
+        )
+        await bot.handlers["on_message"](human_message)
 
+        item = await asyncio.wait_for(next_task, timeout=2.0)
+        assert item["author_id"] == "555"
+        await gen.aclose()
 
-class TestRunStop:
-    async def test_run_delegates_to_bot_start_with_token(self, redis_client: Any) -> None:
-        receiver = _make_receiver(redis_client)
-        receiver.bot.start = AsyncMock()  # type: ignore[method-assign]
+    async def test_on_ready_handler_does_not_raise(self, fake_bots: list[_FakeBot]) -> None:
+        receiver = DiscordGatewayReceiver()
+        gen = receiver.receive({"token": TOKEN})
+        next_task = await _advance_to_bot_started(gen, fake_bots)
+        bot = fake_bots[0]
 
-        await receiver.run()
+        await bot.handlers["on_ready"]()  # must not raise
 
-        receiver.bot.start.assert_awaited_once_with("fake-token-not-a-real-discord-token")
+        await _cancel_and_close(next_task, gen)
 
-    async def test_stop_closes_the_bot(self, redis_client: Any) -> None:
-        receiver = _make_receiver(redis_client)
-        receiver.bot.close = AsyncMock()  # type: ignore[method-assign]
+    async def test_generator_ends_cleanly_when_bot_connection_closes(
+        self, fake_bots: list[_FakeBot]
+    ) -> None:
+        """A clean `bot.close()` (connection ended, no error) ends iteration, not an exception."""
+        receiver = DiscordGatewayReceiver()
+        gen = receiver.receive({"token": TOKEN})
+        next_task = await _advance_to_bot_started(gen, fake_bots)
+        bot = fake_bots[0]
 
-        await receiver.stop()
+        await bot.close()
 
-        receiver.bot.close.assert_awaited_once()
+        with pytest.raises(StopAsyncIteration):
+            await asyncio.wait_for(next_task, timeout=2.0)
 
-    async def test_stop_swallows_close_errors(self, redis_client: Any) -> None:
-        receiver = _make_receiver(redis_client)
-        receiver.bot.close = AsyncMock(side_effect=RuntimeError("already closed"))  # type: ignore[method-assign]
+    async def test_cancelling_the_consumer_closes_the_bot(self, fake_bots: list[_FakeBot]) -> None:
+        receiver = DiscordGatewayReceiver()
+        gen = receiver.receive({"token": TOKEN})
+        next_task = await _advance_to_bot_started(gen, fake_bots)
+        bot = fake_bots[0]
+        assert bot.close_calls == 0
 
-        await receiver.stop()  # must not raise
+        await _cancel_and_close(next_task, gen)
+
+        assert bot.close_calls == 1
 
 
 class TestTransportClassification:
-    """`DiscordGatewayReceiver` maps to `(TransportType.SOCKET, Direction.INBOUND)`."""
+    """`DiscordGatewayReceiver` maps to `waddle_transports.Transport`.
 
-    def test_is_a_transport_subclass(self, redis_client: Any) -> None:
-        receiver = _make_receiver(redis_client)
-        assert isinstance(receiver, Transport)
+    `name="discord_gateway"`, `directions={Direction.INBOUND}`.
+    """
 
-    def test_transport_type_is_socket(self, redis_client: Any) -> None:
-        receiver = _make_receiver(redis_client)
-        assert receiver.transport_type is TransportType.SOCKET
+    def test_is_a_transport_subclass(self) -> None:
+        assert isinstance(DiscordGatewayReceiver(), Transport)
 
-    def test_direction_is_inbound(self, redis_client: Any) -> None:
-        receiver = _make_receiver(redis_client)
-        assert receiver.direction is Direction.INBOUND
+    def test_name_is_discord_gateway(self) -> None:
+        assert DiscordGatewayReceiver().name == "discord_gateway"
+
+    def test_directions_is_inbound_only(self) -> None:
+        assert DiscordGatewayReceiver().directions == frozenset({Direction.INBOUND})
+
+    def test_consumes_tag_matches_manifest(self) -> None:
+        assert CONSUMES_TAG == "discord.message"

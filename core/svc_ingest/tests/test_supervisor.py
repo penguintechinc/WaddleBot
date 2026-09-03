@@ -16,9 +16,9 @@ import logging
 from typing import Any
 
 import pytest
+from waddle_transports import Direction, Transport
 
 from supervisor import ReceiverSupervisor
-from transport_boundary import Direction, Transport, TransportType
 
 
 class _FakeSleep:
@@ -167,24 +167,20 @@ class TestStop:
 class _FakeSocketTransport(Transport):
     """Minimal concrete `Transport`.
 
-    Proves `ReceiverSupervisor` references `transport_boundary`'s real
-    types (`TransportType`/`Direction`), not a local enum.
+    Proves `ReceiverSupervisor` references `waddle_transports`' real
+    types (`Transport`/`Direction`), not a local enum -- `name`/
+    `directions` are the ABC's own `ClassVar` attributes
+    (`waddle_transports.base.Transport`), not a bespoke shape.
     """
 
-    transport_type = TransportType.SOCKET
-    direction = Direction.INBOUND
-
-    async def run(self) -> None:
-        await asyncio.sleep(100)
-
-    async def stop(self) -> None:
-        pass
+    name = "discord_gateway"
+    directions = frozenset({Direction.INBOUND})
 
 
 class TestTransportLabel:
-    def test_transport_label_formats_type_and_direction(self) -> None:
+    def test_transport_label_formats_name_and_directions(self) -> None:
         transport = _FakeSocketTransport()
-        assert ReceiverSupervisor._transport_label(transport) == "socket/inbound"  # noqa: SLF001
+        assert ReceiverSupervisor._transport_label(transport) == "discord_gateway/inbound"  # noqa: SLF001
 
     def test_transport_label_unknown_when_no_transport_registered(self) -> None:
         assert ReceiverSupervisor._transport_label(None) == "unknown"  # noqa: SLF001
@@ -217,4 +213,6 @@ class TestTransportLabel:
             await asyncio.wait_for(done.wait(), timeout=2.0)
             await supervisor.stop()
 
-        assert any("transport=socket/inbound" in record.message for record in caplog.records)
+        assert any(
+            "transport=discord_gateway/inbound" in record.message for record in caplog.records
+        )

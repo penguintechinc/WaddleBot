@@ -1,32 +1,46 @@
-"""DiscordGatewayReceiver -- holds the real py-cord Discord bot gateway connection.
+"""DiscordGatewayReceiver -- a `waddle_transports.Transport` for inbound Discord Gateway receipt.
 
 Real py-cord (`discord.Bot`) connection + intents setup, deliberately
 reusing `trigger/receiver/discord_module/services/discord_bot.py`'s own
 `_setup_events` shape (default intents + `message_content`/`guilds`, an
-`on_ready` log, an `on_message` handler that ignores bot-authored messages)
-rather than reimplementing the py-cord gateway protocol -- per this PR's
-own task spec. This receiver does NOT replicate that legacy module's
-slash/prefix command routing (`_register_slash_commands` and friends) --
-that command-router surface is a separate, much larger migration, out of
-scope here; this receiver's only job is turning one inbound message into
-one fan-out call (`fanout.fan_out_event`).
+`on_ready` log, an `on_message` handler that ignores bot-authored
+messages) rather than reimplementing the py-cord gateway protocol. This
+receiver does NOT replicate that legacy module's slash/prefix command
+routing (`_register_slash_commands` and friends) -- that command-router
+surface is a separate, much larger migration, out of scope here; this
+receiver's only job is turning inbound messages into normalized dicts.
 
-Modeled as a `transport_boundary.Transport` (`TransportType.SOCKET`,
-`Direction.INBOUND`) -- see that module's own docstring for why this is a
-shim for the shared `waddle_transports` library rather than the receiver
-declaring its own bespoke classification.
+NOT `waddle_transports.transports.socket.SocketTransport` -- that
+transport is a GENERIC raw-WebSocket client (its own module docstring:
+"does not speak Discord Gateway's ... own application-level protocol").
+Discord's real gateway protocol (opcodes, heartbeat/ACK, session resume)
+needs py-cord, so this is its own `Transport` subclass -- `TransportType.
+SOCKET`/`Direction.INBOUND` classification, exactly like `bundles/
+discord_send_action.py` owns its Discord-specific outbound logic instead
+of routing through the generic `http` transport's `rest_api` sub_type.
+
+`receive()` bridges py-cord's event-driven dispatch (`on_message`
+callbacks) into the ABC's pull-based `AsyncIterator` contract via an
+internal `asyncio.Queue`: `on_message` pushes one normalized dict per
+inbound message; `receive()` races the bot's own `bot.start()` task
+against `queue.get()` and yields whichever completes, until the bot task
+itself ends (connection dropped -- surfaced as a raised exception, or a
+clean return) or the consuming task is cancelled (this generator's own
+`finally` closes the bot; no bespoke `run()`/`stop()` divergence from the
+ABC).
 """
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
-from typing import Any
+from collections.abc import AsyncIterator, Mapping
+from typing import Any, ClassVar, cast
 
 import discord
-from flask_core.app_registry import AppRegistry
-
-from fanout import RedisLike, fan_out_event
-from transport_boundary import Direction, Transport, TransportType
+from waddle_transports import Direction, NonRetryableTransportError, Transport
+from waddle_transports.signing import SecretResolutionError, resolve_secret
 
 logger = logging.getLogger(__name__)
 
@@ -36,71 +50,101 @@ logger = logging.getLogger(__name__)
 CONSUMES_TAG = "discord.message"
 
 
-class DiscordGatewayReceiver(Transport):
-    """Holds ONE persistent Discord bot gateway connection, fans every inbound message out.
+# The ignore comment below suppresses mypy --strict's "cannot subclass Any" complaint --
+# Transport resolves to Any since waddle_transports ships no py.typed marker (see
+# pyproject.toml's follow_imports="skip" override); the real ABC contract
+# (name/directions/receive()) is still honored regardless.
+class DiscordGatewayReceiver(Transport):  # type: ignore[misc]
+    """Holds ONE persistent Discord bot gateway connection per `receive()` call.
 
     PLATFORM-level, not per-community: one `discord.Bot` connection serves
-    every guild the bot has been invited to, so `run()` is called exactly
-    once (`ReceiverSupervisor` restarts it on failure, never runs a second
-    concurrent instance).
+    every guild the bot has been invited to -- `socket_lease.
+    LeasedReceiver` (this receiver's own caller, see `app.py`) ensures
+    only one live svc-ingest replica ever holds an active iteration.
     """
 
-    transport_type = TransportType.SOCKET
-    direction = Direction.INBOUND
+    name: ClassVar[str] = "discord_gateway"
+    directions: ClassVar[frozenset[Direction]] = frozenset({Direction.INBOUND})
 
-    def __init__(
-        self,
-        *,
-        token: str,
-        redis_client: RedisLike,
-        registry: AppRegistry,
-        tenant_slug: str,
-    ) -> None:
-        """Build the receiver and its `discord.Bot` -- does not connect yet, see `run()`."""
-        self._token = token
-        self._redis = redis_client
-        self._registry = registry
-        self._tenant_slug = tenant_slug
+    async def receive(self, config: Mapping[str, Any]) -> AsyncIterator[Mapping[str, Any]]:
+        """Connect once, yield one normalized dict per inbound (non-bot) Discord message.
 
+        `config["token"]` (a literal token -- test/dev convenience) or
+        `config["token_ref"]` (an env var *name*, resolved via
+        `resolve_secret` -- the production path, never a raw token in
+        bundle/DB config) supplies the bot token.
+        """
+        token = self._resolve_token(config)
+        queue: asyncio.Queue[Mapping[str, Any]] = asyncio.Queue()
+        bot = self._build_bot(queue)
+        bot_task = asyncio.ensure_future(bot.start(token))
+        try:
+            while True:
+                queue_task = asyncio.ensure_future(queue.get())
+                done, _pending = await asyncio.wait(
+                    {bot_task, queue_task}, return_when=asyncio.FIRST_COMPLETED
+                )
+                if queue_task in done:
+                    yield queue_task.result()
+                    continue
+                # bot_task finished first -- the gateway connection ended
+                # (dropped, closed, or never opened). Surface a real
+                # failure, if any, then stop iterating; a clean end just
+                # ends the generator normally, matching every other
+                # waddle_transports `receive()`'s "connection closed ->
+                # iteration simply ends" contract (see irc.py/socket.py).
+                queue_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await queue_task
+                bot_task.result()
+                return
+        finally:
+            if not bot_task.done():
+                await bot.close()
+                bot_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await bot_task
+
+    @staticmethod
+    def _resolve_token(config: Mapping[str, Any]) -> str:
+        token = config.get("token")
+        if isinstance(token, str) and token:
+            return token
+        token_ref = config.get("token_ref")
+        if isinstance(token_ref, str) and token_ref:
+            try:
+                return cast(str, resolve_secret(token_ref))
+            except SecretResolutionError as exc:
+                raise NonRetryableTransportError(
+                    f"discord gateway token resolution failed: {exc}"
+                ) from exc
+        raise NonRetryableTransportError(
+            "discord gateway config missing required 'token' or 'token_ref'"
+        )
+
+    @staticmethod
+    def _build_bot(queue: asyncio.Queue[Mapping[str, Any]]) -> discord.Bot:
+        """Build a real `discord.Bot` whose `on_message` pushes normalized dicts onto `queue`."""
         intents = discord.Intents.default()
         intents.message_content = True  # required to read message text, not just metadata
         intents.guilds = True
-        self.bot = discord.Bot(intents=intents)
-        self._setup_events()
+        bot = discord.Bot(intents=intents)
 
-    def _setup_events(self) -> None:
-        """Register the gateway event handlers py-cord dispatches to."""
-
-        @self.bot.event  # type: ignore[untyped-decorator]
+        @bot.event  # type: ignore[untyped-decorator]
         async def on_ready() -> None:
-            logger.info("gateway.discord_ready user=%s", self.bot.user)
+            logger.info("gateway.discord_ready user=%s", bot.user)
 
-        @self.bot.event  # type: ignore[untyped-decorator]
+        @bot.event  # type: ignore[untyped-decorator]
         async def on_message(message: discord.Message) -> None:
-            await self._handle_message(message)
+            if message.author.bot:
+                return
+            await queue.put(DiscordGatewayReceiver._build_raw_event(message))
 
-    async def _handle_message(self, message: discord.Message) -> None:
-        """Fan a real inbound message out; one bad event must never kill the gateway connection."""
-        if message.author.bot:
-            return
-        raw_event = self._build_raw_event(message)
-        community = message.guild.id if message.guild else None
-        try:
-            count = await fan_out_event(
-                raw_event,
-                consumes_tag=CONSUMES_TAG,
-                tenant=self._tenant_slug,
-                community=community,
-                redis_client=self._redis,
-                registry=self._registry,
-            )
-            logger.debug("gateway.discord_message_fanned count=%s", count)
-        except Exception as exc:  # noqa: BLE001 - one bad event must never kill the gateway
-            logger.error("gateway.fanout_failed error=%s", exc)
+        return bot
 
     @staticmethod
     def _build_raw_event(message: discord.Message) -> dict[str, Any]:
-        """Build the raw event dict LPUSHed onto each matching bundle's `:ingest` key.
+        """Build the normalized dict yielded by `receive()` for one inbound message.
 
         Consumed downstream by `core/svc_ingest/bundles/discord_ingest.py`'s
         `normalize()` -- field names here are this receiver's own contract
@@ -108,11 +152,11 @@ class DiscordGatewayReceiver(Transport):
         (none exists yet, matching `bundles/echo_ingest.py`'s own precedent
         of documenting its own minimal shape rather than inventing one).
 
-        `community_id` in the App Bundle schema is an internal integer, not
-        the raw platform guild id -- no guild->community lookup table
-        exists yet anywhere in this codebase (documented gap, see the PR
-        description); the guild id passes straight through as a
-        best-effort community scope for this MVP proof, not a real mapping.
+        `guild_id` is carried for FUTURE use only -- fan-out
+        (`app.py`'s wiring, per T9) always routes at `community=None`
+        (tenant-wide) today; a real guild->community mapping is a
+        deferred, documented follow-up (no such lookup table exists yet
+        anywhere in this codebase).
         """
         guild_id = str(message.guild.id) if message.guild else None
         return {
@@ -124,19 +168,3 @@ class DiscordGatewayReceiver(Transport):
             "author_username": message.author.name,
             "content": message.content,
         }
-
-    async def run(self) -> None:
-        """Connect and run until the gateway connection ends or `stop()` cancels it.
-
-        `ReceiverSupervisor` calls this in a loop -- a raised exception or
-        a normal return (connection dropped) both trigger a supervised
-        restart with backoff, see `supervisor.py`'s own docstring.
-        """
-        await self.bot.start(self._token)
-
-    async def stop(self) -> None:
-        """Close the gateway connection. Never raises -- shutdown must not fail."""
-        try:
-            await self.bot.close()
-        except Exception as exc:  # noqa: BLE001 - shutdown must not raise
-            logger.warning("gateway.discord_close_error error=%s", exc)

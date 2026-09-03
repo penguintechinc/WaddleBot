@@ -28,10 +28,11 @@ field is thirdparty-vendor-only (`webhook_push`/`rest_pull`,
 `hub_api/services/marketplace_execution_service.py`), not a place to
 classify a native/builtin bundle's own transport. The receiver's transport
 shape (a persistent inbound socket) is declared in CODE instead --
-`receivers/discord_gateway.py`'s `DiscordGatewayReceiver` subclasses
-`transport_boundary.Transport` and sets `transport_type = TransportType.
-SOCKET`, `direction = Direction.INBOUND` (placeholder for the shared
-`waddle_transports` library, landing separately).
+`receivers/discord_gateway.py`'s `DiscordGatewayReceiver` subclasses the
+shared `waddle_transports.Transport` ABC (`name = "discord_gateway"`,
+`directions = frozenset({Direction.INBOUND})`), implementing
+`receive(config) -> AsyncIterator[Mapping]` per that library's own
+contract rather than a bespoke `run()`/`stop()` shape.
 """
 
 from __future__ import annotations
