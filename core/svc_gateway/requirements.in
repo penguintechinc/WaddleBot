@@ -1,0 +1,26 @@
+# svc-gateway -- Dependencies
+# Real control plane: Quart control plane + supervised persistent-socket
+# receiver tasks. flask_core (libs/flask_core) is installed as a separate
+# package step (Dockerfile) and brings in redis transitively via its own
+# requirements.in -- pinned here too for explicitness on direct imports.
+
+# Core Framework
+quart>=0.19.0
+hypercorn>=0.16.0
+
+# Valkey/Redis (LPUSH per-bundle isolation keys)
+redis>=5.0.1
+hiredis>=2.3.2
+
+# Discord gateway receiver -- real py-cord connection, matches
+# trigger/receiver/discord_module/requirements.txt's own pin.
+py-cord>=2.4.1
+
+# Environment
+python-dotenv>=1.0.0
+
+# Development / test
+pytest>=7.4.0
+pytest-asyncio>=0.23.0
+pytest-cov>=4.1.0
+fakeredis>=2.21.0

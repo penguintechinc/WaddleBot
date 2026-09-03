@@ -1,0 +1,33 @@
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "N", "D", "UP", "B", "ASYNC", "S"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+# Test names are self-documenting (pytest convention); S101 (assert) is
+# standard pytest usage.
+"tests/*" = ["D100", "D101", "D102", "D103", "D104", "S101", "SLF001"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+warn_unused_ignores = true
+exclude = ["^\\.venv/", "^tests/"]
+
+# libs/flask_core ships no py.typed marker -- same boundary override
+# hub_api/pyproject.toml and core/svc_ingest/pyproject.toml use for the
+# identical reason.
+[[tool.mypy.overrides]]
+module = ["flask_core.*"]
+ignore_missing_imports = true
+follow_imports = "skip"
+
+# py-cord ships no inline type stubs / py.typed marker.
+[[tool.mypy.overrides]]
+module = ["discord.*"]
+ignore_missing_imports = true
