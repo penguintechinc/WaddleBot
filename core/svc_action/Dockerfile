@@ -17,6 +17,12 @@ RUN cd /app/libs/waddle_transports \
     && pip install --no-cache-dir --require-hashes -r requirements.txt \
     && pip install --no-cache-dir .
 
+# waddle_transports (libs/waddle_transports) -- shared, direction-tagged
+# transport contracts (see that package's own README for the coordination
+# note); same install pattern as flask_core above.
+COPY libs/waddle_transports /app/libs/waddle_transports
+RUN cd /app/libs/waddle_transports && pip install --no-cache-dir .
+
 # Module files
 COPY core/svc_action/requirements.txt /app/
 RUN pip install --no-cache-dir --require-hashes -r requirements.txt

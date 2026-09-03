@@ -149,7 +149,7 @@ async def send_message(
     try:
         message_id = response.json().get("id")
     except Exception:  # noqa: BLE001, S110 -- best-effort audit detail only, never fatal
-        pass
+        pass  # nosec B110 -- same rationale as the noqa above, bandit's own suppression syntax
 
     return TransportResult(
         transport="bundle",

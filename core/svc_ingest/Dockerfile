@@ -17,7 +17,8 @@ RUN pip install --no-cache-dir /app/libs/flask_core
 
 # waddle_transports (libs/waddle_transports) -- shared inbound/outbound
 # transport primitives; receivers/discord_gateway.py's DiscordGatewayReceiver
-# subclasses its Transport ABC. Same direct-install pattern as flask_core.
+# and receivers/twitch_irc.py's TwitchIrcReceiver both subclass its
+# Transport ABC. Same direct-install pattern as flask_core.
 COPY libs/waddle_transports /app/libs/waddle_transports
 RUN pip install --no-cache-dir /app/libs/waddle_transports
 
@@ -27,7 +28,8 @@ COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/pytho
 COPY --from=builder /usr/local/bin /usr/local/bin
 
 COPY core/svc_ingest/app.py core/svc_ingest/config.py core/svc_ingest/runner.py \
-     core/svc_ingest/supervisor.py core/svc_ingest/fanout.py core/svc_ingest/socket_lease.py ./
+     core/svc_ingest/supervisor.py core/svc_ingest/fanout.py core/svc_ingest/socket_lease.py \
+     core/svc_ingest/eventsub.py core/svc_ingest/outbound_drain.py ./
 COPY core/svc_ingest/bundles ./bundles
 COPY core/svc_ingest/receivers ./receivers
 

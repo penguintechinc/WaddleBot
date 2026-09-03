@@ -13,23 +13,36 @@ stage container (`core/svc_streaming/app.py`).
 
 Alongside that poll-drain loop, svc-ingest ALSO runs any registered
 platform-level inbound transports (`receivers/discord_gateway.py`'s
-`waddle_transports.Transport` today) as `supervisor.ReceiverSupervisor`-
-supervised tasks -- 8-container decision: these receivers were briefly a
-standalone `svc-gateway` 9th container, folded back into svc-ingest since
-a Discord bot connection is exactly the same "hold a persistent inbound
-socket, normalize, feed the pipeline" shape this container already owns.
-Each transport is guarded by a `socket_lease.SocketLease`
-(`waddles:socket-owner:{provider}:{community}`, Valkey `SET NX PX`) so
-scaling `pipeline.svcIngest.replicas` never opens duplicate sockets for
-the same `(provider, community)` -- see `socket_lease.py`'s own module
-docstring for the full design.
+`DiscordGatewayReceiver`, `receivers/twitch_irc.py`'s `TwitchIrcReceiver`
+-- one instance per configured channel, see that module's own docstring)
+as `supervisor.ReceiverSupervisor`-supervised tasks -- 8-container
+decision: these receivers were briefly a standalone `svc-gateway` 9th
+container, folded back into svc-ingest since a persistent bot/IRC
+connection is exactly the same "hold a persistent inbound socket,
+normalize, feed the pipeline" shape this container already owns. Each
+transport is guarded by a `socket_lease.SocketLease` (`waddles:socket-
+owner:{provider}:{community}`, Valkey `SET NX PX`) so scaling
+`pipeline.svcIngest.replicas` never opens duplicate sockets for the same
+`(provider, community)` -- see `socket_lease.py`'s own module docstring
+for the full design.
 
-Fan-out (T9): every item the Discord transport yields is routed at
-`community=None` (tenant-wide) for this demo -- `item["guild_id"]` is
-carried in the normalized dict for FUTURE use, but no
-guild->community mapping table exists yet anywhere in this codebase
-(documented, deferred slot; see `receivers/discord_gateway.py`'s own
-docstring).
+Fan-out (T9): every item either transport yields is routed at
+`community=None` (tenant-wide) for this demo -- Discord's `guild_id`/
+Twitch's `channel_name` are both carried in their own normalized dicts for
+FUTURE use, but no guild/channel->community mapping table exists yet
+anywhere in this codebase (documented, deferred slot; see each receiver's
+own docstring).
+
+Twitch's outbound chat sends for svc-action are handled by a SEPARATE
+`outbound_drain.py` task (also supervised, not lease-guarded -- `BRPOP` is
+atomic, so every replica safely competes for the same queue) that opens a
+fresh short-lived `waddle_transports.transports.irc.IrcTransport`
+connection per relayed message rather than reusing any receiver's socket.
+
+The EventSub webhook (`POST /eventsub/twitch/webhook`, `eventsub.py`) is a
+genuine inbound HTTP push (not a persistent socket) -- registered as a
+plain Quart route, wired to the same `fanout.fan_out_event` machinery the
+IRC receivers use.
 """
 
 from __future__ import annotations
@@ -45,12 +58,18 @@ from flask_core import create_health_blueprint, install_security_headers, setup_
 from flask_core.app_registry import AppRegistry
 from flask_core.auth import create_jwt_token
 from flask_core.stage_runner import BundlePoller
-from quart import Quart
+from quart import Blueprint, Quart, request
 
-from bundles.discord_gateway_manifest import register_default_bundles
+from bundles.discord_gateway_manifest import register_default_bundles as register_discord_bundles
+from bundles.twitch_gateway_manifest import register_default_bundles as register_twitch_bundles
 from config import Config
+from eventsub import TwitchEventSubHandler
 from fanout import fan_out_event
-from receivers.discord_gateway import CONSUMES_TAG, DiscordGatewayReceiver
+from outbound_drain import TwitchOutboundDrain
+from receivers.discord_gateway import CONSUMES_TAG as DISCORD_CONSUMES_TAG
+from receivers.discord_gateway import DiscordGatewayReceiver
+from receivers.twitch_irc import CONSUMES_TAG as TWITCH_CONSUMES_TAG
+from receivers.twitch_irc import TwitchIrcReceiver
 from runner import IngestRunner
 from socket_lease import PLATFORM_COMMUNITY, LeasedReceiver
 from supervisor import ReceiverSupervisor
@@ -61,6 +80,8 @@ install_security_headers(app)
 
 health_bp = create_health_blueprint(Config.MODULE_NAME, Config.MODULE_VERSION)
 app.register_blueprint(health_bp)
+
+eventsub_bp = Blueprint("eventsub", __name__, url_prefix="/eventsub")
 
 logger = setup_aaa_logging(Config.MODULE_NAME, Config.MODULE_VERSION)
 
@@ -86,6 +107,152 @@ def _jwt_provider() -> str:
             expiration_hours=1,
         ),
     )
+
+
+def _register_discord_receiver(
+    supervisor: ReceiverSupervisor,
+    *,
+    redis_client: Any,
+    registry: AppRegistry,
+) -> None:
+    """Build + lease-guard + supervise the Discord gateway receiver, if configured."""
+    if not Config.DISCORD_BOT_TOKEN:
+        logger.system(
+            "svc-ingest starting with no Discord receiver -- DISCORD_BOT_TOKEN not configured",
+            action="startup",
+            result="SKIPPED",
+        )
+        return
+
+    replica_id = uuid.uuid4().hex
+    discord_receiver = DiscordGatewayReceiver()
+
+    async def _on_discord_item(item: Mapping[str, Any]) -> None:
+        """Fan one normalized Discord message dict out to every consuming bundle.
+
+        T9: `community=None` (tenant-wide) for this demo -- see this
+        module's own docstring for the deferred guild->community mapping
+        slot.
+        """
+        await fan_out_event(
+            item,
+            consumes_tag=DISCORD_CONSUMES_TAG,
+            tenant=Config.RUNNER_TENANT_SLUG,
+            community=None,
+            redis_client=redis_client,
+            registry=registry,
+        )
+
+    leased_discord = LeasedReceiver(
+        transport=discord_receiver,
+        # `token_ref` is an env var *name*, resolved by `receive()` via
+        # `waddle_transports.signing.resolve_secret` -- never a raw token
+        # in this config dict.
+        config={"token_ref": "DISCORD_BOT_TOKEN"},  # nosec B105 -- env var name, not a token value
+        on_item=_on_discord_item,
+        redis_client=redis_client,
+        provider="discord",
+        community=PLATFORM_COMMUNITY,
+        owner_id=replica_id,
+        ttl_s=Config.SOCKET_LEASE_TTL_S,
+        renew_interval_s=Config.SOCKET_LEASE_RENEW_INTERVAL_S,
+    )
+    app.config["discord_leased_receiver"] = leased_discord
+    supervisor.register("discord_gateway", leased_discord.run, transport=discord_receiver)
+    logger.system(
+        "svc-ingest registered Discord gateway receiver", action="startup", replica_id=replica_id
+    )
+
+
+def _register_twitch_receivers(
+    supervisor: ReceiverSupervisor,
+    *,
+    redis_client: Any,
+    registry: AppRegistry,
+) -> None:
+    """Build + lease-guard + supervise one Twitch IRC receiver per channel, if configured."""
+    if not (Config.TWITCH_BOT_TOKEN_REF and Config.TWITCH_CHANNELS):
+        logger.system(
+            "svc-ingest starting with no Twitch IRC receivers -- "
+            "TWITCH_BOT_TOKEN_REF/TWITCH_CHANNELS not configured",
+            action="startup",
+            result="SKIPPED",
+        )
+        return
+
+    replica_id = uuid.uuid4().hex
+    irc_config_base = Config.twitch_irc_config_base()
+    leased_receivers = []
+
+    async def _on_twitch_item(item: Mapping[str, Any]) -> None:
+        """Fan one normalized Twitch chat message dict out to every consuming bundle.
+
+        T9: `community=None` (tenant-wide) for this demo -- see this
+        module's own docstring for the deferred channel->community
+        mapping slot.
+        """
+        await fan_out_event(
+            item,
+            consumes_tag=TWITCH_CONSUMES_TAG,
+            tenant=Config.RUNNER_TENANT_SLUG,
+            community=None,
+            redis_client=redis_client,
+            registry=registry,
+        )
+
+    for channel in Config.TWITCH_CHANNELS:
+        twitch_receiver = TwitchIrcReceiver()
+        # ONE lease per channel -- IrcTransport.receive() is a single-
+        # channel-per-connection contract, so two replicas must never
+        # both hold the SAME channel's connection, but different channels
+        # are entirely independent (never contend for the same lease
+        # key). See receivers/twitch_irc.py's own docstring.
+        leased = LeasedReceiver(
+            transport=twitch_receiver,
+            config={**irc_config_base, "channel": channel},
+            on_item=_on_twitch_item,
+            redis_client=redis_client,
+            provider="twitch",
+            community=channel,
+            owner_id=replica_id,
+            ttl_s=Config.SOCKET_LEASE_TTL_S,
+            renew_interval_s=Config.SOCKET_LEASE_RENEW_INTERVAL_S,
+        )
+        leased_receivers.append(leased)
+        supervisor.register(f"twitch_irc:{channel}", leased.run, transport=twitch_receiver)
+
+    app.config["twitch_leased_receivers"] = leased_receivers
+
+    outbound_drain = TwitchOutboundDrain(redis_client=redis_client, irc_config_base=irc_config_base)
+    app.config["twitch_outbound_drain"] = outbound_drain
+    supervisor.register("twitch_outbound_drain", outbound_drain.run)
+
+    logger.system(
+        "svc-ingest registered Twitch IRC receivers",
+        action="startup",
+        replica_id=replica_id,
+        channels=len(Config.TWITCH_CHANNELS),
+    )
+
+
+def _register_twitch_eventsub(*, redis_client: Any, registry: AppRegistry) -> None:
+    """Build the Twitch EventSub webhook handler, if configured."""
+    if not Config.TWITCH_EVENTSUB_SECRET:
+        logger.system(
+            "svc-ingest starting with no Twitch EventSub handler -- "
+            "TWITCH_EVENTSUB_SECRET not configured",
+            action="startup",
+            result="SKIPPED",
+        )
+        return
+
+    app.config["twitch_eventsub_handler"] = TwitchEventSubHandler(
+        secret=Config.TWITCH_EVENTSUB_SECRET,
+        redis_client=redis_client,
+        registry=registry,
+        tenant_slug=Config.RUNNER_TENANT_SLUG,
+    )
+    logger.system("svc-ingest registered Twitch EventSub handler", action="startup")
 
 
 @app.before_serving
@@ -119,7 +286,8 @@ async def startup() -> None:
     # opens N duplicate sockets for the same (provider, community). See
     # this module's own docstring and socket_lease.py for the full design.
     registry = AppRegistry()
-    register_default_bundles(registry)
+    register_discord_bundles(registry)
+    register_twitch_bundles(registry)
     app.config["registry"] = registry
 
     supervisor = ReceiverSupervisor(
@@ -128,53 +296,9 @@ async def startup() -> None:
     )
     app.config["supervisor"] = supervisor
 
-    if Config.DISCORD_BOT_TOKEN:
-        replica_id = uuid.uuid4().hex
-        discord_receiver = DiscordGatewayReceiver()
-
-        async def _on_discord_item(item: Mapping[str, Any]) -> None:
-            """Fan one normalized Discord message dict out to every consuming bundle.
-
-            T9: `community=None` (tenant-wide) for this demo -- see this
-            module's own docstring for the deferred guild->community
-            mapping slot.
-            """
-            await fan_out_event(
-                item,
-                consumes_tag=CONSUMES_TAG,
-                tenant=Config.RUNNER_TENANT_SLUG,
-                community=None,
-                redis_client=redis_client,
-                registry=registry,
-            )
-
-        leased_discord = LeasedReceiver(
-            transport=discord_receiver,
-            # `token_ref` is an env var *name*, resolved by `receive()`
-            # via `waddle_transports.signing.resolve_secret` -- never a
-            # raw token in this config dict.
-            config={"token_ref": "DISCORD_BOT_TOKEN"},
-            on_item=_on_discord_item,
-            redis_client=redis_client,
-            provider="discord",
-            community=PLATFORM_COMMUNITY,
-            owner_id=replica_id,
-            ttl_s=Config.SOCKET_LEASE_TTL_S,
-            renew_interval_s=Config.SOCKET_LEASE_RENEW_INTERVAL_S,
-        )
-        app.config["discord_leased_receiver"] = leased_discord
-        supervisor.register("discord_gateway", leased_discord.run, transport=discord_receiver)
-        logger.system(
-            "svc-ingest registered Discord gateway receiver",
-            action="startup",
-            replica_id=replica_id,
-        )
-    else:
-        logger.system(
-            "svc-ingest starting with no socket receivers -- DISCORD_BOT_TOKEN not configured",
-            action="startup",
-            result="SKIPPED",
-        )
+    _register_discord_receiver(supervisor, redis_client=redis_client, registry=registry)
+    _register_twitch_receivers(supervisor, redis_client=redis_client, registry=registry)
+    _register_twitch_eventsub(redis_client=redis_client, registry=registry)
 
     await supervisor.start()
     logger.system("svc-ingest started", action="startup", result="SUCCESS")
@@ -207,6 +331,35 @@ async def shutdown() -> None:
     if redis_client is not None:
         await redis_client.aclose()
     logger.system("svc-ingest shutdown complete", action="shutdown", result="SUCCESS")
+
+
+@eventsub_bp.route("/twitch/webhook", methods=["POST"])
+async def twitch_eventsub_webhook():  # type: ignore[no-untyped-def]
+    """Real Twitch EventSub webhook endpoint -- signature-verified, fans out via `fanout.py`.
+
+    `webhook_callback_verification` (subscription-setup handshake) must
+    echo the bare challenge string back as `text/plain`, NOT JSON-wrapped
+    -- Twitch's own subscription-verification contract, ported verbatim
+    from the legacy module's identical special case
+    (`trigger/receiver/twitch_module/app.py`'s `eventsub_webhook`).
+    """
+    handler = app.config.get("twitch_eventsub_handler")
+    if handler is None:
+        return {"error": "EventSub not configured"}, 503
+
+    body = await request.get_data()
+    body_json = await request.get_json()
+    headers = dict(request.headers)
+
+    response_body, status = await handler.handle_webhook(
+        headers=headers, body=body, body_json=body_json or {}
+    )
+    if "challenge" in response_body:
+        return response_body["challenge"], status, {"Content-Type": "text/plain"}
+    return response_body, status
+
+
+app.register_blueprint(eventsub_bp)
 
 
 if __name__ == "__main__":  # pragma: no cover - process entrypoint, not exercised by unit tests
