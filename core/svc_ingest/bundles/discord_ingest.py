@@ -4,10 +4,11 @@ Fanned out by this container's own Discord gateway receiver
 (`receivers/discord_gateway.py`). Referenced by
 `app_catalog.stages.ingest.entrypoint` (same pattern as
 migration 071's `bundles.echo_ingest:normalize`) as
-`"bundles.discord_ingest:normalize"` for the `waddles.bot.discord.gateway`
-bundle seeded by `config/postgres/migrations/082_discord_gateway_bundle.sql`
-and registered into svc-ingest's own in-process registry at startup
-(`app.py`, `bundles/discord_gateway_manifest.py`).
+`"bundles.discord_ingest:normalize"` for the `waddles.bot.discord.default`
+bundle seeded by `config/postgres/migrations/
+083_discord_twitch_demo_convergence.sql` and registered into svc-ingest's
+own in-process registry at startup (`app.py`, `bundles/
+discord_gateway_manifest.py`).
 
 Consumes the raw event shape `receivers/discord_gateway.py`'s
 `DiscordGatewayReceiver._build_raw_event` LPUSHes onto this bundle's

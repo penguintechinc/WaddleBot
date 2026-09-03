@@ -1,9 +1,24 @@
-"""The Discord gateway ingest bundle's manifest.
+"""The Discord ingest bundle's manifest.
 
 Registered into svc-ingest's own in-process `flask_core.app_registry.
 AppRegistry` at startup (`app.py`), separate from -- and NOT loaded via --
 hub-api's distribution HTTP endpoint the way the poll-drain loop
 (`runner.py`) loads its bundles.
+
+`app_id` is `waddles.bot.discord.default` -- the SAME app_id the action
+stage uses (`core/svc_action/bundles/discord_send_action.py`, seeded by
+migration 082) and the unified 3-stage `app_catalog` row
+(`083_discord_twitch_demo_convergence.sql`) describes. The pipeline keys
+every Valkey stream by `(tenant, community, app_id, stage)`
+(`flask_core.stream_pipeline.bundle_stream_key`): this receiver's fan-out
+LPUSHes onto `...:app:{app_id}:ingest` using THIS manifest's `app_id`,
+while `runner.py`'s poll-drain loop RPOPs the same key using the app_id
+`GET /api/v1/distribution/bundles` returns from `app_catalog` -- the two
+must match exactly or the ingest event never reaches the poll loop. An
+earlier draft used a separate `waddles.bot.discord.gateway` app_id for
+ingest alone, which never connected to the action-only DB row seeded
+under `waddles.bot.discord.default` -- T8 convergence unifies both onto
+one app_id across all three stages.
 
 The Discord gateway receiver (`receivers/discord_gateway.py`) is
 platform-level (one Discord bot gateway connection serving every
@@ -46,7 +61,7 @@ from flask_core.app_registry import AppRegistry
 #: parse_manifest` at registration time, never constructed as an
 #: `AppManifest` directly (see that module's own docstring on why).
 DISCORD_GATEWAY_MANIFEST: dict[str, Any] = {
-    "app_id": "waddles.bot.discord.gateway",
+    "app_id": "waddles.bot.discord.default",
     "name": "Discord Gateway Ingest",
     "version": "1.0.0",
     "feature": "waddles.bot.discord",
