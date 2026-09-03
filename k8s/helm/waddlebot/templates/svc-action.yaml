@@ -58,6 +58,43 @@ spec:
           value: "action"
         - name: MODULE_PORT
           value: {{ .Values.pipeline.svcAction.port | quote }}
+        # T10 (v3 demo) -- Valkey pub/sub + stage LPUSH/RPOP transport (VALKEY_URL),
+        # shared runner tenant scope (RUNNER_TENANT_SLUG; RUNNER_COMMUNITY_ID
+        # deliberately UNSET -- tenant-wide per roadmap DATA-MODEL GAPS), hub-api
+        # callback URL, and the JWT signing key shared with hub-api (same Secret key
+        # SECRET_KEY as hub-api.yaml -- see templates/secrets.yaml).
+        - name: VALKEY_URL
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "waddlebot.fullname" . }}-secrets
+              key: VALKEY_URL
+        - name: RUNNER_TENANT_SLUG
+          value: {{ .Values.pipeline.runnerTenantSlug | quote }}
+        - name: HUB_API_URL
+          value: "http://{{ include "waddlebot.fullname" . }}-hub-api-v3:{{ .Values.pipeline.hubApi.port }}"
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "waddlebot.fullname" . }}-secrets
+              key: SECRET_KEY
+        # ONE-WAY AI kill-switch, same value hub-api.yaml renders as WADDLES_AI_ENABLED
+        # (single toggle: pipeline.hubApi.aiEnabled) -- v3 demo runs the whole pipeline
+        # with WaddleAI disabled, not just hub-api.
+        - name: WADDLES_AI_ENABLED
+          value: {{ .Values.pipeline.hubApi.aiEnabled | quote }}
+        # svc-action writes action_dispatch_log rows directly (core/svc_action/runner.py)
+        # and sends outbound Discord messages via CANON-LIB (waddle_transports) using this
+        # bot token -- same Secret keys hub-api/svc-ingest already read.
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "waddlebot.fullname" . }}-secrets
+              key: DATABASE_URL
+        - name: DISCORD_BOT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "waddlebot.fullname" . }}-secrets
+              key: DISCORD_BOT_TOKEN
         {{- if .Values.modules.bot.enabled }}
         - name: MODULE_LOAD_BOT
           value: "true"

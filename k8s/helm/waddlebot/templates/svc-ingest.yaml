@@ -18,11 +18,10 @@
 # do for the poll-drain loop -- not Helm-overridden today. Each replica races to CLAIM the
 # `waddles:socket-owner:discord:_platform` Valkey lease (`socket_lease.py`) at startup, so
 # `replicas: 2` below is already safe -- only one replica ever actually holds the socket.
-# KNOWN GAP (pre-existing, not introduced by this change): this Deployment has no
-# `VALKEY_URL` env var wired at all (only legacy `REDIS_HOST`/`REDIS_PORT` exist in the
-# shared configmap) -- `Config.VALKEY_URL` falls back to `redis://localhost:6379/0`, which
-# is wrong for a real cluster deploy. Wiring a real `VALKEY_URL` is out of scope here
-# (pre-dates this PR, affects the poll-drain loop identically) -- flagged for follow-up.
+# T10 (v3 demo): the `VALKEY_URL` gap flagged above is now closed -- see the `env:` block
+# below, which wires `VALKEY_URL` (+ `RUNNER_TENANT_SLUG`/`HUB_API_URL`/`SECRET_KEY`/
+# `WADDLES_AI_ENABLED`/Discord+Twitch receiver credentials/socket-lease tuning) explicitly,
+# rather than relying on `Config.py`'s `redis://localhost:6379/0` fallback.
 {{- if .Values.pipeline.svcIngest.enabled }}
 ---
 apiVersion: apps/v1
@@ -75,6 +74,56 @@ spec:
           value: "ingest"
         - name: MODULE_PORT
           value: {{ .Values.pipeline.svcIngest.port | quote }}
+        # T10 (v3 demo) -- Valkey pub/sub + stage LPUSH/RPOP transport (VALKEY_URL),
+        # shared runner tenant scope (RUNNER_TENANT_SLUG; RUNNER_COMMUNITY_ID
+        # deliberately UNSET -- tenant-wide per roadmap DATA-MODEL GAPS), hub-api
+        # callback URL, and the JWT signing key shared with hub-api (same Secret key
+        # SECRET_KEY as hub-api.yaml -- see templates/secrets.yaml).
+        - name: VALKEY_URL
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "waddlebot.fullname" . }}-secrets
+              key: VALKEY_URL
+        - name: RUNNER_TENANT_SLUG
+          value: {{ .Values.pipeline.runnerTenantSlug | quote }}
+        - name: HUB_API_URL
+          value: "http://{{ include "waddlebot.fullname" . }}-hub-api-v3:{{ .Values.pipeline.hubApi.port }}"
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "waddlebot.fullname" . }}-secrets
+              key: SECRET_KEY
+        # ONE-WAY AI kill-switch, same value hub-api.yaml renders as WADDLES_AI_ENABLED
+        # (single toggle: pipeline.hubApi.aiEnabled) -- v3 demo runs the whole pipeline
+        # with WaddleAI disabled, not just hub-api.
+        - name: WADDLES_AI_ENABLED
+          value: {{ .Values.pipeline.hubApi.aiEnabled | quote }}
+        # Discord gateway + Twitch IRC receiver credentials (svc-ingest/receivers/
+        # {discord_gateway,twitch_irc}.py). Empty defaults mean the receiver stays idle
+        # rather than crash-looping without a token -- see values-alpha.yaml for the
+        # dev-only placeholders used in the demo.
+        - name: DISCORD_BOT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "waddlebot.fullname" . }}-secrets
+              key: DISCORD_BOT_TOKEN
+        - name: TWITCH_OAUTH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "waddlebot.fullname" . }}-secrets
+              key: TWITCH_OAUTH_TOKEN
+        - name: TWITCH_NICK
+          value: {{ .Values.oauth.twitch.nick | default "" | quote }}
+        - name: TWITCH_CHANNELS
+          value: {{ .Values.oauth.twitch.channels | default "" | quote }}
+        # Held-socket lease defaults (supervisor/socket_lease.py) -- see
+        # pipeline.svcIngest.socketLease in values.yaml.
+        - name: SOCKET_LEASE_TTL_SECONDS
+          value: {{ .Values.pipeline.svcIngest.socketLease.ttlSeconds | quote }}
+        - name: SOCKET_LEASE_RENEW_SECONDS
+          value: {{ .Values.pipeline.svcIngest.socketLease.renewSeconds | quote }}
+        - name: SOCKET_LEASE_KEY_PREFIX
+          value: {{ .Values.pipeline.svcIngest.socketLease.keyPrefix | quote }}
         {{- if .Values.modules.bot.enabled }}
         - name: MODULE_LOAD_BOT
           value: "true"

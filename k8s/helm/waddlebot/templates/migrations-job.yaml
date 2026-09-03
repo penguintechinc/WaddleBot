@@ -1,0 +1,63 @@
+# v3.0.x Task T10 (v3 demo) — pre-install/pre-upgrade Helm hook Job that applies
+# config/postgres/migrations/*.sql to completion BEFORE any pipeline Deployment's pods are
+# scheduled. Complements (does not replace) the per-pod waddlebot.dbMigrateInitContainer
+# already used by svc-ingest/svc-process/svc-action/hub-api/svc-core (_helpers.tpl) — that
+# initContainer guards against schema drift if a pod restarts mid-rollout; this Job is what
+# actually applies the migration directory to a clean cluster before the demo's Deployments
+# come up in the first place, without N pods racing the same advisory lock at once.
+#
+# T8 landed on release/v3.0.X: migrations now run through
+# config/postgres/migrations/083_discord_twitch_demo_convergence.sql (seeds both
+# discord.default + twitch.default 3-stage app_ids + `global` tenant activation). This Job
+# runs the migrations image's entrypoint (migrations/run-alembic.sh -> `alembic upgrade
+# head`) against the whole config/postgres/migrations/ directory the image COPYs in
+# (migrations/Dockerfile), never a hardcoded file list or number, so it already covers 083
+# with no further Helm change.
+{{- if .Values.pipeline.migrationsJob.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "waddlebot.fullname" . }}-db-migrate
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "waddlebot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: db-migrate
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        {{- include "waddlebot.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: db-migrate
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "waddlebot.serviceAccountName" . }}
+      {{- include "waddlebot.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - name: db-migrate
+        # Same image reference as waddlebot.dbMigrateInitContainer (_helpers.tpl) — one
+        # migrations image, two call sites (this pre-install/pre-upgrade Job + the per-pod
+        # initContainer). Replace once migrations has its own pinned CI-built digest.
+        image: "{{ .Values.global.imageRegistry }}/migrations:{{ .Values.global.imageTag }}"
+        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 10 }}
+        envFrom:
+        - secretRef:
+            name: {{ include "waddlebot.fullname" . }}-secrets
+        resources:
+          {{- toYaml .Values.pipeline.migrationsJob.resources | nindent 10 }}
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir: {}
+{{- end }}
