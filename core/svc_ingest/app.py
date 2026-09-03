@@ -1,4 +1,4 @@
-"""svc-ingest -- Quart control-plane + background stage-runner loop.
+"""svc-ingest -- Quart control-plane + background stage-runner loop + supervised socket receivers.
 
 Real async loop (`runner.IngestRunner`, started in `@app.before_serving`):
 polls hub-api's distribution endpoint for the `ingest` stage's active
@@ -10,22 +10,40 @@ entrypoint, and LPUSHes the normalized result onto that bundle's `:process`
 key as a JSON envelope. `/health`/`/healthz`/`/metrics` come from
 `flask_core`'s standard health blueprint, same as every other pipeline-
 stage container (`core/svc_streaming/app.py`).
+
+Alongside that poll-drain loop, svc-ingest ALSO runs any registered
+platform-level socket receivers (`receivers/discord_gateway.py` today) as
+`supervisor.ReceiverSupervisor`-supervised tasks -- 8-container decision:
+these receivers were briefly a standalone `svc-gateway` 9th container,
+folded back into svc-ingest since a Discord bot connection is exactly the
+same "hold a persistent inbound socket, normalize, feed the pipeline"
+shape this container already owns. Each receiver is guarded by a
+`socket_lease.SocketLease` (`waddles:socket-owner:{provider}:{community}`,
+Valkey `SET NX PX`) so scaling `pipeline.svcIngest.replicas` never opens
+duplicate sockets for the same `(provider, community)` -- see
+`socket_lease.py`'s own module docstring for the full design.
 """
 
 from __future__ import annotations
 
 import asyncio
+import uuid
 from typing import cast
 
 import httpx
 import redis.asyncio as redis
 from flask_core import create_health_blueprint, install_security_headers, setup_aaa_logging
+from flask_core.app_registry import AppRegistry
 from flask_core.auth import create_jwt_token
 from flask_core.stage_runner import BundlePoller
 from quart import Quart
 
+from bundles.discord_gateway_manifest import register_default_bundles
 from config import Config
+from receivers.discord_gateway import DiscordGatewayReceiver
 from runner import IngestRunner
+from socket_lease import PLATFORM_COMMUNITY, LeasedReceiver
+from supervisor import ReceiverSupervisor
 
 app = Quart(__name__)
 # security.md A05 hardening -- JSON-only service, default deny-everything CSP.
@@ -62,7 +80,7 @@ def _jwt_provider() -> str:
 
 @app.before_serving
 async def startup() -> None:
-    """Wire the httpx client, Valkey client, poller, and start the background loop."""
+    """Wire the httpx/Valkey clients, poller, and start the poll-drain loop + socket receivers."""
     http_client = httpx.AsyncClient()
     redis_client = redis.from_url(Config.VALKEY_URL, encoding="utf-8", decode_responses=True)
 
@@ -84,12 +102,64 @@ async def startup() -> None:
     app.config["redis_client"] = redis_client
     app.config["runner"] = runner
     app.config["runner_task"] = asyncio.ensure_future(runner.run_forever())
+
+    # Socket-owning receivers (App Bundle SDK gateway_socket ingest) --
+    # supervised alongside the poll-drain loop above, each guarded by a
+    # Valkey lease so scaling svc-ingest to N replicas never opens N
+    # duplicate sockets for the same (provider, community). See this
+    # module's own docstring and socket_lease.py for the full design.
+    registry = AppRegistry()
+    register_default_bundles(registry)
+    app.config["registry"] = registry
+
+    supervisor = ReceiverSupervisor(
+        base_backoff_s=Config.RECEIVER_BASE_BACKOFF_S,
+        max_backoff_s=Config.RECEIVER_MAX_BACKOFF_S,
+    )
+    app.config["supervisor"] = supervisor
+
+    if Config.DISCORD_BOT_TOKEN:
+        replica_id = uuid.uuid4().hex
+        discord_receiver = DiscordGatewayReceiver(
+            token=Config.DISCORD_BOT_TOKEN,
+            redis_client=redis_client,
+            registry=registry,
+            tenant_slug=Config.RUNNER_TENANT_SLUG,
+        )
+        leased_discord = LeasedReceiver(
+            receiver=discord_receiver,
+            redis_client=redis_client,
+            provider="discord",
+            community=PLATFORM_COMMUNITY,
+            owner_id=replica_id,
+            ttl_s=Config.SOCKET_LEASE_TTL_S,
+            renew_interval_s=Config.SOCKET_LEASE_RENEW_INTERVAL_S,
+        )
+        app.config["discord_leased_receiver"] = leased_discord
+        supervisor.register("discord_gateway", leased_discord.run)
+        logger.system(
+            "svc-ingest registered Discord gateway receiver",
+            action="startup",
+            replica_id=replica_id,
+        )
+    else:
+        logger.system(
+            "svc-ingest starting with no socket receivers -- DISCORD_BOT_TOKEN not configured",
+            action="startup",
+            result="SKIPPED",
+        )
+
+    await supervisor.start()
     logger.system("svc-ingest started", action="startup", result="SUCCESS")
 
 
 @app.after_serving
 async def shutdown() -> None:
-    """Stop the background loop and close both clients -- must never raise."""
+    """Stop the background loop, every supervised receiver, and close both clients."""
+    supervisor = app.config.get("supervisor")
+    if supervisor is not None:
+        await supervisor.stop()
+
     runner = app.config.get("runner")
     if runner is not None:
         runner.stop()

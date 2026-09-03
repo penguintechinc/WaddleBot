@@ -65,3 +65,15 @@ class TestLifespan:
         # our after_serving hook -- by the time this block exits, the
         # runner task must be finished (stopped, not hung).
         assert quart_app.config["runner_task"].done()
+
+    async def test_startup_wires_supervisor_with_no_receivers_when_no_token(self) -> None:
+        """No `DISCORD_BOT_TOKEN` -- the supervisor still starts, with zero receivers.
+
+        `discord_leased_receiver` is never populated (graceful skip,
+        matching `trigger/receiver/discord_module/app.py`'s own
+        precedent) -- test env has no token set by default.
+        """
+        async with quart_app.test_app():
+            assert quart_app.config["supervisor"] is not None
+            assert quart_app.config["registry"] is not None
+            assert "discord_leased_receiver" not in quart_app.config

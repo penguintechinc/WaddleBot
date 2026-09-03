@@ -1,13 +1,14 @@
 """Fan a platform-level gateway event out to every bundle's own `:ingest` Valkey key.
 
 A gateway-socket receiver (e.g. `receivers/discord_gateway.py`) holds ONE
-persistent connection serving MANY communities -- unlike svc-ingest's
-`BundlePoller`, which is a single stage-runner instance already scoped to
-one (tenant, community) via `RUNNER_TENANT_SLUG`/`RUNNER_COMMUNITY_ID`,
-svc-gateway must discover, per inbound event, which bundle(s) actually want
-it. Per this PR's own task spec: call `flask_core.app_binding.resolve_apps`
-(the in-process registry ladder), not hub-api's `GET /api/v1/distribution/
-bundles` HTTP endpoint -- that endpoint's DTO doesn't carry `consumes`/
+persistent connection serving MANY communities -- unlike this same
+container's `BundlePoller`-driven poll-drain loop (`runner.py`), which is
+already scoped to one (tenant, community) via `RUNNER_TENANT_SLUG`/
+`RUNNER_COMMUNITY_ID`, a socket receiver must discover, per inbound event,
+which bundle(s) actually want it. Per this PR's own task spec: call
+`flask_core.app_binding.resolve_apps` (the in-process registry ladder),
+not hub-api's `GET /api/v1/distribution/bundles` HTTP endpoint -- that
+endpoint's DTO doesn't carry `consumes`/
 `communication_model` at all (`hub_api/services/distribution_service.py`'s
 `BundleDistributionRow` only exposes `{entrypoint, config, spec}`), and
 extending it to would require new migration/service/blueprint work out of
@@ -26,7 +27,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Sequence
+from collections.abc import Awaitable, Sequence
 from typing import Any, Protocol
 
 from flask_core.app_binding import (
@@ -49,9 +50,13 @@ _EMPTY_STAGE_SPEC = StageSpec()
 
 
 class _NullInstallationLookup:
-    """`InstallationLookup` with no rows -- every `resolve_apps` call falls straight to the
-    Feature's shipped default (see `bundles/discord_gateway_manifest.py`'s own docstring for
-    why this is today's deliberate MVP scope, not the long-term design)."""
+    """`InstallationLookup` with no rows.
+
+    Every `resolve_apps` call falls straight to the Feature's shipped
+    default (see `bundles/discord_gateway_manifest.py`'s own docstring
+    for why this is today's deliberate MVP scope, not the long-term
+    design).
+    """
 
     async def find(
         self, feature: str, *, tenant: str, community: int | None
@@ -65,9 +70,17 @@ NULL_INSTALLATIONS: InstallationLookup = _NullInstallationLookup()
 
 
 class RedisLike(Protocol):
-    """The one Valkey method `fan_out_event` needs -- narrow on purpose, easy to fake in tests."""
+    """The one Valkey method `fan_out_event` needs -- narrow on purpose, easy to fake in tests.
 
-    async def lpush(self, key: str, value: str) -> Any:
+    Declared non-`async def`/`Awaitable[Any]`-returning + positional-only
+    params (`/`) so `redis.asyncio.Redis` (whose real `lpush` stub is
+    `(name, *values) -> Awaitable[int]`, a different param name/return
+    shape) still structurally satisfies this Protocol -- see
+    `socket_lease.LeaseRedisLike`'s own docstring for the identical
+    reasoning against `set`/`eval`.
+    """
+
+    def lpush(self, key: str, value: str, /) -> Awaitable[Any]:
         """LPUSH `value` onto `key`."""
         ...
 

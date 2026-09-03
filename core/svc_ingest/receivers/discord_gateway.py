@@ -18,9 +18,9 @@ import logging
 from typing import Any
 
 import discord
+from flask_core.app_registry import AppRegistry
 
 from fanout import RedisLike, fan_out_event
-from flask_core.app_registry import AppRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -62,11 +62,11 @@ class DiscordGatewayReceiver:
     def _setup_events(self) -> None:
         """Register the gateway event handlers py-cord dispatches to."""
 
-        @self.bot.event
+        @self.bot.event  # type: ignore[untyped-decorator]
         async def on_ready() -> None:
             logger.info("gateway.discord_ready user=%s", self.bot.user)
 
-        @self.bot.event
+        @self.bot.event  # type: ignore[untyped-decorator]
         async def on_message(message: discord.Message) -> None:
             await self._handle_message(message)
 

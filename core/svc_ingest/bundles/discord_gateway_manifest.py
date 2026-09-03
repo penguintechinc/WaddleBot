@@ -1,14 +1,18 @@
-"""The Discord gateway ingest bundle's manifest -- registered into svc-gateway's own in-process
-`flask_core.app_registry.AppRegistry` at startup (`app.py`), NOT loaded from hub-api's
-distribution HTTP endpoint the way `core/svc_ingest`'s stage-runner loads its bundles.
+"""The Discord gateway ingest bundle's manifest.
 
-svc-gateway is platform-level (one Discord bot gateway connection serving
-every community), so its fan-out (`fanout.py`) has to answer "which
-bundles want a `discord.message` event" BEFORE it knows which single
-(tenant, community) a stage-runner's own `RUNNER_TENANT_SLUG`/
+Registered into svc-ingest's own in-process `flask_core.app_registry.
+AppRegistry` at startup (`app.py`), separate from -- and NOT loaded via --
+hub-api's distribution HTTP endpoint the way the poll-drain loop
+(`runner.py`) loads its bundles.
+
+The Discord gateway receiver (`receivers/discord_gateway.py`) is
+platform-level (one Discord bot gateway connection serving every
+community), so its fan-out (`fanout.py`) has to answer "which bundles
+want a `discord.message` event" BEFORE it knows which single (tenant,
+community) the poll-drain loop's own `RUNNER_TENANT_SLUG`/
 `RUNNER_COMMUNITY_ID` env vars would scope it to -- it needs the full
 in-memory manifest set (`flask_core.app_binding.resolve_apps`, per this
-PR's own task spec), not one poll against one stage-runner's fixed scope.
+PR's own task spec), not one poll against one fixed scope.
 
 `is_default=True` + no real `InstallationLookup` wiring (`fanout.py`'s
 `_NullInstallationLookup`) is a deliberate, documented MVP scope choice:
@@ -39,11 +43,12 @@ DISCORD_GATEWAY_MANIFEST: dict[str, Any] = {
     "is_default": True,
     "stages": {
         "ingest": {
-            # Run by svc-ingest, NOT svc-gateway -- svc-gateway only fans
-            # the raw event out onto this bundle's `:ingest` Valkey key
-            # (`bundle_stream_key`); svc-ingest's own poll loop
-            # (`core/svc_ingest/runner.py`) RPOPs it and calls this
-            # entrypoint exactly like every other ingest bundle.
+            # Run by the poll-drain loop (runner.py), NOT the gateway
+            # receiver directly -- the receiver only fans the raw event
+            # out onto this bundle's `:ingest` Valkey key
+            # (`bundle_stream_key`); `runner.py`'s own poll loop RPOPs it
+            # and calls this entrypoint exactly like every other ingest
+            # bundle.
             "entrypoint": "bundles.discord_ingest:normalize",
             "consumes": ["discord.message"],
             "communication_model": "gateway_socket",

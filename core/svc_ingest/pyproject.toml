@@ -28,3 +28,12 @@ exclude = ["^\\.venv/", "^tests/"]
 module = ["flask_core.*"]
 ignore_missing_imports = true
 follow_imports = "skip"
+
+# py-cord ships no inline type stubs / py.typed marker -- follow_imports =
+# "skip" (not just ignore_missing_imports) so mypy --strict doesn't also
+# flag every call into it as "Call to untyped function", same boundary
+# treatment as flask_core.* above.
+[[tool.mypy.overrides]]
+module = ["discord.*"]
+ignore_missing_imports = true
+follow_imports = "skip"

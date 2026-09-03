@@ -1,14 +1,16 @@
-"""Discord gateway ingest bundle -- normalizes a raw Discord message fanned out by svc-gateway.
+"""Discord gateway ingest bundle -- normalizes a raw fanned-out Discord message.
 
-Referenced by `app_catalog.stages.ingest.entrypoint` (same pattern as
+Fanned out by this container's own Discord gateway receiver
+(`receivers/discord_gateway.py`). Referenced by
+`app_catalog.stages.ingest.entrypoint` (same pattern as
 migration 071's `bundles.echo_ingest:normalize`) as
 `"bundles.discord_ingest:normalize"` for the `waddles.bot.discord.gateway`
 bundle seeded by `config/postgres/migrations/082_discord_gateway_bundle.sql`
-and registered into svc-gateway's own in-process registry
-(`core/svc_gateway/bundles/discord_gateway_manifest.py`).
+and registered into svc-ingest's own in-process registry at startup
+(`app.py`, `bundles/discord_gateway_manifest.py`).
 
-Consumes the raw event shape `core/svc_gateway/receivers/discord_gateway.
-py`'s `DiscordGatewayReceiver._build_raw_event` LPUSHes onto this bundle's
+Consumes the raw event shape `receivers/discord_gateway.py`'s
+`DiscordGatewayReceiver._build_raw_event` LPUSHes onto this bundle's
 `:ingest` Valkey key -- `{platform, guild_id, channel_id, message_id,
 author_id, author_username, content}` -- and produces the same
 `{platform, event_type, actor, payload, occurred_at}` platform event shape

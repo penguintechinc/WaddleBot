@@ -1,20 +1,23 @@
--- Migration 082: seed the Discord gateway ingest bundle (svc-gateway).
+-- Migration 082: seed the Discord gateway ingest bundle (svc-ingest).
 --
--- Proves the INGEST half of the Discord connector running through the new
--- 9-container/bundle model end to end: svc-gateway holds the real
+-- Proves the INGEST half of the Discord connector running through the
+-- 8-container/bundle model end to end: svc-ingest's Discord gateway
+-- receiver (`core/svc_ingest/receivers/discord_gateway.py`) holds the real
 -- persistent Discord bot gateway socket (platform-level, one connection
--- serving every community) and, on each inbound message, fans it out via
--- `flask_core.app_binding.resolve_apps` to every bundle whose ingest stage
--- `consumes` `"discord.message"` -- LPUSHing onto that bundle's own
--- `:ingest` Valkey key (`bundle_stream_key`). svc-gateway resolves that
--- fan-out against its OWN in-process registry (`core/svc_gateway/bundles/
--- discord_gateway_manifest.py`), not this table -- this row exists so
--- svc-ingest's stage-runner poll (`GET /api/v1/distribution/bundles?
--- stage=ingest`, `core/svc_ingest/runner.py`) ALSO discovers the same
--- bundle and runs its real `bundles.discord_ingest:normalize` entrypoint
--- against whatever svc-gateway LPUSHed -- same seed shape as migration
--- 071's `waddles.core.demo.echo` bundle, one more App added to the
--- catalog, not a schema change.
+-- serving every community, lease-owned per `core/svc_ingest/socket_lease.
+-- py` so scaling svc-ingest never opens a duplicate) and, on each inbound
+-- message, fans it out via `flask_core.app_binding.resolve_apps` to every
+-- bundle whose ingest stage `consumes` `"discord.message"` -- LPUSHing
+-- onto that bundle's own `:ingest` Valkey key (`bundle_stream_key`). The
+-- receiver resolves that fan-out against svc-ingest's OWN in-process
+-- registry (`core/svc_ingest/bundles/discord_gateway_manifest.py`), not
+-- this table -- this row exists so the SAME container's poll-drain loop
+-- (`GET /api/v1/distribution/bundles?stage=ingest`, `core/svc_ingest/
+-- runner.py`) ALSO discovers the bundle and runs its real
+-- `bundles.discord_ingest:normalize` entrypoint against whatever the
+-- receiver LPUSHed -- same seed shape as migration 071's `waddles.core.
+-- demo.echo` bundle, one more App added to the catalog, not a schema
+-- change.
 --
 -- `stages.ingest` mirrors flask_core.app_manifest.StageSpec's field names
 -- (071's own convention) plus this PR's two new fields --

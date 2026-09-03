@@ -11,6 +11,14 @@ OIDC-machine-JWT fallback where SPIFFE/SPIRE isn't deployed in this
 environment yet -- this service is SPIFFE-ready in the sense that nothing
 here precludes swapping the JWT for an mTLS/X.509-SVID identity later, that
 wiring itself is out of scope for this PR).
+
+Also carries svc-ingest's socket-owning receiver config (8-container
+decision, folded in from the standalone svc-gateway skeleton): a
+gateway-socket receiver (`receivers/discord_gateway.py`) runs as a
+`supervisor.ReceiverSupervisor`-supervised task alongside the poll-drain
+loop above, guarded by a `socket_lease.SocketLease` so scaling
+`pipeline.svcIngest.replicas` never opens duplicate sockets for the same
+`(provider, community)`.
 """
 
 from __future__ import annotations
@@ -57,3 +65,24 @@ class Config:
     JWT_SCOPE = "distribution:read"
 
     VALKEY_URL = os.getenv("VALKEY_URL", "redis://localhost:6379/0")
+
+    # Discord gateway receiver. Empty string (never committed, never
+    # logged) disables the receiver entirely -- `app.py`'s startup skips
+    # it gracefully, matching `trigger/receiver/discord_module/app.py`'s
+    # own "DISCORD_BOT_TOKEN not configured" skip behavior.
+    DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN", "")
+
+    # ReceiverSupervisor backoff bounds for socket receivers -- same shape
+    # as POLL_INTERVAL_S's BASE_BACKOFF_S/MAX_BACKOFF_S above, kept as
+    # separate env vars since a died gateway socket and a failed
+    # distribution poll are unrelated failure domains that may need
+    # different tuning.
+    RECEIVER_BASE_BACKOFF_S = float(os.getenv("RECEIVER_BASE_BACKOFF_S", "1.0"))
+    RECEIVER_MAX_BACKOFF_S = float(os.getenv("RECEIVER_MAX_BACKOFF_S", "60.0"))
+
+    # socket_lease.SocketLease TTL/renew wiring -- renew_interval_s must
+    # stay comfortably below ttl_s so a normal renewal cadence never
+    # brushes up against expiry (a missed renewal or two should not cost
+    # the lease).
+    SOCKET_LEASE_TTL_S = float(os.getenv("SOCKET_LEASE_TTL_S", "30.0"))
+    SOCKET_LEASE_RENEW_INTERVAL_S = float(os.getenv("SOCKET_LEASE_RENEW_INTERVAL_S", "10.0"))

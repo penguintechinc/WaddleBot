@@ -1,20 +1,21 @@
 """ReceiverSupervisor -- restart-on-exit + exponential backoff for long-lived receiver tasks.
 
-svc-gateway's whole job is holding PERSISTENT inbound sockets (a Discord
-bot gateway connection today, more platforms later) as long-lived asyncio
-tasks. A raw `asyncio.ensure_future(receiver.run())` (the pattern
-`core/svc_ingest/app.py` uses for its own, much shorter-lived poll loop)
-dies silently on any unhandled exception -- the task just stops, no retry,
-no restart, no crash loud enough for anyone to notice, and the platform
-quietly loses that entire receiver's traffic. `ReceiverSupervisor` wraps
-each registered receiver coroutine in its own supervised loop so a dropped
-gateway connection, an auth failure, or any other unhandled exception
-restarts the receiver rather than ending it -- backoff shape (double on
-failure, cap at `max_backoff_s`, reset to `base_backoff_s` on a clean
-`RECEIVER_HEALTHY_S`-long run) deliberately mirrors
-`flask_core.stage_runner.BundlePoller.poll_once` (stage_runner.py:185-211)
-so the two "keep retrying, never go idle, never hammer" policies in this
-codebase read the same way.
+svc-ingest's socket receivers (`receivers/discord_gateway.py` today, more
+platforms later) hold PERSISTENT inbound sockets as long-lived asyncio
+tasks, alongside the container's existing poll-drain loop (`app.py`'s own
+`runner.IngestRunner.run_forever()`, started with a raw `asyncio.
+ensure_future` since that loop already retries internally). A receiver
+task started the same raw way would die silently on any unhandled
+exception -- the task just stops, no retry, no restart, no crash loud
+enough for anyone to notice, and the platform quietly loses that entire
+receiver's traffic. `ReceiverSupervisor` wraps each registered receiver
+coroutine in its own supervised loop so a dropped gateway connection, an
+auth failure, or any other unhandled exception restarts the receiver
+rather than ending it -- backoff shape (double on failure, cap at
+`max_backoff_s`, reset to `base_backoff_s` on a clean `RECEIVER_HEALTHY_S`-
+long run) deliberately mirrors `flask_core.stage_runner.BundlePoller.
+poll_once` (stage_runner.py:185-211) so the two "keep retrying, never go
+idle, never hammer" policies in this codebase read the same way.
 """
 
 from __future__ import annotations
@@ -116,9 +117,7 @@ class ReceiverSupervisor:
                 # until cancelled; returning means its connection ended
                 # (or it was never opened), so it restarts exactly like a
                 # raised exception would.
-                logger.warning(
-                    "supervisor.receiver_exited name=%s -- restarting", supervised.name
-                )
+                logger.warning("supervisor.receiver_exited name=%s -- restarting", supervised.name)
             except asyncio.CancelledError:
                 raise  # our own stop() -- propagate, do not restart
             except Exception as exc:  # noqa: BLE001 - one receiver's bug must never kill others
