@@ -31,6 +31,22 @@ PIP=("$PYTHON_BIN" -m pip install --disable-pip-version-check)
 echo "[install-unit-test-deps] core/identity_core_module + editable libs/flask_core"
 "${PIP[@]}" -r core/identity_core_module/requirements.txt -e libs/flask_core
 
+# libs/waddle_transports is the first libs/* module carrying its own
+# runtime dependencies beyond flask_core (websockets/aiosmtplib/httpx[http2]
+# for the socket/email/http transports) -- every other libs/* module (see
+# the run_suite loop in tests/k8s/alpha/05-unit-tests.sh) has no
+# requirements.txt of its own and is satisfied by flask_core alone. Unlike
+# flask_core's combined line above, this requirements.txt IS hash-pinned
+# (--generate-hashes) -- pip auto-enables hash-checking the moment any
+# requirement in a call carries a hash, and then rejects every other spec
+# in that same call lacking one (the unhashed local `-e` path), so the
+# hash-pinned install and the editable package install must be two
+# separate `pip install` calls, not combined like flask_core's.
+echo "[install-unit-test-deps] libs/waddle_transports (hash-pinned deps)"
+"${PIP[@]}" --require-hashes -r libs/waddle_transports/requirements.txt
+echo "[install-unit-test-deps] editable libs/waddle_transports"
+"${PIP[@]}" -e libs/waddle_transports
+
 for pkg in hub_api core/svc_action core/svc_ingest core/svc_presentation core/svc_process core/svc_streaming; do
     req="${pkg}/requirements.txt"
     if [ ! -f "$req" ]; then
