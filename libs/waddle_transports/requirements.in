@@ -1,0 +1,26 @@
+# waddle_transports -- shared inbound/outbound transport-primitives library.
+
+# HTTP(/2) client -- http transport's webhook/rest_api/graphql/grpc
+# sub-types, overlay transport. [http2] extra (pulls in h2) is mandatory,
+# not decorative -- the grpc sub-type is a real HTTP/2 call and httpx only
+# negotiates HTTP/2 when the client was constructed with http2=True, which
+# requires h2 importable.
+httpx[http2]>=0.27.0,<0.28.0
+
+# Valkey/Redis -- message_queue transport's valkey sub_type.
+redis>=5.0.1
+
+# SMTP -- email transport's smtp sub_type. >=5.1.2 mandatory: 3.0.x-4.x
+# carry PYSEC-2026-2338/CVE-2026-55558, fixed in 5.1.2.
+aiosmtplib>=5.1.2,<6.0.0
+
+# WebSocket client/server -- socket transport (generic connect+receive/
+# send). Already an established pin elsewhere in this repo
+# (services/trigger-webhooks, trigger/receiver/mattermost_module).
+websockets>=13.0,<14.0
+
+# Development
+pytest>=7.4.0
+pytest-asyncio>=0.23.0
+pytest-cov>=4.1.0
+fakeredis>=2.24.0
