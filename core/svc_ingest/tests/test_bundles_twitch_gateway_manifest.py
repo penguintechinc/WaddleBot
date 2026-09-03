@@ -25,11 +25,25 @@ class TestRegisterDefaultBundles:
         assert eventsub.is_default is True
 
     def test_gateway_ingest_stage_declares_twitch_message(self) -> None:
+        """Also a regression test for the manifest-load crash a `gateway_socket` value caused.
+
+        `communication_model` is thirdparty-vendor-only
+        (`flask_core.app_manifest.KNOWN_COMMUNICATION_MODELS` ==
+        `{webhook_push, rest_pull}`); an earlier draft set it to
+        `"gateway_socket"` here, which `parse_manifest` rejects
+        (`ManifestError`) -- confirmed via a live `register_default_
+        bundles()` call, crashing `app.py`'s `@app.before_serving` on
+        every startup regardless of whether Twitch was even configured.
+        Fixed by dropping the key entirely, matching `bundles/
+        discord_gateway_manifest.py`'s own precedent (transport shape is
+        declared in CODE via the `waddle_transports.Transport` ABC, not
+        this field).
+        """
         registry = AppRegistry()
         gateway, _ = register_default_bundles(registry)
 
         ingest_spec = gateway.stage_specs["ingest"]
-        assert ingest_spec.communication_model == "gateway_socket"
+        assert ingest_spec.communication_model is None
         assert ingest_spec.consumes == ("twitch.message",)
         assert ingest_spec.entrypoint == "bundles.twitch_ingest:normalize"
 
@@ -67,6 +81,7 @@ class TestRegisterDefaultBundles:
         assert TWITCH_GATEWAY_MANIFEST["app_id"] == "waddles.bot.twitch.default"
         assert gateway_stages["ingest"]["entrypoint"] == "bundles.twitch_ingest:normalize"
         assert gateway_stages["ingest"]["consumes"] == ["twitch.message"]
+        assert "communication_model" not in gateway_stages["ingest"]
 
         eventsub_stages = TWITCH_EVENTSUB_MANIFEST["stages"]
         assert TWITCH_EVENTSUB_MANIFEST["app_id"] == "waddles.bot.twitchevents.eventsub"

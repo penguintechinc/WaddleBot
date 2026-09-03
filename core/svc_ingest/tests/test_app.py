@@ -21,6 +21,7 @@ from typing import Any
 import pytest
 
 from app import app as quart_app
+from config import Config
 
 
 @pytest.fixture
@@ -77,3 +78,31 @@ class TestLifespan:
             assert quart_app.config["supervisor"] is not None
             assert quart_app.config["registry"] is not None
             assert "discord_leased_receiver" not in quart_app.config
+
+    async def test_startup_registers_both_discord_and_twitch_under_the_one_supervisor(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Both connectors' receivers register under the SAME `ReceiverSupervisor` instance.
+
+        `Config` attributes are read fresh at `startup()` time (not
+        cached at import), so monkeypatching the class directly (not env
+        vars, which `Config` only reads once at import) takes effect for
+        this one lifespan. `SocketLease.try_claim()`'s own real Valkey
+        call is never reached by this assertion -- `supervisor.register()`
+        happens before `supervisor.start()`, so a missing local Valkey
+        (this test env has none) never prevents the registration itself
+        from being observed.
+        """
+        monkeypatch.setattr(Config, "DISCORD_BOT_TOKEN", "fake-discord-token")  # noqa: S105
+        monkeypatch.setattr(Config, "TWITCH_BOT_TOKEN_REF", "FAKE_TWITCH_TOKEN_REF")
+        monkeypatch.setattr(Config, "TWITCH_CHANNELS", ["somechannel"])
+
+        async with quart_app.test_app():
+            supervisor = quart_app.config["supervisor"]
+            registered = set(supervisor._receivers)  # noqa: SLF001 - test-only introspection
+
+            assert "discord_gateway" in registered
+            assert "twitch_irc:somechannel" in registered
+            assert "twitch_outbound_drain" in registered
+            assert quart_app.config["discord_leased_receiver"] is not None
+            assert len(quart_app.config["twitch_leased_receivers"]) == 1

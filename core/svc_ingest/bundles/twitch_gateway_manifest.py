@@ -31,7 +31,20 @@ a legal app_id either):
   `(tenant, community, app_id, stage)`, `flask_core.stream_pipeline.
   bundle_stream_key` -- the receiver's fan-out and the poll-drain loop
   must agree on app_id or the ingest event never reaches the poll loop).
-  Platform-level, `communication_model="gateway_socket"`.
+  Does NOT set `stages.ingest.communication_model` -- that field is
+  thirdparty-vendor-only (`webhook_push`/`rest_pull`,
+  `flask_core.app_manifest.KNOWN_COMMUNICATION_MODELS`, `hub_api/
+  services/marketplace_execution_service.py`), not a place to classify a
+  native/builtin bundle's own transport; `parse_manifest` rejects any
+  other value outright (`ManifestError`), which an earlier draft of this
+  manifest hit at every svc-ingest startup by setting `"gateway_socket"`
+  here -- confirmed via a live `register_default_bundles()` call, fixed
+  by dropping the key, matching `bundles/discord_gateway_manifest.py`'s
+  own precedent exactly. The receiver's transport shape (a persistent
+  inbound socket) is declared in CODE instead -- `receivers/twitch_irc.py`'s
+  `TwitchIrcReceiver` subclasses the shared `waddle_transports.Transport`
+  ABC (`name = "twitch_irc"`, `directions = frozenset({Direction.
+  INBOUND})`).
 - `waddles.bot.twitchevents.eventsub` -- the EventSub webhook handler
   (`eventsub.py`), feature `waddles.bot.twitchevents` (a single token,
   deliberately NOT `waddles.bot.twitch` -- `AppRegistry.register` rejects
@@ -76,7 +89,6 @@ TWITCH_GATEWAY_MANIFEST: dict[str, Any] = {
             # bundle.
             "entrypoint": "bundles.twitch_ingest:normalize",
             "consumes": ["twitch.message"],
-            "communication_model": "gateway_socket",
         }
     },
 }

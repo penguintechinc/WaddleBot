@@ -148,7 +148,7 @@ def _register_discord_receiver(
         # `token_ref` is an env var *name*, resolved by `receive()` via
         # `waddle_transports.signing.resolve_secret` -- never a raw token
         # in this config dict.
-        config={"token_ref": "DISCORD_BOT_TOKEN"},
+        config={"token_ref": "DISCORD_BOT_TOKEN"},  # nosec B105 -- env var name, not a token value
         on_item=_on_discord_item,
         redis_client=redis_client,
         provider="discord",
