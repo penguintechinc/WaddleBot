@@ -20,7 +20,6 @@ from waddle_transports.transports.irc_relay import outbound_queue_key
 
 import bundles.twitch_send_action as twitch_bundle
 from bundles.twitch_send_action import _get_redis_client, send_message
-from services.adapters.base import NonRetryableDispatchError, RetryableDispatchError
 from services.envelope import ActionEnvelope
 
 
@@ -58,55 +57,48 @@ def _noop_http_client() -> httpx.AsyncClient:
     return httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(200)))
 
 
-async def test_missing_channel_is_non_retryable() -> None:
-    async with _noop_http_client() as client:
-        with pytest.raises(NonRetryableDispatchError, match="channel"):
-            await send_message(
-                _envelope(payload={"text": "hi"}), _config(channel=None), http_client=client
+class TestChannelResolution:
+    """Reply-in-place: payload.channel_name is primary, config.channel is a fallback only."""
+
+    async def test_no_channel_from_either_source_is_non_retryable(self) -> None:
+        async with _noop_http_client() as client:
+            with pytest.raises(NonRetryableTransportError, match="channel"):
+                await send_message(
+                    _envelope(payload={"text": "hi"}), _config(channel=None), http_client=client
+                )
+
+    async def test_payload_channel_name_takes_precedence_over_config(self, fake_redis: Any) -> None:
+        payload = {"text": "reply!", "channel_name": "origin-channel"}
+        async with _noop_http_client() as client:
+            result = await send_message(
+                _envelope(payload=payload), _config(channel="from-config"), http_client=client
             )
+
+        assert result.transport == "irc_relay"
+        assert "origin-channel" in result.detail
+        raw = await fake_redis.rpop(outbound_queue_key("twitch"))
+        assert json.loads(raw) == {"channel": "origin-channel", "text": "reply!"}
+
+    async def test_config_channel_used_as_fallback_when_payload_lacks_one(
+        self, fake_redis: Any
+    ) -> None:
+        async with _noop_http_client() as client:
+            result = await send_message(
+                _envelope(payload={"text": "scheduled announcement"}),
+                _config(channel="announcements"),
+                http_client=client,
+            )
+
+        assert "announcements" in result.detail
+        raw = await fake_redis.rpop(outbound_queue_key("twitch"))
+        assert json.loads(raw) == {"channel": "announcements", "text": "scheduled announcement"}
 
 
 async def test_missing_payload_text_is_non_retryable() -> None:
     async with _noop_http_client() as client:
-        with pytest.raises(NonRetryableDispatchError, match="'text'"):
+        with pytest.raises(NonRetryableTransportError, match="'text'"):
             await send_message(
                 _envelope(payload={"channel_name": "waddlebot"}), _config(), http_client=client
-            )
-
-
-async def test_replies_to_the_origin_channel_from_payload(fake_redis: Any) -> None:
-    """Fail-first verification: `payload['channel_name']` wins over the static config default."""
-    payload = {"text": "reply!", "channel_name": "origin-channel"}
-    async with _noop_http_client() as client:
-        result = await send_message(_envelope(payload=payload), _config(), http_client=client)
-
-    assert result.transport == "irc_relay"
-    assert "origin-channel" in result.detail
-
-    raw = await fake_redis.rpop(outbound_queue_key("twitch"))
-    assert raw is not None
-    assert json.loads(raw) == {"channel": "origin-channel", "text": "reply!"}
-
-
-async def test_falls_back_to_static_config_channel_when_no_origin(fake_redis: Any) -> None:
-    """No `payload['channel_name']` (e.g. a scheduled action) -- static `config['channel']` used."""
-    async with _noop_http_client() as client:
-        result = await send_message(
-            _envelope(payload={"text": "scheduled announcement"}),
-            _config(channel="announcements"),
-            http_client=client,
-        )
-
-    assert "announcements" in result.detail
-    raw = await fake_redis.rpop(outbound_queue_key("twitch"))
-    assert json.loads(raw) == {"channel": "announcements", "text": "scheduled announcement"}
-
-
-async def test_no_channel_anywhere_is_non_retryable() -> None:
-    async with _noop_http_client() as client:
-        with pytest.raises(NonRetryableDispatchError, match="no channel"):
-            await send_message(
-                _envelope(payload={"text": "hi"}), _config(channel=None), http_client=client
             )
 
 
@@ -125,14 +117,13 @@ def test_get_redis_client_builds_and_caches_a_real_client(monkeypatch: pytest.Mo
     assert _get_redis_client({}) is client
 
 
-async def test_transport_non_retryable_error_maps_to_dispatch_error(
+async def test_transport_non_retryable_error_propagates_unchanged(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A `NonRetryableTransportError` from the shared transport maps to the adapter's own type.
+    """A `NonRetryableTransportError` the shared transport raises propagates directly.
 
-    Callers (`services/adapters/bundle.py::dispatch`) only ever catch the
-    `*DispatchError` family, never `waddle_transports`' own error types
-    directly.
+    `runner.py::_handle_envelope` only ever catches `waddle_transports`'
+    own error types -- there is no local translation layer to go through.
     """
 
     async def _raise(self, config, payload):  # noqa: ANN001, ANN202, ARG001
@@ -141,7 +132,7 @@ async def test_transport_non_retryable_error_maps_to_dispatch_error(
     monkeypatch.setattr(twitch_bundle.RelayOutboundIrcTransport, "send", _raise)
 
     async with _noop_http_client() as client:
-        with pytest.raises(NonRetryableDispatchError, match="bad channel"):
+        with pytest.raises(NonRetryableTransportError, match="bad channel"):
             await send_message(
                 _envelope(payload={"text": "hi", "channel_name": "waddlebot"}),
                 _config(),
@@ -149,7 +140,7 @@ async def test_transport_non_retryable_error_maps_to_dispatch_error(
             )
 
 
-async def test_transport_retryable_error_maps_to_dispatch_error(
+async def test_transport_retryable_error_propagates_unchanged(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def _raise(self, config, payload):  # noqa: ANN001, ANN202, ARG001
@@ -158,7 +149,7 @@ async def test_transport_retryable_error_maps_to_dispatch_error(
     monkeypatch.setattr(twitch_bundle.RelayOutboundIrcTransport, "send", _raise)
 
     async with _noop_http_client() as client:
-        with pytest.raises(RetryableDispatchError, match="valkey unavailable"):
+        with pytest.raises(RetryableTransportError, match="valkey unavailable"):
             await send_message(
                 _envelope(payload={"text": "hi", "channel_name": "waddlebot"}),
                 _config(),

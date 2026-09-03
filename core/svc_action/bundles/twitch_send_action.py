@@ -1,16 +1,20 @@
-"""bundles/twitch_send_action.py -- OUTBOUND `irc` transport chat send, relayed to svc-ingest.
+"""bundles/twitch_send_action.py -- OUTBOUND `irc` chat send, relayed to svc-ingest.
 
-Loaded via the same bundle-script entrypoint mechanism Discord's action
-bundle uses (`services/adapters/bundle.py::dispatch`,
-`app_catalog.stages.action.entrypoint`), but its OWN implementation does
-NOT call an HTTP API the way `discord_send_action.py`'s `send_message`
-does. Twitch chat send is `irc`, `Direction.OUTBOUND`; for this
-connector's demo scope it relays through Valkey to svc-ingest's own
-`outbound_drain.py` (which sends via a fresh `waddle_transports.
-transports.irc.IrcTransport` connection) rather than calling Twitch's
-Helix REST API directly -- svc-action never holds Twitch credentials or
-opens its own IRC connections. Realigned (2026-09-03) onto the merged
-`waddle_transports.transports.irc_relay.RelayOutboundIrcTransport`.
+App Bundle SDK action-stage script contract: `async def <name>(envelope,
+config, *, http_client) -> TransportResult` (`runner.py`), same as
+`discord_send_action.py`'s own `send_message` -- but its OWN
+implementation does NOT call an HTTP API the way Discord's does. Twitch
+chat send relays through Valkey to svc-ingest's own `outbound_drain.py`
+(which sends via a fresh `waddle_transports.transports.irc.IrcTransport`
+connection) rather than calling Twitch's Helix REST API directly --
+svc-action never holds Twitch credentials or opens its own IRC
+connections. Uses the shared `waddle_transports.transports.irc_relay.
+RelayOutboundIrcTransport` as its own delivery mechanism -- one of the
+two documented patterns `runner.py`'s own module docstring describes for
+an action-stage script ("a bundle's own script may import and call
+[transport primitives] for its actual delivery mechanism"), the other
+being Discord's "implement its own connector-specific API logic
+entirely".
 
 Replies to the ORIGIN channel: `envelope.payload["channel_name"]` (the
 channel the triggering chat message came from, carried through process->
@@ -18,7 +22,9 @@ action by `bundles/twitch_ingest.py::normalize()`'s own payload shape)
 takes precedence over the bundle's static `config["channel"]` default --
 a reply belongs in the channel the request came from, not a hardcoded
 one; the static config value only matters for an action with no
-triggering chat message (e.g. a scheduled announcement).
+triggering chat message (e.g. a scheduled announcement). Mirrors
+`discord_send_action.py`'s own `channel_id` reply-in-place precedence
+exactly.
 
 Seeded via `config/postgres/migrations/083_twitch_send_action_bundle.sql`
 as `waddles.bot.twitch.default`'s `stages.action.entrypoint`.
@@ -31,18 +37,17 @@ from typing import Any
 
 import httpx
 import redis.asyncio as redis
-from waddle_transports import NonRetryableTransportError, RetryableTransportError, TransportResult
+from waddle_transports import NonRetryableTransportError, TransportResult
 from waddle_transports.transports.irc_relay import RelayOutboundIrcTransport
 
-from services.adapters.base import NonRetryableDispatchError, RetryableDispatchError
 from services.envelope import ActionEnvelope
 
 #: Lazily-built, process-wide Valkey client -- `send_message`'s own
 #: signature (`(envelope, config, *, http_client)`) is the same one every
-#: other bundle-script entrypoint uses (`services/adapters/bundle.py::
-#: dispatch`'s fixed call shape), so a redis client is not passed in;
-#: built here instead of per-call to avoid opening a new connection on
-#: every dispatched message.
+#: other bundle-script entrypoint uses (`runner.py::_handle_envelope`'s
+#: fixed call shape), so a redis client is not passed in; built here
+#: instead of per-call to avoid opening a new connection on every
+#: dispatched message.
 _redis_client: redis.Redis | None = None
 
 
@@ -75,24 +80,20 @@ async def send_message(
     *,
     http_client: httpx.AsyncClient,
 ) -> TransportResult:
-    """Relay `envelope.payload["text"]` to the origin (or configured) Twitch channel.
+    """Reply in-place: relay `envelope.payload["text"]` to the origin (or configured) channel.
 
     `channel` resolution: `envelope.payload["channel_name"]` (the
     triggering message's own channel) first, falling back to the bundle's
     static `config["channel"]` default. `http_client` is accepted (and
-    unused) only because `services/adapters/bundle.py::dispatch` always
-    passes it -- every bundle-script entrypoint shares that one call
-    signature.
+    unused) only because `runner.py::_handle_envelope` always passes it --
+    every action-stage entrypoint shares that one call signature.
 
-    Raises `NonRetryableDispatchError` for a config error or an empty
-    payload `text`, translating any `waddle_transports.
-    NonRetryableTransportError`/`RetryableTransportError` the relay itself
-    raises into this bundle's own `*DispatchError` family --
-    `services/adapters/bundle.py::dispatch` only ever catches that family,
-    never `waddle_transports`' own error types directly. On success,
-    returns the transport's own `waddle_transports.TransportResult`
-    unwrapped -- `dispatch()` normalizes it into this service's local
-    `AdapterResult` shape for the dispatch-log audit record.
+    Raises `NonRetryableTransportError` for a config error or an empty
+    payload `text`; a `RetryableTransportError`/`NonRetryableTransportError`
+    the relay itself raises propagates unchanged -- `runner.py`'s own
+    `retry_with_backoff` wrapper catches `waddle_transports`' error types
+    directly, same contract every action-stage entrypoint follows. On
+    success, returns the transport's own `TransportResult` unwrapped.
     """
     payload_channel = envelope.payload.get("channel_name")
     channel = payload_channel if isinstance(payload_channel, str) and payload_channel else None
@@ -100,20 +101,14 @@ async def send_message(
         config_channel = config.get("channel")
         channel = config_channel if isinstance(config_channel, str) and config_channel else None
     if not channel:
-        raise NonRetryableDispatchError(
-            "twitch bundle has no channel: envelope.payload['channel_name'] and "
-            "config['channel'] are both missing"
+        raise NonRetryableTransportError(
+            "twitch bundle could not resolve a channel from either "
+            "envelope.payload['channel_name'] (reply-in-place) or config['channel'] (fallback)"
         )
 
     text = envelope.payload.get("text")
     if not isinstance(text, str) or not text:
-        raise NonRetryableDispatchError("action envelope payload missing required 'text' string")
+        raise NonRetryableTransportError("action envelope payload missing required 'text' string")
 
     transport = RelayOutboundIrcTransport(provider="twitch", redis_client=_get_redis_client(config))
-
-    try:
-        return await transport.send({"channel": channel}, {"text": text})
-    except NonRetryableTransportError as exc:
-        raise NonRetryableDispatchError(str(exc), http_status=exc.http_status) from exc
-    except RetryableTransportError as exc:
-        raise RetryableDispatchError(str(exc), http_status=exc.http_status) from exc
+    return await transport.send({"channel": channel}, {"text": text})
