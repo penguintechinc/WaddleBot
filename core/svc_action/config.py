@@ -45,6 +45,22 @@ def _optional_int(value: str | None) -> int | None:
     return int(value) if value not in (None, "") else None
 
 
+def _normalize_pydal_scheme(url: str) -> str:
+    """Rewrite a leading `postgresql://` to `postgres://` for pydal.
+
+    pydal registers its PostgreSQL adapter under the `postgres` scheme, not
+    `postgresql` -- unlike SQLAlchemy (used by hub-api), which requires
+    `postgresql://`. The shared `DATABASE_URL` env var is written in
+    SQLAlchemy's scheme, so this must run on it before handing the URI to
+    `AsyncDAL`/pydal, or startup fails with `LifespanFailureError: 'Adapter
+    not found for postgresql'`. `_build_db_url()` already emits `postgres://`
+    via `_DB_URI_SCHEMES`, so applying this again there is a harmless no-op.
+    """
+    if url.startswith("postgresql://"):
+        return f"postgres://{url[len('postgresql://'):]}"
+    return url
+
+
 def _build_db_url(
     *, db_type: str, host: str, port: str, name: str, user: str, password: str
 ) -> str:
@@ -113,13 +129,16 @@ class ActionConfig:
     def from_env(cls) -> ActionConfig:
         """Build config from the process environment. Raises on an invalid DB_TYPE."""
         db_type = os.getenv("DB_TYPE", "postgresql")
-        database_url = os.getenv("DATABASE_URL") or _build_db_url(
-            db_type=db_type,
-            host=os.getenv("DB_HOST", "infra-postgres"),
-            port=os.getenv("DB_PORT", "5432"),
-            name=os.getenv("DB_NAME", "waddlebot"),
-            user=os.getenv("DB_USER", "svc-action-rw"),
-            password=os.getenv("DB_PASS", ""),
+        database_url = _normalize_pydal_scheme(
+            os.getenv("DATABASE_URL")
+            or _build_db_url(
+                db_type=db_type,
+                host=os.getenv("DB_HOST", "infra-postgres"),
+                port=os.getenv("DB_PORT", "5432"),
+                name=os.getenv("DB_NAME", "waddlebot"),
+                user=os.getenv("DB_USER", "svc-action-rw"),
+                password=os.getenv("DB_PASS", ""),
+            )
         )
         valkey_url = os.getenv("VALKEY_URL") or os.getenv("REDIS_URL") or "redis://localhost:6379/0"
         hub_api_url = os.getenv("HUB_API_URL", "http://hub-api:8204")
