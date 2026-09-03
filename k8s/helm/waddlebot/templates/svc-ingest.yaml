@@ -6,6 +6,23 @@
 # Module bundle gating: presence of MODULE_LOAD_* env vars signals which Module App bundles
 # this stage should import. The actual conditional Python import behind these env vars is
 # the remaining build — this skeleton only proves the values flag reaches the container.
+#
+# 8-container decision (folded in from a briefly-standalone svc-gateway 9th container):
+# this same Deployment ALSO runs svc-ingest's socket-owning receivers (Discord gateway
+# today, `core/svc_ingest/receivers/discord_gateway.py`) as `supervisor.ReceiverSupervisor`-
+# supervised tasks alongside the poll-drain loop. No new env var wiring needed here --
+# `DISCORD_BOT_TOKEN` is already in the shared `-secrets` Secret (`secrets.yaml`) and
+# already reaches this container via the `envFrom: secretRef` below; the receiver/
+# socket-lease tuning knobs (`RECEIVER_BASE_BACKOFF_S`/`SOCKET_LEASE_TTL_S`/etc.) fall back
+# to `config.py`'s own sane defaults the same way `POLL_INTERVAL_S`/`BASE_BACKOFF_S` already
+# do for the poll-drain loop -- not Helm-overridden today. Each replica races to CLAIM the
+# `waddles:socket-owner:discord:_platform` Valkey lease (`socket_lease.py`) at startup, so
+# `replicas: 2` below is already safe -- only one replica ever actually holds the socket.
+# KNOWN GAP (pre-existing, not introduced by this change): this Deployment has no
+# `VALKEY_URL` env var wired at all (only legacy `REDIS_HOST`/`REDIS_PORT` exist in the
+# shared configmap) -- `Config.VALKEY_URL` falls back to `redis://localhost:6379/0`, which
+# is wrong for a real cluster deploy. Wiring a real `VALKEY_URL` is out of scope here
+# (pre-dates this PR, affects the poll-drain loop identically) -- flagged for follow-up.
 {{- if .Values.pipeline.svcIngest.enabled }}
 ---
 apiVersion: apps/v1

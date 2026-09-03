@@ -100,6 +100,18 @@ KNOWN_PROVIDERS = frozenset({"builtin", "thirdparty"})
 # the two share member names.
 KNOWN_EXECUTION_MODELS = frozenset({"native", "thirdparty"})
 
+# communication_model (StageSpec, §3.2's webhook_push/rest_pull pair) --
+# both thirdparty-vendor-only values (marketplace_execution_service.py).
+# A persistent-socket ingest stage (Discord gateway etc.) is deliberately
+# NOT a third member here: that transport shape is modeled by the shared
+# `libs/waddle_transports` library's own `Transport`/`TransportType.
+# SOCKET`/`Direction.INBOUND` (`core/svc_ingest/receivers/discord_gateway.
+# py`'s `DiscordGatewayReceiver`) in the CODE that implements the
+# receiver, not by the bundle manifest schema -- duplicating that
+# classification into `communication_model` would just be a second,
+# competing vocabulary.
+KNOWN_COMMUNICATION_MODELS = frozenset({"webhook_push", "rest_pull"})
+
 _SEGMENT = r"[a-z0-9][a-z0-9_-]*"
 # waddles.<module>.<feature>.<app> -- exactly four dot-separated tokens.
 _APP_ID_RE = re.compile(rf"^waddles\.{_SEGMENT}\.{_SEGMENT}\.{_SEGMENT}$")
@@ -147,6 +159,10 @@ REASON_INVALID_COMPAT_APP_ID = "invalid_compat_app_id"
 REASON_PRESENTATION_MISSING_HTML_ENTRYPOINT = "presentation_missing_html_entrypoint"
 REASON_PRESENTATION_HAS_SCRIPT_ENTRYPOINT = "presentation_has_script_entrypoint"
 REASON_SCRIPT_STAGE_HAS_HTML_ENTRYPOINT = "script_stage_has_html_entrypoint"
+# communication_model has a fixed enum (see KNOWN_COMMUNICATION_MODELS
+# above); a bad value is rejected with the same stable-reason-code
+# convention as every other enum field.
+REASON_INVALID_COMMUNICATION_MODEL = "invalid_communication_model"
 
 _REQUIRED_STR_FIELDS = ("app_id", "name", "version", "feature", "module", "provider")
 
@@ -277,6 +293,14 @@ def _compile_stage_spec(stage_name: str, raw: Dict[str, Any]) -> StageSpec:
 
     entrypoint = raw.get("entrypoint")
     html_entrypoint = raw.get("html_entrypoint")
+    communication_model = raw.get("communication_model")
+
+    if communication_model is not None and communication_model not in KNOWN_COMMUNICATION_MODELS:
+        raise ManifestError(
+            REASON_INVALID_COMMUNICATION_MODEL,
+            f"stage {stage_name!r} communication_model {communication_model!r} is not "
+            f"one of {sorted(KNOWN_COMMUNICATION_MODELS)}",
+        )
 
     if stage_name == "presentation":
         if not html_entrypoint:
@@ -302,7 +326,7 @@ def _compile_stage_spec(stage_name: str, raw: Dict[str, Any]) -> StageSpec:
         config=raw.get("config"),
         spec=raw.get("spec"),
         execution_model=raw.get("execution_model"),
-        communication_model=raw.get("communication_model"),
+        communication_model=communication_model,
         webhook_url=raw.get("webhook_url"),
         api_base_url=raw.get("api_base_url"),
         secret_ref=raw.get("secret_ref"),
@@ -363,6 +387,8 @@ def parse_manifest(data: Dict[str, Any]) -> AppManifest:
         ``html_entrypoint``, or declaring a script ``entrypoint``
     12. an ``ingest``/``process``/``action`` stage entry in ``stages``
         declaring ``html_entrypoint``
+    13. any ``stages`` entry's ``communication_model`` outside
+        ``{webhook_push, rest_pull}`` (when set)
 
     Two things this function deliberately does **not** check (per App
     Bundle SDK spec §3.5, left for a later, registry-aware pass): whether

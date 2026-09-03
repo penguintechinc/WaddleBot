@@ -96,6 +96,12 @@ class AppRegistry:
         """All Apps (default and alternatives) registered against ``feature``, registration order."""
         return tuple(self._by_id[app_id] for app_id in self._by_feature.get(feature, []))
 
+    def all_apps(self) -> Tuple[AppManifest, ...]:
+        """Every registered App, registration order -- svc-gateway's own fan-out (`consumes`
+        filtering across ALL Features, not one known Feature at a time) needs this; existing
+        callers only ever asked "what implements Feature X", never "what exists at all"."""
+        return tuple(self._by_id.values())
+
     def default_app_for(self, feature: str) -> Optional[AppManifest]:
         """The shipped default App for ``feature``, or ``None`` if none is registered."""
         app_id = self._default_by_feature.get(feature)
@@ -130,6 +136,11 @@ def load(data: Dict[str, object]) -> AppManifest:
 def apps_for_feature(feature: str) -> Tuple[AppManifest, ...]:
     """All Apps registered against ``feature`` in the singleton registry."""
     return _registry.apps_for_feature(feature)
+
+
+def all_apps() -> Tuple[AppManifest, ...]:
+    """Every App registered in the singleton registry."""
+    return _registry.all_apps()
 
 
 def default_app_for(feature: str) -> Optional[AppManifest]:
