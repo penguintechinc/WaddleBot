@@ -8166,8 +8166,8 @@ void main() {
 
   testWidgets('masked stream key shows only the last 4 characters', (WidgetTester tester) async {
     await pumpGazerApp(tester, overrides: overrides(), size: const Size(1280, 800));
-    expect(find.text('••••••••efgh'), findsOneWidget);
-    expect(find.text('abcd1234efgh'), findsNothing);
+    expect(find.text('•••••••••0001'), findsOneWidget);
+    expect(find.text('demo-key-0001'), findsNothing);
   });
 }
 ```
