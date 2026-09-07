@@ -201,3 +201,6 @@ mobile/flutter_gazer/android/build/
 *.apk
 *.aab
 
+
+# Superpowers SDD scratch workspace (ledger, briefs, review packages)
+.superpowers/
