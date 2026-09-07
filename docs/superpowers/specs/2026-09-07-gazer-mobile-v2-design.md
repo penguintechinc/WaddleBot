@@ -248,7 +248,7 @@ Used from 2.8.1:
 - `ConnectChecker { onConnectionStarted(url), onConnectionSuccess(), onConnectionFailed(reason), onDisconnect(), onAuthError(), onAuthSuccess() }` (ConnectChecker extends BitrateChecker)
 - `BitrateChecker.onNewBitrate(bitrate: Long)` (called when bitrate changes)
 - `BitrateAdapter(listener: BitrateAdapter.Listener) { adaptBitrate(actualBitrate: Long, hasCongestion: Boolean) }` where `Listener.onBitrateAdapted(bitrate: Int)`
-- RTMPS: `addCertificates(TrustManager?)` (null = system trust), `setTlsHostVerification(true)`
+- RTMPS: `addCertificates(TrustManager?)` (null = system trust). Verified 2026-09-07: `GenericStreamClient` does not expose `setTlsHostVerification`; hostname verification is the platform default, and `RootEncoderEngine.setTlsHostVerification` is a documented no-op kept on the `StreamEngine` interface.
 - `setAuthorization(user: String?, password: String?)`
 - `setReTries(n)` — DECISION: always 0; Dart owns retry logic via ReconnectPolicy
 - `hasCongestion(percentUsed: Float) -> boolean`
@@ -312,7 +312,7 @@ uvc_stop_streaming(devh)
 
 ### Camera2 External Fallback
 
-If Camera2Source's rotation/mirroring assumption breaks for external cameras on Pixel: replace `Camera2Source.openCameraId(id)` path with a custom `Camera2ExternalSource : VideoSource` that opens the external camera ID directly and targets the SurfaceTexture without RootEncoder's abstraction layer.
+If Camera2Source's rotation/mirroring assumption breaks for external cameras on Pixel: replace `Camera2Source.openCameraId(id)` path with a custom `Camera2ExternalSource : VideoSource` that opens the external camera ID directly and targets the SurfaceTexture without RootEncoder's abstraction layer. Verified 2026-09-07 against source: `openCameraId(id)` re-opens only while the source is already running, so the M2 implementation starts the source on the default camera and then calls `openCameraId(externalId)`; initial back/front selection in M1 uses `switchCamera()`.
 
 ## Error Handling & Reconnect
 
@@ -549,7 +549,7 @@ Path-filtered to `mobile/gazer/**`:
 
 - Upload key (internal, CI secrets): for upload to Play Store (not committed)
 - App signing key (Play managed): app signing at Play Store
-- CI secrets: `ANDROID_UPLOAD_KEY_STORE`, `ANDROID_UPLOAD_KEY_STORE_PASSWORD`, `ANDROID_UPLOAD_KEY_ALIAS`, `ANDROID_UPLOAD_KEY_ALIAS_PASSWORD`
+- CI secrets: `ANDROID_UPLOAD_KEY_STORE_B64` (base64 of the keystore file, decoded in CI), `ANDROID_UPLOAD_KEY_STORE_PASSWORD`, `ANDROID_UPLOAD_KEY_ALIAS`, `ANDROID_UPLOAD_KEY_ALIAS_PASSWORD`
 
 ### Versioning
 
