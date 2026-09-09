@@ -53,11 +53,20 @@ class _FakeMessage:
 
 
 @dataclass
+class _FakeClientUser:
+    """Stand-in for `discord.ClientUser` -- real py-cord only exposes `.id` here that matters."""
+
+    id: int
+
+
+@dataclass
 class _FakeBot:
     """Stand-in for `discord.Bot` -- records registered handlers, controllable lifecycle."""
 
     intents: Any = None
-    user: str = "TestBot#0001"
+    # `None` until `on_ready` -- mirrors real py-cord's `bot.user` being unset
+    # until the gateway handshake completes (see `_is_self`'s pre-ready edge).
+    user: _FakeClientUser | None = None
     handlers: dict[str, Any] = field(default_factory=dict)
     start_calls: list[str] = field(default_factory=list)
     close_calls: int = 0
@@ -206,21 +215,23 @@ class TestReceive:
         assert item["guild_id"] is None
         await gen.aclose()
 
-    async def test_bot_authored_message_is_ignored(self, fake_bots: list[_FakeBot]) -> None:
+    async def test_self_authored_message_is_ignored(self, fake_bots: list[_FakeBot]) -> None:
+        """A message from THIS bot's own id (echoed back by the gateway) is dropped."""
         receiver = DiscordGatewayReceiver()
         gen = receiver.receive({"token": TOKEN})
         next_task = await _advance_to_bot_started(gen, fake_bots)
         bot = fake_bots[0]
+        bot.user = _FakeClientUser(id=999)
 
-        bot_message = _FakeMessage(
+        self_message = _FakeMessage(
             id=1,
-            author=_FakeAuthor(id=999, name="OtherBot", bot=True),
+            author=_FakeAuthor(id=999, name="WaddleBot", bot=True),
             channel=_FakeChannel(id=42),
-            content="I am a bot",
+            content="Hey alice! 👋",
             guild=_FakeGuild(id=7),
         )
-        await bot.handlers["on_message"](bot_message)
-        # Immediately followed by a real human message -- if the bot
+        await bot.handlers["on_message"](self_message)
+        # Immediately followed by a real human message -- if the self
         # message had been queued, THAT would be the first item yielded.
         human_message = _FakeMessage(
             id=2,
@@ -233,6 +244,50 @@ class TestReceive:
 
         item = await asyncio.wait_for(next_task, timeout=2.0)
         assert item["author_id"] == "555"
+        await gen.aclose()
+
+    async def test_other_bot_authored_message_is_not_dropped(
+        self, fake_bots: list[_FakeBot]
+    ) -> None:
+        """Scope is self-only -- a DIFFERENT bot's message must still be fanned out."""
+        receiver = DiscordGatewayReceiver()
+        gen = receiver.receive({"token": TOKEN})
+        next_task = await _advance_to_bot_started(gen, fake_bots)
+        bot = fake_bots[0]
+        bot.user = _FakeClientUser(id=999)
+
+        other_bot_message = _FakeMessage(
+            id=3,
+            author=_FakeAuthor(id=888, name="OtherBot", bot=True),
+            channel=_FakeChannel(id=42),
+            content="I am a different bot",
+            guild=_FakeGuild(id=7),
+        )
+        await bot.handlers["on_message"](other_bot_message)
+
+        item = await asyncio.wait_for(next_task, timeout=2.0)
+        assert item["author_id"] == "888"
+        await gen.aclose()
+
+    async def test_unready_bot_does_not_drop_any_message(self, fake_bots: list[_FakeBot]) -> None:
+        """Pre-`on_ready` (`bot.user is None`) -- unknown identity errs toward NOT dropping."""
+        receiver = DiscordGatewayReceiver()
+        gen = receiver.receive({"token": TOKEN})
+        next_task = await _advance_to_bot_started(gen, fake_bots)
+        bot = fake_bots[0]
+        assert bot.user is None  # not yet readied
+
+        message = _FakeMessage(
+            id=4,
+            author=_FakeAuthor(id=42, name="anyone"),
+            channel=_FakeChannel(id=42),
+            content="early message",
+            guild=_FakeGuild(id=7),
+        )
+        await bot.handlers["on_message"](message)
+
+        item = await asyncio.wait_for(next_task, timeout=2.0)
+        assert item["author_id"] == "42"
         await gen.aclose()
 
     async def test_on_ready_handler_does_not_raise(self, fake_bots: list[_FakeBot]) -> None:
@@ -269,6 +324,50 @@ class TestReceive:
         await _cancel_and_close(next_task, gen)
 
         assert bot.close_calls == 1
+
+
+class TestIsSelf:
+    """Direct unit coverage of `DiscordGatewayReceiver._is_self`, independent of `receive()`."""
+
+    def test_matching_id_is_self(self) -> None:
+        message = _FakeMessage(
+            id=1,
+            author=_FakeAuthor(id=999, name="WaddleBot"),
+            channel=_FakeChannel(id=1),
+            content="hi",
+        )
+        bot = _FakeBot(user=_FakeClientUser(id=999))
+        assert DiscordGatewayReceiver._is_self(message, bot) is True  # noqa: SLF001
+
+    def test_different_id_is_not_self(self) -> None:
+        message = _FakeMessage(
+            id=1,
+            author=_FakeAuthor(id=555, name="alice"),
+            channel=_FakeChannel(id=1),
+            content="hi",
+        )
+        bot = _FakeBot(user=_FakeClientUser(id=999))
+        assert DiscordGatewayReceiver._is_self(message, bot) is False  # noqa: SLF001
+
+    def test_other_bot_id_is_not_self(self) -> None:
+        message = _FakeMessage(
+            id=1,
+            author=_FakeAuthor(id=888, name="OtherBot", bot=True),
+            channel=_FakeChannel(id=1),
+            content="hi",
+        )
+        bot = _FakeBot(user=_FakeClientUser(id=999))
+        assert DiscordGatewayReceiver._is_self(message, bot) is False  # noqa: SLF001
+
+    def test_unready_bot_user_none_is_not_self(self) -> None:
+        message = _FakeMessage(
+            id=1,
+            author=_FakeAuthor(id=999, name="WaddleBot"),
+            channel=_FakeChannel(id=1),
+            content="hi",
+        )
+        bot = _FakeBot(user=None)
+        assert DiscordGatewayReceiver._is_self(message, bot) is False  # noqa: SLF001
 
 
 class TestTransportClassification:

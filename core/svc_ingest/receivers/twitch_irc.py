@@ -33,11 +33,14 @@ persistent connection to reuse in the first place).
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator, Mapping
 from typing import Any, ClassVar
 
 from waddle_transports import Direction, Transport
 from waddle_transports.transports.irc import IrcTransport
+
+logger = logging.getLogger(__name__)
 
 #: The `consumes` tag every ingest bundle wanting a raw Twitch chat message
 #: declares (`bundles/twitch_gateway_manifest.py`'s own `stages.ingest.
@@ -79,11 +82,30 @@ class TwitchIrcReceiver(Transport):  # type: ignore[misc]
         this receiver's own contract with that entrypoint, matching
         `receivers/discord_gateway.py`'s own precedent (no repo-wide "raw
         platform event" schema exists yet).
+
+        Drops PRIVMSGs sent by the bot's OWN nick only (`config["nick"]`
+        -- the same value `IrcTransport` itself connects as, see
+        `Config.twitch_irc_config_base()`), compared case-insensitively
+        (IRC nicks are case-insensitive on the wire); never other bots'
+        messages, matching `DiscordGatewayReceiver._is_self`'s identical
+        self-only scope. `config["nick"]` missing/non-string is an
+        unknown-identity edge case -- errs toward NOT dropping, same
+        rationale as the Discord receiver's pre-`on_ready` handling.
         """
+        self_nick = config.get("nick")
+        self_nick_lower = self_nick.lower() if isinstance(self_nick, str) else None
         async for raw in self._irc.receive(config):
+            sender = raw.get("sender")
+            if (
+                self_nick_lower is not None
+                and isinstance(sender, str)
+                and sender.lower() == self_nick_lower
+            ):
+                logger.debug("receiver.skipped_self platform=twitch sender=%s", sender)
+                continue
             yield {
                 "platform": "twitch",
                 "channel_name": raw.get("channel", "").lstrip("#"),
-                "author_username": raw.get("sender"),
+                "author_username": sender,
                 "content": raw.get("text"),
             }

@@ -109,6 +109,57 @@ class TestReceive:
         items = [item async for item in receiver.receive(_IRC_CONFIG)]
         assert items == []
 
+    async def test_self_authored_message_is_dropped(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A PRIVMSG whose sender matches `config["nick"]` (case-insensitive) is not fanned out."""
+        receiver = TwitchIrcReceiver()
+        monkeypatch.setattr(
+            receiver._irc,  # noqa: SLF001
+            "receive",
+            lambda config: _fake_privmsgs(
+                {"channel": "#waddlebot", "sender": "WaddleBot", "text": "Hey alice! 👋"},
+                {"channel": "#waddlebot", "sender": "alice", "text": "hi"},
+            ),
+        )
+
+        items = [item async for item in receiver.receive(_IRC_CONFIG)]
+
+        assert [i["author_username"] for i in items] == ["alice"]
+
+    async def test_other_bot_authored_message_is_not_dropped(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Scope is self-only -- a DIFFERENT sender's message must still be fanned out."""
+        receiver = TwitchIrcReceiver()
+        monkeypatch.setattr(
+            receiver._irc,  # noqa: SLF001
+            "receive",
+            lambda config: _fake_privmsgs(
+                {"channel": "#waddlebot", "sender": "othergreetbot", "text": "hi there"},
+            ),
+        )
+
+        items = [item async for item in receiver.receive(_IRC_CONFIG)]
+
+        assert [i["author_username"] for i in items] == ["othergreetbot"]
+
+    async def test_missing_nick_in_config_does_not_drop_anything(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Unknown self-identity (no `nick` in config) errs toward NOT dropping."""
+        receiver = TwitchIrcReceiver()
+        monkeypatch.setattr(
+            receiver._irc,  # noqa: SLF001
+            "receive",
+            lambda config: _fake_privmsgs(
+                {"channel": "#waddlebot", "sender": "waddlebot", "text": "hi"},
+            ),
+        )
+        config_without_nick = {k: v for k, v in _IRC_CONFIG.items() if k != "nick"}
+
+        items = [item async for item in receiver.receive(config_without_nick)]
+
+        assert [i["author_username"] for i in items] == ["waddlebot"]
+
     async def test_passes_config_through_to_irc_transport(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:

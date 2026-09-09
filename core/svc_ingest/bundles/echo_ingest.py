@@ -1,11 +1,11 @@
-"""Demo ingest bundle -- normalizes a raw inbound event to the platform event shape.
+"""Demo ingest bundle -- normalizes a raw inbound event to a `PlatformEvent`.
 
 Referenced by `app_catalog.stages.ingest.entrypoint` (migration 071) as
 `"bundles.echo_ingest:normalize"` for the `waddles.core.demo.echo` bundle
-that migration seeds. No repo-wide "platform event shape" schema exists yet
-(no `PlatformEvent`/`normalized_event` convention found anywhere in this
-codebase) -- this module documents its own minimal, sensible shape:
-`{platform, event_type, actor, payload, occurred_at}`.
+that migration seeds. Returns `flask_core.PlatformEvent` -- the frozen
+stage-to-stage contract (`libs/flask_core/flask_core/stream_pipeline.py`) --
+rather than a bare dict; `runner.py` wraps the result in a `StageEnvelope`
+and enqueues it typed, not as ad-hoc JSON.
 """
 
 from __future__ import annotations
@@ -13,9 +13,11 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from flask_core import PlatformEvent
 
-async def normalize(raw: dict[str, Any]) -> dict[str, Any]:
-    """Normalize one raw inbound event dict to the platform event shape.
+
+async def normalize(raw: dict[str, Any]) -> PlatformEvent:
+    """Normalize one raw inbound event dict to a `PlatformEvent`.
 
     Real, working transform (not a stub): requires `source`/`text` on the
     raw event, trims `text`, and stamps a UTC `occurred_at` when the raw
@@ -30,10 +32,10 @@ async def normalize(raw: dict[str, Any]) -> dict[str, Any]:
     if not text or not isinstance(text, str):
         raise ValueError("raw event missing required 'text' string field")
 
-    return {
-        "platform": source,
-        "event_type": raw.get("event_type", "message"),
-        "actor": raw.get("actor", "unknown"),
-        "payload": {"text": text.strip()},
-        "occurred_at": raw.get("occurred_at") or datetime.now(UTC).isoformat(),
-    }
+    return PlatformEvent(
+        platform=source,
+        event_type=raw.get("event_type", "message"),
+        actor=raw.get("actor", "unknown"),
+        payload={"text": text.strip()},
+        occurred_at=raw.get("occurred_at") or datetime.now(UTC).isoformat(),
+    )

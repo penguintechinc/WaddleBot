@@ -13,6 +13,7 @@ import json
 from typing import Any
 
 import httpx
+from flask_core import StageEnvelope
 from flask_core.stage_runner import BundlePoller
 from flask_core.stream_pipeline import bundle_stream_key
 
@@ -89,14 +90,14 @@ class TestRunOnce:
         process_key = bundle_stream_key(TENANT, "42", APP_ID, "process")
         raw_out = await redis_client.rpop(process_key)
         assert raw_out is not None
-        envelope = json.loads(raw_out)
-        assert envelope["tenant"] == TENANT
-        assert envelope["community"] == 42
-        assert envelope["app_id"] == APP_ID
-        assert envelope["stage"] == "process"
-        assert envelope["payload"]["platform"] == "twitch"
-        assert envelope["payload"]["payload"]["text"] == "Hello  Waddlebot"
-        assert "ts" in envelope
+        envelope = StageEnvelope.from_dict(json.loads(raw_out))
+        assert envelope.tenant == TENANT
+        assert envelope.community == "42"  # StageEnvelope.community is a string slug
+        assert envelope.app_id == APP_ID
+        assert envelope.stage == "process"
+        assert envelope.event.platform == "twitch"
+        assert envelope.event.payload["text"] == "Hello  Waddlebot"
+        assert envelope.ts
 
     async def test_malformed_json_in_queue_is_skipped_not_fatal(
         self, redis_client: Any, http_client_factory: Any
@@ -215,10 +216,17 @@ class TestRunOnce:
         runner = IngestRunner(poller=poller, redis_client=redis_client, tenant_slug=TENANT)
         assert await runner.run_once() == 0
 
-    async def test_unwraps_already_enveloped_raw_event(
+    async def test_legacy_enveloped_shape_is_no_longer_unwrapped(
         self, redis_client: Any, http_client_factory: Any
     ) -> None:
-        """A raw ingest entry that's already our own envelope shape gets its payload unwrapped."""
+        """ALPHA: no legacy-shape tolerance -- an envelope-shaped raw entry is NOT unwrapped.
+
+        `normalize_fn` receives it as-is (the bare dict, `payload`/`stage`
+        keys and all); `echo_ingest.normalize` requires top-level
+        `source`/`text`, which this shape doesn't have, so it raises and
+        the event is skipped -- proving the old defensive unwrap heuristic
+        is gone, not silently reinstated.
+        """
         poller = _make_poller(
             http_client_factory,
             [
@@ -248,7 +256,36 @@ class TestRunOnce:
         )
 
         processed = await runner.run_once()
-        assert processed == 1
+        assert processed == 0
+
+        process_key = bundle_stream_key(TENANT, None, APP_ID, "process")
+        assert await redis_client.rpop(process_key) is None
+
+    async def test_entrypoint_returning_non_platform_event_is_envelope_error_and_skipped(
+        self, redis_client: Any, http_client_factory: Any
+    ) -> None:
+        """A bundle entrypoint that doesn't return a `PlatformEvent` is refused, not coerced."""
+        poller = _make_poller(
+            http_client_factory,
+            [
+                {
+                    "appId": APP_ID,
+                    "communityId": None,
+                    "entrypoint": "tests._bad_entrypoint:normalize",
+                    "spec": {},
+                    "config": {},
+                }
+            ],
+        )
+        runner = IngestRunner(poller=poller, redis_client=redis_client, tenant_slug=TENANT)
+        ingest_key = bundle_stream_key(TENANT, None, APP_ID, "ingest")
+        await redis_client.lpush(ingest_key, json.dumps({"source": "twitch", "text": "hi"}))
+
+        processed = await runner.run_once()
+        assert processed == 0
+
+        process_key = bundle_stream_key(TENANT, None, APP_ID, "process")
+        assert await redis_client.rpop(process_key) is None
 
 
 class TestRunForeverLifecycle:

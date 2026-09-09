@@ -18,14 +18,16 @@ broadcaster_id, broadcaster_login, user_id, user_login, user_display_name,
 metadata}` -- ported from `trigger/receiver/twitch_module/services/
 eventsub_handler.py`'s own `_build_event_data` field set, trimmed to the
 subset this connector's MVP normalizes (follow/subscribe/subscription-gift/
-cheer/raid) -- and produces the same `{platform, event_type, actor,
-payload, occurred_at}` platform event shape `twitch_ingest.py` documents.
+cheer/raid) -- and produces a `flask_core.PlatformEvent`, the frozen
+stage-to-stage contract (`libs/flask_core/flask_core/stream_pipeline.py`).
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import Any
+
+from flask_core import PlatformEvent
 
 #: EventSub subscription types this connector's MVP normalizes -- matches
 #: `eventsub.py`'s own `DEFAULT_SUBSCRIPTION_TYPES`, ported from the
@@ -41,8 +43,8 @@ KNOWN_EVENT_TYPES = frozenset(
 )
 
 
-async def normalize(raw: dict[str, Any]) -> dict[str, Any]:
-    """Normalize one raw Twitch EventSub notification to the platform event shape.
+async def normalize(raw: dict[str, Any]) -> PlatformEvent:
+    """Normalize one raw Twitch EventSub notification to a `PlatformEvent`.
 
     Real, working transform (not a stub): requires `event_type`/
     `broadcaster_id` on the raw event, rejects an `event_type` outside
@@ -61,11 +63,11 @@ async def normalize(raw: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("raw Twitch EventSub event missing required 'broadcaster_id' string field")
 
     actor = raw.get("user_login") or raw.get("user_id") or broadcaster_id
-    return {
-        "platform": raw.get("platform", "twitch"),
-        "event_type": event_type,
-        "actor": actor,
-        "payload": {
+    return PlatformEvent(
+        platform=raw.get("platform", "twitch"),
+        event_type=event_type,
+        actor=actor,
+        payload={
             "broadcaster_id": broadcaster_id,
             "broadcaster_login": raw.get("broadcaster_login"),
             "user_id": raw.get("user_id"),
@@ -73,5 +75,5 @@ async def normalize(raw: dict[str, Any]) -> dict[str, Any]:
             "user_display_name": raw.get("user_display_name"),
             "metadata": raw.get("metadata") or {},
         },
-        "occurred_at": raw.get("occurred_at") or datetime.now(UTC).isoformat(),
-    }
+        occurred_at=raw.get("occurred_at") or datetime.now(UTC).isoformat(),
+    )

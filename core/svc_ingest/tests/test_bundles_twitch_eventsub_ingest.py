@@ -1,11 +1,12 @@
 """Tests for `bundles.twitch_eventsub_ingest.normalize`.
 
-Raw EventSub notification -> platform event shape.
+Raw EventSub notification -> `PlatformEvent`.
 """
 
 from __future__ import annotations
 
 import pytest
+from flask_core import PlatformEvent
 
 from bundles.twitch_eventsub_ingest import normalize
 
@@ -23,11 +24,12 @@ async def test_normalizes_a_follow_event() -> None:
     }
     event = await normalize(raw)
 
-    assert event["platform"] == "twitch"
-    assert event["event_type"] == "channel.follow"
-    assert event["actor"] == "alice"
-    assert event["payload"]["broadcaster_id"] == "999"
-    assert "occurred_at" in event
+    assert isinstance(event, PlatformEvent)
+    assert event.platform == "twitch"
+    assert event.event_type == "channel.follow"
+    assert event.actor == "alice"
+    assert event.payload["broadcaster_id"] == "999"
+    assert event.occurred_at
 
 
 async def test_normalizes_a_cheer_event_with_metadata() -> None:
@@ -38,7 +40,7 @@ async def test_normalizes_a_cheer_event_with_metadata() -> None:
         "metadata": {"bits": 500},
     }
     event = await normalize(raw)
-    assert event["payload"]["metadata"] == {"bits": 500}
+    assert event.payload["metadata"] == {"bits": 500}
 
 
 async def test_unsupported_event_type_raises() -> None:
@@ -54,4 +56,4 @@ async def test_missing_broadcaster_id_raises() -> None:
 async def test_falls_back_to_broadcaster_id_when_no_user_identity() -> None:
     raw = {"event_type": "channel.raid", "broadcaster_id": "999", "metadata": {"viewers": 10}}
     event = await normalize(raw)
-    assert event["actor"] == "999"
+    assert event.actor == "999"

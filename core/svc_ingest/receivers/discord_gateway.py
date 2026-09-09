@@ -3,9 +3,11 @@
 Real py-cord (`discord.Bot`) connection + intents setup, deliberately
 reusing `trigger/receiver/discord_module/services/discord_bot.py`'s own
 `_setup_events` shape (default intents + `message_content`/`guilds`, an
-`on_ready` log, an `on_message` handler that ignores bot-authored
-messages) rather than reimplementing the py-cord gateway protocol. This
-receiver does NOT replicate that legacy module's slash/prefix command
+`on_ready` log, an `on_message` handler that ignores messages authored
+by the bot's OWN identity only -- see `_is_self` -- never other bots,
+to leave room for future bot-to-bot features) rather than reimplementing
+the py-cord gateway protocol. This receiver does NOT replicate that
+legacy module's slash/prefix command
 routing (`_register_slash_commands` and friends) -- that command-router
 surface is a separate, much larger migration, out of scope here; this
 receiver's only job is turning inbound messages into normalized dicts.
@@ -67,7 +69,7 @@ class DiscordGatewayReceiver(Transport):  # type: ignore[misc]
     directions: ClassVar[frozenset[Direction]] = frozenset({Direction.INBOUND})
 
     async def receive(self, config: Mapping[str, Any]) -> AsyncIterator[Mapping[str, Any]]:
-        """Connect once, yield one normalized dict per inbound (non-bot) Discord message.
+        """Connect once, yield one normalized dict per inbound (non-self) Discord message.
 
         `config["token"]` (a literal token -- test/dev convenience) or
         `config["token_ref"]` (an env var *name*, resolved via
@@ -136,11 +138,29 @@ class DiscordGatewayReceiver(Transport):  # type: ignore[misc]
 
         @bot.event  # type: ignore[untyped-decorator]
         async def on_message(message: discord.Message) -> None:
-            if message.author.bot:
+            if DiscordGatewayReceiver._is_self(message, bot):
+                logger.debug(
+                    "receiver.skipped_self platform=discord author_id=%s",
+                    message.author.id,
+                )
                 return
             await queue.put(DiscordGatewayReceiver._build_raw_event(message))
 
         return bot
+
+    @staticmethod
+    def _is_self(message: discord.Message, bot: discord.Bot) -> bool:
+        """True only when `message` was authored by THIS bot's own identity.
+
+        Self-only, by id (never `message.author.bot`, which would drop
+        every OTHER bot's messages too -- out of scope here; future bot-
+        to-bot features may want those). `bot.user` is `None` until the
+        gateway handshake completes (before `on_ready`) -- an unknown
+        identity errs toward NOT dropping, since a missed self-filter for
+        the first few ms of connection is far cheaper than dropping a
+        real user's message.
+        """
+        return bot.user is not None and message.author.id == bot.user.id
 
     @staticmethod
     def _build_raw_event(message: discord.Message) -> dict[str, Any]:

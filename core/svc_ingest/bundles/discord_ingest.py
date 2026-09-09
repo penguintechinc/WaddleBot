@@ -13,10 +13,9 @@ discord_gateway_manifest.py`).
 Consumes the raw event shape `receivers/discord_gateway.py`'s
 `DiscordGatewayReceiver._build_raw_event` LPUSHes onto this bundle's
 `:ingest` Valkey key -- `{platform, guild_id, channel_id, message_id,
-author_id, author_username, content}` -- and produces the same
-`{platform, event_type, actor, payload, occurred_at}` platform event shape
-`echo_ingest.py` documents (this repo's own minimal convention, no
-repo-wide schema exists yet).
+author_id, author_username, content}` -- and produces a
+`flask_core.PlatformEvent`, the frozen stage-to-stage contract
+(`libs/flask_core/flask_core/stream_pipeline.py`).
 """
 
 from __future__ import annotations
@@ -24,9 +23,11 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from flask_core import PlatformEvent
 
-async def normalize(raw: dict[str, Any]) -> dict[str, Any]:
-    """Normalize one raw Discord gateway message event to the platform event shape.
+
+async def normalize(raw: dict[str, Any]) -> PlatformEvent:
+    """Normalize one raw Discord gateway message event to a `PlatformEvent`.
 
     Real, working transform (not a stub): requires `content`/`author_id`
     on the raw event, trims `content`, and stamps a UTC `occurred_at` when
@@ -41,16 +42,16 @@ async def normalize(raw: dict[str, Any]) -> dict[str, Any]:
     if not author_id or not isinstance(author_id, str):
         raise ValueError("raw Discord event missing required 'author_id' string field")
 
-    return {
-        "platform": raw.get("platform", "discord"),
-        "event_type": "message",
-        "actor": raw.get("author_username") or author_id,
-        "payload": {
+    return PlatformEvent(
+        platform=raw.get("platform", "discord"),
+        event_type="message",
+        actor=raw.get("author_username") or author_id,
+        payload={
             "text": content.strip(),
             "guild_id": raw.get("guild_id"),
             "channel_id": raw.get("channel_id"),
             "message_id": raw.get("message_id"),
             "author_id": author_id,
         },
-        "occurred_at": raw.get("occurred_at") or datetime.now(UTC).isoformat(),
-    }
+        occurred_at=raw.get("occurred_at") or datetime.now(UTC).isoformat(),
+    )

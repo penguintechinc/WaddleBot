@@ -34,10 +34,18 @@ anywhere in this codebase (documented, deferred slot; see each receiver's
 own docstring).
 
 Twitch's outbound chat sends for svc-action are handled by a SEPARATE
-`outbound_drain.py` task (also supervised, not lease-guarded -- `BRPOP` is
-atomic, so every replica safely competes for the same queue) that opens a
-fresh short-lived `waddle_transports.transports.irc.IrcTransport`
-connection per relayed message rather than reusing any receiver's socket.
+`outbound_drain.py` task, ALSO supervised and ALSO lease-guarded (2026-09-04
+fix -- see that module's own docstring) -- `provider="twitch",
+community=socket_lease.PLATFORM_COMMUNITY`, since the underlying relay
+queue is provider-scoped, not per-channel, so only one live replica ever
+drains/sends at a time. It opens a fresh short-lived `waddle_transports.
+transports.irc.IrcTransport` connection per relayed message rather than
+reusing any receiver's socket, and runs on its OWN dedicated Valkey
+connection (`socket_timeout=outbound_drain.DRAIN_SOCKET_TIMEOUT_S`, built
+below) rather than the shared `redis_client` -- sharing it would leave the
+blocking BRPOP racing that client's own (shorter) default socket timeout,
+which is exactly what caused the `Timeout reading from ...` false failures
+this fix addresses.
 
 The EventSub webhook (`POST /eventsub/twitch/webhook`, `eventsub.py`) is a
 genuine inbound HTTP push (not a persistent socket) -- registered as a
@@ -65,7 +73,7 @@ from bundles.twitch_gateway_manifest import register_default_bundles as register
 from config import Config
 from eventsub import TwitchEventSubHandler
 from fanout import fan_out_event
-from outbound_drain import TwitchOutboundDrain
+from outbound_drain import DRAIN_SOCKET_TIMEOUT_S, TwitchOutboundDrain
 from receivers.discord_gateway import CONSUMES_TAG as DISCORD_CONSUMES_TAG
 from receivers.discord_gateway import DiscordGatewayReceiver
 from receivers.twitch_irc import CONSUMES_TAG as TWITCH_CONSUMES_TAG
@@ -223,7 +231,36 @@ def _register_twitch_receivers(
 
     app.config["twitch_leased_receivers"] = leased_receivers
 
-    outbound_drain = TwitchOutboundDrain(redis_client=redis_client, irc_config_base=irc_config_base)
+    # Dedicated Valkey connection for the drain's own blocking BRPOP --
+    # NOT the shared redis_client above, whose default socket_timeout
+    # (redis-py: 5s) equals the BRPOP block timeout and races it on every
+    # idle poll (see outbound_drain.py's own module docstring for the
+    # full root-cause). Closed in shutdown() below alongside redis_client.
+    drain_redis_client = redis.from_url(
+        Config.VALKEY_URL,
+        encoding="utf-8",
+        decode_responses=True,
+        socket_timeout=DRAIN_SOCKET_TIMEOUT_S,
+    )
+    app.config["twitch_outbound_drain_redis_client"] = drain_redis_client
+
+    outbound_drain = TwitchOutboundDrain(
+        redis_client=drain_redis_client,
+        # The ORDINARY shared client (same one every other Twitch/Discord
+        # lease already uses) for the drain's own claim/renew/release --
+        # deliberately NOT drain_redis_client, see outbound_drain.py's own
+        # "Two separate Valkey clients" docstring section for why sharing
+        # one connection between a blocking BRPOP and lease SET/EVAL calls
+        # is unsafe.
+        lease_redis_client=redis_client,
+        irc_config_base=irc_config_base,
+        # Same replica_id as this replica's own per-channel leases above --
+        # one owner identity per svc-ingest process across every Twitch
+        # lease it may hold (inbound receive AND outbound transmit).
+        owner_id=replica_id,
+        ttl_s=Config.SOCKET_LEASE_TTL_S,
+        renew_interval_s=Config.SOCKET_LEASE_RENEW_INTERVAL_S,
+    )
     app.config["twitch_outbound_drain"] = outbound_drain
     supervisor.register("twitch_outbound_drain", outbound_drain.run)
 
@@ -330,6 +367,9 @@ async def shutdown() -> None:
     redis_client = app.config.get("redis_client")
     if redis_client is not None:
         await redis_client.aclose()
+    drain_redis_client = app.config.get("twitch_outbound_drain_redis_client")
+    if drain_redis_client is not None:
+        await drain_redis_client.aclose()
     logger.system("svc-ingest shutdown complete", action="shutdown", result="SUCCESS")
 
 

@@ -13,9 +13,11 @@ twitch_gateway_manifest.py`).
 Consumes the raw event shape `receivers/twitch_irc.py`'s
 `TwitchIrcReceiver.receive()` LPUSHes onto this bundle's `:ingest` Valkey
 key -- `{platform, channel_name, author_username, content}` -- and
-produces the same `{platform, event_type, actor, payload, occurred_at}`
-platform event shape `echo_ingest.py`/`discord_ingest.py` document (this
-repo's own minimal convention, no repo-wide schema exists yet).
+produces a `flask_core.PlatformEvent`, the frozen stage-to-stage contract
+(`libs/flask_core/flask_core/stream_pipeline.py`). `payload` carries
+`channel_name`/`text`/`author` -- everything `bundles/twitch_send_action.py`
+(svc-action, other side of the pipeline) needs to reply in place, mirroring
+`actor` for callers that only see the action-stage envelope's `payload`.
 
 Realigned (2026-09-03) onto the merged `waddle_transports` library's
 generic `IrcTransport` -- that transport does NOT parse Twitch's own
@@ -31,9 +33,11 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from flask_core import PlatformEvent
 
-async def normalize(raw: dict[str, Any]) -> dict[str, Any]:
-    """Normalize one raw Twitch IRC chat message event to the platform event shape.
+
+async def normalize(raw: dict[str, Any]) -> PlatformEvent:
+    """Normalize one raw Twitch IRC chat message event to a `PlatformEvent`.
 
     Real, working transform (not a stub): requires `content`/`channel_name`
     on the raw event, trims `content`, and stamps a UTC `occurred_at` when
@@ -48,13 +52,15 @@ async def normalize(raw: dict[str, Any]) -> dict[str, Any]:
     if not channel_name or not isinstance(channel_name, str):
         raise ValueError("raw Twitch event missing required 'channel_name' string field")
 
-    return {
-        "platform": raw.get("platform", "twitch"),
-        "event_type": "message",
-        "actor": raw.get("author_username") or "unknown",
-        "payload": {
+    actor = raw.get("author_username") or "unknown"
+    return PlatformEvent(
+        platform=raw.get("platform", "twitch"),
+        event_type="message",
+        actor=actor,
+        payload={
             "text": content.strip(),
             "channel_name": channel_name,
+            "author": actor,
         },
-        "occurred_at": raw.get("occurred_at") or datetime.now(UTC).isoformat(),
-    }
+        occurred_at=raw.get("occurred_at") or datetime.now(UTC).isoformat(),
+    )

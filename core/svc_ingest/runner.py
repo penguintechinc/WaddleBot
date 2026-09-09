@@ -16,6 +16,16 @@ where a normalized ingest event goes next -- the task only specified
 process's destination explicitly; using the bundle's own 3-key convention
 for ingest's output keeps the naming self-consistent rather than inventing
 a fourth key.
+
+Wave 2 (pipeline-standardization): the enqueued message is now the frozen
+typed contract, `flask_core.StageEnvelope` (`event` field holding a
+`flask_core.PlatformEvent`), serialized via `.to_dict()` -- not an ad-hoc
+dict. A raw `:ingest` entry is always a bare, transport-specific event dict
+(never our own envelope shape -- `fanout.fan_out_event`/the receivers only
+ever push raw platform dicts); the old defensive "unwrap if it looks like
+one of our own envelopes" heuristic is gone with it -- ALPHA has no
+legacy-shape tolerance, so a bundle entrypoint that doesn't return a
+`PlatformEvent` is a hard `EnvelopeError`, not silently coerced.
 """
 
 from __future__ import annotations
@@ -25,6 +35,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
+from flask_core import EnvelopeError, PlatformEvent, StageEnvelope
 from flask_core.stage_runner import (
     BundleDistribution,
     BundlePoller,
@@ -95,43 +106,56 @@ class IngestRunner:
             if raw is None:
                 break
             count += await self._normalize_and_enqueue(
-                raw, normalize_fn, bundle=bundle, process_key=process_key
+                raw,
+                normalize_fn,
+                bundle=bundle,
+                community=community_str,
+                process_key=process_key,
             )
         return count
 
     async def _normalize_and_enqueue(
-        self, raw: Any, normalize_fn: Any, *, bundle: BundleDistribution, process_key: str
+        self,
+        raw: Any,
+        normalize_fn: Any,
+        *,
+        bundle: BundleDistribution,
+        community: str | None,
+        process_key: str,
     ) -> int:
-        """Parse + normalize one raw event; LPUSH the envelope. Returns 1 on success, 0 on skip."""
+        """Parse + normalize one raw event; LPUSH the typed `StageEnvelope`.
+
+        Returns 1 on success, 0 on skip. `raw` is always a bare,
+        transport-specific event dict (`fanout.fan_out_event`/the
+        receivers never push our own envelope shape onto `:ingest`) -- no
+        unwrap heuristic. A `normalize_fn` that fails, or that doesn't
+        return a `PlatformEvent`, is logged and the one bad event skipped;
+        the poll loop itself never dies on it.
+        """
         try:
-            raw_value = json.loads(raw)
+            raw_event = json.loads(raw)
         except (TypeError, ValueError) as exc:
             logger.error("ingest.bad_json app_id=%s error=%s", bundle.app_id, exc)
             return 0
 
-        # A raw ingest-queue entry is either a bare event dict, or (if the
-        # upstream receiver already wrapped it in our own envelope shape)
-        # carries the event under "payload" -- unwrap defensively so either
-        # producer shape works without a second queue/format.
-        raw_event = (
-            raw_value["payload"]
-            if isinstance(raw_value, dict) and "payload" in raw_value and "stage" in raw_value
-            else raw_value
-        )
-
         try:
-            normalized = await normalize_fn(raw_event)
+            event = await normalize_fn(raw_event)
+            if not isinstance(event, PlatformEvent):
+                raise EnvelopeError(
+                    f"bundle entrypoint {bundle.entrypoint!r} must return a PlatformEvent, "
+                    f"got {type(event).__name__}"
+                )
+            envelope = StageEnvelope(
+                tenant=self._tenant_slug,
+                community=community,
+                app_id=bundle.app_id,
+                stage="process",
+                event=event,
+                ts=datetime.now(UTC).isoformat(),
+            )
         except Exception as exc:  # noqa: BLE001 - one bad event must never kill the loop
             logger.error("ingest.normalize_failed app_id=%s error=%s", bundle.app_id, exc)
             return 0
 
-        envelope = {
-            "tenant": self._tenant_slug,
-            "community": bundle.community_id,
-            "app_id": bundle.app_id,
-            "stage": "process",
-            "payload": normalized,
-            "ts": datetime.now(UTC).isoformat(),
-        }
-        await self._redis.lpush(process_key, json.dumps(envelope))
+        await self._redis.lpush(process_key, json.dumps(envelope.to_dict()))
         return 1
