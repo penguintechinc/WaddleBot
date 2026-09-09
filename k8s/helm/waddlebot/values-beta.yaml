@@ -16,15 +16,23 @@ infrastructure:
   postgresql:
     enabled: true
     image: postgres:16-bookworm@sha256:a0fd72825431f4b7fd3f9d5def9f370b9c22012f1a9e37ece1a5749b95333fb7
+    replicas: 1
     persistence:
       size: 10Gi
       storageClass: "longhorn"
+    resources:
+      requests: { cpu: "250m", memory: "384Mi" }
+      limits: { cpu: "1500m", memory: "1536Mi" }
   redis:
     enabled: true
     image: valkey/valkey:8-bookworm@sha256:fea8b3e67b15729d4bb70589eb03367bab9ad1ee89c876f54327fc7c6e618571
+    replicas: 1
     persistence:
       size: 2Gi
       storageClass: "longhorn"
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits: { cpu: "400m", memory: "384Mi" }
   minio:
     enabled: false
   ollama:
@@ -35,9 +43,57 @@ infrastructure:
 # WADDLES_AI_ENABLED=false -- no Ollama deployed above (infrastructure.
 # ollama.enabled: false), so hub-api's AI-routing subsystem stays off too
 # rather than crash-looping/degrading against an unreachable backend.
+#
+# Resources/replicas min-spec'd for a shared beta cluster (economical, but
+# slightly more headroom than alpha). Pipeline app services share one
+# generic tier; hubApi/hubWebui are sized individually.
 pipeline:
+  svcIngest:
+    replicas: 1
+    resources:
+      requests: { cpu: "150m", memory: "192Mi" }
+      limits: { cpu: "750m", memory: "768Mi" }
+  svcProcess:
+    replicas: 1
+    resources:
+      requests: { cpu: "150m", memory: "192Mi" }
+      limits: { cpu: "750m", memory: "768Mi" }
+  svcAction:
+    replicas: 1
+    resources:
+      requests: { cpu: "150m", memory: "192Mi" }
+      limits: { cpu: "750m", memory: "768Mi" }
+  svcCore:
+    replicas: 1
+    resources:
+      requests: { cpu: "150m", memory: "192Mi" }
+      limits: { cpu: "750m", memory: "768Mi" }
   hubApi:
     aiEnabled: false
+    replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
+  hubWebui:
+    replicas: 1
+    resources:
+      requests: { cpu: "50m", memory: "96Mi" }
+      limits: { cpu: "300m", memory: "384Mi" }
+  svcRtc:
+    replicas: 1
+    resources:
+      requests: { cpu: "150m", memory: "192Mi" }
+      limits: { cpu: "750m", memory: "768Mi" }
+  svcPresentation:
+    replicas: 1
+    resources:
+      requests: { cpu: "150m", memory: "192Mi" }
+      limits: { cpu: "750m", memory: "768Mi" }
+  svcStreaming:
+    replicas: 1
+    resources:
+      requests: { cpu: "150m", memory: "192Mi" }
+      limits: { cpu: "750m", memory: "768Mi" }
 
 # PostHog stays OFF by default in beta too — flip on deliberately per
 # release. When enabled, secrets MUST come from a pre-created Secret, never
@@ -69,15 +125,21 @@ posthog:
 
 # Module image overrides - use registry image names
 modules:
-  # Router
+  # Router (legacy modules.* tier -- min-spec)
   router:
     image: router
     replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
 
-  # Hub
+  # Hub (hub-api tier -- matches pipeline.hubApi)
   hub:
     image: hub-api
     replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
     env:
       RATE_LIMIT_MAX_REQUESTS: "300"     # 3× default; E2E suite generates bursts
       RATE_LIMIT_WINDOW_MS: "60000"      # Keep 60s window unchanged
@@ -90,6 +152,9 @@ modules:
   hubWebui:
     image: hub-webui
     replicas: 1
+    resources:
+      requests: { cpu: "50m", memory: "96Mi" }
+      limits: { cpu: "300m", memory: "384Mi" }
 
   # Core Modules
   identityCore:
@@ -114,6 +179,10 @@ modules:
 
   aiResearcher:
     image: ai-researcher
+    replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
 
   videoProxy:
     image: core-video-proxy
@@ -133,14 +202,27 @@ modules:
     twitch:
       image: collector-twitch
       replicas: 1
+      resources:
+        requests: { cpu: "100m", memory: "128Mi" }
+        limits: { cpu: "500m", memory: "512Mi" }
     discord:
       image: collector-discord
       replicas: 1
+      resources:
+        requests: { cpu: "100m", memory: "128Mi" }
+        limits: { cpu: "500m", memory: "512Mi" }
     slack:
       image: collector-slack
       replicas: 1
+      resources:
+        requests: { cpu: "100m", memory: "128Mi" }
+        limits: { cpu: "500m", memory: "512Mi" }
     youtubeLive:
       image: collector-youtube
+      replicas: 1
+      resources:
+        requests: { cpu: "100m", memory: "128Mi" }
+        limits: { cpu: "500m", memory: "512Mi" }
     kick:
       image: collector-kick
 
@@ -207,6 +289,9 @@ modules:
   marketplace:
     image: marketplace
     replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
 
   # Platform Action Modules
   platformActions:
@@ -221,6 +306,78 @@ modules:
       replicas: 1
     youtube:
       image: action-youtube
+
+  # Rendered-but-not-yet-listed-above legacy modules (see
+  # k8s/helm/waddlebot/templates/{core,interactive,pushing}/*.yaml) --
+  # resources/replicas min-spec only, no image override needed (the
+  # keys above under identityCore/labelsCore/etc. are stale leftovers
+  # from an earlier module naming scheme and are not rendered by any
+  # current template -- left untouched, out of scope for this pass).
+  coreData:
+    replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
+  coreIdentity:
+    replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
+  coreCommunity:
+    replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
+  triggerWebhooks:
+    replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
+  triggerStreaming:
+    replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
+  actionPlatforms:
+    replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
+  actionServerless:
+    replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
+  interactiveSocial:
+    replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
+  interactiveGaming:
+    replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
+  interactiveMedia:
+    replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
+  interactiveProductivity:
+    replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
+  interactiveAi:
+    replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
+  interactiveLoyalty:
+    replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
 
 # Shared Environment
 sharedEnv:
@@ -581,3 +738,11 @@ networkPolicy:
 spire:
   enabled: true
   environment: "beta"
+  server:
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits: { cpu: "250m", memory: "256Mi" }
+  agent:
+    resources:
+      requests: { cpu: "50m", memory: "64Mi" }
+      limits: { cpu: "150m", memory: "128Mi" }

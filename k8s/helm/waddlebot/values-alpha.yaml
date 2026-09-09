@@ -18,10 +18,18 @@ global:
 infrastructure:
   postgresql:
     enabled: true
+    replicas: 1
     persistence: {size: 1Gi}
+    resources:
+      requests: { cpu: "250m", memory: "256Mi" }
+      limits: { cpu: "1000m", memory: "1Gi" }
   redis:
     enabled: true
+    replicas: 1
     persistence: {size: 512Mi}
+    resources:
+      requests: { cpu: "50m", memory: "64Mi" }
+      limits: { cpu: "250m", memory: "256Mi" }
   minio:
     enabled: false
   ollama:
@@ -32,15 +40,72 @@ infrastructure:
 # WADDLES_AI_ENABLED=false -- no Ollama deployed above (infrastructure.
 # ollama.enabled: false), so hub-api's AI-routing subsystem stays off too
 # rather than crash-looping/degrading against an unreachable backend.
+#
+# Resources/replicas min-spec'd for a single-node laptop (see
+# docs/plans -- alpha min-spec pass). Pipeline app services share one
+# generic tier; hubApi/hubWebui are sized individually to match their
+# lighter footprint.
 pipeline:
+  svcIngest:
+    replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
+  svcProcess:
+    replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
+  svcAction:
+    replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
+  svcCore:
+    replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
   hubApi:
     aiEnabled: false
+    replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits: { cpu: "400m", memory: "384Mi" }
+  hubWebui:
+    replicas: 1
+    resources:
+      requests: { cpu: "50m", memory: "64Mi" }
+      limits: { cpu: "200m", memory: "256Mi" }
+  svcRtc:
+    replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
+  svcPresentation:
+    replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
+  svcStreaming:
+    replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
 
 ingress:
   enabled: false
 spire:
   enabled: true
   environment: "alpha"
+  server:
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits: { cpu: "250m", memory: "256Mi" }
+  agent:
+    resources:
+      requests: { cpu: "50m", memory: "64Mi" }
+      limits: { cpu: "150m", memory: "128Mi" }
 
 # Alpha is where the local e2e Playwright suite runs (tests/k8s/alpha/07-page-load.sh).
 # Unlike beta (which already raises this 3x for the same reason), alpha inherited no
@@ -48,11 +113,126 @@ spire:
 # for rapid SERIAL Playwright runs against a cold, cache-less cluster. Alpha-only,
 # env-var driven (admin/hub_module/backend/src/config/index.js); production/default
 # stays untouched at 100.
+#
+# Legacy modules.* (31->7 collapse in progress -- see PIPELINE_MAPPING.md).
+# KEEP all enabled; resources/replicas min-spec'd only. hub/hubWebui match
+# their pipeline.hubApi/hubWebui tier above; every other rendered module
+# shares one generic legacy tier (50m/96Mi req, 300m/384Mi lim).
 modules:
   hub:
+    replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "128Mi" }
+      limits: { cpu: "400m", memory: "384Mi" }
     env:
       RATE_LIMIT_MAX_REQUESTS: "1000"    # ~10x default; local e2e test/dev only
       RATE_LIMIT_WINDOW_MS: "60000"      # keep 60s window unchanged
+  hubWebui:
+    replicas: 1
+    resources:
+      requests: { cpu: "50m", memory: "64Mi" }
+      limits: { cpu: "200m", memory: "256Mi" }
+  router:
+    replicas: 1
+    resources:
+      requests: { cpu: "50m", memory: "96Mi" }
+      limits: { cpu: "300m", memory: "384Mi" }
+  coreData:
+    replicas: 1
+    resources:
+      requests: { cpu: "50m", memory: "96Mi" }
+      limits: { cpu: "300m", memory: "384Mi" }
+  coreIdentity:
+    replicas: 1
+    resources:
+      requests: { cpu: "50m", memory: "96Mi" }
+      limits: { cpu: "300m", memory: "384Mi" }
+  coreCommunity:
+    replicas: 1
+    resources:
+      requests: { cpu: "50m", memory: "96Mi" }
+      limits: { cpu: "300m", memory: "384Mi" }
+  triggerWebhooks:
+    replicas: 1
+    resources:
+      requests: { cpu: "50m", memory: "96Mi" }
+      limits: { cpu: "300m", memory: "384Mi" }
+  triggerStreaming:
+    replicas: 1
+    resources:
+      requests: { cpu: "50m", memory: "96Mi" }
+      limits: { cpu: "300m", memory: "384Mi" }
+  actionPlatforms:
+    replicas: 1
+    resources:
+      requests: { cpu: "50m", memory: "96Mi" }
+      limits: { cpu: "300m", memory: "384Mi" }
+  actionServerless:
+    replicas: 1
+    resources:
+      requests: { cpu: "50m", memory: "96Mi" }
+      limits: { cpu: "300m", memory: "384Mi" }
+  interactiveSocial:
+    replicas: 1
+    resources:
+      requests: { cpu: "50m", memory: "96Mi" }
+      limits: { cpu: "300m", memory: "384Mi" }
+  interactiveGaming:
+    replicas: 1
+    resources:
+      requests: { cpu: "50m", memory: "96Mi" }
+      limits: { cpu: "300m", memory: "384Mi" }
+  interactiveMedia:
+    replicas: 1
+    resources:
+      requests: { cpu: "50m", memory: "96Mi" }
+      limits: { cpu: "300m", memory: "384Mi" }
+  interactiveProductivity:
+    replicas: 1
+    resources:
+      requests: { cpu: "50m", memory: "96Mi" }
+      limits: { cpu: "300m", memory: "384Mi" }
+  aiResearcher:
+    replicas: 1
+    resources:
+      requests: { cpu: "50m", memory: "96Mi" }
+      limits: { cpu: "300m", memory: "384Mi" }
+  interactiveAi:
+    replicas: 1
+    resources:
+      requests: { cpu: "50m", memory: "96Mi" }
+      limits: { cpu: "300m", memory: "384Mi" }
+  interactiveLoyalty:
+    replicas: 1
+    resources:
+      requests: { cpu: "50m", memory: "96Mi" }
+      limits: { cpu: "300m", memory: "384Mi" }
+  marketplace:
+    replicas: 1
+    resources:
+      requests: { cpu: "50m", memory: "96Mi" }
+      limits: { cpu: "300m", memory: "384Mi" }
+  collectors:
+    discord:
+      replicas: 1
+      resources:
+        requests: { cpu: "50m", memory: "96Mi" }
+        limits: { cpu: "300m", memory: "384Mi" }
+    twitch:
+      replicas: 1
+      resources:
+        requests: { cpu: "50m", memory: "96Mi" }
+        limits: { cpu: "300m", memory: "384Mi" }
+    slack:
+      replicas: 1
+      resources:
+        requests: { cpu: "50m", memory: "96Mi" }
+        limits: { cpu: "300m", memory: "384Mi" }
+    youtubeLive:
+      replicas: 1
+      resources:
+        requests: { cpu: "50m", memory: "96Mi" }
+        limits: { cpu: "300m", memory: "384Mi" }
 
 # PostHog stays OFF by default even in alpha (trimmed stack still budgets
 # ~4GB RAM — heavier than typical alpha footprint). To smoke-test the
