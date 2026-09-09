@@ -3,7 +3,7 @@ Streaming Module -- Feature contracts + default App bindings
 ================================================================
 
 Declares the Streaming Module's five Feature contracts and registers each
-one's shipped default App, per docs/plans/2026-08-31-v3-sccembs-program-plan.md
+one's shipped default App, per docs/plans/2026-08-31-v3-sccebm-program-plan.md
 SS9 P4 and docs/plans/2026-08-31-hubapi-node-to-quart-migration.md SS2's
 controller inventory (the 5 M7-Streaming controllers). All five are already
 ported and live at ``hub_api/blueprints/v1/{stream,streaming,calls,music,

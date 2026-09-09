@@ -23,6 +23,15 @@ from .platform_version import get_platform_version, platform_version_compatible
 __version__ = get_platform_version()
 
 from .database import AsyncDAL, init_database
+from .bundle_runtime import (
+    BundleContext,
+    BundleRuntimeError,
+    bundle_context,
+    get_bundle_context,
+    get_bundle_dal,
+    reset_bundle_dal_for_tests,
+    set_bundle_dal,
+)
 from .auth import (
     setup_auth,
     OAuthProvider,
@@ -83,7 +92,15 @@ from .http_rate_limit import (
     install_rate_limiting,
 )
 from .message_queue import MessageQueue, Message, create_message_queue
-from .stream_pipeline import StreamPipeline, StreamEvent, create_stream_pipeline
+from .stream_pipeline import (
+    StreamPipeline,
+    StreamEvent,
+    create_stream_pipeline,
+    PlatformEvent,
+    StageEnvelope,
+    EnvelopeError,
+    PROCESS_TARGET_APP_ID_KEY,
+)
 from .circuit_breaker import (
     CircuitBreaker,
     CircuitBreakerError,
@@ -204,6 +221,14 @@ __all__ = [
     # Database
     "AsyncDAL",
     "init_database",
+    # Bundle runtime (DAL + tenant/community context for stateful App Bundles)
+    "BundleContext",
+    "BundleRuntimeError",
+    "bundle_context",
+    "get_bundle_context",
+    "get_bundle_dal",
+    "reset_bundle_dal_for_tests",
+    "set_bundle_dal",
     # Auth
     "setup_auth",
     "OAuthProvider",
@@ -272,6 +297,11 @@ __all__ = [
     "StreamPipeline",
     "StreamEvent",
     "create_stream_pipeline",
+    # Frozen typed stage-to-stage pipeline contract
+    "PlatformEvent",
+    "StageEnvelope",
+    "EnvelopeError",
+    "PROCESS_TARGET_APP_ID_KEY",
     # Circuit Breaker & Resilience
     "CircuitBreaker",
     "CircuitBreakerError",

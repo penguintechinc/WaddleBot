@@ -3,9 +3,9 @@ Community Module -- Feature contracts + default App bindings
 ================================================================
 
 Declares the Community Module's eleven Feature contracts and registers each
-one's shipped default App, per docs/plans/2026-08-31-v3-sccembs-program-plan.md
+one's shipped default App, per docs/plans/2026-08-31-v3-sccebm-program-plan.md
 SS9 P4 ("per-module default bundles + per-capability flags -- migrate
-KNOWN_MODULES to SCCEMBS; map 44 controllers -> default App Bundles per
+KNOWN_MODULES to SCCEBM; map 44 controllers -> default App Bundles per
 module") and docs/plans/2026-08-31-hubapi-node-to-quart-migration.md SS2's
 controller inventory (the 9 M6-Community controllers). Nine of eleven map
 1:1 onto an already-ported ``hub_api/blueprints/v1/community_*.py`` group;

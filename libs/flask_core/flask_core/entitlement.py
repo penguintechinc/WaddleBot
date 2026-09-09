@@ -69,7 +69,7 @@ except ImportError:  # pragma: no cover - only fires with a broken install
 # the way a naive substring or unanchored `.endswith` check might be coaxed
 # into via a crafted Host header.
 #
-# BYPASS DEPTH (program plan 2026-08-31-v3-sccembs-program-plan.md §3.3):
+# BYPASS DEPTH (program plan 2026-08-31-v3-sccebm-program-plan.md §3.3):
 # a bypass hostname is not a flat yes/no -- it resolves to a DEPTH, because
 # the two host classes exist for different reasons. `waddles*.penguintech.
 # cloud` (+ the bare `penguincloud.io`/`penguintech.cloud` apex domains) are

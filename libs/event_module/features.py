@@ -3,7 +3,7 @@ Event Module -- Feature contracts + default App bindings
 ============================================================
 
 Declares the Event Module's two Feature contracts and registers each one's
-shipped default App, per docs/plans/2026-08-31-v3-sccembs-program-plan.md
+shipped default App, per docs/plans/2026-08-31-v3-sccebm-program-plan.md
 SS9 P4 and docs/plans/2026-08-31-hubapi-node-to-quart-migration.md SS2's
 controller inventory: ``calendarController`` -> ``waddles.event.calendar``,
 ``ticketController`` -> ``waddles.event.ticketing`` ("proxy to calendar for

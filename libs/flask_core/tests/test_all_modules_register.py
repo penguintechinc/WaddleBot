@@ -2,8 +2,8 @@
 Cross-module Feature-registration coherence gate
 ====================================================
 
-v3.0.0 MVP gate, grown under SCCEMBS P4
-(docs/plans/2026-08-31-v3-sccembs-program-plan.md SS9): registers all
+v3.0.0 MVP gate, grown under SCCEBM P4
+(docs/plans/2026-08-31-v3-sccebm-program-plan.md SS9): registers all
 EIGHT Modules' Feature contracts (Bot, Social, Marketing, Customer,
 Core/Platform, Community, Event, Streaming -- ``bot_module``,
 ``social_module``, ``marketing_module``, ``customer_module``,

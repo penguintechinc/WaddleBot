@@ -1,6 +1,6 @@
 """Community Module -- Feature contracts and default App bindings.
 
-Per docs/plans/2026-08-31-v3-sccembs-program-plan.md SS1.1 and
+Per docs/plans/2026-08-31-v3-sccebm-program-plan.md SS1.1 and
 docs/plans/2026-08-31-hubapi-node-to-quart-migration.md SS2: the Community
 Module is the *management/engagement* product module -- forum, chat,
 virtual stages, polls, announcements, activity, loyalty, inventory,

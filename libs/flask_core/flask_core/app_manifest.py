@@ -34,11 +34,11 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, Mapping, Optional, Tuple
 
-# SCCEMBS product modules (docs/plans/2026-08-31-v3-sccembs-program-plan.md
+# SCCEBM product modules (docs/plans/2026-08-31-v3-sccebm-program-plan.md
 # §1.1/§9 P4) -- 7 modules, each independently toggleable as a Helm
 # deployment grouping (values.yaml `modules.<name>.enabled`): Socials,
 # Customers, Community, Event, Marketing, Bot, Streaming. This is P4's
-# "migrate KNOWN_MODULES to SCCEMBS" step. The remaining namespaces
+# "migrate KNOWN_MODULES to SCCEBM" step. The remaining namespaces
 # (analytics, video_proxy, auth, compliance, integrations, tenancy, core)
 # are Core/platform capability namespaces: always deployed (no Helm toggle
 # of their own -- Core ships with every install), but their *Features*
@@ -48,7 +48,7 @@ from typing import Any, Dict, Mapping, Optional, Tuple
 # so App and Feature validation can never drift onto two different lists.
 #
 # "social"/"customer" (singular) are pre-P4 aliases, NOT part of the
-# SCCEMBS taxonomy: `social_module`/`customer_module`'s already-registered
+# SCCEBM taxonomy: `social_module`/`customer_module`'s already-registered
 # Feature contracts (9 + 5, landed pre-P4) still declare `module="social"`/
 # `module="customer"` -- dropping those strings here would break every one
 # of those registrations at import time (parse_feature_contract's
@@ -60,7 +60,7 @@ from typing import Any, Dict, Mapping, Optional, Tuple
 # gates outside flask_core/hub_api (action/interactive/quote_interaction_
 # module, welcome_interaction_module also key off `waddles.social.*`).
 KNOWN_MODULES = frozenset({
-    # SCCEMBS product modules (canonical, P4)
+    # SCCEBM product modules (canonical, P4)
     "socials",
     "customers",
     "community",
