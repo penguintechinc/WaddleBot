@@ -4,6 +4,18 @@ Mirrors `core/svc_ingest/app.py` exactly, one stage over: polls hub-api's
 distribution endpoint for the `process` stage's active bundles, RPOPs each
 bundle's `:process` Valkey key, runs the bundle's real `transform()`
 entrypoint, and LPUSHes the result onto that bundle's `:action` key.
+
+DB: as of the App Bundle bundle-runtime freeze (`docs/
+APP_BUNDLE_AUTHORING.md`, 'Accessing the database / shared state'),
+svc-process also constructs its own `AsyncDAL` here (mirroring
+`core/svc_action/app.py`'s existing DAL construction exactly) and binds it
+once via `flask_core.set_bundle_dal()` so a stateful process bundle can
+call `get_bundle_dal()` from inside its own `transform()` body -- the
+frozen `transform(event) -> PlatformEvent | None` signature itself carries
+no DAL parameter. Startup also binds the `live_activity_events` table on
+that same DAL (`services.activity_feed.init_live_activity_events_table`)
+so `runner.py`'s best-effort activity emit has a table to write to -- see
+that module's docstring.
 """
 
 from __future__ import annotations
@@ -13,13 +25,20 @@ from typing import cast
 
 import httpx
 import redis.asyncio as redis
-from flask_core import create_health_blueprint, install_security_headers, setup_aaa_logging
+from flask_core import (
+    AsyncDAL,
+    create_health_blueprint,
+    install_security_headers,
+    set_bundle_dal,
+    setup_aaa_logging,
+)
 from flask_core.auth import create_jwt_token
 from flask_core.stage_runner import BundlePoller
 from quart import Quart
 
 from config import Config
 from runner import ProcessRunner
+from services.activity_feed import init_live_activity_events_table
 
 app = Quart(__name__)
 # security.md A05 hardening -- JSON-only service, default deny-everything CSP.
@@ -50,9 +69,12 @@ def _jwt_provider() -> str:
 
 @app.before_serving
 async def startup() -> None:
-    """Wire the httpx client, Valkey client, poller, and start the background loop."""
+    """Wire the httpx client, Valkey client, DAL, poller, and start the background loop."""
     http_client = httpx.AsyncClient()
     redis_client = redis.from_url(Config.VALKEY_URL, encoding="utf-8", decode_responses=True)
+    async_dal = AsyncDAL(Config.DATABASE_URL, pool_size=Config.DB_POOL_SIZE, migrate=False)
+    set_bundle_dal(async_dal)
+    init_live_activity_events_table(async_dal.dal)
 
     poller = BundlePoller(
         http_client,
@@ -70,6 +92,7 @@ async def startup() -> None:
 
     app.config["http_client"] = http_client
     app.config["redis_client"] = redis_client
+    app.config["async_dal"] = async_dal
     app.config["runner"] = runner
     app.config["runner_task"] = asyncio.ensure_future(runner.run_forever())
     logger.system("svc-process started", action="startup", result="SUCCESS")
@@ -77,7 +100,7 @@ async def startup() -> None:
 
 @app.after_serving
 async def shutdown() -> None:
-    """Stop the background loop and close both clients -- must never raise."""
+    """Stop the background loop and close every client -- must never raise."""
     runner = app.config.get("runner")
     if runner is not None:
         runner.stop()
@@ -97,6 +120,18 @@ async def shutdown() -> None:
     redis_client = app.config.get("redis_client")
     if redis_client is not None:
         await redis_client.aclose()
+    async_dal = app.config.get("async_dal")
+    if async_dal is not None:
+        # Defensive try/except -- mirrors `core/svc_action/app.py::shutdown`'s
+        # own comment: `AsyncDAL.close_async()` runs pydal's `DAL.close()`
+        # inside its own ThreadPoolExecutor, on a different thread than the
+        # one that created the DAL; a cross-thread close can raise, and
+        # failing to release the pool cleanly on shutdown must never crash
+        # the ASGI lifespan.
+        try:
+            await async_dal.close_async()
+        except Exception as exc:  # noqa: BLE001 -- shutdown must not raise
+            logger.warning(f"Error closing DAL on shutdown: {exc}")
     logger.system("svc-process shutdown complete", action="shutdown", result="SUCCESS")
 
 

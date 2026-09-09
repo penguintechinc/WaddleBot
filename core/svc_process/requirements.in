@@ -1,9 +1,16 @@
-# svc-process -- Dependencies. Mirrors core/svc_ingest/requirements.in exactly
-# (same stage-runner shape, one stage over).
+# svc-process -- Dependencies. Mirrors core/svc_ingest/requirements.in
+# (same stage-runner shape, one stage over), plus the DB deps `core/
+# svc_action/requirements.in` already carries -- svc-process gained its own
+# `AsyncDAL` (config.py/app.py) as of the App Bundle bundle-runtime freeze
+# (docs/APP_BUNDLE_AUTHORING.md, 'Accessing the database / shared state').
 
 # Core Framework
 quart>=0.19.0
 hypercorn>=0.16.0
+
+# Database (flask_core.AsyncDAL wraps pydal directly)
+pydal>=20240906.1,<20250101
+psycopg2-binary>=2.9.9
 
 # HTTP client (distribution API poll)
 httpx>=0.27.0,<0.28.0

@@ -7,30 +7,34 @@ that migration seeds.
 
 from __future__ import annotations
 
-from typing import Any
+import dataclasses
+
+from flask_core import PlatformEvent
 
 
-async def transform(event: dict[str, Any]) -> dict[str, Any]:
-    """Apply the demo bundle's process transform to one normalized platform event.
+async def transform(event: PlatformEvent) -> PlatformEvent:
+    """Apply the demo bundle's process transform to one normalized `PlatformEvent`.
 
-    Real, working transform (not a stub): uppercases the event's
-    `payload.text` and tags it with a computed `word_count`. Raises
-    `ValueError` on a malformed event -- the process runner catches this
-    per-event so one bad event never kills the poll loop.
+    Real, working transform (not a stub): uppercases `event.payload["text"]`
+    and tags it with a computed `word_count`, returning a NEW `PlatformEvent`
+    (`dataclasses.replace` -- the frozen contract's own instances are never
+    mutated in place). Every other payload field is preserved as-is
+    (crucially `channel_id`/`guild_id` survive), and every top-level
+    `PlatformEvent` field (`platform`, `event_type`, `actor`, `occurred_at`)
+    passes through untouched. Raises `ValueError` on a malformed event --
+    the process runner catches this per-event so one bad event never kills
+    the poll loop.
     """
-    payload = event.get("payload")
-    if not isinstance(payload, dict):
-        raise ValueError("event missing required 'payload' object")
-    text = payload.get("text")
+    text = event.payload.get("text")
     if not isinstance(text, str):
         raise ValueError("event payload missing required 'text' string field")
 
-    return {
-        **event,
-        "payload": {
-            **payload,
+    return dataclasses.replace(
+        event,
+        payload={
+            **event.payload,
             "text": text.upper(),
             "word_count": len(text.split()),
+            "processed": True,
         },
-        "processed": True,
-    }
+    )
