@@ -64,6 +64,7 @@ function AdminLayout() {
           icon: HomeIcon,
           items: [
             { to: `/admin/${communityId}`, icon: HomeIcon, label: 'Overview', exact: true },
+            { to: `/admin/${communityId}/live-activity`, icon: SignalIcon, label: 'Live Activity' },
             { to: `/admin/${communityId}/profile`, icon: UserGroupIcon, label: 'Profile' },
             { to: `/admin/${communityId}/members`, icon: UserGroupIcon, label: 'Members' },
             { to: `/admin/${communityId}/join-requests`, icon: UserPlusIcon, label: 'Join Requests' },

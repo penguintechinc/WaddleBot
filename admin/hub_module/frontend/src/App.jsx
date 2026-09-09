@@ -53,6 +53,7 @@ import AdminStreamOverlays from './pages/admin/AdminStreamOverlays';
 import AdminDomains from './pages/admin/AdminDomains';
 import AdminServers from './pages/admin/AdminServers';
 import AdminConnectedPlatforms from './pages/admin/AdminConnectedPlatforms';
+import LiveActivity from './pages/community/LiveActivity';
 import AdminMirrorGroups from './pages/admin/AdminMirrorGroups';
 import AdminLeaderboardConfig from './pages/admin/AdminLeaderboardConfig';
 import AdminCommunityProfile from './pages/admin/AdminCommunityProfile';
@@ -290,6 +291,7 @@ function App() {
         }
       >
         <Route path="/admin/:communityId" element={<AdminHome />} />
+        <Route path="/admin/:communityId/live-activity" element={<LiveActivity />} />
         <Route path="/admin/:communityId/members" element={<AdminMembers />} />
         <Route path="/admin/:communityId/workflows" element={<AdminWorkflows />} />
         <Route path="/admin/:communityId/modules" element={<AdminModules />} />
