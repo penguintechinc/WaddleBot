@@ -158,7 +158,7 @@ Set up your platform integrations:
 ### 3. Core Configuration
 Configure the core system components:
 
-- **[Architecture — module ownership](../ARCHITECTURE.md#module-ownership-sccembs)**
+- **[Architecture — module ownership](../ARCHITECTURE.md#module-ownership-sccebm)**
 - **[Identity Management](../identity_core_module/CONFIGURATION.md)**
 - **[Database Setup](../DATABASE.md)**
 

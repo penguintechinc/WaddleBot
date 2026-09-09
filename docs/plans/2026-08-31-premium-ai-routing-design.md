@@ -4,7 +4,7 @@
 **Status:** Draft
 **Branch:** feature/v3-premium-ai-spec
 **Provenance:** `.PLAN:345-356` (Premium AI + BYOK; generalized metered-consumable token billing)
-**Cross-refs:** `docs/plans/2026-08-31-metered-token-billing-design.md` (parallel — the token ledger/pricing/enforcement mechanism this spec consumes), `docs/plans/2026-08-31-v3-sccembs-program-plan.md` §5–§6 + P6, `docs/plans/2026-08-26-v3-scbm-apps-design.md` (Feature/flag/tier spine).
+**Cross-refs:** `docs/plans/2026-08-31-metered-token-billing-design.md` (parallel — the token ledger/pricing/enforcement mechanism this spec consumes), `docs/plans/2026-08-31-v3-sccebm-program-plan.md` §5–§6 + P6, `docs/plans/2026-08-26-v3-scbm-apps-design.md` (Feature/flag/tier spine).
 
 ## Goal
 

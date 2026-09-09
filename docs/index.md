@@ -12,8 +12,7 @@ overlays — ships as **App Bundles**: versioned packages of per-stage scripts t
 makes available, and a community activates. First-party functionality is built as bundles too;
 there is no separate "built-in" code path.
 
-Product capability is organized into 7 modules, **SCCEMBS**: Socials, Customers, Community, Event,
-Marketing, Bot, Streaming — each independently toggleable and tier-gated. See
+Product capability is organized into 7 modules, **SCCEBM** (+ Streaming): Socials, Customer, Community, Event, Bot, Marketing — each independently toggleable and tier-gated. See
 [Architecture](ARCHITECTURE.md) for the full container/module breakdown.
 
 ## Key Features
@@ -71,7 +70,11 @@ Full deployment and first-run walkthrough: [Quick Start](QUICKSTART.md).
   hub-webui  React SPA + Express static-serve/proxy
 ```
 
-Full detail, per-container table, and current build status: [Architecture](ARCHITECTURE.md).
+Messages crossing a stage boundary are typed `flask_core.stream_pipeline` dataclasses
+(`PlatformEvent`, `StageEnvelope`), not raw dicts.
+
+Full detail, per-container table, typed stage contract, and current build status:
+[Architecture](ARCHITECTURE.md).
 
 ## Core Components
 

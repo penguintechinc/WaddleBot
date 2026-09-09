@@ -11,7 +11,7 @@ For the App Bundle authoring spec, see [`docs/plans/2026-08-31-app-bundle-sdk-de
 - [Pipeline flow](#pipeline-flow)
 - [App Bundle model](#app-bundle-model)
 - [Distribution & control plane](#distribution--control-plane)
-- [Module ownership (SCCEMBS)](#module-ownership-sccembs)
+- [Module ownership (SCCEBM)](#module-ownership-sccebm)
 - [Feature flags & licensing](#feature-flags--licensing)
 - [Build status caveats](#build-status-caveats)
 - [Technology stack](#technology-stack)
@@ -74,6 +74,31 @@ waddles:t:{tenant}:c:{community}:app:{app_id}:state
 
 Tenant-wide activations (no specific community) use a literal `c:_tenant` segment so every key
 stays uniformly parseable. Consumer groups: `{app_id}:{stage}-group`.
+
+### Typed stage contract
+
+Every message crossing a stage boundary is a frozen `@dataclass(slots=True, frozen=True)` from
+`flask_core.stream_pipeline` (re-exported from `flask_core`), never a raw dict — round-tripped
+through Valkey as JSON (`json.dumps(envelope.to_dict())` on LPUSH, `StageEnvelope.from_dict(
+json.loads(raw))` on RPOP):
+
+- **`PlatformEvent`** — `{platform, event_type, actor, payload, occurred_at}`. What an `ingest`
+  bundle's `normalize()` returns.
+- **`StageEnvelope`** — `{tenant, community, app_id, stage, event, ts}`. The actual queue message.
+  The carried event lives under **`event`**, deliberately not `payload` — a bundle always reaches
+  its data at `envelope.event.payload[...]`, never `envelope.payload[...]`, so a
+  payload-under-payload double-nesting bug is structurally impossible.
+
+Bundle entrypoint contracts per stage:
+
+| Stage | Signature |
+|---|---|
+| `ingest` | `normalize(raw: dict) -> PlatformEvent` |
+| `process` | `transform(event: PlatformEvent) -> PlatformEvent` |
+| `action` | `send(envelope: StageEnvelope, config, *, http_client) -> TransportResult` |
+
+A malformed or legacy-shaped message (missing `event`, wrong field types) raises `EnvelopeError`
+on read — refused, never silently coerced.
 
 ## App Bundle model
 
@@ -164,9 +189,9 @@ Polling (not push) means a restarting or newly-scaled-out runner self-heals to t
 installed set on its own next poll — hub-api never needs to know a given replica exists. Routing
 reads are cached with a short TTL, invalidated on the stage-runner's own poll cycle.
 
-## Module ownership (SCCEMBS)
+## Module ownership (SCCEBM)
 
-7 product modules, each a Helm-toggleable grouping of default App Bundles
+7 product modules (SCCEBM + Streaming), each a Helm-toggleable grouping of default App Bundles
 (`modules.<name>.enabled`), plus Core (mandatory, no toggle):
 
 | Module | Owns |
@@ -183,7 +208,7 @@ reads are cached with a short TTL, invalidated on the stage-runner's own poll cy
 credentials, tenancy (the **community entity** — teams/OUs — lives here, not in the Community
 module), marketplace, token/billing, analytics, event bus.
 
-`KNOWN_MODULES` in `libs/flask_core/flask_core/app_manifest.py` carries the canonical SCCEMBS set
+`KNOWN_MODULES` in `libs/flask_core/flask_core/app_manifest.py` carries the canonical SCCEBM set
 plus two transitional aliases (`social`, `customer`, singular) kept because pre-migration Feature
 contracts still register under those names — a follow-up rename, not yet done.
 
@@ -250,6 +275,6 @@ Read this before assuming a container is production-ready:
 ## See also
 
 - [`docs/plans/2026-08-31-app-bundle-sdk-design.md`](plans/2026-08-31-app-bundle-sdk-design.md) — full bundle authoring spec
-- [`docs/plans/2026-08-31-v3-sccembs-program-plan.md`](plans/2026-08-31-v3-sccembs-program-plan.md) — program roadmap and phase history
+- [`docs/plans/2026-08-31-v3-sccebm-program-plan.md`](plans/2026-08-31-v3-sccebm-program-plan.md) — program roadmap and phase history
 - [`docs/architecture/core-boundary.md`](architecture/core-boundary.md) — per-file module-ownership evidence
 - [`k8s/helm/waddlebot/PIPELINE_MAPPING.md`](../k8s/helm/waddlebot/PIPELINE_MAPPING.md) — legacy container → pipeline container mapping

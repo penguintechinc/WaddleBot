@@ -1,7 +1,7 @@
 # Metered-Consumable Token Billing — Design Spec
 
 **Date:** 2026-08-31
-**Status:** Design (DESIGN DOC ONLY — no implementation). Feeds program plan **P6** (`docs/plans/2026-08-31-v3-sccembs-program-plan.md:357`), owed spec row at `:377`.
+**Status:** Design (DESIGN DOC ONLY — no implementation). Feeds program plan **P6** (`docs/plans/2026-08-31-v3-sccebm-program-plan.md:357`), owed spec row at `:377`.
 **Scope:** ONE metered-billing mechanism serving TWO+ consumables — **transcoding/encoding tokens** (svc-streaming, program-plan §4.3) and **premium-AI tokens** (§6). Extensible to future consumables. A **third** billing axis beyond the license per-node / per-seat axes (`.PLAN:352-356`).
 
 ## Sources this grounds against

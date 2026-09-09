@@ -1,7 +1,7 @@
 # hub-api: Node/Express → Python3/Quart Migration Plan
 
 **Date:** 2026-08-31 · **Status:** PLANNING (no implementation) · **Branch:** `feature/v3-hubapi-migration-plan`
-**Cross-ref:** master program plan `docs/plans/2026-08-31-v3-sccembs-program-plan.md` (parallel), SCBM design `docs/plans/2026-08-26-v3-scbm-apps-design.md`, App Bundle SDK `docs/plans/2026-08-31-app-bundle-sdk-design.md`
+**Cross-ref:** master program plan `docs/plans/2026-08-31-v3-sccebm-program-plan.md` (parallel), SCBM design `docs/plans/2026-08-26-v3-scbm-apps-design.md`, App Bundle SDK `docs/plans/2026-08-31-app-bundle-sdk-design.md`
 
 ---
 
@@ -24,9 +24,9 @@ Port the **entire Node/Express hub backend** to **Python3/Quart inside `hub-api`
 
 ---
 
-## 2. Controller Inventory + SCCEMBS Mapping
+## 2. Controller Inventory + SCCEBM Mapping
 
-**Legend:** *Core* = always-on hub-api platform endpoint (tier-gated, not a product module). *Module* = becomes a **DEFAULT APP BUNDLE** within a SCCEMBS product module. `†` = overlap/ambiguous (see §8 Open Decisions).
+**Legend:** *Core* = always-on hub-api platform endpoint (tier-gated, not a product module). *Module* = becomes a **DEFAULT APP BUNDLE** within a SCCEBM product module. `†` = overlap/ambiguous (see §8 Open Decisions).
 
 ### Core / hub-api (33 — 22 hub + 11 marketplace)
 
@@ -56,7 +56,7 @@ Port the **entire Node/Express hub backend** to **Python3/Quart inside `hub-api`
 | `vendorSubmissionController` | Marketplace | vendor submission |
 | **marketplace_module (11):** `catalog` `installation` `subscription` `payment` `premium` `discountCode` `vendor` `vendorAnalytics` `adminReview` `routerIntegration` `module` | Marketplace | folds INTO hub-api marketplace module (`.PLAN`: "marketplace = module within hub-api, not a container"). Stripe/PayPal webhooks (`webhooks.js`). |
 
-### SCCEMBS Product Modules → default app bundles (22)
+### SCCEBM Product Modules → default app bundles (22)
 
 | Controller | Module | Default bundle / feature key | Notes |
 |---|---|---|---|
@@ -205,7 +205,7 @@ Each phase, per group: port controllers → Quart blueprints · port services �
 | M8 | Event | 2 | ~1.5K | S |
 | M9 | Socials+Customers+Marketing | 2 existing (+greenfield) | ~2K + new | M–L (greenfield scope in program plan) |
 
-**Totals:** ≈39K LOC Node backend · 55 controllers · avg ~537 LOC/hub-controller, ~213/marketplace. **Suggested 9-phase breakdown** maps onto the master program plan's Core→module wave (Bot pattern-prover first, then modules) — see `docs/plans/2026-08-31-v3-sccembs-program-plan.md`. Media-control modules (Streaming) are **management API only**; actual media runs in `svc-presentation`/`svc-streaming`.
+**Totals:** ≈39K LOC Node backend · 55 controllers · avg ~537 LOC/hub-controller, ~213/marketplace. **Suggested 9-phase breakdown** maps onto the master program plan's Core→module wave (Bot pattern-prover first, then modules) — see `docs/plans/2026-08-31-v3-sccebm-program-plan.md`. Media-control modules (Streaming) are **management API only**; actual media runs in `svc-presentation`/`svc-streaming`.
 
 ---
 
@@ -219,4 +219,4 @@ Each phase, per group: port controllers → Quart blueprints · port services �
 | D4 | **Socket.io transport** | python-socketio ASGI (keep `socket.io-client`). Reconsider raw Quart WS only with a coordinated frontend change. |
 | D5 | **Ambiguous controller homes (`†`)** | `rconController` → Bot vs Streaming(voice)/game-module; `githubSync` → Socials vs Core-integration; `support` → Customers(cases) vs Core-support; `loyalty`/`inventory`/`interaction`/`aiKnowledge` module vs Community/Bot overlap. Confirm before assigning feature-flag namespaces + KNOWN_MODULES. |
 | D6 | **Marketplace fold-in granularity** | Confirm marketplace becomes a hub-api **blueprint package** (not separate container) per `.PLAN` line 358; whether its 14 services (stripe/paypal/order/premium) port as-is or consolidate. |
-| D7 | **Per-service DB account cardinality** | one account per SCCEMBS module vs one per hub-api (control-plane) with RLS — recommend per-module scoped accounts, admin(DDL) separate. |
+| D7 | **Per-service DB account cardinality** | one account per SCCEBM module vs one per hub-api (control-plane) with RLS — recommend per-module scoped accounts, admin(DDL) separate. |

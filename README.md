@@ -12,8 +12,8 @@
 
 ## What is Waddles?
 
-Waddles is a chat bot and community platform built around the **SCCEMBS** module set —
-**S**ocials, **C**ustomers, **C**ommunity, **E**vent, **M**arketing, **B**ot, **S**treaming.
+Waddles is a chat bot and community platform built around the **SCCEBM** module set —
+**S**ocials, **C**ustomer, **C**ommunity, **E**vent, **B**ot, **M**arketing.
 Every capability, first-party or third-party, ships as an **App Bundle**: a versioned package of
 per-stage scripts (`ingest` / `process` / `action` / `presentation`) that a tenant installs,
 makes available, and a community activates. The platform provides the pipeline, identity,
@@ -63,6 +63,11 @@ Each pipeline stage publishes onto the next stage's own Valkey stream — `proce
 `process`. Streams are isolated per `(tenant, community, app_id, stage)`:
 `waddles:t:{tenant}:c:{community}:app:{app_id}:{stage}`.
 
+Messages crossing a stage boundary are typed `flask_core.stream_pipeline` dataclasses
+(`PlatformEvent`, `StageEnvelope`), not raw dicts — see
+[Architecture: Typed stage contract](docs/ARCHITECTURE.md#typed-stage-contract) for the full
+shape and per-stage entrypoint signatures.
+
 ## App Bundle model
 
 ```
@@ -70,7 +75,7 @@ Core → Module → Feature → App (Bundle)
 ```
 
 - **Core** — mandatory, non-toggleable platform: identity, tenancy, entitlement, marketplace, event bus.
-- **Module** — one of the 7 SCCEMBS modules, globally toggleable via Helm.
+- **Module** — one of the SCCEBM modules (+ Streaming), globally toggleable via Helm.
 - **Feature** — a capability inside a module (`waddles.community.chat`, `waddles.streaming.music_station`).
 - **App (Bundle)** — the code implementing a Feature. A bundle **is** the App, not a group of Apps:
   `bundle.yaml` manifest + a `{config, spec, script}` directory per stage it implements
@@ -102,7 +107,7 @@ platform provides one adapter per type: `webhook` | `rest_api` | `grpc_api` | `g
 Full spec: [`docs/plans/2026-08-31-app-bundle-sdk-design.md`](docs/plans/2026-08-31-app-bundle-sdk-design.md).
 Container/module mapping detail: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-## SCCEMBS modules
+## SCCEBM modules
 
 | # | Module | Scope |
 |---|---|---|

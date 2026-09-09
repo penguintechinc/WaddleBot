@@ -4,7 +4,7 @@ Status: **DRAFT — for review, not implementation.** Extends
 `docs/plans/2026-08-26-v3-scbm-apps-design.md` (Modules/Features/Apps, seven→eight
 container topology), `docs/plans/2026-08-31-app-bundle-sdk-design.md` (pipeline, isolation
 keys, poll/read-replica distribution), `docs/plans/2026-08-31-music-station-design.md`
-(the `svc-presentation` render surface it shares with), and the v3 SCCEMBS master program
+(the `svc-presentation` render surface it shares with), and the v3 SCCEBM master program
 plan (`git show origin/feature/v3-program-plan:docs/plans/2026-08-31-v3-sccembs-program-plan.md`,
 §4.3, §5, P5/P6, §10). Cross-refs the metered-token-billing spec being authored in
 parallel (`docs/plans/2026-08-31-metered-token-billing-design.md`). Every "today" claim
@@ -36,7 +36,7 @@ here.
 ## 1. Overview
 
 `svc-streaming` is the paired **RTC + broadcast media** container — the engine of the
-**Streaming** module (the "S" in SCCEMBS, `program-plan §1`). It is the **8th** container
+**Streaming** module (the "S" in SCCEBM, `program-plan §1`). It is the **8th** container
 (`.PLAN:385-389`, program-plan container table): the legacy `svc-rtc` (interactive
 voice/video) is *folded in* rather than kept separate, because both are media-heavy and
 share one transcode/media stack.
@@ -230,7 +230,7 @@ don't hard-break `.PLAN:52-62` consumers):
 
 `+` new: `streaming.display`, `streaming.record`, `streaming.transcode`. This also moves
 the module gating: `svc-rtc.yaml` is gated today on `modules.social.enabled`
-(`svc-rtc.yaml:5-12`) because "Only Social owns module_rtc"; under SCCEMBS the container is
+(`svc-rtc.yaml:5-12`) because "Only Social owns module_rtc"; under SCCEBM the container is
 gated on **`modules.streaming.enabled`** instead.
 
 **Migration note (staged — §8.1/§8.2 timing):**
@@ -338,4 +338,4 @@ DB account (read-only on the read replica for routing reads, §3; `backend.md` D
 | No community "live streams" aggregation section anywhere | `svc-presentation`-rendered aggregation of own streams + connected-channel live-status (§4) |
 | No transcoding-token metering | per-job usage emission to hub-api marketplace + license-server ledger (§5) |
 | Forward target stream keys stored inline (`stream_destinations.stream_key`, `database.py:70`) | `penguin-sal` secret refs + rotation (§8.4) |
-| No streaming module gating (`svc-rtc` rides `modules.social.enabled`) | `modules.streaming.enabled` — Streaming is its own SCCEMBS module (§6) |
+| No streaming module gating (`svc-rtc` rides `modules.social.enabled`) | `modules.streaming.enabled` — Streaming is its own SCCEBM module (§6) |
