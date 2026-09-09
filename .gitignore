@@ -137,6 +137,7 @@ celerybeat.pid
 
 # Environments
 .env
+.env.*
 .venv
 env/
 venv/
@@ -201,3 +202,6 @@ mobile/flutter_gazer/android/build/
 *.apk
 *.aab
 
+
+# Integration test OAuth2 tokens (local only — NEVER commit)
+*.token
