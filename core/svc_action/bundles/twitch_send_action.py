@@ -16,9 +16,10 @@ an action-stage script ("a bundle's own script may import and call
 being Discord's "implement its own connector-specific API logic
 entirely".
 
-Replies to the ORIGIN channel: `envelope.payload["channel_name"]` (the
-channel the triggering chat message came from, carried through process->
-action by `bundles/twitch_ingest.py::normalize()`'s own payload shape)
+Replies to the ORIGIN channel: `envelope.event.payload["channel_name"]`
+(the channel the triggering chat message came from, carried through
+process->action by `bundles/twitch_ingest.py::normalize()`'s own payload
+shape)
 takes precedence over the bundle's static `config["channel"]` default --
 a reply belongs in the channel the request came from, not a hardcoded
 one; the static config value only matters for an action with no
@@ -40,10 +41,9 @@ from typing import Any
 
 import httpx
 import redis.asyncio as redis
+from flask_core import StageEnvelope
 from waddle_transports import NonRetryableTransportError, TransportResult
 from waddle_transports.transports.irc_relay import RelayOutboundIrcTransport
-
-from services.envelope import ActionEnvelope
 
 #: Lazily-built, process-wide Valkey client -- `send_message`'s own
 #: signature (`(envelope, config, *, http_client)`) is the same one every
@@ -78,27 +78,29 @@ def _get_redis_client(config: Mapping[str, Any]) -> redis.Redis:
 
 
 async def send_message(
-    envelope: ActionEnvelope,
+    envelope: StageEnvelope,
     config: Mapping[str, Any],
     *,
     http_client: httpx.AsyncClient,
 ) -> TransportResult:
-    """Reply in-place: relay `envelope.payload["text"]` to the origin (or configured) channel.
+    """Reply in-place: relay `envelope.event.payload["text"]` to the origin (or configured) channel.
 
-    `channel` resolution: `envelope.payload["channel_name"]` (the
+    `channel` resolution: `envelope.event.payload["channel_name"]` (the
     triggering message's own channel) first, falling back to the bundle's
     static `config["channel"]` default. `http_client` is accepted (and
     unused) only because `runner.py::_handle_envelope` always passes it --
     every action-stage entrypoint shares that one call signature.
 
     Raises `NonRetryableTransportError` for a config error or an empty
-    payload `text`; a `RetryableTransportError`/`NonRetryableTransportError`
-    the relay itself raises propagates unchanged -- `runner.py`'s own
-    `retry_with_backoff` wrapper catches `waddle_transports`' error types
-    directly, same contract every action-stage entrypoint follows. On
-    success, returns the transport's own `TransportResult` unwrapped.
+    event payload `text`; a `RetryableTransportError`/
+    `NonRetryableTransportError` the relay itself raises propagates
+    unchanged -- `runner.py`'s own `retry_with_backoff` wrapper catches
+    `waddle_transports`' error types directly, same contract every
+    action-stage entrypoint follows. On success, returns the transport's
+    own `TransportResult` unwrapped.
     """
-    payload_channel = envelope.payload.get("channel_name")
+    event_payload = envelope.event.payload
+    payload_channel = event_payload.get("channel_name")
     channel = payload_channel if isinstance(payload_channel, str) and payload_channel else None
     if channel is None:
         config_channel = config.get("channel")
@@ -106,12 +108,15 @@ async def send_message(
     if not channel:
         raise NonRetryableTransportError(
             "twitch bundle could not resolve a channel from either "
-            "envelope.payload['channel_name'] (reply-in-place) or config['channel'] (fallback)"
+            "envelope.event.payload['channel_name'] (reply-in-place) or "
+            "config['channel'] (fallback)"
         )
 
-    text = envelope.payload.get("text")
+    text = event_payload.get("text")
     if not isinstance(text, str) or not text:
-        raise NonRetryableTransportError("action envelope payload missing required 'text' string")
+        raise NonRetryableTransportError(
+            "action envelope event.payload missing required 'text' string"
+        )
 
     transport = RelayOutboundIrcTransport(provider="twitch", redis_client=_get_redis_client(config))
     return await transport.send({"channel": channel}, {"text": text})

@@ -34,8 +34,15 @@ from flask_core.secrets import require_secret_key
 
 #: DB_TYPE values understood -- backend-database.md Database Support Matrix
 #: minus MariaDB Galera (not needed for this service's narrow audit-log use).
+#: Both "postgresql" (backend-database.md's documented DB_TYPE convention)
+#: and "postgres" (the value this service's own configmap actually ships,
+#: k8s/helm/waddlebot/templates/configmap.yaml -- not owned by this
+#: service, left as-is) are accepted so the component-built fallback URL
+#: never regresses on either spelling; pydal itself only recognizes the
+#: "postgres://" URI scheme.
 _DB_URI_SCHEMES: dict[str, str] = {
-    "postgresql": "postgres",  # pydal wants postgres://, not postgresql://
+    "postgresql": "postgres",
+    "postgres": "postgres",
     "mysql": "mysql",
     "sqlite": "sqlite",
 }
@@ -43,6 +50,25 @@ _DB_URI_SCHEMES: dict[str, str] = {
 
 def _optional_int(value: str | None) -> int | None:
     return int(value) if value not in (None, "") else None
+
+
+def _normalize_pydal_scheme(url: str) -> str:
+    """Rewrite a ``postgresql://`` (or ``postgresql+driver://``) URI to pydal's ``postgres://``.
+
+    pydal's adapter registry keys off the URI scheme literally and only
+    registers ``postgres``, never the also-valid ``postgresql`` -- SQLAlchemy's
+    (and this repo's shared `DATABASE_URL` secret's) required scheme. A
+    directly-supplied `DATABASE_URL` bypasses `_build_db_url`'s own
+    `_DB_URI_SCHEMES` translation entirely (`from_env` only calls
+    `_build_db_url` as a fallback when `DATABASE_URL` is unset), so this is
+    the single chokepoint applied to *both* paths below -- no future code
+    path can construct a `database_url` without going through it. Without
+    it, pydal raises `SyntaxError: Adapter not found for postgresql` at
+    `DAL()` construction, surfacing as a Quart lifespan startup failure.
+    """
+    if url.startswith("postgresql://") or url.startswith("postgresql+"):
+        return "postgres://" + url.split("://", 1)[1]
+    return url
 
 
 def _build_db_url(
@@ -113,13 +139,16 @@ class ActionConfig:
     def from_env(cls) -> ActionConfig:
         """Build config from the process environment. Raises on an invalid DB_TYPE."""
         db_type = os.getenv("DB_TYPE", "postgresql")
-        database_url = os.getenv("DATABASE_URL") or _build_db_url(
-            db_type=db_type,
-            host=os.getenv("DB_HOST", "infra-postgres"),
-            port=os.getenv("DB_PORT", "5432"),
-            name=os.getenv("DB_NAME", "waddlebot"),
-            user=os.getenv("DB_USER", "svc-action-rw"),
-            password=os.getenv("DB_PASS", ""),
+        database_url = _normalize_pydal_scheme(
+            os.getenv("DATABASE_URL")
+            or _build_db_url(
+                db_type=db_type,
+                host=os.getenv("DB_HOST", "infra-postgres"),
+                port=os.getenv("DB_PORT", "5432"),
+                name=os.getenv("DB_NAME", "waddlebot"),
+                user=os.getenv("DB_USER", "svc-action-rw"),
+                password=os.getenv("DB_PASS", ""),
+            )
         )
         valkey_url = os.getenv("VALKEY_URL") or os.getenv("REDIS_URL") or "redis://localhost:6379/0"
         hub_api_url = os.getenv("HUB_API_URL", "http://hub-api:8204")

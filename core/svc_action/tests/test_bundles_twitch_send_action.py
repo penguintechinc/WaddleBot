@@ -15,23 +15,28 @@ from typing import Any
 import fakeredis
 import httpx
 import pytest
+from flask_core import PlatformEvent, StageEnvelope
 from waddle_transports import NonRetryableTransportError, RetryableTransportError
 from waddle_transports.transports.irc_relay import outbound_queue_key
 
 import bundles.twitch_send_action as twitch_bundle
 from bundles.twitch_send_action import _get_redis_client, send_message
-from services.envelope import ActionEnvelope
 
 
-def _envelope(payload: dict | None = None) -> ActionEnvelope:
-    return ActionEnvelope(
+def _envelope(payload: dict | None = None) -> StageEnvelope:
+    return StageEnvelope(
         tenant="1",
         community="42",
         app_id="waddles.bot.twitch.default",
         stage="action",
-        payload=payload if payload is not None else {"text": "hello from waddlebot"},
+        event=PlatformEvent(
+            platform="twitch",
+            event_type="chat_message",
+            actor=None,
+            payload=payload if payload is not None else {"text": "hello from waddlebot"},
+            occurred_at="2026-09-02T12:00:00Z",
+        ),
         ts="2026-09-02T12:00:00Z",
-        raw="{}",
     )
 
 

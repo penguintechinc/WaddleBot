@@ -36,11 +36,10 @@ from collections.abc import Mapping
 from typing import Any
 
 import httpx
+from flask_core import StageEnvelope
 from waddle_transports import NonRetryableTransportError, RetryableTransportError, TransportResult
 from waddle_transports.signing import SecretResolutionError, resolve_secret
 from waddle_transports.url_guard import SSRFError, guarded_request
-
-from services.envelope import ActionEnvelope
 
 #: Real Discord REST API base -- overridable via bundle `config["api_base"]`
 #: (tests point this at a literal-IP mock target, matching every other
@@ -51,12 +50,12 @@ _DEFAULT_API_BASE = "https://discord.com/api/v10"
 
 
 async def send_message(
-    envelope: ActionEnvelope,
+    envelope: StageEnvelope,
     config: Mapping[str, Any],
     *,
     http_client: httpx.AsyncClient,
 ) -> TransportResult:
-    """Reply in-place: send `envelope.payload["text"]` to `envelope.payload["channel_id"]`.
+    """Reply in-place: send `envelope.event.payload["text"]` to the resolved `channel_id`.
 
     "Reply-in-place" is the primary behavior -- `channel_id` comes from
     the triggering event's own payload (the channel the inbound message
@@ -78,7 +77,8 @@ async def send_message(
     `retry_with_backoff` in `runner.py` owns the actual backoff; this
     bundle never sleeps itself) or a 5xx/network error.
     """
-    payload_channel_id = envelope.payload.get("channel_id")
+    event_payload = envelope.event.payload
+    payload_channel_id = event_payload.get("channel_id")
     config_channel_id = config.get("channel_id")
     channel_id = (
         payload_channel_id
@@ -90,16 +90,19 @@ async def send_message(
     if channel_id is None:
         raise NonRetryableTransportError(
             "discord bundle could not resolve a channel_id from either "
-            "envelope.payload['channel_id'] (reply-in-place) or config['channel_id'] (fallback)"
+            "envelope.event.payload['channel_id'] (reply-in-place) or "
+            "config['channel_id'] (fallback)"
         )
 
     bot_token_ref = config.get("bot_token_ref")
     if not isinstance(bot_token_ref, str) or not bot_token_ref:
         raise NonRetryableTransportError("discord bundle config missing required 'bot_token_ref'")
 
-    text = envelope.payload.get("text")
+    text = event_payload.get("text")
     if not isinstance(text, str) or not text:
-        raise NonRetryableTransportError("action envelope payload missing required 'text' string")
+        raise NonRetryableTransportError(
+            "action envelope event.payload missing required 'text' string"
+        )
 
     try:
         bot_token = resolve_secret(bot_token_ref)
@@ -113,7 +116,7 @@ async def send_message(
         "Content-Type": "application/json",
     }
     body: dict[str, Any] = {"content": text}
-    embed = envelope.payload.get("embed")
+    embed = event_payload.get("embed")
     if isinstance(embed, dict):
         body["embeds"] = [embed]
 

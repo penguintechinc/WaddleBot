@@ -22,6 +22,7 @@ from flask_core import (
     AsyncDAL,
     create_health_blueprint,
     install_security_headers,
+    set_bundle_dal,
     setup_aaa_logging,
 )
 from flask_core.auth import create_jwt_token
@@ -79,6 +80,11 @@ async def startup() -> None:
     async_dal = AsyncDAL(_config.database_url, pool_size=_config.db_pool_size, migrate=False)
     bind_minimal_reference_tables(async_dal.dal)
     init_action_dispatch_log_table(async_dal.dal)
+    # Bind for `get_bundle_dal()` -- an action bundle needing DB access
+    # beyond the audit log (e.g. fetching a stored quote) reaches this same
+    # DAL from inside its own entrypoint body. See docs/
+    # APP_BUNDLE_AUTHORING.md, 'Accessing the database / shared state'.
+    set_bundle_dal(async_dal)
 
     poller = BundlePoller(
         http_client,

@@ -14,6 +14,15 @@ def client() -> Any:
     return quart_app.test_client()
 
 
+@pytest.fixture(autouse=True)
+def _reset_bundle_dal() -> Any:
+    """`set_bundle_dal()` binds a process-wide singleton -- never leak it across test modules."""
+    from flask_core import reset_bundle_dal_for_tests
+
+    yield
+    reset_bundle_dal_for_tests()
+
+
 class TestHealthEndpoints:
     async def test_health(self, client: Any) -> None:
         """flask_core's health blueprint wiring boots and reports healthy.
@@ -61,3 +70,18 @@ class TestLifespan:
             assert quart_app.config["runner"] is not None
             assert not quart_app.config["runner_task"].done()
         assert quart_app.config["runner_task"].done()
+
+    async def test_startup_binds_dal_for_get_bundle_dal(self) -> None:
+        """`startup()` calls `set_bundle_dal()`.
+
+        An action bundle's `get_bundle_dal()` (for DB access beyond the
+        audit log) must resolve to the same `AsyncDAL`
+        `app.config["async_dal"]` holds.
+        """
+        from flask_core import get_bundle_dal
+
+        from app import app as quart_app
+
+        async with quart_app.test_app():
+            assert quart_app.config["async_dal"] is not None
+            assert get_bundle_dal() is quart_app.config["async_dal"]
