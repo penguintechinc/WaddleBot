@@ -11,6 +11,11 @@ RUN pip install --no-cache-dir --require-hashes -r requirements.txt
 COPY libs/flask_core /app/libs/flask_core
 RUN pip install --no-cache-dir /app/libs/flask_core
 
+# moderation_module -- content-moderation classifier (docs/plans/2026-09-08-
+# content-moderation-design.md), same local-package pattern as flask_core.
+COPY libs/moderation_module /app/libs/moderation_module
+RUN pip install --no-cache-dir /app/libs/moderation_module
+
 FROM python:3.13-slim-bookworm@sha256:f13a6b7565175da40695e8109f64cbc4d2e65f4c9ef2e3b321c3a44fa3c06fe7
 WORKDIR /app
 COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
@@ -18,6 +23,7 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 
 COPY core/svc_process/app.py core/svc_process/config.py core/svc_process/runner.py ./
 COPY core/svc_process/bundles ./bundles
+COPY core/svc_process/services ./services
 
 EXPOSE 8211
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
