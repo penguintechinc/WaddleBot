@@ -55,6 +55,10 @@ async def app_and_client(
     monkeypatch.setenv("DB_MIGRATE", "true")
     monkeypatch.setenv("SERVICE_API_KEY", "test-service-key")
     monkeypatch.setenv("GRPC_PORT", "0")
+    # app.py's startup() unconditionally calls bind_secure_port(), which
+    # fails closed without real TLS cert/key material (flask_core.grpc_tls)
+    # -- the explicit dev-only escape hatch is required to boot the test app.
+    monkeypatch.setenv("GRPC_TLS_INSECURE_DEV", "true")
 
     for mod_name in ("app", "config"):
         sys.modules.pop(mod_name, None)

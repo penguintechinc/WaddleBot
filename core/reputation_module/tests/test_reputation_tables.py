@@ -11,14 +11,16 @@ files (not a hand-defined pydal/SQLite schema), so a regression on either
 table's columns is caught here instead of in production.
 
 ``ReputationService.get_reputation()``/``.adjust()``/``.set_reputation()``/
-``.get_leaderboard()``/``.initialize_member()`` all additionally join
+``.get_leaderboard()``/``.initialize_member()`` previously also joined
 against ``community_members.hub_user_id`` -- a column that does not exist on
 that table (it has ``user_id VARCHAR``, see
 config/postgres/migrations/000_create_base_schema.sql /
-037_fix_community_schema.sql). That is a separate, pre-existing bug outside
-this migration's scope (it exists independently of whether
-reputation_events/reputation_global exist) and is not exercised here; this
-suite only covers the code paths whose *only* runtime dependency was the
+037_fix_community_schema.sql). That was a separate, pre-existing bug
+(gh-299) outside this migration's original scope -- fixed in
+``services/reputation_service.py`` to match on ``user_id``/platform
+identity instead, and now covered by
+``test_adjust_writes_community_and_global_reputation`` below. The rest of
+this suite covers the code paths whose *only* runtime dependency was the
 missing reputation_events/reputation_global tables --
 ``_update_global_reputation()``/``get_global_reputation()``,
 ``get_history()``, and ``get_global_leaderboard()``.
@@ -179,3 +181,70 @@ async def test_global_leaderboard(dal: DAL, seeded_ids: tuple[int, int]) -> None
     assert entry["score"] == Config.REPUTATION_DEFAULT + 50
     assert entry["total_events"] == 1
     assert entry["rank"] >= 1
+
+
+async def test_adjust_writes_community_and_global_reputation(
+    dal: DAL, seeded_ids: tuple[int, int]
+) -> None:
+    # regression: gh-299
+    """adjust() must persist a real delta to BOTH reputation tiers.
+
+    Pre-fix, every accrual write in ``adjust()`` (and
+    ``set_reputation()``/``get_reputation()``/``get_leaderboard()``/
+    ``initialize_member()``) filtered ``community_members`` on a
+    ``hub_user_id`` column that does not exist on that table --
+    ``community_members`` only has ``user_id VARCHAR`` (storing
+    ``str(hub_user_id)``) -- so every one of those statements raised
+    ``column cm.hub_user_id does not exist`` and reputation never changed.
+    This exercises the real ``adjust()`` write path end to end against the
+    actual migrated schema: the seeded ``community_members`` row (matched
+    by ``user_id``, not the phantom column) and ``reputation_global``
+    (matched by its real ``hub_user_id`` column) both receive a persisted,
+    non-zero delta.
+    """
+    community_id, hub_user_id = seeded_ids
+    weight_manager = WeightManager(dal, NullLogger())
+    service = ReputationService(dal, weight_manager, NullLogger())
+
+    platform = "discord"
+    platform_user_id = f"repmig-adjust-{hub_user_id}"
+
+    # Seed the community_members row adjust() will update -- linked to the
+    # hub user via the table's real `user_id` column.
+    dal.executesql(
+        """INSERT INTO community_members
+           (community_id, user_id, platform, platform_user_id, reputation, role)
+           VALUES (%s, %s, %s, %s, %s, 'member')""",
+        [community_id, str(hub_user_id), platform, platform_user_id, 600],
+    )
+    dal.commit()
+
+    result = await service.adjust(
+        community_id=community_id,
+        user_id=hub_user_id,
+        event_type="follow",
+        platform=platform,
+        platform_user_id=platform_user_id,
+    )
+
+    assert result.success, result.error
+    assert result.error is None
+    assert result.score_change != 0.0
+    assert result.score_before == 600
+    assert result.score_after == result.score_before + result.score_change
+
+    # community_members.reputation actually moved -- looked up by the real
+    # `user_id` column, never the nonexistent `hub_user_id`.
+    community_row = dal.executesql(
+        "SELECT reputation FROM community_members WHERE community_id = %s AND user_id = %s",
+        [community_id, str(hub_user_id)],
+    )
+    assert community_row[0][0] == result.score_after
+
+    # reputation_global.score also moved -- looked up by hub_user_id, the
+    # column that table actually has.
+    global_row = dal.executesql(
+        "SELECT score FROM reputation_global WHERE hub_user_id = %s",
+        [hub_user_id],
+    )
+    assert global_row[0][0] == Config.REPUTATION_DEFAULT + result.score_change

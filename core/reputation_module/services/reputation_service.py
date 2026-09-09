@@ -78,43 +78,39 @@ class ReputationService:
         platform: Optional[str] = None,
         platform_user_id: Optional[str] = None
     ) -> Optional[ReputationInfo]:
-        """
-        Get reputation for a user in a specific community.
+        """Get reputation for a user in a specific community.
 
-        Can lookup by hub_user_id OR platform/platform_user_id.
+        Can lookup by hub_user_id OR platform/platform_user_id. Matches
+        against `community_members.user_id` -- that table has no
+        `hub_user_id` column, only `user_id VARCHAR` storing
+        `str(hub_user_id)` once a member is linked to a hub account (see
+        `flask_core.community_access`'s identical
+        `dal.community_members.user_id == str(user_id)` convention, and
+        `core/svc_process/bundles/community_reputation_process.py`'s
+        matching read path). The platform-identity lookup queries
+        `community_members.platform`/`platform_user_id` directly -- those
+        columns already live on the row itself, no join through
+        `hub_users`/`user_identities` (the latter does not exist; the real
+        table is `hub_user_identities`) is needed.
         Returns None if user not found in community.
         """
         try:
             if user_id:
-                # Lookup by hub_user_id
+                # Lookup by hub_user_id (stored as community_members.user_id)
                 result = self.dal.executesql(
-                    """SELECT cm.reputation, cm.updated_at,
-                              (SELECT COUNT(*) FROM reputation_events re
-                               WHERE re.community_id = cm.community_id
-                               AND re.hub_user_id = cm.hub_user_id) as event_count,
-                              (SELECT MAX(created_at) FROM reputation_events re
-                               WHERE re.community_id = cm.community_id
-                               AND re.hub_user_id = cm.hub_user_id) as last_event
+                    """SELECT cm.reputation, cm.updated_at, cm.user_id
                        FROM community_members cm
-                       WHERE cm.community_id = %s AND cm.hub_user_id = %s""",
-                    [community_id, user_id]
+                       WHERE cm.community_id = %s AND cm.user_id = %s""",
+                    [community_id, str(user_id)]
                 )
             elif platform and platform_user_id:
-                # Lookup by platform identity
+                # Lookup by platform identity -- native columns on community_members
                 result = self.dal.executesql(
-                    """SELECT cm.reputation, cm.updated_at,
-                              (SELECT COUNT(*) FROM reputation_events re
-                               WHERE re.community_id = cm.community_id
-                               AND re.hub_user_id = cm.hub_user_id) as event_count,
-                              (SELECT MAX(created_at) FROM reputation_events re
-                               WHERE re.community_id = cm.community_id
-                               AND re.hub_user_id = cm.hub_user_id) as last_event
+                    """SELECT cm.reputation, cm.updated_at, cm.user_id
                        FROM community_members cm
-                       JOIN hub_users hu ON hu.id = cm.hub_user_id
-                       JOIN user_identities ui ON ui.hub_user_id = hu.id
                        WHERE cm.community_id = %s
-                         AND ui.platform = %s
-                         AND ui.platform_user_id = %s""",
+                         AND cm.platform = %s
+                         AND cm.platform_user_id = %s""",
                     [community_id, platform, platform_user_id]
                 )
             else:
@@ -127,12 +123,27 @@ class ReputationService:
             score = row[0] if row[0] is not None else Config.REPUTATION_DEFAULT
             tier_name, tier_label = self._get_tier(score)
 
+            # reputation_events is keyed by the INTEGER hub_user_id -- only
+            # queryable once the member row is resolved to its hub link.
+            event_count = 0
+            last_event = None
+            resolved_user_id = row[2]
+            if resolved_user_id:
+                stats = self.dal.executesql(
+                    """SELECT COUNT(*), MAX(created_at) FROM reputation_events
+                       WHERE community_id = %s AND hub_user_id = %s""",
+                    [community_id, int(resolved_user_id)]
+                )
+                if stats:
+                    event_count = stats[0][0] or 0
+                    last_event = stats[0][1]
+
             return ReputationInfo(
                 score=score,
                 tier=tier_name,
                 tier_label=tier_label,
-                total_events=row[2] or 0,
-                last_event_at=str(row[3]) if row[3] else None
+                total_events=event_count,
+                last_event_at=str(last_event) if last_event else None
             )
 
         except Exception as e:
@@ -187,12 +198,25 @@ class ReputationService:
         reason: Optional[str] = None,
         amount_multiplier: float = 1.0
     ) -> AdjustmentResult:
-        """
-        Adjust reputation based on an event.
+        """Adjust reputation based on an event.
 
-        Uses weight configuration to determine score change.
-        Updates both community and global reputation.
-        Creates audit log entry.
+        Uses weight configuration to determine score change. Updates both
+        community reputation (`community_members.reputation`) and, when the
+        member is linked to a hub account, global reputation
+        (`reputation_global.score`). Creates a `reputation_events` audit log
+        entry.
+
+        The community member row is matched by `(community_id, platform,
+        platform_user_id)` -- the table's actual `UNIQUE` constraint (see
+        `config/postgres/migrations/000_create_base_schema.sql`).
+        `community_members` has no `hub_user_id` column; `user_id VARCHAR`
+        stores `str(hub_user_id)` once the member is linked (see
+        `flask_core.community_access`'s identical convention), and is left
+        `NULL` for a platform-only member with no hub account yet -- so
+        matching on the platform identity (always present, unlike the hub
+        link) is the only way to find the correct row regardless of link
+        state, instead of the previous `OR hub_user_id IS NULL` fallback
+        which could grab any other unlinked member's row in the community.
 
         Args:
             community_id: Community where event occurred
@@ -224,15 +248,16 @@ class ReputationService:
             # Calculate actual change with multiplier
             score_change = float(base_weight) * amount_multiplier
 
-            # Get or create community membership
+            # Get or create community membership -- matched by platform
+            # identity (community_members has no hub_user_id column).
             member_result = self.dal.executesql(
-                """SELECT cm.id, cm.reputation, cm.hub_user_id
+                """SELECT cm.id, cm.reputation, cm.user_id
                    FROM community_members cm
                    WHERE cm.community_id = %s
-                   AND (cm.hub_user_id = %s OR cm.hub_user_id IS NULL)
-                   ORDER BY cm.hub_user_id IS NOT NULL DESC
+                     AND cm.platform = %s
+                     AND cm.platform_user_id = %s
                    LIMIT 1""",
-                [community_id, user_id] if user_id else [community_id, None]
+                [community_id, platform, platform_user_id]
             )
 
             if not member_result or len(member_result) == 0:
@@ -240,17 +265,20 @@ class ReputationService:
                 current_score = weights.starting_score
                 self.dal.executesql(
                     """INSERT INTO community_members
-                       (community_id, hub_user_id, reputation, role)
-                       VALUES (%s, %s, %s, 'member')""",
-                    [community_id, user_id, current_score]
+                       (community_id, user_id, platform, platform_user_id,
+                        reputation, role)
+                       VALUES (%s, %s, %s, %s, %s, 'member')""",
+                    [community_id, str(user_id) if user_id else None,
+                     platform, platform_user_id, current_score]
                 )
                 self.dal.commit()
-                member_id = None  # Will fetch after insert
             else:
                 row = member_result[0]
-                member_id = row[0]
                 current_score = row[1] if row[1] is not None else weights.starting_score
-                user_id = row[2]  # Use the stored hub_user_id
+                stored_user_id = row[2]
+                # Prefer the caller-supplied hub link; fall back to whatever
+                # is already stored on the member row.
+                user_id = user_id or (int(stored_user_id) if stored_user_id else None)
 
             score_before = current_score
             new_score = self._clamp_score(
@@ -264,8 +292,8 @@ class ReputationService:
             self.dal.executesql(
                 """UPDATE community_members
                    SET reputation = %s, updated_at = NOW()
-                   WHERE community_id = %s AND hub_user_id = %s""",
-                [score_after, community_id, user_id]
+                   WHERE community_id = %s AND platform = %s AND platform_user_id = %s""",
+                [score_after, community_id, platform, platform_user_id]
             )
 
             # Create audit log entry
@@ -290,9 +318,19 @@ class ReputationService:
 
             self.logger.audit(
                 "Reputation adjusted",
+                user=str(user_id) if user_id else platform_user_id,
+                community=str(community_id),
+                result="success",
+                # `reputation_event_type`, not `event_type` -- AAALogger.
+                # audit()'s own `_build_extra(event_type: str, **kwargs)`
+                # reserves the bare `event_type` kwarg name for its own
+                # "AUDIT"/"AUTH"/etc. category positional arg; a caller
+                # extra kwarg of the same name collides ("got multiple
+                # values for argument 'event_type'") -- caught here by
+                # `tests/test_reputation_service_audit.py`.
                 community_id=community_id,
                 user_id=user_id,
-                event_type=event_type,
+                reputation_event_type=event_type,
                 score_before=score_before,
                 score_after=score_after,
                 change=score_change
@@ -346,10 +384,12 @@ class ReputationService:
         reason: str,
         admin_id: int
     ) -> AdjustmentResult:
-        """
-        Manually set reputation score (admin action).
+        """Manually set reputation score (admin action).
 
-        Creates audit log with admin attribution.
+        Matches the target by `community_members.user_id` (`str(user_id)`)
+        -- that table has no `hub_user_id` column, see `adjust()`'s
+        docstring for the full convention. Creates audit log with admin
+        attribution.
         """
         try:
             # Get weights for bounds checking
@@ -361,8 +401,8 @@ class ReputationService:
             # Get current score
             result = self.dal.executesql(
                 """SELECT reputation FROM community_members
-                   WHERE community_id = %s AND hub_user_id = %s""",
-                [community_id, user_id]
+                   WHERE community_id = %s AND user_id = %s""",
+                [community_id, str(user_id)]
             )
 
             if not result or len(result) == 0:
@@ -381,8 +421,8 @@ class ReputationService:
             self.dal.executesql(
                 """UPDATE community_members
                    SET reputation = %s, updated_at = NOW()
-                   WHERE community_id = %s AND hub_user_id = %s""",
-                [new_score, community_id, user_id]
+                   WHERE community_id = %s AND user_id = %s""",
+                [new_score, community_id, str(user_id)]
             )
 
             # Audit log with admin attribution
@@ -402,6 +442,9 @@ class ReputationService:
 
             self.logger.audit(
                 "Reputation manually set",
+                user=str(user_id),
+                community=str(community_id),
+                result="success",
                 community_id=community_id,
                 user_id=user_id,
                 admin_id=admin_id,
@@ -471,15 +514,22 @@ class ReputationService:
         limit: int = 25,
         offset: int = 0
     ) -> List[Dict[str, Any]]:
-        """Get reputation leaderboard for a community."""
+        """Get reputation leaderboard for a community.
+
+        Only shows members linked to a hub account (`community_members
+        .user_id IS NOT NULL`) -- `community_members` has no `hub_user_id`
+        column; `user_id VARCHAR` stores `str(hub_user_id)`, cast to
+        `INTEGER` to join `hub_users`.
+        """
         try:
             result = self.dal.executesql(
-                """SELECT cm.hub_user_id, hu.username, hu.avatar_url,
-                          cm.reputation,
+                """SELECT CAST(cm.user_id AS INTEGER) as hub_user_id,
+                          hu.username, hu.avatar_url, cm.reputation,
                           RANK() OVER (ORDER BY cm.reputation DESC) as rank
                    FROM community_members cm
-                   JOIN hub_users hu ON hu.id = cm.hub_user_id
+                   JOIN hub_users hu ON hu.id = CAST(cm.user_id AS INTEGER)
                    WHERE cm.community_id = %s AND cm.is_active = true
+                     AND cm.user_id IS NOT NULL
                    ORDER BY cm.reputation DESC
                    LIMIT %s OFFSET %s""",
                 [community_id, limit, offset]
@@ -549,16 +599,20 @@ class ReputationService:
         community_id: int,
         user_id: int
     ) -> bool:
-        """Initialize reputation for a new community member."""
+        """Initialize reputation for a new community member.
+
+        Matches by `community_members.user_id` (`str(user_id)`) -- see
+        `adjust()`'s docstring for the full column convention.
+        """
         try:
             weights = await self.weight_manager.get_weights(community_id)
 
             self.dal.executesql(
                 """UPDATE community_members
                    SET reputation = %s
-                   WHERE community_id = %s AND hub_user_id = %s
+                   WHERE community_id = %s AND user_id = %s
                    AND reputation IS NULL""",
-                [weights.starting_score, community_id, user_id]
+                [weights.starting_score, community_id, str(user_id)]
             )
             self.dal.commit()
             return True
