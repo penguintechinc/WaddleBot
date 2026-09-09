@@ -7,12 +7,16 @@ Provides a high-level event streaming pipeline with:
 - Consumer group management
 - Event acknowledgment and retry logic
 - Stream monitoring and diagnostics
+- Frozen typed stage-to-stage pipeline contract (PlatformEvent, StageEnvelope)
 """
+
+from __future__ import annotations
 
 import os
 import json
 import logging
 import asyncio
+from collections.abc import Mapping
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, asdict, field
 from datetime import datetime
@@ -146,6 +150,183 @@ class BundleIsolationKeys:
     def consumer_group(self, stage: str) -> str:
         """Consumer group name for one stage; see `bundle_consumer_group`."""
         return bundle_consumer_group(self.app_id, stage)
+
+
+# --- Frozen typed stage-to-stage pipeline contract ---
+#
+# Root cause this fixes: stage handlers passed untyped dicts over Valkey, and
+# one stage wrapped an already-normalized dict under a second `payload` key,
+# leaving real fields one level too deep for the next stage to find -- a
+# lookup that returns None silently instead of raising. `PlatformEvent`/
+# `StageEnvelope` are the ONLY typed objects stage code should pass to each
+# other from here on; the queue-crossing field is deliberately named `event`
+# (never `payload`) precisely so that double-nesting a payload dict under a
+# `payload` key can no longer happen structurally. Frozen + slots: a stage
+# produces a NEW instance (`dataclasses.replace`) rather than mutating one in
+# place.
+
+
+class EnvelopeError(ValueError):
+    """Raised when a queue-crossing pipeline object is malformed on read.
+
+    Covers a missing/wrong-typed required field and, deliberately, any
+    legacy pre-fix shape (e.g. a dict with no `event` key). A malformed or
+    legacy-shaped message is refused, never silently coerced.
+    """
+
+
+def _require_str(d: Mapping[str, Any], key: str) -> str:
+    """Fetch a required non-empty string field, or raise `EnvelopeError`."""
+    value = d.get(key)
+    if not isinstance(value, str) or not value:
+        raise EnvelopeError(f"{key!r} must be a non-empty string, got {value!r}")
+    return value
+
+
+def _optional_str(d: Mapping[str, Any], key: str) -> str | None:
+    """Fetch an optional string field (`None` allowed), or raise `EnvelopeError`."""
+    value = d.get(key)
+    if value is not None and not isinstance(value, str):
+        raise EnvelopeError(f"{key!r} must be a string or null, got {value!r}")
+    return value
+
+
+def _require_object(d: Mapping[str, Any], key: str) -> dict[str, Any]:
+    """Fetch a required JSON-object field as a `dict`, or raise `EnvelopeError`."""
+    value = d.get(key)
+    if not isinstance(value, dict):
+        raise EnvelopeError(
+            f"{key!r} must be a JSON object, got {type(value).__name__}"
+        )
+    return value
+
+
+@dataclass(slots=True, frozen=True)
+class PlatformEvent:
+    """A normalized inbound platform event.
+
+    Transport-neutral metadata (`platform`, `event_type`, `actor`,
+    `occurred_at`) plus a platform-specific `payload` dict (text,
+    channel_id, guild_id, message_id, author_id, ...).
+    """
+
+    platform: str
+    event_type: str
+    actor: str | None
+    payload: dict[str, Any]
+    occurred_at: str
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to a plain, JSON-ready dict."""
+        return {
+            "platform": self.platform,
+            "event_type": self.event_type,
+            "actor": self.actor,
+            "payload": dict(self.payload),
+            "occurred_at": self.occurred_at,
+        }
+
+    @classmethod
+    def from_dict(cls, d: Mapping[str, Any]) -> PlatformEvent:
+        """Deserialize from a plain dict; raises `EnvelopeError` on a bad shape."""
+        return cls(
+            platform=_require_str(d, "platform"),
+            event_type=_require_str(d, "event_type"),
+            actor=_optional_str(d, "actor"),
+            payload=_require_object(d, "payload"),
+            occurred_at=_require_str(d, "occurred_at"),
+        )
+
+
+#: Reserved `PlatformEvent.payload` key a process-stage `transform()` sets
+#: to request cross-app routing (gh #298). `transform_fn`'s frozen contract
+#: is `PlatformEvent -> PlatformEvent | None` -- it never sees or returns a
+#: `StageEnvelope` -- so this payload key is the only channel available for
+#: a bundle to communicate a `target_app_id` back to the runner that DOES
+#: build the outbound `StageEnvelope`. `core/svc_process/runner.py` pops
+#: this key back out of the payload before enqueuing, so it never leaks
+#: into the actual message data an action-stage bundle (or a relayed chat
+#: reply) sees. General mechanism -- any process bundle may set it, not
+#: forum-specific.
+PROCESS_TARGET_APP_ID_KEY = "_target_app_id"
+
+
+@dataclass(slots=True, frozen=True)
+class StageEnvelope:
+    """One pipeline queue message routed between stages.
+
+    `event` (a `PlatformEvent`) is the payload being carried -- NOT named
+    `payload`, deliberately: this rename makes payload-under-payload
+    double-nesting structurally impossible, since the real message data is
+    always reached at `envelope.event.payload[...]`, never
+    `envelope.event["payload"][...]`.
+
+    `target_app_id` (gh #298, feature-bundle-routing): OPTIONAL, defaults to
+    `None` for 100% backward compatibility with every existing envelope.
+    Routing between stages is otherwise strict-by-queue-key -- a consumer
+    dispatches whatever it popped from its own `app_id:stage` key, no
+    content-based re-route (see `core/svc_action/runner.py`'s module
+    docstring). `target_app_id` is the one sanctioned escape hatch: when a
+    process-stage bundle produces an event that belongs to a DIFFERENT
+    app's action stage (e.g. `bot_process` delegating `!forum` to the
+    community-forums feature bundle), it sets this field and the enqueuing
+    stage (`core/svc_process/runner.py`) pushes to that app's `:action` key
+    instead of the originating `bundle.app_id`'s. This changes the
+    destination QUEUE KEY only -- `tenant`/`community` above are still
+    sourced exclusively from `flask_core.get_bundle_context()`, never from
+    event payload, so the security/tenancy invariant is untouched.
+    """
+
+    tenant: str
+    community: str | None
+    app_id: str
+    stage: str
+    event: PlatformEvent
+    ts: str
+    target_app_id: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to a plain, JSON-ready dict; `event` nests under an `event` key."""
+        return {
+            "tenant": self.tenant,
+            "community": self.community,
+            "app_id": self.app_id,
+            "stage": self.stage,
+            "event": self.event.to_dict(),
+            "ts": self.ts,
+            "target_app_id": self.target_app_id,
+        }
+
+    @classmethod
+    def from_dict(cls, d: Mapping[str, Any]) -> StageEnvelope:
+        """Deserialize from a plain dict; raises `EnvelopeError` on a bad/legacy shape.
+
+        Requires an `event` key holding a JSON object; a legacy pre-fix
+        message shaped without one (e.g. carrying its data directly under
+        `payload` at the top level instead) is refused, not coerced.
+        `target_app_id` is optional -- absent (legacy message) or explicit
+        `null` both deserialize to `None`.
+        """
+        tenant = _require_str(d, "tenant")
+        app_id = _require_str(d, "app_id")
+        stage = _require_str(d, "stage")
+        if stage not in BUNDLE_STAGES:
+            raise EnvelopeError(f"'stage' {stage!r} is not one of {BUNDLE_STAGES}")
+        community = _optional_str(d, "community")
+        ts = _require_str(d, "ts")
+        event = _require_object(d, "event")
+        target_app_id = _optional_str(d, "target_app_id")
+
+        return cls(
+            tenant=tenant,
+            community=community,
+            app_id=app_id,
+            stage=stage,
+            event=PlatformEvent.from_dict(event),
+            ts=ts,
+            target_app_id=target_app_id,
+        )
+
 
 try:
     import redis.asyncio as redis
