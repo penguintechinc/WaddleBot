@@ -1,4 +1,4 @@
-"""Community blueprints -- two-gate Feature guard proofs (SCCEMBS per-capability flags).
+"""Community blueprints -- two-gate Feature guard proofs (SCCEBM per-capability flags).
 
 Dedicated fail-first-verify coverage for the one-line `feature_enabled(...)`
 guards added this PR to `community_chat.py`, `community_polls.py`,

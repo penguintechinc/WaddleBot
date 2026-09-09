@@ -1,6 +1,6 @@
 """v1 `event` group -- Event module (`waddles.event.calendar`), M8 in the migration plan.
 
-Ports BOTH Node controllers the migration plan's §2 SCCEMBS mapping
+Ports BOTH Node controllers the migration plan's §2 SCCEBM mapping
 assigns to the Event module: `calendarController.js` (user-facing OAuth,
 availability, booking pages, public booking, user bookings, group
 scheduling -- mounted at `/api/v1/calendar/*`) and `ticketController.js`

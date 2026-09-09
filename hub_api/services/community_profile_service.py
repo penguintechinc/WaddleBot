@@ -1,7 +1,7 @@
 """Community profile management -- ported from `communityProfileController.js`.
 
 About section, social links, visibility, and logo/banner uploads for a
-community entity. Community is a Core-tenancy entity per SCCEMBS (the
+community entity. Community is a Core-tenancy entity per SCCEBM (the
 community ENTITY, not the Community engagement module) -- see
 `hub_api/PORTING.md`.
 
